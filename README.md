@@ -58,3 +58,15 @@ dotnet publish HorizonRadio.UI/HorizonRadio.UI.csproj -c Release -r win-x64 --se
 ## License
 
 GPLv3 — see [LICENSE](LICENSE).
+
+## Credits
+
+_Libraries_
+
+- [librespot](https://github.com/librespot-org/librespot) - Spotify Connect client (Rust)
+- [ShadUI](https://github.com/accntech/shad-ui/) - UI framework (C#)
+
+_References_
+
+- [Spotify Radio](https://www.nexusmods.com/forzahorizon6/mods/95?tab=description) - Original inspiration (closed source)
+- [fh6-universal-radio](https://github.com/g0ldyy/fh6-universal-radio) - Cross-referenced for FH6's FMOD function signatures and RadioStreamFmod chain offsets, and adapted its lazy-resolve createDSP technique.
