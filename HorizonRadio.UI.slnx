@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="HorizonRadio.Core/HorizonRadio.Core.csproj" />
+  <Project Path="HorizonRadio.UI/HorizonRadio.UI.csproj" />
+</Solution>

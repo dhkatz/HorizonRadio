@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!--
+    Test executable. Runs doctest with the production translation units
+    compiled directly into the exe (the simplest way to give tests
+    access to internal helpers without exporting them from the DLL).
+
+    Build output: $(SolutionDir)build/$(Configuration)/HorizonRadio.Tests.exe.
+    No CI scaffolding here beyond doctest's own auto-discovery; CI just
+    runs the exe and checks its exit code.
+  -->
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{8B3A3E10-5F1F-4B0B-AC0B-3A5C3B3B7B11}</ProjectGuid>
+    <RootNamespace>HorizonRadio.Tests</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props"
+            Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')"
+            Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props"
+            Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')"
+            Label="LocalAppDataPlatform" />
+  </ImportGroup>
+
+  <PropertyGroup>
+    <OutDir>$(SolutionDir)build\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)build\obj\$(ProjectName)\$(Configuration)\</IntDir>
+    <LinkIncremental Condition="'$(Configuration)'=='Debug'">true</LinkIncremental>
+    <LinkIncremental Condition="'$(Configuration)'=='Release'">false</LinkIncremental>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <AdditionalIncludeDirectories>$(SolutionDir)HorizonRadio\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32_LEAN_AND_MEAN;NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+    </ClCompile>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+    </ClCompile>
+  </ItemDefinitionGroup>
+
+  <!-- doctest entry point + tests. -->
+  <ItemGroup>
+    <ClCompile Include="test_main.cpp" />
+    <ClCompile Include="test_fmod_bridge.cpp" />
+    <ClCompile Include="test_fmod_resolver.cpp" />
+    <ClCompile Include="test_fmod_types.cpp" />
+    <ClCompile Include="test_heap_scan.cpp" />
+    <ClCompile Include="test_metadata_injector.cpp" />
+    <ClCompile Include="test_msvc_rtti.cpp" />
+    <ClCompile Include="test_msvc_string.cpp" />
+    <ClCompile Include="test_normalizer.cpp" />
+    <ClCompile Include="test_ring_buffer.cpp" />
+    <ClCompile Include="test_sigscan.cpp" />
+  </ItemGroup>
+
+  <!--
+    Production translation units compiled into the test exe. Mirrors
+    what the old CMake test target pulled in: every src/*.cpp that the
+    tests transitively need, except dllmain.cpp (its forwarders only
+    make sense in a DLL).
+  -->
+  <ItemGroup>
+    <ClCompile Include="..\HorizonRadio\src\fmod\bridge.cpp" />
+    <ClCompile Include="..\HorizonRadio\src\fmod\resolver.cpp" />
+    <ClCompile Include="..\HorizonRadio\src\fmod\system_resolver.cpp" />
+    <ClCompile Include="..\HorizonRadio\src\inject\game_resolver.cpp" />
+    <ClCompile Include="..\HorizonRadio\src\inject\heap_scan.cpp" />
+    <ClCompile Include="..\HorizonRadio\src\inject\metadata_injector.cpp" />
+    <ClCompile Include="..\HorizonRadio\src\inject\msvc_rtti.cpp" />
+    <ClCompile Include="..\HorizonRadio\src\inject\msvc_string.cpp" />
+    <ClCompile Include="..\HorizonRadio\src\inject\sigscan.cpp" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

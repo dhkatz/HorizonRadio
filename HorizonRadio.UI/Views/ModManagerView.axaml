@@ -1,0 +1,134 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="480"
+             x:Class="HorizonRadio.UI.Views.ModManagerView"
+             x:DataType="vm:ModManagerViewModel">
+
+    <Design.DataContext>
+        <vm:ModManagerViewModel />
+    </Design.DataContext>
+
+    <ScrollViewer>
+        <StackPanel Margin="24" Spacing="16">
+
+            <StackPanel Spacing="4" Margin="0,0,0,4">
+                <TextBlock Text="Mod Installer" FontSize="20" FontWeight="SemiBold"/>
+                <TextBlock Text="Install or remove the Horizon Radio DLL."
+                           FontSize="12" Opacity="0.6"/>
+            </StackPanel>
+
+            <Border Classes="Card" Padding="20">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Game Folder" FontSize="14" FontWeight="SemiBold"/>
+
+                    <StackPanel Spacing="6"
+                                IsVisible="{Binding Detected.Count}">
+                        <TextBlock Text="Detected" FontSize="11" Opacity="0.7"/>
+                        <ComboBox ItemsSource="{Binding Detected}"
+                                  SelectedItem="{Binding SelectedDetected, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Border Background="{DynamicResource MutedColor}"
+                                                CornerRadius="4"
+                                                Padding="6,1">
+                                            <TextBlock Text="{Binding Source}"
+                                                       FontSize="10"
+                                                       Foreground="{DynamicResource MutedForegroundColor}"/>
+                                        </Border>
+                                        <TextBlock Text="{Binding Path}" FontSize="12"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Path" FontSize="11" Opacity="0.7"/>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBox Grid.Column="0"
+                                     Text="{Binding GamePath, Mode=TwoWay}"
+                                     Watermark="C:\Path\To\Forza Horizon 6"/>
+                            <Button Grid.Column="1"
+                                    Classes="Outline"
+                                    Content="Browse"
+                                    Margin="6,0,0,0"
+                                    Click="Browse_Click"/>
+                        </Grid>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Classes="Card" Padding="20">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <Border Grid.Column="0"
+                            Width="44" Height="44"
+                            CornerRadius="999"
+                            Background="{Binding StatusBrush}"
+                            Margin="0,0,16,0"
+                            VerticalAlignment="Center">
+                        <materialIcons:MaterialIcon Kind="PuzzleOutline"
+                                                    Width="22" Height="22"
+                                                    Foreground="White"/>
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+                        <TextBlock Text="{Binding StatusLabel}"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding StatusDetail}"
+                                   FontSize="11"
+                                   Opacity="0.65"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                    <Button Grid.Column="2"
+                            Classes="Outline"
+                            Command="{Binding RefreshCommand}"
+                            Content="Refresh"
+                            Margin="12,0,0,0"
+                            VerticalAlignment="Center"
+                            IsVisible="{Binding HasGamePath}"/>
+                </Grid>
+            </Border>
+
+            <Border Classes="Card" Padding="14"
+                    IsVisible="{Binding BundledDllMissing}">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <materialIcons:MaterialIcon Kind="AlertCircleOutline"
+                                                Width="20" Height="20"
+                                                Foreground="#f59e0b"
+                                                VerticalAlignment="Center"/>
+                    <TextBlock Text="No DLL bundled. Build HorizonRadio.slnx first."
+                               FontSize="12"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <TextBlock Text="{Binding LastActionMessage}"
+                       FontSize="11"
+                       Opacity="0.8"
+                       TextWrapping="Wrap"
+                       IsVisible="{Binding LastActionMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                <Button Classes="Secondary"
+                        Content="Open Folder"
+                        Command="{Binding OpenGameFolderCommand}"
+                        IsVisible="{Binding HasGamePath}"/>
+                <Button Classes="Destructive"
+                        Content="Uninstall"
+                        Command="{Binding UninstallCommand}"
+                        IsEnabled="{Binding CanUninstall}"/>
+                <Button Classes="Primary"
+                        Content="{Binding InstallButtonLabel}"
+                        Command="{Binding InstallCommand}"
+                        IsEnabled="{Binding CanInstall}"/>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

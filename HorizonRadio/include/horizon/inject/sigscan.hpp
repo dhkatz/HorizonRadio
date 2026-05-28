@@ -1,0 +1,221 @@
+#pragma once
+
+#include <windows.h>
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include <string_view>
+#include <vector>
+
+namespace horizon::inject {
+
+// View into a loaded PE module. Construction parses the NT headers from
+// the in-memory image (not the on-disk file: section addresses are RVAs
+// relative to the loaded base, not file offsets).
+//
+// Used by the FMOD bridge to scan for byte signatures in the game's
+// .text section and by the metadata injector to find RTTI structures
+// in .rdata. Source-agnostic -- nothing in here knows about audio.
+class PeImage {
+public:
+    explicit PeImage(HMODULE module);
+
+    bool valid() const noexcept { return base_ != nullptr; }
+
+    std::uintptr_t base() const noexcept {
+        return reinterpret_cast<std::uintptr_t>(base_);
+    }
+    std::size_t image_size() const noexcept { return image_size_; }
+
+    std::span<const std::byte> text()  const noexcept { return text_; }
+    std::span<const std::byte> rdata() const noexcept { return rdata_; }
+    // MSVC emits TypeDescriptor structs into .data (not .rdata), because
+    // the `spare` field is mutated at runtime by the type_info demangle
+    // cache. Same for the test exe and for FH6.
+    std::span<const std::byte> data()  const noexcept { return data_; }
+
+    // Runtime function table (.pdata). Each entry's BeginAddress and
+    // EndAddress are RVAs relative to base(); used to map an arbitrary
+    // instruction address back to its enclosing function.
+    std::span<const RUNTIME_FUNCTION> pdata() const noexcept { return pdata_; }
+
+private:
+    std::byte*  base_       = nullptr;
+    std::size_t image_size_ = 0;
+    std::span<const std::byte> text_;
+    std::span<const std::byte> rdata_;
+    std::span<const std::byte> data_;
+    std::span<const RUNTIME_FUNCTION> pdata_;
+};
+
+// A compiled IDA-style pattern: byte values plus a fixed/wildcard mask.
+// Input syntax: hex pairs separated by whitespace, "??" for wildcard:
+//   "48 89 5C 24 ?? E8 ?? ?? ?? ??"
+struct Pattern {
+    std::vector<std::byte> bytes;
+    std::vector<bool>      mask;   // true = fixed byte, false = wildcard
+};
+
+// Throws std::invalid_argument on malformed input.
+Pattern compile_pattern(std::string_view ida_style);
+
+// Returns a pointer into haystack at the first match, or nullptr if none.
+const std::byte* find_pattern(std::span<const std::byte> haystack, const Pattern& p);
+
+// Convenience overload: compile + find in one call. Useful in tests; in
+// hot paths prefer pre-compiling the pattern and reusing it.
+inline const std::byte* find_pattern(std::span<const std::byte> haystack,
+                                     std::string_view ida_style) {
+    return find_pattern(haystack, compile_pattern(ida_style));
+}
+
+// A union of alternative patterns. Used for function prologues that
+// vary across builds (FMOD shipped at least four x64 MSVC prologues
+// across its 1.x line); we accept any one as a match.
+//
+// Syntax: alternatives separated by `|`.
+//   "48 89 5C 24 ?? | 40 53 48 83 EC 20"
+struct PatternSet {
+    std::vector<Pattern> alternatives;
+};
+
+PatternSet compile_pattern_set(std::string_view ida_style);
+
+// True if any alternative matches at the start of `haystack`. Bounded
+// by the longest alternative; returns false if haystack is shorter
+// than every alternative.
+bool match_pattern_set_at(std::span<const std::byte> haystack, const PatternSet& set);
+
+// Finds NUL-terminated occurrences of `needle` in `haystack`. Both
+// the byte preceding the match and the byte following it must be
+// `\0` (or the match must start at haystack[0]) so we don't pick up
+// the tail of a longer string. Used to locate FMOD anchor strings
+// like "ChannelControl::addDSP" in .rdata.
+std::vector<const std::byte*> find_anchor_strings(
+    std::span<const std::byte> haystack, std::string_view needle);
+
+// Walks `text` looking for x64 `lea reg, [rip + disp32]` instructions
+// whose computed target address (rip + disp32) is one of `targets`.
+// Returns pointers to the first byte of each matching lea (the REX
+// prefix). The opcode is `48|4C 8D /5` with ModR/M mod=00 r/m=101.
+//
+// `targets` must be sorted (binary search inside the loop).
+std::vector<const std::byte*> find_lea_targeting(
+    std::span<const std::byte> text,
+    std::span<const std::byte* const> targets);
+
+// Returns the function-start RVA enclosing `instruction_rva`, looking
+// it up in `.pdata` via binary search. Returns 0 if no enclosing
+// function is recorded (some leaf functions don't appear in .pdata).
+//
+// CAVEAT: when MSVC emits chained unwind info (UNW_FLAG_CHAININFO),
+// `.pdata` has multiple entries per function and this returns the
+// BeginAddress of the *chunk* containing the instruction, not the
+// true function entry. Use resolve_primary_function_rva to walk
+// back to the entry when you need to call the function.
+std::uint32_t enclosing_function_rva(
+    std::span<const RUNTIME_FUNCTION> pdata, std::uint32_t instruction_rva);
+
+// Given a `.pdata` chunk's BeginAddress, walk UNWIND_INFO's
+// chain-info flag to find the primary (entry-point) RUNTIME_FUNCTION
+// and return its BeginAddress. If `chunk_begin_rva` already points
+// at the primary (no CHAININFO flag), returns `chunk_begin_rva`.
+// Returns 0 on any malformed-info / out-of-bounds access.
+//
+// UNWIND_INFO layout (Microsoft x64 ABI):
+//   +0    uint8  Version:3, Flags:5     (UNW_FLAG_CHAININFO = 0x4)
+//   +1    uint8  SizeOfProlog
+//   +2    uint8  CountOfCodes
+//   +3    uint8  FrameRegister:4, FrameOffset:4
+//   +4    UNWIND_CODE codes[CountOfCodes]  (2 bytes each)
+//   pad to 4-byte boundary
+//   then either ExceptionHandler RVA (Flags & 0x1|0x2)
+//        or    RUNTIME_FUNCTION chained (Flags & 0x4)
+std::uint32_t resolve_primary_function_rva(const PeImage& image,
+                                            std::uint32_t chunk_begin_rva);
+
+// Anchor-based function search. Combines the primitives above:
+//   1. Find every occurrence of `anchor` in `image.rdata()`.
+//   2. Find every `lea reg, [rip+disp32]` in `image.text()` whose
+//      target is one of those anchor addresses.
+//   3. Look up each lea's enclosing function via .pdata.
+//   4. Keep only enclosing functions whose prologue bytes match any
+//      alternative in `prologue`.
+//
+// Returns nullptr if no candidates match, the unique candidate's
+// function-start address if exactly one matches, or nullptr if the
+// match is ambiguous (multiple distinct functions both qualify --
+// safer to fail than to pick wrong).
+//
+// This is far more robust than direct prologue sigscan because the
+// anchor strings (FMOD's own "Class::method" error labels) are
+// stable across builds, while the prologues vary.
+const std::byte* find_function_by_anchor(const PeImage& image,
+                                          std::string_view anchor,
+                                          const PatternSet& prologue);
+
+inline const std::byte* find_function_by_anchor(const PeImage& image,
+                                                 std::string_view anchor,
+                                                 std::string_view ida_style) {
+    return find_function_by_anchor(image, anchor, compile_pattern_set(ida_style));
+}
+
+// Diagnostic variant: returns intermediate counts plus the final
+// outcome. Useful when an anchored resolve is failing in production
+// and you need to know whether the anchor missing, the lea decode is
+// rejecting candidates, .pdata lookup is empty, or the prologue
+// patterns don't match the build. Same matching logic as
+// find_function_by_anchor; status reports which stage filtered the
+// resolution out.
+struct AnchorResolution {
+    enum class Status {
+        ok,
+        no_anchor_string,
+        no_lea,
+        no_enclosing_function,
+        no_prologue_match,
+        ambiguous,
+    };
+
+    Status status = Status::no_anchor_string;
+    std::size_t anchor_count          = 0;
+    std::size_t lea_count             = 0;
+    std::size_t enclosing_fn_count    = 0;
+    std::size_t prologue_match_count  = 0;
+    const std::byte* result           = nullptr;
+
+    // The first few enclosing-function addresses (deduplicated, in
+    // discovery order). Populated even when status == no_prologue_match
+    // or ambiguous, so callers can dump the actual prologue bytes
+    // and either widen the alternation or pick a better disambiguator.
+    // Capped at 4 to keep the result small.
+    std::array<const std::byte*, 4> enclosing_functions{};
+};
+
+AnchorResolution diagnose_function_by_anchor(const PeImage& image,
+                                              std::string_view anchor,
+                                              const PatternSet& prologue);
+
+inline AnchorResolution diagnose_function_by_anchor(const PeImage& image,
+                                                     std::string_view anchor,
+                                                     std::string_view ida_style) {
+    return diagnose_function_by_anchor(image, anchor, compile_pattern_set(ida_style));
+}
+
+// Direct PatternSet scan with .pdata-prioritized lookup. First pass
+// matches only function-start RVAs from .pdata (no false hits inside
+// other function bodies); second pass falls back to a linear scan
+// over .text for leaf functions FMOD didn't record in .pdata
+// (Handle::unlock has this property in current builds). Returns
+// nullptr if ambiguous or absent.
+const std::byte* find_function_by_pattern(const PeImage& image,
+                                           const PatternSet& set);
+
+inline const std::byte* find_function_by_pattern(const PeImage& image,
+                                                  std::string_view ida_style) {
+    return find_function_by_pattern(image, compile_pattern_set(ida_style));
+}
+
+} // namespace horizon::inject

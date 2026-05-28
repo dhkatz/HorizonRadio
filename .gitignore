@@ -1,0 +1,53 @@
+# MSBuild outputs (we route all artifacts under build/ via OutDir/IntDir)
+build/
+bin/
+obj/
+
+# vcpkg's per-build install dir (manifest mode places deps here).
+# The vcpkg/ submodule itself stays tracked via .gitmodules.
+vcpkg_installed/
+
+# Cargo build outputs from the Librespot project. The final
+# librespot.exe gets copied into build/{Configuration}/ which is
+# already ignored above; this entry covers the intermediate
+# `cargo install --root` cache.
+build/Librespot/
+
+# Visual Studio / Rider local state
+.vs/
+.idea/
+*.user
+*.suo
+*.aps
+*.opensdf
+*.sdf
+ipch/
+*.VC.db
+*.VC.opendb
+riderModule.iml
+/_ReSharper.Caches/
+/packages/
+
+# Compiler / linker intermediates
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# Horizon Radio: user-supplied music + runtime trigger files are
+# kept out of the repo to respect copyright and avoid accidental
+# commits of personal libraries.
+music/
+playlist.m3u
+playlist.m3u8
+test.mp3
+test.wav
+test.flac
+test.ogg
+horizon-radio.discover
+
+# OS noise
+Thumbs.db
+.DS_Store
+desktop.ini

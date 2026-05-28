@@ -1,0 +1,237 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
+             xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="HorizonRadio.UI.Views.StatsView"
+             x:DataType="vm:StatsViewModel">
+
+    <Design.DataContext>
+        <vm:StatsViewModel />
+    </Design.DataContext>
+
+    <ScrollViewer>
+        <StackPanel Margin="24" Spacing="16">
+
+            <!-- Hero status card. Big visual at the top so the user can
+                 tell at a glance whether the bridge is alive without
+                 reading any of the numeric stats below. -->
+            <Border Classes="Card" Padding="20">
+                <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
+                    <!-- Status dot -->
+                    <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="0"
+                            Width="48" Height="48"
+                            CornerRadius="999"
+                            Background="{Binding BridgeStatusBrush}"
+                            Margin="0,0,16,0"
+                            VerticalAlignment="Center">
+                        <materialIcons:MaterialIcon Kind="Pulse"
+                                                    Width="26" Height="26"
+                                                    Foreground="White"/>
+                    </Border>
+
+                    <StackPanel Grid.Row="0" Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding BridgeStatusLabel}"
+                                   FontSize="22"
+                                   FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding SourceDisplay}"
+                                   FontSize="13"
+                                   Opacity="0.6"/>
+                    </StackPanel>
+
+                    <!-- Uptime tile. Foreground pinned to the
+                         MutedForegroundColor brush so text stays
+                         legible on the MutedColor background — the
+                         default ForegroundColor matches Card text and
+                         washes out here. -->
+                    <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="2"
+                            Padding="14,8"
+                            CornerRadius="8"
+                            Background="{DynamicResource MutedColor}"
+                            VerticalAlignment="Center">
+                        <StackPanel>
+                            <TextBlock Text="Uptime"
+                                       FontSize="10"
+                                       Opacity="0.7"
+                                       Foreground="{DynamicResource MutedForegroundColor}"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="{Binding UptimeLabel}"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource MutedForegroundColor}"
+                                       HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- Throughput chart card. The big payoff: live frames-in
+                 vs frames-out at 2 Hz, 30-second window. If these two
+                 lines diverge for any length of time the bridge is
+                 leaking or starving — visible at a glance. -->
+            <Border Classes="Card" Padding="20">
+                <StackPanel Spacing="10">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0"
+                                   Text="Throughput"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="14">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Ellipse Width="8" Height="8" Fill="#22c55e" VerticalAlignment="Center"/>
+                                <TextBlock Text="in" FontSize="11" Opacity="0.7" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding FramesInPerSecond, StringFormat={}{0:F0}}"
+                                           FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
+                                <TextBlock Text="fps" FontSize="11" Opacity="0.5" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <Ellipse Width="8" Height="8" Fill="#3b82f6" VerticalAlignment="Center"/>
+                                <TextBlock Text="out" FontSize="11" Opacity="0.7" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding FramesOutPerSecond, StringFormat={}{0:F0}}"
+                                           FontSize="11" FontWeight="Medium" VerticalAlignment="Center"/>
+                                <TextBlock Text="fps" FontSize="11" Opacity="0.5" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Grid>
+
+                    <lvc:CartesianChart Height="180"
+                                        Series="{Binding ThroughputSeries}"
+                                        XAxes="{Binding XAxes}"
+                                        YAxes="{Binding YAxes}"
+                                        AnimationsSpeed="0:0:0"
+                                        TooltipPosition="Hidden"
+                                        LegendPosition="Hidden"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Bottom row: 2-column grid of smaller cards. -->
+            <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,16,Auto">
+
+                <!-- Producer rate vs 44.1 kHz target. 100% = source is
+                     keeping pace; sustained dips warn of underruns. -->
+                <Border Grid.Row="0" Grid.Column="0" Classes="Card" Padding="20">
+                    <StackPanel Spacing="10">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Text="Producer Rate"
+                                       FontSize="14" FontWeight="SemiBold"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding ProducerRatePercent, StringFormat={}{0:F0}%}"
+                                       FontSize="14" FontWeight="Medium" Opacity="0.85"/>
+                        </Grid>
+                        <TextBlock Text="How close the source is to delivering frames at the 44.1 kHz target."
+                                   FontSize="11" Opacity="0.55" TextWrapping="Wrap"/>
+                        <ProgressBar Value="{Binding ProducerRatePercent}"
+                                     Maximum="100"
+                                     Height="10"/>
+                        <TextBlock Text="{Binding FramesInPerSecond, StringFormat={}{0:F0} fps / 44100 fps}"
+                                   FontSize="11" Opacity="0.55"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Underruns -->
+                <Border Grid.Row="0" Grid.Column="2" Classes="Card" Padding="20">
+                    <StackPanel Spacing="10">
+                        <TextBlock Text="Underruns"
+                                   FontSize="14" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding Underruns}"
+                                   FontSize="32" FontWeight="Bold"
+                                   Foreground="{Binding Underruns, Converter={x:Static vm:UnderrunBrushConverter.Instance}}"/>
+                        <lvc:CartesianChart Height="40"
+                                            Series="{Binding UnderrunSeries}"
+                                            XAxes="{Binding UnderrunXAxes}"
+                                            YAxes="{Binding UnderrunYAxes}"
+                                            AnimationsSpeed="0:0:0"
+                                            TooltipPosition="Hidden"
+                                            LegendPosition="Hidden"/>
+                        <TextBlock Text="Times the mixer had to fill silence because PCM didn't arrive in time."
+                                   FontSize="11" Opacity="0.55" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Gain meters -->
+                <Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
+                        Classes="Card" Padding="20">
+                    <StackPanel Spacing="14">
+                        <TextBlock Text="Gain Stages"
+                                   FontSize="14" FontWeight="SemiBold"/>
+
+                        <!-- Normalizer AGC. Bar pinned to 1.0× because
+                             the bridge currently caps it (see bridge.cpp
+                             set_max_gain/min_gain) — kept for forward-
+                             compat when AGC re-engages on certain sources. -->
+                        <Grid ColumnDefinitions="100,*,60" RowDefinitions="Auto">
+                            <TextBlock Grid.Column="0" Text="Normalizer"
+                                       FontSize="12" Opacity="0.7"
+                                       VerticalAlignment="Center"/>
+                            <Border Grid.Column="1"
+                                    Background="{DynamicResource MutedColor}"
+                                    CornerRadius="3"
+                                    Height="8" VerticalAlignment="Center">
+                                <Grid HorizontalAlignment="Stretch">
+                                    <Rectangle Fill="#22c55e"
+                                               HorizontalAlignment="Left"
+                                               Width="{Binding NormalizerGain, Converter={x:Static vm:GainToWidthConverter.Instance}}"
+                                               Height="8"
+                                               RadiusX="3" RadiusY="3"/>
+                                </Grid>
+                            </Border>
+                            <TextBlock Grid.Column="2"
+                                       Text="{Binding NormalizerGain, StringFormat={}{0:F2}x}"
+                                       FontSize="12" FontWeight="Medium"
+                                       HorizontalAlignment="Right"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <!-- Limiter. Below 1.0× = active limiting. -->
+                        <Grid ColumnDefinitions="100,*,60" RowDefinitions="Auto">
+                            <TextBlock Grid.Column="0" Text="Limiter"
+                                       FontSize="12" Opacity="0.7"
+                                       VerticalAlignment="Center"/>
+                            <Border Grid.Column="1"
+                                    Background="{DynamicResource MutedColor}"
+                                    CornerRadius="3"
+                                    Height="8" VerticalAlignment="Center">
+                                <Grid HorizontalAlignment="Stretch">
+                                    <Rectangle Fill="#f59e0b"
+                                               HorizontalAlignment="Left"
+                                               Width="{Binding LimiterGain, Converter={x:Static vm:GainToWidthConverter.Instance}}"
+                                               Height="8"
+                                               RadiusX="3" RadiusY="3"/>
+                                </Grid>
+                            </Border>
+                            <TextBlock Grid.Column="2"
+                                       Text="{Binding LimiterGain, StringFormat={}{0:F2}x}"
+                                       FontSize="12" FontWeight="Medium"
+                                       HorizontalAlignment="Right"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <!-- Lifetime totals — kept around for debugging, less prominent. -->
+            <Border Classes="Card" Padding="16">
+                <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto">
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Frames in" FontSize="11" Opacity="0.55" HorizontalAlignment="Center"/>
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="Frames out" FontSize="11" Opacity="0.55" HorizontalAlignment="Center"/>
+                    <TextBlock Grid.Row="0" Grid.Column="2" Text="Underruns" FontSize="11" Opacity="0.55" HorizontalAlignment="Center"/>
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{Binding FramesIn, StringFormat={}{0:N0}}"
+                               FontSize="14" FontWeight="Medium" HorizontalAlignment="Center"/>
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding FramesOut, StringFormat={}{0:N0}}"
+                               FontSize="14" FontWeight="Medium" HorizontalAlignment="Center"/>
+                    <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding Underruns, StringFormat={}{0:N0}}"
+                               FontSize="14" FontWeight="Medium" HorizontalAlignment="Center"/>
+                </Grid>
+            </Border>
+
+            <TextBlock Text="Waiting for Forza Horizon 6 with mod installed..."
+                       HorizontalAlignment="Center"
+                       Opacity="0.5"
+                       IsVisible="{Binding !IsConnected}"/>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

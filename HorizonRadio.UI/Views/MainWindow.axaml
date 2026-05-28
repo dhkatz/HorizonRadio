@@ -1,0 +1,282 @@
+<shadui:Window xmlns="https://github.com/avaloniaui"
+               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+               xmlns:vm="using:HorizonRadio.UI.ViewModels"
+               xmlns:views="using:HorizonRadio.UI.Views"
+               xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
+               xmlns:material="using:Material.Icons.Avalonia"
+               xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+               xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+               mc:Ignorable="d" d:DesignWidth="1024" d:DesignHeight="640"
+               x:Class="HorizonRadio.UI.Views.MainWindow"
+               x:DataType="vm:MainWindowViewModel"
+               Title="Horizon Radio"
+               TitleFontWeight="SemiBold"
+               Width="1024" Height="640"
+               MinWidth="720" MinHeight="480"
+               SaveWindowState="True"
+               WindowStartupLocation="CenterScreen"
+               EnableTrafficLightPositioning="True"
+               TrafficLightOffset="5,8">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel />
+    </Design.DataContext>
+
+    <!-- Title-bar logo. ShadUI's LogoContent slot lives in an
+         AppTitlePanel that's HorizontalAlignment=Left with no left
+         padding, so the image otherwise renders flush against the
+         window edge — looks cramped next to the traffic lights /
+         window-control area. The left margin pushes it inboard to
+         match the typical chrome inset. -->
+    <shadui:Window.LogoContent>
+        <Image Source="avares://HorizonRadio.UI/Assets/logo.png"
+               Width="22" Height="22"
+               Margin="10,0,0,0"/>
+    </shadui:Window.LogoContent>
+
+    <!-- Right-side title-bar buttons: theme switch + fullscreen toggle.
+         Same pattern as GMConverter so the chrome stays consistent. -->
+    <shadui:Window.RightWindowTitleBarContent>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Background="{DynamicResource SidebarBackgroundColor}"
+                    CornerRadius="{DynamicResource MdCornerRadius}"
+                    Height="30" Width="30"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"
+                    Padding="0"
+                    ToolTip.Tip="Switch theme"
+                    Click="SwitchTheme_Click">
+                <PathIcon Data="{x:Static shadui:Icons.Palette}" Width="16" Height="16"/>
+            </Button>
+            <Button Background="{DynamicResource SidebarBackgroundColor}"
+                    CornerRadius="{DynamicResource MdCornerRadius}"
+                    Height="30" Width="30"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"
+                    Padding="0"
+                    ToolTip.Tip="Toggle fullscreen"
+                    Click="ToggleFullscreen_Click">
+                <PathIcon Data="{x:Static shadui:Icons.WindowMaximize}" Width="16" Height="16"/>
+            </Button>
+        </StackPanel>
+    </shadui:Window.RightWindowTitleBarContent>
+
+    <Grid ColumnDefinitions="Auto,*">
+
+        <!-- Expanded sidebar -->
+        <shadui:Sidebar Grid.Column="0"
+                        Background="{DynamicResource SidebarBackgroundColor}"
+                        BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="0,0,1,0"
+                        CurrentRoute="{Binding CurrentRoute}"
+                        Expanded="True"
+                        IsVisible="{Binding IsSidebarExpanded}"
+                        ItemIconContentSpacing="12"
+                        Padding="12"
+                        Width="240">
+            <shadui:Sidebar.Header>
+                <Grid Margin="0,4,0,18">
+                    <Button Background="{DynamicResource SidebarBackgroundColor}"
+                            CornerRadius="{DynamicResource MdCornerRadius}"
+                            Command="{Binding ToggleSidebarCommand}"
+                            Height="30" Width="30"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            Padding="0"
+                            HorizontalAlignment="Left"
+                            ToolTip.Tip="Collapse sidebar">
+                        <PathIcon Data="{x:Static shadui:Icons.SidePanel}" Width="16" Height="16"/>
+                    </Button>
+                </Grid>
+            </shadui:Sidebar.Header>
+
+            <StackPanel Spacing="4">
+                <!-- Dashboard sits above any section header — it's the
+                     home page, not a setting. -->
+                <shadui:SidebarItem Content="Dashboard"
+                                    Command="{Binding ShowNowPlayingCommand}"
+                                    IsChecked="{Binding IsNowPlayingWorkspace}"
+                                    Route="now-playing">
+                    <shadui:SidebarItem.Icon>
+                        <material:MaterialIcon Kind="ViewDashboard" Width="18" Height="18"/>
+                    </shadui:SidebarItem.Icon>
+                </shadui:SidebarItem>
+
+                <shadui:SidebarItemLabel Text="Settings" AsSeparator="True"/>
+
+                <shadui:SidebarItem Content="Sources"
+                                    Command="{Binding ShowSourcesCommand}"
+                                    IsChecked="{Binding IsSourcesWorkspace}"
+                                    Route="sources">
+                    <shadui:SidebarItem.Icon>
+                        <material:MaterialIcon Kind="Music" Width="18" Height="18"/>
+                    </shadui:SidebarItem.Icon>
+                </shadui:SidebarItem>
+
+                <shadui:SidebarItem Content="Metadata"
+                                    Command="{Binding ShowMetadataCommand}"
+                                    IsChecked="{Binding IsMetadataWorkspace}"
+                                    Route="metadata">
+                    <shadui:SidebarItem.Icon>
+                        <material:MaterialIcon Kind="TagOutline" Width="18" Height="18"/>
+                    </shadui:SidebarItem.Icon>
+                </shadui:SidebarItem>
+
+                <shadui:SidebarItemLabel Text="Integration" AsSeparator="True"/>
+
+                <shadui:SidebarItem Content="Stats"
+                                    Command="{Binding ShowStatsCommand}"
+                                    IsChecked="{Binding IsStatsWorkspace}"
+                                    Route="stats">
+                    <shadui:SidebarItem.Icon>
+                        <material:MaterialIcon Kind="ChartBar" Width="18" Height="18"/>
+                    </shadui:SidebarItem.Icon>
+                </shadui:SidebarItem>
+
+                <shadui:SidebarItem Content="Mods"
+                                    Command="{Binding ShowModManagerCommand}"
+                                    IsChecked="{Binding IsModManagerWorkspace}"
+                                    Route="mod-manager">
+                    <shadui:SidebarItem.Icon>
+                        <material:MaterialIcon Kind="PuzzleOutline" Width="18" Height="18"/>
+                    </shadui:SidebarItem.Icon>
+                </shadui:SidebarItem>
+            </StackPanel>
+
+            <shadui:Sidebar.Footer>
+                <!-- Full-width status strip — reads like a status bar
+                     across the bottom of the sidebar rather than a
+                     centred pill. Border top divider + transparent
+                     background fixes the contrast issue the muted
+                     pill background had against the green/grey dot. -->
+                <Border BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="0,1,0,0"
+                        Padding="12,8"
+                        Margin="-12,0,-12,-12">
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <Ellipse Width="8" Height="8"
+                                 Fill="#22c55e"
+                                 IsVisible="{Binding NowPlaying.IsConnected}" />
+                        <Ellipse Width="8" Height="8"
+                                 Fill="#6b7280"
+                                 IsVisible="{Binding !NowPlaying.IsConnected}" />
+                        <TextBlock Text="{Binding ConnectionLabel}"
+                                   FontSize="11"
+                                   Opacity="0.75"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+            </shadui:Sidebar.Footer>
+        </shadui:Sidebar>
+
+        <!-- Collapsed rail. DockPanel so the connection dot stays
+             pinned at the bottom; without this the dot just sits
+             directly under the last toggle button, looking detached. -->
+        <Border Grid.Column="0"
+                Width="56"
+                Background="{DynamicResource CardBackgroundColor}"
+                BorderBrush="{DynamicResource BorderColor}"
+                BorderThickness="0,0,1,0"
+                IsVisible="{Binding IsSidebarCollapsed}">
+          <DockPanel LastChildFill="True">
+            <Grid DockPanel.Dock="Bottom"
+                  Margin="0,0,0,16"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Bottom"
+                  ToolTip.Tip="{Binding ConnectionLabel}">
+                <Ellipse Width="10" Height="10" Fill="#22c55e"
+                         IsVisible="{Binding NowPlaying.IsConnected}"/>
+                <Ellipse Width="10" Height="10" Fill="#6b7280"
+                         IsVisible="{Binding !NowPlaying.IsConnected}"/>
+            </Grid>
+            <StackPanel Margin="8,16" Spacing="10">
+                <Button Background="{DynamicResource SidebarBackgroundColor}"
+                        CornerRadius="{DynamicResource MdCornerRadius}"
+                        Command="{Binding ToggleSidebarCommand}"
+                        Height="40" Width="40"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center"
+                        Padding="0"
+                        ToolTip.Tip="Expand sidebar">
+                    <PathIcon Data="{x:Static shadui:Icons.SidePanel}" Width="16" Height="16"/>
+                </Button>
+
+                <Separator Margin="0,4"/>
+
+                <ToggleButton Command="{Binding ShowNowPlayingCommand}"
+                              IsChecked="{Binding IsNowPlayingWorkspace}"
+                              Height="40" Width="40"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              Padding="0"
+                              ToolTip.Tip="Dashboard">
+                    <material:MaterialIcon Kind="ViewDashboard" Width="18" Height="18"/>
+                </ToggleButton>
+
+                <Separator Margin="0,4"/>
+
+                <ToggleButton Command="{Binding ShowSourcesCommand}"
+                              IsChecked="{Binding IsSourcesWorkspace}"
+                              Height="40" Width="40"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              Padding="0"
+                              ToolTip.Tip="Sources">
+                    <material:MaterialIcon Kind="Music" Width="18" Height="18"/>
+                </ToggleButton>
+                <ToggleButton Command="{Binding ShowMetadataCommand}"
+                              IsChecked="{Binding IsMetadataWorkspace}"
+                              Height="40" Width="40"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              Padding="0"
+                              ToolTip.Tip="Metadata">
+                    <material:MaterialIcon Kind="TagOutline" Width="18" Height="18"/>
+                </ToggleButton>
+
+                <Separator Margin="0,4"/>
+
+                <ToggleButton Command="{Binding ShowStatsCommand}"
+                              IsChecked="{Binding IsStatsWorkspace}"
+                              Height="40" Width="40"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              Padding="0"
+                              ToolTip.Tip="Stats">
+                    <material:MaterialIcon Kind="ChartBar" Width="18" Height="18"/>
+                </ToggleButton>
+                <ToggleButton Command="{Binding ShowModManagerCommand}"
+                              IsChecked="{Binding IsModManagerWorkspace}"
+                              Height="40" Width="40"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              Padding="0"
+                              ToolTip.Tip="Mods">
+                    <material:MaterialIcon Kind="PuzzleOutline" Width="18" Height="18"/>
+                </ToggleButton>
+
+            </StackPanel>
+          </DockPanel>
+        </Border>
+
+        <!-- Workspace content -->
+        <Panel Grid.Column="1">
+            <Grid IsVisible="{Binding IsNowPlayingWorkspace}">
+                <views:NowPlayingView DataContext="{Binding NowPlaying}"/>
+            </Grid>
+            <Grid IsVisible="{Binding IsSourcesWorkspace}">
+                <views:SourcesView DataContext="{Binding Sources}"/>
+            </Grid>
+            <Grid IsVisible="{Binding IsMetadataWorkspace}">
+                <views:MetadataView DataContext="{Binding Metadata}"/>
+            </Grid>
+            <Grid IsVisible="{Binding IsStatsWorkspace}">
+                <views:StatsView DataContext="{Binding Stats}"/>
+            </Grid>
+            <Grid IsVisible="{Binding IsModManagerWorkspace}">
+                <views:ModManagerView DataContext="{Binding ModManager}"/>
+            </Grid>
+        </Panel>
+    </Grid>
+</shadui:Window>

@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!--
+    Bundles librespot (Spotify Connect, Rust) as a buildable solution
+    project. `cargo install` is invoked under MSBuild's hood; the
+    resulting librespot.exe is copied next to version.dll so the
+    release zip is a single drop-in folder.
+
+    Requires Rust toolchain on the build machine. CI installs it via
+    dtolnay/rust-toolchain in the workflows.
+
+    Why these feature flags:
+      no-default-features             drop rodio + native-tls + with-libmdns
+      features rustls-tls-webpki-roots
+                                      pure-Rust TLS so we don't need
+                                      OpenSSL headers on Windows
+      features with-libmdns           pure-Rust mDNS so the user
+                                      doesn't need Apple's Bonjour
+                                      Print Services installed
+    The `pipe` output backend is unconditionally compiled into
+    librespot's binary, so no audio backend feature needs enabling.
+  -->
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{2A4FE6DC-7E2E-4F70-9AD2-1A0E2A5E9F71}</ProjectGuid>
+    <RootNamespace>Librespot</RootNamespace>
+    <Keyword>MakeFileProj</Keyword>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Makefile</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+
+  <PropertyGroup>
+    <!--
+      Source selection: set LibrespotLocalPath to a checkout to build
+      from a local fork; otherwise we use the pinned git rev. Useful
+      for iterating on patches without pushing to a remote.
+
+      Pinned to a specific commit on librespot's `dev` branch rather
+      than a crates.io release. Reason: v0.8.0 has a Connect-protocol
+      state-machine quirk where every track "loads" but never enters
+      the Playing state — Spotify then cycles through tracks one
+      per second forever. Reproducible standalone, not specific to
+      our integration. dev has fixes ahead of v0.8.0.
+
+      Bumping: update LibrespotGitRev to the latest dev commit SHA
+      (gh api repos/librespot-org/librespot/git/ref/heads/dev). The
+      pinned SHA gives reproducible builds; we move it deliberately,
+      not on every contributor's clock.
+    -->
+    <LibrespotLocalPath>E:\Projects\librespot-horizon</LibrespotLocalPath>
+    <LibrespotGitUrl>https://github.com/librespot-org/librespot</LibrespotGitUrl>
+    <LibrespotGitRev>33bf3a77ed4b549df67e8347d7d6e55b007b3ec2</LibrespotGitRev>
+    <LibrespotCacheRoot>$(SolutionDir)build\Librespot\</LibrespotCacheRoot>
+    <LibrespotCargoOutput>$(LibrespotCacheRoot)bin\librespot.exe</LibrespotCargoOutput>
+    <LibrespotFinalOutput>$(SolutionDir)build\$(Configuration)\librespot.exe</LibrespotFinalOutput>
+    <LibrespotCargoFeatures>rustls-tls-webpki-roots,with-libmdns</LibrespotCargoFeatures>
+    <LibrespotSourceFlags Condition="'$(LibrespotLocalPath)' != '' and Exists('$(LibrespotLocalPath)')">--path "$(LibrespotLocalPath)"</LibrespotSourceFlags>
+    <LibrespotSourceFlags Condition="'$(LibrespotSourceFlags)' == ''">--git $(LibrespotGitUrl) --rev $(LibrespotGitRev)</LibrespotSourceFlags>
+  </PropertyGroup>
+
+  <!--
+    Build target: cargo install is idempotent against version, so
+    re-running this when librespot.exe already exists at the right
+    version is fast (cargo says "already installed, skipping"). The
+    explicit Outputs hint also lets MSBuild's up-to-date check
+    short-circuit when nothing changed.
+  -->
+  <!--
+    No Inputs/Outputs on this Target on purpose: when iterating on a
+    local fork (LibrespotLocalPath), MSBuild's file-stamp check can't
+    see edits inside Rust source. We always invoke cargo install and
+    let cargo's own up-to-date check decide whether a rebuild is
+    needed; cargo is fast (~1-2s) on a no-op.
+  -->
+  <Target Name="Build">
+    <Message Importance="High"
+             Text="Building librespot via cargo install $(LibrespotSourceFlags). First build is slow (~5-10 min cold); subsequent builds short-circuit." />
+
+    <MakeDir Directories="$(SolutionDir)build\$(Configuration)\"
+             Condition="!Exists('$(SolutionDir)build\$(Configuration)\')" />
+
+    <!--
+      Source flags pick between local-fork (LibrespotLocalPath) and
+      pinned-git (LibrespotGitRev). Both feed the same cargo install
+      pipeline below. The locked flag works in both cases — local
+      uses the fork's Cargo.lock, git uses the pinned commit's.
+    -->
+    <Exec Command="cargo install $(LibrespotSourceFlags) --target x86_64-pc-windows-msvc --no-default-features --features &quot;$(LibrespotCargoFeatures)&quot; --locked --root &quot;$(LibrespotCacheRoot.TrimEnd('\'))&quot; librespot"
+          ConsoleToMSBuild="true" />
+
+    <Copy SourceFiles="$(LibrespotCargoOutput)"
+          DestinationFiles="$(LibrespotFinalOutput)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="Clean">
+    <RemoveDir Directories="$(LibrespotCacheRoot)"
+               Condition="Exists('$(LibrespotCacheRoot)')" />
+    <Delete Files="$(LibrespotFinalOutput)"
+            Condition="Exists('$(LibrespotFinalOutput)')" />
+  </Target>
+
+  <Target Name="Rebuild" DependsOnTargets="Clean;Build" />
+</Project>

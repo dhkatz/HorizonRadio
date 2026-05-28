@@ -1,0 +1,127 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Linq;
+using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using HorizonRadio.Core.Sources;
+using HorizonRadio.Core.Sources.Config;
+
+namespace HorizonRadio.UI.ViewModels;
+
+/// <summary>
+/// Sources tab: pick a source from the catalog, fill in its config
+/// (auto-rendered from the factory's schema), Start it. Persists the
+/// last-selected source + last-used config across runs.
+/// </summary>
+public sealed partial class SourcesViewModel : ViewModelBase
+{
+    private readonly SourceRunner       _runner;
+    private readonly SourceConfigStore  _store;
+
+    public ObservableCollection<IAudioSourceFactory> AvailableSources { get; } = new();
+    public ObservableCollection<ConfigFieldViewModel> CurrentSchema   { get; } = new();
+
+    [ObservableProperty] private IAudioSourceFactory? selectedFactory;
+    [ObservableProperty] private bool   isRunning;
+    [ObservableProperty] private string statusMessage = "";
+    [ObservableProperty] private bool   hasError;
+    [ObservableProperty] private bool   hasNoSchema;
+
+    public SourcesViewModel(SourceRunner runner, SourceConfigStore store)
+    {
+        _runner = runner;
+        _store  = store;
+
+        foreach (var f in SourceCatalog.All) AvailableSources.Add(f);
+
+        _runner.ActiveSourceChanged += _ =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => IsRunning = _runner.IsRunning);
+
+        var initial = SourceCatalog.Find(store.LastSelectedId ?? "")
+                   ?? AvailableSources.FirstOrDefault();
+        SelectedFactory = initial;
+    }
+
+    /// <summary>Designer-only ctor (so Avalonia previewer can construct
+    /// the view without a runner).</summary>
+    public SourcesViewModel() : this(
+        new SourceRunner(new NullSink()),
+        new SourceConfigStore()) { }
+
+    private sealed class NullSink : Core.Sources.IPcmSink
+    {
+        public bool Send(ReadOnlySpan<short> samples) => false;
+    }
+
+    partial void OnSelectedFactoryChanged(IAudioSourceFactory? value)
+    {
+        RebuildSchema(value);
+        _store.LastSelectedId = value?.Id;
+        _store.SaveToDisk();
+    }
+
+    private void RebuildSchema(IAudioSourceFactory? factory)
+    {
+        CurrentSchema.Clear();
+        if (factory == null) { HasNoSchema = false; return; }
+
+        var values = _store.Load(factory.Id, factory.Schema);
+        var stored = values.AsReadOnly();
+
+        foreach (var field in factory.Schema)
+        {
+            var fvm = ConfigFieldViewModel.For(field);
+            if (stored.TryGetValue(field.Key, out var v)) fvm.SetValue(v);
+            CurrentSchema.Add(fvm);
+        }
+        HasNoSchema = CurrentSchema.Count == 0;
+    }
+
+    /// <summary>Snapshot the current form into a ConfigValues + persist it.</summary>
+    private ConfigValues SnapshotAndPersist()
+    {
+        var values = new ConfigValues();
+        foreach (var f in CurrentSchema) values.Set(f.Key, f.GetValue());
+
+        if (SelectedFactory != null)
+        {
+            _store.Save(SelectedFactory.Id, values);
+            _store.SaveToDisk();
+        }
+        return values;
+    }
+
+    [RelayCommand]
+    private async Task StartAsync()
+    {
+        if (SelectedFactory == null) return;
+        HasError = false;
+        StatusMessage = "Starting...";
+
+        var values = SnapshotAndPersist();
+        try
+        {
+            await _runner.StartAsync(SelectedFactory, values);
+            StatusMessage = $"Running: {SelectedFactory.DisplayName}";
+        }
+        catch (Exception ex)
+        {
+            HasError = true;
+            StatusMessage = ex.Message;
+            Debug.WriteLine($"[hzn-sources-vm] start failed: {ex}");
+        }
+    }
+
+    [RelayCommand]
+    private async Task StopAsync()
+    {
+        StatusMessage = "Stopping...";
+        try { await _runner.StopAsync(); }
+        catch (Exception ex) { Debug.WriteLine($"[hzn-sources-vm] stop: {ex}"); }
+        StatusMessage = "Stopped";
+        HasError = false;
+    }
+}

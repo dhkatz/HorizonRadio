@@ -1,0 +1,16 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+      Maximized-margin fix lifted from GMConverter. Without the 8 px
+      margin, ShadUI's custom title bar icons get clipped against the
+      screen edge when the window is maximized — the chrome offset
+      that's used in normal state isn't applied in maximized state.
+      Adding margin to the whole window in that state pushes content
+      back inside the visible area.
+    -->
+    <Style Selector="shadui|Window[WindowState=Maximized]">
+        <Setter Property="Margin" Value="8" />
+    </Style>
+</Styles>

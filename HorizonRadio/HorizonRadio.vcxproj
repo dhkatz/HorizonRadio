@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!--
+    Horizon Radio main DLL.
+
+    Output: version.dll (the Windows loader resolves DLL names from the
+    executable's directory before the system path, so when this file
+    lives next to forzahorizon6.exe FH6 loads OUR copy first).
+    Every export of the real C:\Windows\System32\version.dll is
+    forwarded via #pragma comment(linker, "/export:...") in
+    src/dllmain.cpp — no .def file required.
+  -->
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <ProjectGuid>{4085196D-BA78-4209-BD34-902CFA48E336}</ProjectGuid>
+    <RootNamespace>HorizonRadio</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="Shared" />
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props"
+            Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')"
+            Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props"
+            Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')"
+            Label="LocalAppDataPlatform" />
+  </ImportGroup>
+
+  <PropertyGroup Label="UserMacros" />
+
+  <!--
+    Override the default OutDir/IntDir to keep build outputs at the
+    solution root in $(SolutionDir)build/, not buried under the project.
+    Also rename the produced DLL to version.dll regardless of project
+    name — that's what FH6's loader searches for.
+  -->
+  <PropertyGroup>
+    <OutDir>$(SolutionDir)build\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)build\obj\$(ProjectName)\$(Configuration)\</IntDir>
+    <TargetName>version</TargetName>
+    <LinkIncremental Condition="'$(Configuration)'=='Debug'">true</LinkIncremental>
+    <LinkIncremental Condition="'$(Configuration)'=='Release'">false</LinkIncremental>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_WINDOWS;_USRDLL;WIN32_LEAN_AND_MEAN;NOMINMAX;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
+    <ClCompile>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+    </ClCompile>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <ClCompile Include="src\dllmain.cpp" />
+    <ClCompile Include="src\fmod\bridge.cpp" />
+    <ClCompile Include="src\fmod\resolver.cpp" />
+    <ClCompile Include="src\fmod\system_resolver.cpp" />
+    <ClCompile Include="src\inject\game_resolver.cpp" />
+    <ClCompile Include="src\inject\heap_scan.cpp" />
+    <ClCompile Include="src\inject\metadata_injector.cpp" />
+    <ClCompile Include="src\inject\msvc_rtti.cpp" />
+    <ClCompile Include="src\inject\msvc_string.cpp" />
+    <ClCompile Include="src\inject\sigscan.cpp" />
+    <ClCompile Include="src\ipc\ipc_server.cpp" />
+    <ClCompile Include="src\ipc\pcm_pipe_server.cpp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ClInclude Include="include\horizon\audio\normalizer.hpp" />
+    <ClInclude Include="include\horizon\audio\ring_buffer.hpp" />
+    <ClInclude Include="include\horizon\fmod\bridge.hpp" />
+    <ClInclude Include="include\horizon\fmod\resolver.hpp" />
+    <ClInclude Include="include\horizon\fmod\signatures.hpp" />
+    <ClInclude Include="include\horizon\fmod\system_resolver.hpp" />
+    <ClInclude Include="include\horizon\fmod\types.hpp" />
+    <ClInclude Include="include\horizon\inject\game_resolver.hpp" />
+    <ClInclude Include="include\horizon\inject\heap_scan.hpp" />
+    <ClInclude Include="include\horizon\inject\metadata_injector.hpp" />
+    <ClInclude Include="include\horizon\inject\msvc_rtti.hpp" />
+    <ClInclude Include="include\horizon\inject\msvc_string.hpp" />
+    <ClInclude Include="include\horizon\inject\safe_mem.hpp" />
+    <ClInclude Include="include\horizon\inject\sigscan.hpp" />
+    <ClInclude Include="include\horizon\ipc\ipc_server.hpp" />
+    <ClInclude Include="include\horizon\ipc\pcm_pipe_server.hpp" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+</Project>

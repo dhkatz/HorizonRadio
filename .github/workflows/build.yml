@@ -1,0 +1,77 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    name: Build + test (Windows x64)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-binary-cache
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Set up .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: cargo-${{ runner.os }}-${{ hashFiles('Librespot/Librespot.vcxproj') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      - name: Bootstrap vcpkg
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+          .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Cache vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', '.gitmodules') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-
+
+      - name: Build C++ side (Debug, x64)
+        run: msbuild HorizonRadio.slnx /p:Configuration=Debug /p:Platform=x64 /m /v:minimal
+
+      - name: Run C++ tests
+        run: build/Debug/HorizonRadio.Tests.exe
+
+      # C# side runs second so the C++ outputs (version.dll +
+      # librespot.exe) are already on disk by the time the UI's
+      # <None Include> items try to pick them up.
+      - name: Build C# UI
+        run: dotnet build HorizonRadio.UI.slnx -c Debug --nologo
+
+      - name: Upload version.dll artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: version-dll
+          path: build/Debug/version.dll
+          if-no-files-found: error

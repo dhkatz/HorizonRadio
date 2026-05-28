@@ -1,0 +1,125 @@
+name: Publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach artifacts to.
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Publish release asset
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-binary-cache
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Set up .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: cargo-${{ runner.os }}-${{ hashFiles('Librespot/Librespot.vcxproj') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      - name: Bootstrap vcpkg
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
+          .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Cache vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', '.gitmodules') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-
+
+      - name: Resolve release tag
+        id: release
+        shell: pwsh
+        run: |
+          $tag = '${{ github.event.release.tag_name }}'
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            $tag = '${{ inputs.tag }}'
+          }
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            throw 'Release tag could not be resolved.'
+          }
+          $safeTag = $tag -replace '[^A-Za-z0-9_.-]', '-'
+          # Drop a leading 'v' from the in-binary Version property so
+          # AssemblyVersion stays a plain SemVer string ("1.0.0",
+          # not "v1.0.0"). The asset filename keeps the original tag.
+          $semver = $tag -replace '^v', ''
+          "tag=$tag"          >> $env:GITHUB_OUTPUT
+          "safe_tag=$safeTag" >> $env:GITHUB_OUTPUT
+          "semver=$semver"    >> $env:GITHUB_OUTPUT
+
+      # Builds version.dll + librespot.exe into build/Release/. The
+      # HorizonRadio.UI csproj's <None Include> items pick these up
+      # automatically and copy them into the UI's publish output.
+      - name: Build C++ side (Release, x64)
+        run: msbuild HorizonRadio.slnx /p:Configuration=Release /p:Platform=x64 /m /v:minimal
+
+      - name: Run C++ tests
+        run: build/Release/HorizonRadio.Tests.exe
+
+      # Self-contained publish so end users don't need a separate
+      # .NET runtime install. The csproj's ZipPublishOutput target
+      # fires automatically after Publish and drops a zip into
+      # build/release/HorizonRadio.zip — that zip is what we upload.
+      - name: Publish UI + create zip
+        run: >
+          dotnet publish HorizonRadio.UI/HorizonRadio.UI.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:Version=${{ steps.release.outputs.semver }}
+
+      - name: Rename zip with release tag
+        id: archive
+        shell: pwsh
+        run: |
+          $safeTag = '${{ steps.release.outputs.safe_tag }}'
+          $src = 'build/release/HorizonRadio.zip'
+          $dst = "build/release/HorizonRadio-$safeTag.zip"
+          Move-Item $src $dst -Force
+          "zip=$dst" >> $env:GITHUB_OUTPUT
+
+      - name: Attach archive to release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload '${{ steps.release.outputs.tag }}' '${{ steps.archive.outputs.zip }}' --clobber

@@ -1,0 +1,15 @@
+<Project>
+  <PropertyGroup>
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
+  </PropertyGroup>
+
+  <!--
+    Only pull vcpkg's MSBuild integration into C++ projects. Without this
+    scope, the import injects itself into HorizonRadio.UI's .csproj and
+    related .NET projects, producing MSB4011 duplicate-import warnings
+    (and confusing the SDK resolver into looking for C++ headers it
+    will never need).
+  -->
+  <Import Project="$(MSBuildThisFileDirectory)vcpkg\scripts\buildsystems\msbuild\vcpkg.props"
+          Condition="'$(MSBuildProjectExtension)' == '.vcxproj' and exists('$(MSBuildThisFileDirectory)vcpkg\scripts\buildsystems\msbuild\vcpkg.props')" />
+</Project>

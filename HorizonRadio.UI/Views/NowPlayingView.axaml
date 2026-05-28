@@ -1,0 +1,151 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             xmlns:shad="clr-namespace:ShadUI;assembly=ShadUI"
+             mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="480"
+             x:Class="HorizonRadio.UI.Views.NowPlayingView"
+             x:DataType="vm:NowPlayingViewModel">
+
+    <Design.DataContext>
+        <vm:NowPlayingViewModel />
+    </Design.DataContext>
+
+    <Grid RowDefinitions="*,Auto,Auto" Margin="24">
+
+        <!-- Centered card with album art on the left, text on the right -->
+        <Border Grid.Row="0"
+                Classes="Card"
+                Padding="32"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Center">
+            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,*">
+
+                <!-- Album art tile. Falls back to a placeholder block
+                     when no APIC/art is available (Spotify Connect
+                     today doesn't expose art via librespot stderr). -->
+                <Border Grid.Row="0" Grid.RowSpan="4" Grid.Column="0"
+                        Width="180" Height="180"
+                        CornerRadius="8"
+                        Background="{DynamicResource MutedColor}"
+                        Margin="0,0,24,0"
+                        ClipToBounds="True">
+                    <Image Source="{Binding AlbumArt}"
+                           Stretch="UniformToFill"
+                           IsVisible="{Binding AlbumArt, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                </Border>
+
+                <!-- Source badge. Hidden in the empty-state where the
+                     source is "—" and the pill would float orphan-y
+                     above placeholder text. -->
+                <Border Grid.Row="0" Grid.Column="1"
+                        Padding="8,3"
+                        CornerRadius="999"
+                        Background="{DynamicResource PrimaryColor}"
+                        HorizontalAlignment="Left"
+                        Margin="0,0,0,12"
+                        IsVisible="{Binding HasActiveSource}">
+                    <TextBlock Text="{Binding SourceDisplay}"
+                               FontSize="11"
+                               FontWeight="Medium"
+                               Foreground="{DynamicResource PrimaryForegroundColor}" />
+                </Border>
+
+                <!-- Title -->
+                <TextBlock Grid.Row="1" Grid.Column="1"
+                           Text="{Binding Title}"
+                           FontSize="28"
+                           FontWeight="Bold"
+                           TextWrapping="Wrap" />
+
+                <!-- Artist -->
+                <TextBlock Grid.Row="2" Grid.Column="1"
+                           Text="{Binding Artist}"
+                           FontSize="16"
+                           Opacity="0.72"
+                           Margin="0,4,0,0"
+                           TextWrapping="Wrap" />
+
+                <!-- Album (optional) -->
+                <TextBlock Grid.Row="3" Grid.Column="1"
+                           Text="{Binding Album}"
+                           FontSize="13"
+                           Opacity="0.55"
+                           Margin="0,8,0,0"
+                           IsVisible="{Binding Album, Converter={x:Static ObjectConverters.IsNotNull}}"
+                           TextWrapping="Wrap" />
+            </Grid>
+        </Border>
+
+        <!-- Transport controls. Visible when the active source
+             implements ITransportControls (LocalFiles yes; Spotify no
+             since librespot doesn't accept commands from outside the
+             Connect protocol). -->
+        <StackPanel Grid.Row="1"
+                    Orientation="Horizontal"
+                    Margin="0,16,0,0"
+                    HorizontalAlignment="Center"
+                    Spacing="8"
+                    IsVisible="{Binding HasTransport}">
+            <Button Classes="Secondary"
+                    Command="{Binding PreviousCommand}"
+                    IsEnabled="{Binding CanSkipPrevious}"
+                    Width="44" Height="44"
+                    FontSize="18"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"
+                    Content="&#x23EE;"
+                    ToolTip.Tip="Previous"/>
+            <Button Command="{Binding TogglePauseCommand}"
+                    IsEnabled="{Binding CanPause}"
+                    Classes="Primary"
+                    Width="52" Height="52"
+                    FontSize="20"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"
+                    ToolTip.Tip="Play/Pause">
+                <Panel>
+                    <TextBlock Text="&#x25B6;"  IsVisible="{Binding IsPaused}"/>
+                    <TextBlock Text="&#x23F8;"  IsVisible="{Binding !IsPaused}"/>
+                </Panel>
+            </Button>
+            <Button Classes="Secondary"
+                    Command="{Binding NextCommand}"
+                    IsEnabled="{Binding CanSkipNext}"
+                    Width="44" Height="44"
+                    FontSize="18"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"
+                    Content="&#x23ED;"
+                    ToolTip.Tip="Next"/>
+        </StackPanel>
+
+        <!-- Source switcher row at the bottom. Always visible — picking
+             from here drives the C# SourceRunner with the source's
+             persisted config, no DLL round-trip needed. -->
+        <StackPanel Grid.Row="2"
+                    Margin="0,24,0,0"
+                    HorizontalAlignment="Center"
+                    Spacing="6">
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                <TextBlock Text="Source:" VerticalAlignment="Center" Opacity="0.6" />
+                <ComboBox ItemsSource="{Binding AvailableSources}"
+                          SelectedItem="{Binding SelectedFactory, Mode=TwoWay}"
+                          MinWidth="220">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding DisplayName}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
+            <TextBlock Text="{Binding SwitchStatus}"
+                       FontSize="11"
+                       Opacity="0.7"
+                       HorizontalAlignment="Center"
+                       TextWrapping="Wrap"
+                       IsVisible="{Binding SwitchStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+        </StackPanel>
+    </Grid>
+</UserControl>
