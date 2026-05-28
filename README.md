@@ -57,4 +57,4 @@ dotnet publish HorizonRadio.UI/HorizonRadio.UI.csproj -c Release -r win-x64 --se
 
 ## License
 
-MIT.
+GPLv3 — see [LICENSE](LICENSE).

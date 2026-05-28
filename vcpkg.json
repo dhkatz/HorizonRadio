@@ -4,7 +4,7 @@
   "version-string": "0.1.0",
   "description": "Clean-room replacement for Forza Horizon 6's in-game radio.",
   "homepage": "https://github.com/dkatz/horizon-radio",
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "dependencies": [
     {
       "name": "doctest",
