@@ -31,9 +31,7 @@ In FH6's audio settings:
 
 [Releases]: https://github.com/dhkatz/horizon-radio/releases
 
-## Building from source
-
-The repo has two solutions — keep them separate (cross-toolchain MSBuild quirks otherwise).
+## Building
 
 | Solution               | Builds              | Requires                                        |
 |------------------------|---------------------|-------------------------------------------------|
