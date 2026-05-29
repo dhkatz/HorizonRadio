@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using HorizonRadio.Core.Sources.InternetRadio;
 
 namespace HorizonRadio.Core.Sources;
 
@@ -18,6 +19,7 @@ public static class SourceCatalog
     {
         new LocalFileSourceFactory(),
         new SpotifyLibrespotSourceFactory(),
+        new InternetRadioSourceFactory(),
         new TestToneSourceFactory(),
     };
 
