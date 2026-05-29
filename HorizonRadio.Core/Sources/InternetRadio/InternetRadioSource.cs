@@ -474,25 +474,53 @@ internal sealed class IcyMetaStream : Stream
     {
         if (_metaInt == 0)
         {
-            int n = _inner.Read(buffer, offset, count);
+            int n = ReadInnerFully(buffer, offset, count);
             _position += n;
             return n;
         }
 
-        // Only request up to _bytesUntilMeta audio bytes so we stop
-        // exactly at the boundary where the next metadata block lives.
-        int toRead = Math.Min(count, _bytesUntilMeta);
-        int actual = _inner.Read(buffer, offset, toRead);
-        if (actual <= 0) return actual;
-
-        _position += actual;
-        _bytesUntilMeta -= actual;
-        if (_bytesUntilMeta == 0)
+        // Loop across ICY meta block boundaries so callers always get
+        // exactly `count` bytes (or EOF). Without this, a short read at a
+        // meta boundary causes Mp3Frame.LoadFromStream to throw EndOfStream.
+        int total = 0;
+        while (total < count)
         {
-            ReadAndParseMetaBlock();
-            _bytesUntilMeta = _metaInt;
+            int toRead = Math.Min(count - total, _bytesUntilMeta);
+            int actual = ReadInnerFully(buffer, offset + total, toRead);
+            if (actual <= 0) break; // true EOF
+
+            _position      += actual;
+            _bytesUntilMeta -= actual;
+            total           += actual;
+
+            if (_bytesUntilMeta == 0)
+            {
+                ReadAndParseMetaBlock();
+                _bytesUntilMeta = _metaInt;
+            }
         }
-        return actual;
+        return total;
+    }
+
+    // Read from inner stream, retrying on 0-byte reads (network buffer not ready)
+    // so callers never see a spurious 0 that looks like EOF.
+    private int ReadInnerFully(byte[] buffer, int offset, int count)
+    {
+        int total = 0;
+        while (total < count)
+        {
+            int n = _inner.Read(buffer, offset + total, count - total);
+            if (n < 0) break;   // true EOF
+            if (n == 0)
+            {
+                // Spin-wait briefly; HTTP streams can stall for a tick
+                System.Threading.Thread.Sleep(1);
+                continue;
+            }
+            total += n;
+            break; // return partial reads — let the caller loop if needed
+        }
+        return total;
     }
 
     private void ReadAndParseMetaBlock()
@@ -506,7 +534,8 @@ internal sealed class IcyMetaStream : Stream
         while (got < blockLen)
         {
             int n = _inner.Read(blockBuf, got, blockLen - got);
-            if (n <= 0) break;
+            if (n < 0) break;
+            if (n == 0) { System.Threading.Thread.Sleep(1); continue; }
             got += n;
         }
 
