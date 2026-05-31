@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.UI.Tools;
 
 namespace HorizonRadio.UI.ViewModels;
 
@@ -18,22 +19,24 @@ namespace HorizonRadio.UI.ViewModels;
 /// </summary>
 public sealed partial class SourcesViewModel : ViewModelBase
 {
-    private readonly SourceRunner       _runner;
-    private readonly SourceConfigStore  _store;
+    private readonly SourceRunner _runner;
+    private readonly SourceConfigStore _store;
+    private readonly ToolRegistry? _registry;
 
     public ObservableCollection<IAudioSourceFactory> AvailableSources { get; } = new();
-    public ObservableCollection<ConfigFieldViewModel> CurrentSchema   { get; } = new();
+    public ObservableCollection<ConfigFieldViewModel> CurrentSchema { get; } = new();
 
     [ObservableProperty] private IAudioSourceFactory? selectedFactory;
-    [ObservableProperty] private bool   isRunning;
+    [ObservableProperty] private bool isRunning;
     [ObservableProperty] private string statusMessage = "";
-    [ObservableProperty] private bool   hasError;
-    [ObservableProperty] private bool   hasNoSchema;
+    [ObservableProperty] private bool hasError;
+    [ObservableProperty] private bool hasNoSchema;
 
-    public SourcesViewModel(SourceRunner runner, SourceConfigStore store)
+    public SourcesViewModel(SourceRunner runner, SourceConfigStore store, ToolRegistry? registry = null)
     {
         _runner = runner;
-        _store  = store;
+        _store = store;
+        _registry = registry;
 
         foreach (var f in SourceCatalog.All) AvailableSources.Add(f);
 
@@ -49,7 +52,8 @@ public sealed partial class SourcesViewModel : ViewModelBase
     /// the view without a runner).</summary>
     public SourcesViewModel() : this(
         new SourceRunner(new NullSink()),
-        new SourceConfigStore()) { }
+        new SourceConfigStore())
+    { }
 
     private sealed class NullSink : Core.Sources.IPcmSink
     {
@@ -73,7 +77,7 @@ public sealed partial class SourcesViewModel : ViewModelBase
 
         foreach (var field in factory.Schema)
         {
-            var fvm = ConfigFieldViewModel.For(field);
+            var fvm = ConfigFieldViewModel.For(field, _registry);
             if (stored.TryGetValue(field.Key, out var v)) fvm.SetValue(v);
             CurrentSchema.Add(fvm);
         }

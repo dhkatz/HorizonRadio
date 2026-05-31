@@ -1,32 +1,32 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using HorizonRadio.Core.Sources.Config;
 
-namespace HorizonRadio.Core.Sources;
+namespace HorizonRadio.Core.Sources.Spotify;
 
 /// <summary>
-/// Factory for <see cref="SpotifyLibrespotSource"/>. Exposes the
+/// Factory for <see cref="SpotifySource"/>. Exposes the
 /// commonly-tweaked librespot knobs as schema fields so users don't
 /// have to read CLI docs to change them.
 /// </summary>
-public sealed class SpotifyLibrespotSourceFactory : IAudioSourceFactory
+public sealed class SpotifySourceFactory : IAudioSourceFactory
 {
-    public const string KeyExecutable  = "executable";
-    public const string KeyDeviceName  = "deviceName";
-    public const string KeyCacheDir    = "cacheDir";
-    public const string KeyBitrate     = "bitrate";
-    public const string KeyNormalise   = "normalise";
+    public const string KeyExecutable = "executable";
+    public const string KeyDeviceName = "deviceName";
+    public const string KeyCacheDir = "cacheDir";
+    public const string KeyBitrate = "bitrate";
+    public const string KeyNormalise = "normalise";
 
-    public string  Id          => "spotify";
-    public string  DisplayName => "Spotify Connect";
+    private static readonly string[] ExeExtensions = ["exe"];
+    private static readonly string[] BitrateOptions = ["auto", "96", "160", "320"];
+
+    public string Id => "spotify";
+    public string DisplayName => "Spotify Connect";
     public string? Description => "Stream from Spotify via librespot. Cast from your Spotify app to the configured device name.";
 
     public IReadOnlyList<ConfigField> Schema { get; }
 
-    public SpotifyLibrespotSourceFactory()
+    public SpotifySourceFactory()
     {
-        var defaultExe   = DiscoverLibrespotExe() ?? "";
+        var defaultExe = DiscoverLibrespotExe() ?? "";
         var defaultCache = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "HorizonRadio", "librespot");
@@ -36,7 +36,7 @@ public sealed class SpotifyLibrespotSourceFactory : IAudioSourceFactory
             new FileField(
                 Key:             KeyExecutable,
                 Label:           "librespot.exe path",
-                ExtensionFilter: new[] { "exe" },
+                ExtensionFilter: ExeExtensions,
                 Default:         defaultExe,
                 Description:     "Full path to librespot.exe. Bundled copy auto-detected if it lives next to the UI."),
 
@@ -56,7 +56,7 @@ public sealed class SpotifyLibrespotSourceFactory : IAudioSourceFactory
             new EnumField(
                 Key:         KeyBitrate,
                 Label:       "Bitrate",
-                Options:     new[] { "auto", "96", "160", "320" },
+                Options:     BitrateOptions,
                 Default:     "auto",
                 Description: "Auto lets librespot pick the highest the account is licensed for. Forcing 320 on Free can cause skip-on-play."),
 
@@ -84,21 +84,18 @@ public sealed class SpotifyLibrespotSourceFactory : IAudioSourceFactory
                 "HorizonRadio", "librespot");
 
         var bitrate = values.GetString(KeyBitrate) ?? "auto";
-        var norm    = values.GetBool(KeyNormalise, true);
+        var norm = values.GetBool(KeyNormalise, true);
 
-        return new SpotifyLibrespotSource(new SpotifyLibrespotOptions
+        return new SpotifySource(new SpotifyOptions
         {
-            ExecutablePath            = exe,
-            DeviceName                = device!,
-            CacheDirectory            = cache!,
-            Bitrate                   = bitrate,
+            ExecutablePath = exe,
+            DeviceName = device!,
+            CacheDirectory = cache!,
+            Bitrate = bitrate,
             EnableVolumeNormalisation = norm,
         });
     }
 
-    /// <summary>Best-effort search for librespot.exe in the usual
-    /// places. Returns null if not found; user picks one via the
-    /// file field.</summary>
     private static string? DiscoverLibrespotExe()
     {
         var here = AppContext.BaseDirectory;

@@ -38,14 +38,14 @@ public sealed partial class StatsViewModel : ViewModelBase
     public string BridgeStatusLabel => BridgeInstalled ? "Installed" : "Dormant";
     public string BridgeStatusBrush => BridgeInstalled ? "#22c55e" : "#6b7280";
 
-    [ObservableProperty] private ulong  framesIn;
-    [ObservableProperty] private ulong  framesOut;
-    [ObservableProperty] private ulong  underruns;
-    [ObservableProperty] private float  normalizerGain   = 1.0f;
-    [ObservableProperty] private float  limiterGain      = 1.0f;
+    [ObservableProperty] private ulong framesIn;
+    [ObservableProperty] private ulong framesOut;
+    [ObservableProperty] private ulong underruns;
+    [ObservableProperty] private float normalizerGain = 1.0f;
+    [ObservableProperty] private float limiterGain = 1.0f;
     [ObservableProperty] private double framesInPerSecond;
     [ObservableProperty] private double framesOutPerSecond;
-    [ObservableProperty] private bool   isConnected;
+    [ObservableProperty] private bool isConnected;
 
     /// <summary>Producer rate as a percentage of the 44.1 kHz target.
     /// 100 means the source is delivering frames at exactly the rate
@@ -66,16 +66,16 @@ public sealed partial class StatsViewModel : ViewModelBase
     /// <summary>Rolling 30-second history feeding the throughput
     /// chart. ObservableCollection so LiveCharts picks up adds/removes
     /// without us rebinding the Series on every tick.</summary>
-    public ObservableCollection<double> FramesInHistory  { get; } = new();
+    public ObservableCollection<double> FramesInHistory { get; } = new();
     public ObservableCollection<double> FramesOutHistory { get; } = new();
     public ObservableCollection<double> UnderrunSparkline { get; } = new();
 
     public ISeries[] ThroughputSeries { get; }
-    public ISeries[] UnderrunSeries   { get; }
-    public Axis[]    XAxes            { get; }
-    public Axis[]    YAxes            { get; }
-    public Axis[]    UnderrunXAxes    { get; }
-    public Axis[]    UnderrunYAxes    { get; }
+    public ISeries[] UnderrunSeries { get; }
+    public Axis[] XAxes { get; }
+    public Axis[] YAxes { get; }
+    public Axis[] UnderrunXAxes { get; }
+    public Axis[] UnderrunYAxes { get; }
 
     private BridgeStats? _previous;
     private DateTime _previousTimestamp = DateTime.MinValue;
@@ -167,28 +167,28 @@ public sealed partial class StatsViewModel : ViewModelBase
     public void Apply(BridgeStats stats)
     {
         var now = DateTime.UtcNow;
-        double inRate  = 0, outRate = 0;
-        ulong  underrunDelta = 0;
+        double inRate = 0, outRate = 0;
+        ulong underrunDelta = 0;
         if (_previous != null)
         {
             var dtSec = (now - _previousTimestamp).TotalSeconds;
             if (dtSec > 0.05)
             {
-                inRate  = (stats.FramesIn  - _previous.FramesIn ) / dtSec;
+                inRate = (stats.FramesIn - _previous.FramesIn) / dtSec;
                 outRate = (stats.FramesOut - _previous.FramesOut) / dtSec;
             }
             underrunDelta = stats.Underruns - _previous.Underruns;
         }
-        _previous          = stats;
+        _previous = stats;
         _previousTimestamp = now;
 
-        BridgeInstalled  = stats.Installed;
-        FramesIn         = stats.FramesIn;
-        FramesOut        = stats.FramesOut;
-        Underruns        = stats.Underruns;
-        NormalizerGain   = stats.NormalizerGain;
-        LimiterGain      = stats.LimiterGain;
-        FramesInPerSecond  = inRate;
+        BridgeInstalled = stats.Installed;
+        FramesIn = stats.FramesIn;
+        FramesOut = stats.FramesOut;
+        Underruns = stats.Underruns;
+        NormalizerGain = stats.NormalizerGain;
+        LimiterGain = stats.LimiterGain;
+        FramesInPerSecond = inRate;
         FramesOutPerSecond = outRate;
 
         // Producer rate vs the 44.1 kHz target. A healthy C# source
@@ -206,7 +206,7 @@ public sealed partial class StatsViewModel : ViewModelBase
             ? FormatUptime(now - since)
             : "—";
 
-        AppendRolling(FramesInHistory,  inRate);
+        AppendRolling(FramesInHistory, inRate);
         AppendRolling(FramesOutHistory, outRate);
         AppendRolling(UnderrunSparkline, underrunDelta);
     }
@@ -216,19 +216,19 @@ public sealed partial class StatsViewModel : ViewModelBase
         IsConnected = connected;
         if (!connected)
         {
-            BridgeInstalled    = false;
+            BridgeInstalled = false;
             FramesIn = FramesOut = Underruns = 0;
-            FramesInPerSecond  = 0;
+            FramesInPerSecond = 0;
             FramesOutPerSecond = 0;
-            NormalizerGain     = 1.0f;
-            LimiterGain        = 1.0f;
+            NormalizerGain = 1.0f;
+            LimiterGain = 1.0f;
             ProducerRatePercent = 0;
-            UptimeLabel        = "—";
-            _previous          = null;
-            _installedSince    = null;
+            UptimeLabel = "—";
+            _previous = null;
+            _installedSince = null;
             for (int i = 0; i < HistoryLength; ++i)
             {
-                FramesInHistory[i]  = 0;
+                FramesInHistory[i] = 0;
                 FramesOutHistory[i] = 0;
                 UnderrunSparkline[i] = 0;
             }

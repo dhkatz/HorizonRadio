@@ -3,6 +3,18 @@
     <VcpkgEnableManifest>true</VcpkgEnableManifest>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.csproj'">
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.vcxproj'">
+    <EnableClangTidyCodeAnalysis>true</EnableClangTidyCodeAnalysis>
+    <EnableMicrosoftCodeAnalysis>false</EnableMicrosoftCodeAnalysis>
+    <ClangTidyToolPath Condition="'$(ClangTidyToolPath)' == '' and '$(VsInstallRoot)' != ''">$(VsInstallRoot)\VC\Tools\Llvm\x64\bin</ClangTidyToolPath>
+  </PropertyGroup>
+
   <!--
     Only pull vcpkg's MSBuild integration into C++ projects. Without this
     scope, the import injects itself into HorizonRadio.UI's .csproj and

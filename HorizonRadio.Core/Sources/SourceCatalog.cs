@@ -1,5 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
+using HorizonRadio.Core.Sources.Local;
+using HorizonRadio.Core.Sources.Spotify;
+using HorizonRadio.Core.Sources.Test;
+using HorizonRadio.Core.Sources.YouTube;
 
 namespace HorizonRadio.Core.Sources;
 
@@ -14,12 +18,13 @@ namespace HorizonRadio.Core.Sources;
 /// </summary>
 public static class SourceCatalog
 {
-    public static IReadOnlyList<IAudioSourceFactory> All { get; } = new IAudioSourceFactory[]
-    {
+    public static IReadOnlyList<IAudioSourceFactory> All { get; } =
+    [
         new LocalFileSourceFactory(),
-        new SpotifyLibrespotSourceFactory(),
-        new TestToneSourceFactory(),
-    };
+        new SpotifySourceFactory(),
+        new YouTubeSourceFactory(),
+        new TestToneSourceFactory()
+    ];
 
     public static IAudioSourceFactory? Find(string id) =>
         All.FirstOrDefault(f => f.Id == id);

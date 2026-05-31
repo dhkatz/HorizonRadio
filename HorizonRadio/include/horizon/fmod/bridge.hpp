@@ -1,13 +1,12 @@
 #pragma once
 
-#include <horizon/audio/normalizer.hpp>
-#include <horizon/audio/ring_buffer.hpp>
-#include <horizon/fmod/types.hpp>
-
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <horizon/audio/normalizer.hpp>
+#include <horizon/audio/ring_buffer.hpp>
+#include <horizon/fmod/types.hpp>
 
 namespace horizon::fmod {
 
@@ -38,7 +37,7 @@ namespace horizon::fmod {
 // simultaneously is unsafe.
 class FmodBridge {
 public:
-    explicit FmodBridge(ResolvedHooks hooks);
+    explicit FmodBridge(const ResolvedHooks& hooks);
     ~FmodBridge();
 
     // Late-binding hook: install_on_handle() calls this when createDsp
@@ -47,8 +46,10 @@ public:
     // certain FH6 builds the LEA isn't visible until the audio system
     // has actually been touched. Returning a non-null pointer commits
     // it as hooks_.createDsp for the rest of the bridge lifetime.
-    using CreateDspResolver = std::function<horizon::fmod::SystemCreateDspFn()>;
-    void set_create_dsp_resolver(CreateDspResolver fn) { lazy_create_dsp_ = std::move(fn); }
+    using CreateDspResolver = std::function<SystemCreateDspFn()>;
+    void set_create_dsp_resolver(CreateDspResolver fn) {
+        lazy_create_dsp_ = std::move(fn);
+    }
 
     FmodBridge(const FmodBridge&)            = delete;
     FmodBridge& operator=(const FmodBridge&) = delete;
@@ -95,27 +96,45 @@ public:
         resample_enabled_.store(enabled, std::memory_order_release);
     }
 
+    // Master output gain (0..1), applied in the read callback after the
+    // normalizer. Drives the Events "set volume / duck" action via the
+    // set_gain IPC command. Default 1.0 (unity). Safe to set any time.
+    void set_master_gain(float gain) noexcept {
+        master_gain_.store(gain, std::memory_order_release);
+    }
+    float master_gain() const noexcept {
+        return master_gain_.load(std::memory_order_acquire);
+    }
+
     // Access the per-bridge AGC + peak-limiter. Enabled by default
     // with broadcast-ish defaults; turn off via .set_enabled(false)
     // if you want raw source level.
-    horizon::audio::Normalizer&       normalizer()       noexcept { return normalizer_; }
-    const horizon::audio::Normalizer& normalizer() const noexcept { return normalizer_; }
+    audio::Normalizer& normalizer() noexcept {
+        return normalizer_;
+    }
+    const audio::Normalizer& normalizer() const noexcept {
+        return normalizer_;
+    }
 
     // Stats used by the /api/state surface and for debugging.
-    std::uint64_t total_frames_in()  const noexcept { return frames_in_.load(std::memory_order_relaxed); }
-    std::uint64_t total_frames_out() const noexcept { return frames_out_.load(std::memory_order_relaxed); }
-    std::uint64_t underrun_count()   const noexcept { return underruns_.load(std::memory_order_relaxed); }
-    std::uint64_t callback_count()   const noexcept { return callbacks_.load(std::memory_order_relaxed); }
+    std::uint64_t total_frames_in() const noexcept {
+        return frames_in_.load(std::memory_order_relaxed);
+    }
+    std::uint64_t total_frames_out() const noexcept {
+        return frames_out_.load(std::memory_order_relaxed);
+    }
+    std::uint64_t underrun_count() const noexcept {
+        return underruns_.load(std::memory_order_relaxed);
+    }
+    std::uint64_t callback_count() const noexcept {
+        return callbacks_.load(std::memory_order_relaxed);
+    }
 
 private:
     // FMOD callback dispatch. The trampoline reads the process-global
     // active-bridge pointer; the instance method `read` fills out_buffer.
-    static Result read_trampoline(DspState* state,
-                                  float*    in_buffer,
-                                  float*    out_buffer,
-                                  unsigned int length,
-                                  int       inchannels,
-                                  int*      outchannels);
+    static Result read_trampoline(DspState* state, float* in_buffer, float* out_buffer, unsigned int length,
+                                  int inchannels, int* outchannels);
 
     Result read(float* out_buffer, unsigned int length, int outchannels);
 
@@ -131,35 +150,36 @@ private:
     void uninstall_internal() noexcept;
 
     static constexpr std::size_t kChannels   = 2;
-    static constexpr std::size_t kRingFrames = 65536;  // ~1.5s at 44.1kHz stereo
+    static constexpr std::size_t kRingFrames = 65536; // ~1.5s at 44.1kHz stereo
 
-    ResolvedHooks    hooks_;
+    ResolvedHooks     hooks_;
     CreateDspResolver lazy_create_dsp_;
 
     // Live targets, only mutated from the control thread (tick caller).
-    System*          system_       = nullptr;
-    std::byte*       radio_stream_ = nullptr;
+    System*    system_       = nullptr;
+    std::byte* radio_stream_ = nullptr;
 
     // Current DSP install state, only mutated from the control thread.
-    Dsp*             dsp_            = nullptr;
-    std::uint32_t    current_handle_ = 0;
+    Dsp*          dsp_            = nullptr;
+    std::uint32_t current_handle_ = 0;
 
     horizon::audio::SpscRingBuffer<std::int16_t> ring_;
 
     // Resampler scratch. Only the FMOD mixer thread touches these.
     // Reset to zero on every install/uninstall (serialized against the
     // mixer by FMOD's removeDSP semantics).
-    double  resample_phase_ = 0.0;
-    std::int16_t prev_l_    = 0;
-    std::int16_t prev_r_    = 0;
-    std::int16_t cur_l_     = 0;
-    std::int16_t cur_r_     = 0;
-    bool have_prev_ = false;
-    bool have_cur_  = false;
+    double       resample_phase_ = 0.0;
+    std::int16_t prev_l_         = 0;
+    std::int16_t prev_r_         = 0;
+    std::int16_t cur_l_          = 0;
+    std::int16_t cur_r_          = 0;
+    bool         have_prev_      = false;
+    bool         have_cur_       = false;
 
     horizon::audio::Normalizer normalizer_;
 
     std::atomic<bool>          resample_enabled_{true};
+    std::atomic<float>         master_gain_{1.0f};
     std::atomic<std::uint64_t> frames_in_{0};
     std::atomic<std::uint64_t> frames_out_{0};
     std::atomic<std::uint64_t> underruns_{0};
@@ -177,7 +197,7 @@ private:
     // callback: discards everything currently readable so the consumer
     // resumes from whatever the producer is writing right now,
     // not from queued-during-pause audio.
-    std::atomic<bool>          drain_request_{false};
+    std::atomic<bool> drain_request_{false};
 };
 
 } // namespace horizon::fmod

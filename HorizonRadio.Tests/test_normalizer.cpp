@@ -1,8 +1,6 @@
-#include <doctest/doctest.h>
-
-#include <horizon/audio/normalizer.hpp>
-
 #include <cmath>
+#include <doctest/doctest.h>
+#include <horizon/audio/normalizer.hpp>
 
 using horizon::audio::Normalizer;
 
@@ -18,16 +16,15 @@ struct ProcessResult {
     float last_r;
 };
 
-ProcessResult drive_sine(Normalizer& n, float input_peak,
-                          std::size_t frames) {
+ProcessResult drive_sine(Normalizer& n, float input_peak, std::size_t frames) {
     constexpr float kFreq = 440.0f;
     constexpr float kSr   = 48000.0f;
-    ProcessResult r{};
+    ProcessResult   r{};
     for (std::size_t i = 0; i < frames; ++i) {
-        const float t = static_cast<float>(i) / kSr;
-        const float v = input_peak * std::sin(2.0f * 3.14159265f * kFreq * t);
-        float l = v;
-        float r2 = v;
+        const float t  = static_cast<float>(i) / kSr;
+        const float v  = input_peak * std::sin(2.0f * 3.14159265f * kFreq * t);
+        float       l  = v;
+        float       r2 = v;
         n.process_stereo(l, r2);
         r.peak_out = std::max(r.peak_out, std::max(std::abs(l), std::abs(r2)));
         r.last_l   = l;
@@ -49,7 +46,7 @@ TEST_CASE("Normalizer: disabled passes input through unchanged") {
 
 TEST_CASE("Normalizer: peak limiter prevents output above ceiling") {
     Normalizer n;
-    n.set_target_rms(0.5f);   // very high target so AGC won't pull down on its own
+    n.set_target_rms(0.5f); // very high target so AGC won't pull down on its own
     n.set_peak_threshold(0.9f);
     // Drive 5 seconds of full-scale sine. The limiter's slow release
     // means it'll settle below the threshold within the first second.
@@ -78,12 +75,12 @@ TEST_CASE("Normalizer: AGC attenuates a hot source") {
     // unity since the source is way above target loudness.
     drive_sine(n, 1.0f, 60 * 48000);
     CHECK(n.current_gain() < 0.5f);
-    CHECK(n.current_gain() >= 0.1f);  // never exceeds min_gain floor
+    CHECK(n.current_gain() >= 0.1f); // never exceeds min_gain floor
 }
 
 TEST_CASE("Normalizer: reset() returns gain to unity") {
     Normalizer n;
-    drive_sine(n, 0.9f, 10000);  // drive AGC away from unity
+    drive_sine(n, 0.9f, 10000); // drive AGC away from unity
     n.reset();
     CHECK(n.current_gain() == 1.0f);
     CHECK(n.current_limiter_gain() == 1.0f);

@@ -18,15 +18,20 @@ namespace HorizonRadio.Core.Sources;
 /// </summary>
 public interface ITransportControls
 {
-    bool CanPause       { get; }
-    bool CanSkipNext    { get; }
-    bool CanSkipPrevious{ get; }
+    bool CanPause { get; }
+    bool CanSkipNext { get; }
+    bool CanSkipPrevious { get; }
 
     bool IsPaused { get; }
 
     Task TogglePauseAsync();
     Task NextAsync();
     Task PreviousAsync();
+
+    /// <summary>Restart the current track from the beginning. Default is a
+    /// no-op so sources that can't seek (or don't want to) need not opt in;
+    /// playlist sources override it to replay the current entry.</summary>
+    Task RestartAsync() => Task.CompletedTask;
 
     /// <summary>Raised when pause state changes (either via
     /// TogglePauseAsync or by the source itself, e.g. EOF stall).</summary>

@@ -7,81 +7,76 @@ using HorizonRadio.Core.Sources;
 
 namespace HorizonRadio.Core.Metadata;
 
-/// <summary>
-/// Subscribes to a <see cref="SourceRunner"/>'s
-/// <see cref="SourceRunner.TrackChanged"/> event, runs each track
-/// through the currently-selected <see cref="IMetadataEnricher"/> in
-/// the background, and re-publishes the enriched track via
-/// <see cref="TrackEnriched"/>.
-///
-/// The enricher is swappable at runtime (Metadata tab) so the user
-/// can switch between Spotify / MusicBrainz / off without restarting.
-/// Setting it to null disables enrichment cleanly.
-///
-/// Each TrackChanged cancels any in-flight enrichment so a fast-
-/// skipping playlist doesn't queue a backlog of stale requests.
-/// </summary>
 public sealed class EnrichmentService : IAsyncDisposable
 {
-    private readonly SourceRunner       _runner;
-    private IMetadataEnricher?          _enricher;
-    private CancellationTokenSource?    _inflight;
+    private readonly SourceRunner _runner;
+    private IMetadataProvider? _provider;
+    private CancellationTokenSource? _inflight;
 
     public event Action<Track>? TrackEnriched;
 
-    public EnrichmentService(SourceRunner runner, IMetadataEnricher? enricher = null)
+    public EnrichmentService(SourceRunner runner, IMetadataProvider? provider = null)
     {
-        _runner   = runner;
-        _enricher = enricher;
+        _runner = runner;
+        _provider = provider;
         _runner.TrackChanged += OnSourceTrackChanged;
     }
 
-    /// <summary>Replace the active enricher. Pass null to disable
-    /// enrichment without tearing down the service.</summary>
-    public void SetEnricher(IMetadataEnricher? enricher)
+    public void SetProvider(IMetadataProvider? provider)
     {
-        _enricher = enricher;
-        _inflight?.Cancel();    // any in-flight call against the old one is stale now
+        var previous = _provider;
+        _provider = provider;
+        _inflight?.Cancel();
+        _inflight?.Dispose();
+        _inflight = null;
+        if (previous != null && !ReferenceEquals(previous, provider))
+            _ = DisposeProviderAsync(previous);
     }
 
-    public IMetadataEnricher? CurrentEnricher => _enricher;
-
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-enrich] {msg}");
+    public IMetadataProvider? CurrentProvider => _provider;
 
     private void OnSourceTrackChanged(Track t)
     {
+        var provider = _provider;
+        if (provider == null) return;
+
         var prev = _inflight;
-        _inflight = new CancellationTokenSource();
+        var current = new CancellationTokenSource();
+        _inflight = current;
         prev?.Cancel();
+        prev?.Dispose();
 
-        var enricher = _enricher;
-        if (enricher == null) return;   // enrichment disabled
-
-        var ct = _inflight.Token;
+        var ct = current.Token;
         _ = Task.Run(async () =>
         {
             try
             {
-                var enriched = await enricher.EnrichAsync(t, ct).ConfigureAwait(false);
+                var enriched = await provider.EnrichAsync(t, ct).ConfigureAwait(false);
                 if (enriched == null || ct.IsCancellationRequested) return;
 
                 if (enriched.AlbumArt == t.AlbumArt &&
-                    enriched.Album    == t.Album    &&
-                    enriched.Artist   == t.Artist   &&
-                    enriched.Title    == t.Title) return;
+                    enriched.Album == t.Album &&
+                    enriched.Artist == t.Artist &&
+                    enriched.Title == t.Title) return;
 
                 TrackEnriched?.Invoke(enriched);
             }
-            catch (OperationCanceledException) { /* normal on skip */ }
-            catch (Exception ex) { Log($"enrich failed: {ex.GetType().Name}: {ex.Message}"); }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { Debug.WriteLine($"[hzn-enrich] {ex.GetType().Name}: {ex.Message}"); }
         }, ct);
     }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         _runner.TrackChanged -= OnSourceTrackChanged;
         _inflight?.Cancel();
         _inflight?.Dispose();
-        return ValueTask.CompletedTask;
+        if (_provider != null) await _provider.DisposeAsync().ConfigureAwait(false);
+    }
+
+    private static async Task DisposeProviderAsync(IMetadataProvider provider)
+    {
+        try { await provider.DisposeAsync().ConfigureAwait(false); }
+        catch (Exception ex) { Debug.WriteLine($"[hzn-enrich] provider dispose: {ex.Message}"); }
     }
 }

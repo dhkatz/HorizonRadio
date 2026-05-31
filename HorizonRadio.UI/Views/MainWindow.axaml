@@ -141,6 +141,33 @@
                         <material:MaterialIcon Kind="PuzzleOutline" Width="18" Height="18"/>
                     </shadui:SidebarItem.Icon>
                 </shadui:SidebarItem>
+
+                <shadui:SidebarItem Content="Tools"
+                                    Command="{Binding ShowToolsCommand}"
+                                    IsChecked="{Binding IsToolsWorkspace}"
+                                    Route="tools">
+                    <shadui:SidebarItem.Icon>
+                        <material:MaterialIcon Kind="Toolbox" Width="18" Height="18"/>
+                    </shadui:SidebarItem.Icon>
+                </shadui:SidebarItem>
+
+                <shadui:SidebarItem Content="Events"
+                                    Command="{Binding ShowEventsCommand}"
+                                    IsChecked="{Binding IsEventsWorkspace}"
+                                    Route="events">
+                    <shadui:SidebarItem.Icon>
+                        <material:MaterialIcon Kind="FlashOutline" Width="18" Height="18"/>
+                    </shadui:SidebarItem.Icon>
+                </shadui:SidebarItem>
+
+                <shadui:SidebarItem Content="Console"
+                                    Command="{Binding ShowConsoleCommand}"
+                                    IsChecked="{Binding IsConsoleWorkspace}"
+                                    Route="console">
+                    <shadui:SidebarItem.Icon>
+                        <material:MaterialIcon Kind="Console" Width="18" Height="18"/>
+                    </shadui:SidebarItem.Icon>
+                </shadui:SidebarItem>
             </StackPanel>
 
             <shadui:Sidebar.Footer>
@@ -255,13 +282,64 @@
                               ToolTip.Tip="Mods">
                     <material:MaterialIcon Kind="PuzzleOutline" Width="18" Height="18"/>
                 </ToggleButton>
+                <ToggleButton Command="{Binding ShowToolsCommand}"
+                              IsChecked="{Binding IsToolsWorkspace}"
+                              Height="40" Width="40"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              Padding="0"
+                              ToolTip.Tip="Tools">
+                    <material:MaterialIcon Kind="Toolbox" Width="18" Height="18"/>
+                </ToggleButton>
+                <ToggleButton Command="{Binding ShowEventsCommand}"
+                              IsChecked="{Binding IsEventsWorkspace}"
+                              Height="40" Width="40"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              Padding="0"
+                              ToolTip.Tip="Events">
+                    <material:MaterialIcon Kind="FlashOutline" Width="18" Height="18"/>
+                </ToggleButton>
+                <ToggleButton Command="{Binding ShowConsoleCommand}"
+                              IsChecked="{Binding IsConsoleWorkspace}"
+                              Height="40" Width="40"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              Padding="0"
+                              ToolTip.Tip="Console">
+                    <material:MaterialIcon Kind="Console" Width="18" Height="18"/>
+                </ToggleButton>
 
             </StackPanel>
           </DockPanel>
         </Border>
 
-        <!-- Workspace content -->
-        <Panel Grid.Column="1">
+        <!-- Workspace content + mod-status banner -->
+        <Grid Grid.Column="1" RowDefinitions="Auto,*">
+
+            <!-- Shown on every tab when the installed mod is missing or
+                 doesn't match this build. -->
+            <Border Grid.Row="0"
+                    IsVisible="{Binding ShowModBanner}"
+                    Background="{DynamicResource SecondaryColor}"
+                    BorderBrush="#f59e0b"
+                    BorderThickness="0,0,0,2"
+                    Padding="16,10">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <material:MaterialIcon Grid.Column="0" Kind="AlertOutline"
+                                           Width="18" Height="18"
+                                           Foreground="#f59e0b"
+                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Grid.Column="1" Text="{Binding ModBannerText}"
+                               VerticalAlignment="Center" TextWrapping="Wrap" FontSize="12"/>
+                    <Button Grid.Column="2" Classes="Primary"
+                            Content="Open Mod Manager"
+                            Command="{Binding ShowModManagerCommand}"
+                            VerticalAlignment="Center" Margin="12,0,0,0"/>
+                </Grid>
+            </Border>
+
+            <Panel Grid.Row="1">
             <Grid IsVisible="{Binding IsNowPlayingWorkspace}">
                 <views:NowPlayingView DataContext="{Binding NowPlaying}"/>
             </Grid>
@@ -277,6 +355,16 @@
             <Grid IsVisible="{Binding IsModManagerWorkspace}">
                 <views:ModManagerView DataContext="{Binding ModManager}"/>
             </Grid>
-        </Panel>
+            <Grid IsVisible="{Binding IsToolsWorkspace}">
+                <views:ToolsView DataContext="{Binding ToolsTab}"/>
+            </Grid>
+            <Grid IsVisible="{Binding IsEventsWorkspace}">
+                <views:EventsView DataContext="{Binding Events}"/>
+            </Grid>
+            <Grid IsVisible="{Binding IsConsoleWorkspace}">
+                <views:ConsoleView DataContext="{Binding Console}"/>
+            </Grid>
+            </Panel>
+        </Grid>
     </Grid>
 </shadui:Window>

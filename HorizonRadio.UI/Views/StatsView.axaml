@@ -50,18 +50,18 @@
                     <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="2"
                             Padding="14,8"
                             CornerRadius="8"
-                            Background="{DynamicResource MutedColor}"
+                            Background="{DynamicResource SecondaryColor}"
                             VerticalAlignment="Center">
                         <StackPanel>
                             <TextBlock Text="Uptime"
                                        FontSize="10"
                                        Opacity="0.7"
-                                       Foreground="{DynamicResource MutedForegroundColor}"
+                                       Foreground="{DynamicResource SecondaryForegroundColor}"
                                        HorizontalAlignment="Center"/>
                             <TextBlock Text="{Binding UptimeLabel}"
                                        FontSize="16"
                                        FontWeight="SemiBold"
-                                       Foreground="{DynamicResource MutedForegroundColor}"
+                                       Foreground="{DynamicResource SecondaryForegroundColor}"
                                        HorizontalAlignment="Center"/>
                         </StackPanel>
                     </Border>

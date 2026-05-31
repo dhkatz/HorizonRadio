@@ -16,7 +16,7 @@ public sealed class GainToWidthConverter : IValueConverter
 
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        if (value is float f)  return Math.Clamp(f, 0.0, 2.0) * 100.0;
+        if (value is float f) return Math.Clamp(f, 0.0, 2.0) * 100.0;
         if (value is double d) return Math.Clamp(d, 0.0, 2.0) * 100.0;
         return 0.0;
     }
@@ -35,7 +35,7 @@ public sealed class UnderrunBrushConverter : IValueConverter
     public static readonly UnderrunBrushConverter Instance = new();
 
     private static readonly IBrush MutedBrush = new SolidColorBrush(Color.Parse("#9ca3af"));
-    private static readonly IBrush HotBrush   = new SolidColorBrush(Color.Parse("#ef4444"));
+    private static readonly IBrush HotBrush = new SolidColorBrush(Color.Parse("#ef4444"));
 
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         => value is ulong u && u > 0 ? HotBrush : MutedBrush;

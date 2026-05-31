@@ -40,7 +40,7 @@ public sealed class ModInstaller
     }
 
     private const string TargetDllName = "version.dll";
-    private const string BackupSuffix  = ".horizon-backup";
+    private const string BackupSuffix = ".horizon-backup";
 
     /// <summary>Inspect a candidate FH6 directory and report what's
     /// there. Doesn't modify anything.</summary>
@@ -123,9 +123,10 @@ public sealed class ModInstaller
         return InstallResult.Ok("Installed.");
     }
 
-    /// <summary>Remove our DLL from <paramref name="gamePath"/>. If a
-    /// .horizon-backup file is present, restore it back to version.dll
-    /// so the game returns to whatever it was before our first install.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Performance",
+        "CA1822:Mark members as static",
+        Justification = "Kept as an instance method to match the installer API used by the UI.")]
     public InstallResult Uninstall(string gamePath)
     {
         if (string.IsNullOrEmpty(gamePath) || !Directory.Exists(gamePath))
@@ -179,6 +180,6 @@ public enum InstallationStatus
 
 public sealed record InstallResult(bool Success, string Message)
 {
-    public static InstallResult Ok(string m)   => new(true,  m);
+    public static InstallResult Ok(string m) => new(true, m);
     public static InstallResult Fail(string m) => new(false, m);
 }

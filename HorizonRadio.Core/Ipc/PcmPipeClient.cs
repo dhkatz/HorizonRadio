@@ -17,16 +17,13 @@ namespace HorizonRadio.Core.Ipc;
 /// magic bytes; two pipes is cleaner and the OS handles them
 /// independently.
 /// </summary>
-public sealed class PcmPipeClient : IAsyncDisposable
+public sealed class PcmPipeClient(string pipeName = PcmPipeClient.DefaultPipeName) : IAsyncDisposable
 {
     public const string DefaultPipeName = "HorizonRadio.pcm";
 
-    private readonly string _pipeName;
     private readonly CancellationTokenSource _cts = new();
     private NamedPipeClientStream? _pipe;
     private Task? _connectLoop;
-
-    public PcmPipeClient(string pipeName = DefaultPipeName) { _pipeName = pipeName; }
 
     private static void Log(string msg) => Debug.WriteLine($"[hzn-core-pcm] {msg}");
 
@@ -68,10 +65,10 @@ public sealed class PcmPipeClient : IAsyncDisposable
     public bool Send(ReadOnlySpan<short> samples)
     {
         var pipe = _pipe;
-        if (pipe == null || !pipe.IsConnected) return false;
+        if (pipe is not { IsConnected: true }) return false;
 
         // Reinterpret the s16 span as bytes for WriteFile.
-        ReadOnlySpan<byte> bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(samples);
+        var bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(samples);
         try
         {
             pipe.Write(bytes);
@@ -96,9 +93,9 @@ public sealed class PcmPipeClient : IAsyncDisposable
             {
                 pipe = new NamedPipeClientStream(
                     serverName: ".",
-                    pipeName:   _pipeName,
-                    direction:  PipeDirection.Out,
-                    options:    PipeOptions.Asynchronous);
+                    pipeName: pipeName,
+                    direction: PipeDirection.Out,
+                    options: PipeOptions.Asynchronous);
 
                 await pipe.ConnectAsync(timeout: 2000, ct).ConfigureAwait(false);
                 Log("connected to pcm pipe");
@@ -113,9 +110,9 @@ public sealed class PcmPipeClient : IAsyncDisposable
                     await Task.Delay(500, ct).ConfigureAwait(false);
                 }
             }
-            catch (TimeoutException)             { /* DLL not up yet */ }
-            catch (OperationCanceledException)   { return; }
-            catch (Exception ex)                 { Log($"connect loop: {ex.Message}"); }
+            catch (TimeoutException) { /* DLL not up yet */ }
+            catch (OperationCanceledException) { return; }
+            catch (Exception ex) { Log($"connect loop: {ex.Message}"); }
             finally
             {
                 _pipe = null;

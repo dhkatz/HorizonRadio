@@ -7,9 +7,9 @@ namespace HorizonRadio.Core.Models;
 /// downstream from the diff between adjacent snapshots.
 /// </summary>
 public sealed record BridgeStats(
-    bool   Installed,
-    ulong  FramesIn,
-    ulong  FramesOut,
-    ulong  Underruns,
-    float  NormalizerGain,
-    float  LimiterGain);
+    bool Installed,
+    ulong FramesIn,
+    ulong FramesOut,
+    ulong Underruns,
+    float NormalizerGain,
+    float LimiterGain);

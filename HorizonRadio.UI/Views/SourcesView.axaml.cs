@@ -2,20 +2,46 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using HorizonRadio.UI.Tools;
 using HorizonRadio.UI.ViewModels;
 
 namespace HorizonRadio.UI.Views;
 
 public partial class SourcesView : UserControl
 {
+    private static readonly string[] ExePatterns = ["*.exe"];
+
     public SourcesView()
     {
         InitializeComponent();
     }
 
-    /// <summary>Open a native folder picker for the DirectoryField row
-    /// whose Browse button was clicked. The VM is passed via the
-    /// button's Tag so we don't need to walk the visual tree.</summary>
+    private void ToolPick_SelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ComboBox combo || combo.Tag is not ToolFieldViewModel vm) return;
+        if (combo.SelectedItem is InstalledTool tool) vm.PickInstalled(tool);
+    }
+
+    private async void BrowseTool_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button btn || btn.Tag is not ToolFieldViewModel vm) return;
+
+        var top = TopLevel.GetTopLevel(this);
+        if (top is null) return;
+
+        var files = await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = $"Pick file: {vm.Label}",
+            AllowMultiple = false,
+            FileTypeFilter = new[]
+            {
+                new FilePickerFileType(vm.Label) { Patterns = ExePatterns },
+            },
+        });
+        var picked = files.Count > 0 ? files[0] : null;
+        if (picked != null) vm.Path = picked.Path.LocalPath;
+    }
+
     private async void BrowseDirectory_Click(object? sender, RoutedEventArgs e)
     {
         if (sender is not Button btn || btn.Tag is not DirectoryFieldViewModel vm) return;
@@ -25,10 +51,10 @@ public partial class SourcesView : UserControl
 
         var folders = await top.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title           = $"Pick folder: {vm.Label}",
-            AllowMultiple   = false,
+            Title = $"Pick folder: {vm.Label}",
+            AllowMultiple = false,
         });
-        var picked = folders.FirstOrDefault();
+        var picked = folders.Count > 0 ? folders[0] : null;
         if (picked != null) vm.Path = picked.Path.LocalPath;
     }
 
@@ -39,8 +65,6 @@ public partial class SourcesView : UserControl
         var top = TopLevel.GetTopLevel(this);
         if (top is null) return;
 
-        // Build a single FileTypeFilter from the field's extension list.
-        // If none was supplied, fall back to all files.
         var filters = vm.FileField.ExtensionFilter is { Count: > 0 } exts
             ? new[]
               {
@@ -53,11 +77,11 @@ public partial class SourcesView : UserControl
 
         var files = await top.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title         = $"Pick file: {vm.Label}",
+            Title = $"Pick file: {vm.Label}",
             AllowMultiple = false,
             FileTypeFilter = filters,
         });
-        var picked = files.FirstOrDefault();
+        var picked = files.Count > 0 ? files[0] : null;
         if (picked != null) vm.Path = picked.Path.LocalPath;
     }
 }

@@ -55,6 +55,22 @@ dotnet publish HorizonRadio.UI/HorizonRadio.UI.csproj -c Release -r win-x64 --se
 # Output: build/release/HorizonRadio.zip
 ```
 
+## Code Quality
+
+Managed code is governed by `.editorconfig` and .NET analyzers:
+
+```powershell
+dotnet format HorizonRadio.UI.slnx --verify-no-changes
+dotnet build HorizonRadio.UI.slnx /t:Rebuild
+```
+
+Native code is governed by `.clang-format` and `.clang-tidy`. Install LLVM, then run:
+
+```powershell
+clang-format -i (rg --files HorizonRadio HorizonRadio.Tests -g '*.cpp' -g '*.hpp')
+msbuild HorizonRadio.slnx /p:Configuration=Debug /p:Platform=x64 /p:RunCppAnalysis=true /m:1
+```
+
 ## License
 
 GPLv3 — see [LICENSE](LICENSE).

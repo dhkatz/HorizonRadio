@@ -8,4 +8,4 @@ namespace HorizonRadio.Core.Models;
 public sealed record SourceInfo(
     string Id,
     string DisplayName,
-    bool   IsActive);
+    bool IsActive);

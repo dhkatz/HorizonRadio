@@ -1,7 +1,6 @@
 #pragma once
 
 #include <atomic>
-#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <mutex>
@@ -25,15 +24,12 @@ class PcmPipeServer {
 public:
     static constexpr wchar_t kPipeName[] = L"HorizonRadio.pcm";
 
-    // Callback receives raw s16-stereo PCM frames. Caller-owned buffer,
-    // valid only for the duration of the call. frame_count is the number
-    // of *stereo frames* (not samples), so byte count = 4 * frame_count.
-    using PcmCallback = std::function<void(const std::int16_t* frames, std::size_t frame_count)>;
+    using pcm_callback = std::function<void(const std::int16_t* frames, std::size_t frame_count)>;
 
     PcmPipeServer();
     ~PcmPipeServer();
 
-    void start(PcmCallback on_pcm);
+    void start(pcm_callback on_pcm);
     void stop();
 
     bool client_connected() const noexcept {
@@ -43,12 +39,12 @@ public:
 private:
     void run();
 
-    std::atomic<bool>  running_{false};
-    std::atomic<bool>  client_connected_{false};
-    std::thread        thread_;
-    std::mutex         handle_mutex_;
-    void*              pipe_handle_ = nullptr;   // HANDLE
-    PcmCallback        on_pcm_;
+    std::atomic<bool> running_{false};
+    std::atomic<bool> client_connected_{false};
+    std::thread       thread_;
+    std::mutex        handle_mutex_;
+    void*             pipe_handle_ = nullptr; // HANDLE
+    pcm_callback      on_pcm_;
 };
 
 } // namespace horizon::ipc

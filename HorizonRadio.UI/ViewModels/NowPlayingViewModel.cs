@@ -50,7 +50,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     [ObservableProperty] private bool isPaused;
     [ObservableProperty] private bool hasTransport;
 
-    private readonly SourceRunner?      _runner;
+    private readonly SourceRunner? _runner;
     private readonly SourceConfigStore? _store;
     private bool _suppressSwitch;
     private ITransportControls? _transport;
@@ -59,8 +59,8 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
 
     public NowPlayingViewModel(SourceRunner runner, SourceConfigStore store)
     {
-        _runner          = runner;
-        _store           = store;
+        _runner = runner;
+        _store = store;
         AvailableSources = SourceCatalog.All;
 
         // Keep the dropdown in sync when the runner is driven from the
@@ -81,11 +81,11 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     {
         if (_transport != null) _transport.PausedChanged -= OnPausedChanged;
         _transport = _runner?.ActiveSource as ITransportControls;
-        HasTransport     = _transport != null;
-        CanPause         = _transport?.CanPause        ?? false;
-        CanSkipNext      = _transport?.CanSkipNext     ?? false;
-        CanSkipPrevious  = _transport?.CanSkipPrevious ?? false;
-        IsPaused         = _transport?.IsPaused        ?? false;
+        HasTransport = _transport != null;
+        CanPause = _transport?.CanPause ?? false;
+        CanSkipNext = _transport?.CanSkipNext ?? false;
+        CanSkipPrevious = _transport?.CanSkipPrevious ?? false;
+        IsPaused = _transport?.IsPaused ?? false;
         if (_transport != null) _transport.PausedChanged += OnPausedChanged;
     }
 
@@ -155,12 +155,12 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     /// </summary>
     public void Apply(Track track)
     {
-        Title          = string.IsNullOrWhiteSpace(track.Title)  ? "Unknown track"  : track.Title;
-        Artist         = string.IsNullOrWhiteSpace(track.Artist) ? "Unknown artist" : track.Artist;
-        Album          = track.Album;
-        SourceId       = track.SourceId;
-        SourceDisplay  = track.SourceDisplay;
-        AlbumArt       = DecodeArt(track.AlbumArt);
+        Title = string.IsNullOrWhiteSpace(track.Title) ? "Unknown track" : track.Title;
+        Artist = string.IsNullOrWhiteSpace(track.Artist) ? "Unknown artist" : track.Artist;
+        Album = track.Album;
+        SourceId = track.SourceId;
+        SourceDisplay = track.SourceDisplay;
+        AlbumArt = DecodeArt(track.AlbumArt);
     }
 
     public void SetConnectionState(bool connected)
@@ -169,12 +169,12 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         if (!connected)
         {
             // Reset to placeholder so stale data doesn't linger after FH6 closes.
-            Title         = "Nothing playing";
-            Artist        = "Launch Forza Horizon 6 with the mod installed";
-            Album         = null;
+            Title = "Nothing playing";
+            Artist = "Launch Forza Horizon 6 with the mod installed";
+            Album = null;
             SourceDisplay = "—";
-            SourceId      = "";
-            AlbumArt      = null;
+            SourceId = "";
+            AlbumArt = null;
         }
     }
 

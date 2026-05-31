@@ -56,7 +56,7 @@ public sealed class Playlist
         {
             var ext = Path.GetExtension(path).ToLowerInvariant();
             if (ext is ".m3u" or ".m3u8") LoadM3uInto(path, p);
-            else                          p.Add(path);
+            else p.Add(path);
         }
         else if (Directory.Exists(path))
         {

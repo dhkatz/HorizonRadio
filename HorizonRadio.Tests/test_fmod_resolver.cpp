@@ -1,12 +1,9 @@
-#include <doctest/doctest.h>
-
-#include <horizon/fmod/resolver.hpp>
-
-#include <windows.h>
-
-#include <cstdio>
 #include <cstdint>
+#include <cstdio>
+#include <doctest/doctest.h>
+#include <horizon/fmod/resolver.hpp>
 #include <string>
+#include <windows.h>
 
 using namespace horizon::fmod;
 using horizon::inject::PeImage;
@@ -47,11 +44,11 @@ TEST_CASE("FmodResolver: empty signatures resolve to nullptr, report not-found")
     REQUIRE(img.valid());
 
     FmodResolver r(img, SignatureSet{});
-    auto hooks = r.resolve();
+    auto         hooks = r.resolve();
 
-    CHECK(hooks.createDsp  == nullptr);
-    CHECK(hooks.addDsp     == nullptr);
-    CHECK(hooks.removeDsp  == nullptr);
+    CHECK(hooks.createDsp == nullptr);
+    CHECK(hooks.addDsp == nullptr);
+    CHECK(hooks.removeDsp == nullptr);
     CHECK(hooks.dspRelease == nullptr);
     CHECK_FALSE(r.report().ready());
     CHECK_FALSE(r.report().createDsp);
@@ -67,11 +64,10 @@ TEST_CASE("FmodResolver: resolves a function by its real prologue") {
     sigs.createDsp = {.pattern = pat};
 
     FmodResolver r(img, sigs);
-    auto hooks = r.resolve();
+    auto         hooks = r.resolve();
 
     REQUIRE(r.report().createDsp);
-    CHECK(reinterpret_cast<void*>(hooks.createDsp) ==
-          reinterpret_cast<void*>(&horizon_resolver_target_one));
+    CHECK(reinterpret_cast<void*>(hooks.createDsp) == reinterpret_cast<void*>(&horizon_resolver_target_one));
 }
 
 TEST_CASE("FmodResolver: distinguishes two functions by their distinct prologues") {
@@ -89,12 +85,10 @@ TEST_CASE("FmodResolver: distinguishes two functions by their distinct prologues
     sigs.addDsp    = {.pattern = pat_two};
 
     FmodResolver r(img, sigs);
-    auto hooks = r.resolve();
+    auto         hooks = r.resolve();
 
-    CHECK(reinterpret_cast<void*>(hooks.createDsp) ==
-          reinterpret_cast<void*>(&horizon_resolver_target_one));
-    CHECK(reinterpret_cast<void*>(hooks.addDsp) ==
-          reinterpret_cast<void*>(&horizon_resolver_target_two));
+    CHECK(reinterpret_cast<void*>(hooks.createDsp) == reinterpret_cast<void*>(&horizon_resolver_target_one));
+    CHECK(reinterpret_cast<void*>(hooks.addDsp) == reinterpret_cast<void*>(&horizon_resolver_target_two));
 }
 
 TEST_CASE("FmodResolver: partial set leaves unconfigured slots null but resolves the rest") {
@@ -102,16 +96,16 @@ TEST_CASE("FmodResolver: partial set leaves unconfigured slots null but resolves
     REQUIRE(img.valid());
 
     const std::string pat = make_pattern(reinterpret_cast<void*>(&horizon_resolver_target_one));
-    SignatureSet sigs{};
+    SignatureSet      sigs{};
     sigs.dspRelease = {.pattern = pat};
 
     FmodResolver r(img, sigs);
-    auto hooks = r.resolve();
+    auto         hooks = r.resolve();
 
     CHECK(hooks.dspRelease != nullptr);
-    CHECK(hooks.createDsp  == nullptr);
-    CHECK(hooks.addDsp     == nullptr);
-    CHECK(hooks.removeDsp  == nullptr);
+    CHECK(hooks.createDsp == nullptr);
+    CHECK(hooks.addDsp == nullptr);
+    CHECK(hooks.removeDsp == nullptr);
     CHECK(r.report().dspRelease);
     CHECK_FALSE(r.report().ready());
 }
@@ -125,7 +119,7 @@ TEST_CASE("FmodResolver: pattern that doesn't match yields nullptr + not-found")
     sigs.createDsp = {.pattern = "DE AD BE EF FE ED FA CE BA AD F0 0D 12 34 56 78"};
 
     FmodResolver r(img, sigs);
-    auto hooks = r.resolve();
+    auto         hooks = r.resolve();
 
     CHECK(hooks.createDsp == nullptr);
     CHECK_FALSE(r.report().createDsp);

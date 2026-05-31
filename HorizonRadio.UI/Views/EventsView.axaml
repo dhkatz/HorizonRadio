@@ -1,0 +1,85 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="640"
+             x:Class="HorizonRadio.UI.Views.EventsView"
+             x:DataType="vm:EventsViewModel">
+
+    <Design.DataContext>
+        <vm:EventsViewModel />
+    </Design.DataContext>
+
+    <ScrollViewer>
+        <StackPanel Margin="24" Spacing="16">
+
+            <StackPanel Spacing="4" Margin="0,0,0,4">
+                <TextBlock Text="Events" FontSize="20" FontWeight="SemiBold"/>
+                <TextBlock Text="Run an action when something happens in-game."
+                           FontSize="12" Opacity="0.6"/>
+            </StackPanel>
+
+            <!-- Telemetry hint -->
+            <Border Classes="Card" Padding="12,10">
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <materialIcons:MaterialIcon Kind="AccessPoint" Width="16" Height="16"
+                                                Opacity="0.7" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding TelemetryHint}"
+                               FontSize="12" Opacity="0.75"
+                               TextWrapping="Wrap" VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Per-event action rows -->
+            <ItemsControl ItemsSource="{Binding Rules}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:EventRuleRow}">
+                        <Border Classes="Card" Padding="16" Margin="0,0,0,10">
+                            <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+                                <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding DisplayName}"
+                                               FontSize="14" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding Description}"
+                                               FontSize="11" Opacity="0.55" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <ComboBox Grid.Column="1"
+                                          MinWidth="200"
+                                          VerticalAlignment="Center"
+                                          ItemsSource="{Binding Options}"
+                                          SelectedItem="{Binding SelectedOption}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:EventActionOption}">
+                                            <TextBlock Text="{Binding Label}"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Recent activity -->
+            <Border Classes="Card" Padding="16">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Recent activity" FontSize="14" FontWeight="SemiBold"/>
+                    <TextBlock Text="No events yet."
+                               FontSize="12" Opacity="0.5"
+                               IsVisible="{Binding !Activity.Count}"/>
+                    <ItemsControl ItemsSource="{Binding Activity}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}"
+                                           FontFamily="Consolas,Cascadia Mono,monospace"
+                                           FontSize="12" Opacity="0.8"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

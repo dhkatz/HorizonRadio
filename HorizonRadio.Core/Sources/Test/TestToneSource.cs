@@ -1,11 +1,8 @@
-using System;
 using System.Diagnostics;
-using System.Threading;
-using System.Threading.Tasks;
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Models;
 
-namespace HorizonRadio.Core.Sources;
+namespace HorizonRadio.Core.Sources.Test;
 
 /// <summary>
 /// Diagnostic source: emits a 440 Hz sine wave continuously. Used to
@@ -16,37 +13,29 @@ namespace HorizonRadio.Core.Sources;
 /// Lives in Core because it's useful for any consumer that wants to
 /// test the pipe (UI smoke test, future integration tests).
 /// </summary>
-public sealed class TestToneSource : IAudioSource
+public sealed class TestToneSource(double frequencyHz = 440.0, double amplitude = 0.15) : IAudioSource
 {
-    public string Id           => "testtone";
-    public string DisplayName  => "Test Tone (440 Hz)";
+    public string Id => "testtone";
+    public string DisplayName => "Test Tone (440 Hz)";
 
     public event Action<Track>? TrackChanged;
 
-    private readonly double _frequencyHz;
-    private readonly double _amplitude;
     private CancellationTokenSource? _stopCts;
-    private Task?                    _runLoop;
+    private Task? _runLoop;
 
-    public TestToneSource(double frequencyHz = 440.0, double amplitude = 0.15)
-    {
-        _frequencyHz = frequencyHz;
-        _amplitude   = amplitude;
-    }
-
-    public Task StartAsync(IPcmSink sink, CancellationToken externalCt)
+    public Task StartAsync(IPcmSink sink, CancellationToken ct)
     {
         if (_runLoop != null) return Task.CompletedTask;
-        _stopCts = CancellationTokenSource.CreateLinkedTokenSource(externalCt);
+        _stopCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         TrackChanged?.Invoke(new Track(
-            Title:         "Test Tone",
-            Artist:        $"{_frequencyHz:F0} Hz sine wave",
-            Album:         null,
-            AlbumArt:      null,
-            SourceId:      Id,
+            Title: "Test Tone",
+            Artist: $"{frequencyHz:F0} Hz sine wave",
+            Album: null,
+            AlbumArt: null,
+            SourceId: Id,
             SourceDisplay: DisplayName,
-            ExternalId:    null));
-        _runLoop = Task.Run(() => RunAsync(sink, _stopCts.Token));
+            ExternalId: null));
+        _runLoop = Task.Run(() => RunAsync(sink, _stopCts.Token), _stopCts.Token);
         return Task.CompletedTask;
     }
 
@@ -64,23 +53,23 @@ public sealed class TestToneSource : IAudioSource
     {
         // 2048 frames per chunk @ 44.1 kHz ≈ 46.4 ms. Matches the DLL
         // reader's expected granularity and the LocalFileSource pacing.
-        const int ChunkFrames = 2048;
+        const int chunkFrames = 2048;
         var chunkPeriod = TimeSpan.FromMicroseconds(
-            (long)ChunkFrames * 1_000_000 / AudioFormat.SampleRate);
+            (long)chunkFrames * 1_000_000 / AudioFormat.SampleRate);
 
-        var samples = new short[ChunkFrames * AudioFormat.Channels];
+        var samples = new short[chunkFrames * AudioFormat.Channels];
         double phase = 0;
-        double phaseInc = 2.0 * Math.PI * _frequencyHz / AudioFormat.SampleRate;
-        short  peak     = (short)(_amplitude * short.MaxValue);
+        double phaseInc = 2.0 * Math.PI * frequencyHz / AudioFormat.SampleRate;
+        short peak = (short)(amplitude * short.MaxValue);
 
         var sw = Stopwatch.StartNew();
         var nextChunk = TimeSpan.Zero;
 
-        Debug.WriteLine($"[hzn-tone] starting {_frequencyHz} Hz");
+        Debug.WriteLine($"[hzn-tone] starting {frequencyHz} Hz");
 
         while (!ct.IsCancellationRequested)
         {
-            for (int i = 0; i < ChunkFrames; ++i)
+            for (int i = 0; i < chunkFrames; ++i)
             {
                 short s = (short)(Math.Sin(phase) * peak);
                 samples[i * 2 + 0] = s;

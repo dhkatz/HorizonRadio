@@ -1,15 +1,12 @@
-#include <doctest/doctest.h>
-
-#include <horizon/inject/metadata_injector.hpp>
-
-#include <windows.h>
-
 #include <array>
 #include <cstddef>
 #include <cstring>
+#include <doctest/doctest.h>
+#include <horizon/inject/metadata_injector.hpp>
 #include <memory>
 #include <ostream>
 #include <string>
+#include <windows.h>
 
 using namespace horizon::inject;
 
@@ -50,21 +47,21 @@ TEST_CASE("walk_offset_chain: single deref through known offset") {
     struct {
         char  pad[16];
         void* p;
-    } outer{ .p = &leaf };
+    } outer{.p = &leaf};
 
-    std::array<std::ptrdiff_t, 1> chain{ 16 };
+    std::array<std::ptrdiff_t, 1> chain{16};
     CHECK(walk_offset_chain(&outer, chain) == &leaf);
 }
 
 TEST_CASE("walk_offset_chain: multi-step traversal") {
-    int   leaf  = 42;
-    void* mid   = &leaf;
+    int   leaf = 42;
+    void* mid  = &leaf;
     struct {
         char  pad[8];
         void* p;
-    } outer{ .p = &mid };
+    } outer{.p = &mid};
 
-    std::array<std::ptrdiff_t, 2> chain{ 8, 0 };
+    std::array<std::ptrdiff_t, 2> chain{8, 0};
     CHECK(walk_offset_chain(&outer, chain) == &leaf);
 }
 
@@ -74,7 +71,7 @@ TEST_CASE("walk_offset_chain: returns nullptr when a deref slot is null") {
         void* p = nullptr;
     } outer;
 
-    std::array<std::ptrdiff_t, 1> chain{ 16 };
+    std::array<std::ptrdiff_t, 1> chain{16};
     CHECK(walk_offset_chain(&outer, chain) == nullptr);
 }
 
@@ -91,9 +88,9 @@ TEST_CASE("MetadataInjector: resolve fails for unknown class") {
 }
 
 TEST_CASE("MetadataInjector: write_to_instance before resolve does nothing") {
-    PeImage img(GetModuleHandleW(nullptr));
+    PeImage                img(GetModuleHandleW(nullptr));
     MetadataInjectorConfig cfg{};
-    MetadataInjector inj(img, cfg);
+    MetadataInjector       inj(img, cfg);
 
     int dummy = 0;
     CHECK(inj.write_to_instance(&dummy, "a", "b", "c") == 0);
@@ -109,16 +106,13 @@ TEST_CASE("MetadataInjector: write_to_instance writes char[32] fields") {
     MetadataInjector inj(img, direct_cfg());
     REQUIRE(inj.resolve());
 
-    const int n = inj.write_to_instance(target.get(),
-                                        "track_name",
-                                        "Display Title",
-                                        "Artist Name");
+    const int n = inj.write_to_instance(target.get(), "track_name", "Display Title", "Artist Name");
     CHECK(n == 1);
     CHECK(inj.total_writes() == 1);
 
-    CHECK(std::string(target->sound_name)   == "track_name");
+    CHECK(std::string(target->sound_name) == "track_name");
     CHECK(std::string(target->display_name) == "Display Title");
-    CHECK(std::string(target->artist)       == "Artist Name");
+    CHECK(std::string(target->artist) == "Artist Name");
 }
 
 TEST_CASE("MetadataInjector: long strings get truncated to fit char[32]") {
@@ -133,24 +127,24 @@ TEST_CASE("MetadataInjector: long strings get truncated to fit char[32]") {
     const std::string long_value(60, 'a');
     inj.write_to_instance(target.get(), long_value, long_value, long_value);
 
-    CHECK(std::strlen(target->sound_name)   == 31);
+    CHECK(std::strlen(target->sound_name) == 31);
     CHECK(std::strlen(target->display_name) == 31);
-    CHECK(std::strlen(target->artist)       == 31);
+    CHECK(std::strlen(target->artist) == 31);
     CHECK(target->sound_name[31] == '\0');
 }
 
 TEST_CASE("MetadataInjector: nullopt offsets are skipped without writing") {
     auto target = std::make_unique<HorizonInjectTarget>();
-    std::strcpy(target->sound_name,   "original_sound");
+    std::strcpy(target->sound_name, "original_sound");
     std::strcpy(target->display_name, "original_display");
-    std::strcpy(target->artist,       "original_artist");
+    std::strcpy(target->artist, "original_artist");
 
     PeImage img(GetModuleHandleW(nullptr));
     REQUIRE(img.valid());
 
     auto cfg = direct_cfg();
-    cfg.sound_name_offset.reset();  // skip
-    cfg.artist_offset.reset();      // skip
+    cfg.sound_name_offset.reset(); // skip
+    cfg.artist_offset.reset();     // skip
     // display_name_offset stays set
 
     MetadataInjector inj(img, cfg);
@@ -158,9 +152,9 @@ TEST_CASE("MetadataInjector: nullopt offsets are skipped without writing") {
 
     inj.write_to_instance(target.get(), "ignored", "new_display", "also_ignored");
 
-    CHECK(std::string(target->sound_name)   == "original_sound");
+    CHECK(std::string(target->sound_name) == "original_sound");
     CHECK(std::string(target->display_name) == "new_display");
-    CHECK(std::string(target->artist)       == "original_artist");
+    CHECK(std::string(target->artist) == "original_artist");
 }
 
 TEST_CASE("MetadataInjector: write_to_instance with all-nullopt config is a no-op") {
