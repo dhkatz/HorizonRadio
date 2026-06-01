@@ -55,3 +55,6 @@ horizon-radio.discover
 Thumbs.db
 .DS_Store
 desktop.ini
+
+# Stray tool config written to a literal ~ instead of $HOME
+/~/
