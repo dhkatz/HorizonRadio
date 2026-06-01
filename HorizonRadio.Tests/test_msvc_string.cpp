@@ -17,9 +17,11 @@ void init_sso(MsvcString& s, std::string_view value) {
     s.capacity            = 15;
 }
 
-// Allocate a heap buffer via VirtualAlloc so the test can free it
-// symmetrically after the test (matching the writer's allocation
-// strategy). Returns the pointer in `s.u.ptr` and sets size+capacity.
+// Allocate the test's own heap buffer via VirtualAlloc so the test can
+// VirtualFree it symmetrically afterwards. (The writer allocates its
+// replacement buffers from a private HeapAlloc heap, not VirtualAlloc --
+// those are writer-owned and must not be VirtualFree'd by the test.)
+// Returns the pointer in `s.u.ptr` and sets size+capacity.
 void init_heap(MsvcString& s, std::string_view value, std::size_t cap) {
     REQUIRE(value.size() <= cap);
     REQUIRE(cap > 15);
@@ -98,7 +100,11 @@ TEST_CASE("MsvcString: write promotes SSO to heap when >15 chars") {
     CHECK(s.capacity >= 50);
     CHECK(view(s) == long_val);
 
-    VirtualFree(s.u.ptr, 0, MEM_RELEASE);
+    // Do NOT free s.u.ptr: the writer allocated it from its private
+    // HeapAlloc heap, not VirtualAlloc. VirtualFree'ing a heap pointer
+    // corrupts that heap and crashes a later test's allocation. The
+    // writer intentionally never frees these (game-owned std::string);
+    // leaking it in this short-lived test process is fine.
 }
 
 TEST_CASE("MsvcString: write reuses heap when new value fits in current capacity") {
@@ -130,11 +136,13 @@ TEST_CASE("MsvcString: write reallocates heap when new value exceeds capacity") 
     CHECK(s.capacity >= 80);
     CHECK(view(s) == new_val);
 
-    // Old buffer was intentionally leaked by writer; free it here for
-    // the test. Writer's behavior is correct -- the old buffer's
-    // allocator isn't ours to free in production.
+    // Free the old buffer we VirtualAlloc'd in init_heap. The new buffer
+    // (s.u.ptr) comes from the writer's private HeapAlloc heap, not
+    // VirtualAlloc -- VirtualFree'ing it would be invalid (and crashes).
+    // The writer intentionally never frees these (the game owns the
+    // std::string and may still read it), so we leak it here too; the
+    // test process is short-lived.
     VirtualFree(old_ptr, 0, MEM_RELEASE);
-    VirtualFree(s.u.ptr, 0, MEM_RELEASE);
 }
 
 TEST_CASE("MsvcString: write short into heap demotes back to SSO") {
