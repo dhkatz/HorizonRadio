@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-01
+
 ### Added
 
 - Shuffle toggle on the Now Playing page for local-file and YouTube playback.
@@ -46,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release of Horizon Radio.
 
-[Unreleased]: https://github.com/dhkatz/HorizonRadio/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/dhkatz/HorizonRadio/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/dhkatz/HorizonRadio/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/dhkatz/HorizonRadio/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/dhkatz/HorizonRadio/releases/tag/v0.1.0
