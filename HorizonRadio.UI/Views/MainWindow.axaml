@@ -124,15 +124,6 @@
 
                 <shadui:SidebarItemLabel Text="Integration" AsSeparator="True"/>
 
-                <shadui:SidebarItem Content="Stats"
-                                    Command="{Binding ShowStatsCommand}"
-                                    IsChecked="{Binding IsStatsWorkspace}"
-                                    Route="stats">
-                    <shadui:SidebarItem.Icon>
-                        <material:MaterialIcon Kind="ChartBar" Width="18" Height="18"/>
-                    </shadui:SidebarItem.Icon>
-                </shadui:SidebarItem>
-
                 <shadui:SidebarItem Content="Mods"
                                     Command="{Binding ShowModManagerCommand}"
                                     IsChecked="{Binding IsModManagerWorkspace}"
@@ -142,21 +133,32 @@
                     </shadui:SidebarItem.Icon>
                 </shadui:SidebarItem>
 
-                <shadui:SidebarItem Content="Tools"
-                                    Command="{Binding ShowToolsCommand}"
-                                    IsChecked="{Binding IsToolsWorkspace}"
-                                    Route="tools">
-                    <shadui:SidebarItem.Icon>
-                        <material:MaterialIcon Kind="Toolbox" Width="18" Height="18"/>
-                    </shadui:SidebarItem.Icon>
-                </shadui:SidebarItem>
-
                 <shadui:SidebarItem Content="Events"
                                     Command="{Binding ShowEventsCommand}"
                                     IsChecked="{Binding IsEventsWorkspace}"
                                     Route="events">
                     <shadui:SidebarItem.Icon>
                         <material:MaterialIcon Kind="FlashOutline" Width="18" Height="18"/>
+                    </shadui:SidebarItem.Icon>
+                </shadui:SidebarItem>
+
+                <shadui:SidebarItemLabel Text="Diagnostics" AsSeparator="True"/>
+
+                <shadui:SidebarItem Content="Stats"
+                                    Command="{Binding ShowStatsCommand}"
+                                    IsChecked="{Binding IsStatsWorkspace}"
+                                    Route="stats">
+                    <shadui:SidebarItem.Icon>
+                        <material:MaterialIcon Kind="ChartBar" Width="18" Height="18"/>
+                    </shadui:SidebarItem.Icon>
+                </shadui:SidebarItem>
+
+                <shadui:SidebarItem Content="Tools"
+                                    Command="{Binding ShowToolsCommand}"
+                                    IsChecked="{Binding IsToolsWorkspace}"
+                                    Route="tools">
+                    <shadui:SidebarItem.Icon>
+                        <material:MaterialIcon Kind="Toolbox" Width="18" Height="18"/>
                     </shadui:SidebarItem.Icon>
                 </shadui:SidebarItem>
 
@@ -264,15 +266,6 @@
 
                 <Separator Margin="0,4"/>
 
-                <ToggleButton Command="{Binding ShowStatsCommand}"
-                              IsChecked="{Binding IsStatsWorkspace}"
-                              Height="40" Width="40"
-                              HorizontalContentAlignment="Center"
-                              VerticalContentAlignment="Center"
-                              Padding="0"
-                              ToolTip.Tip="Stats">
-                    <material:MaterialIcon Kind="ChartBar" Width="18" Height="18"/>
-                </ToggleButton>
                 <ToggleButton Command="{Binding ShowModManagerCommand}"
                               IsChecked="{Binding IsModManagerWorkspace}"
                               Height="40" Width="40"
@@ -282,15 +275,6 @@
                               ToolTip.Tip="Mods">
                     <material:MaterialIcon Kind="PuzzleOutline" Width="18" Height="18"/>
                 </ToggleButton>
-                <ToggleButton Command="{Binding ShowToolsCommand}"
-                              IsChecked="{Binding IsToolsWorkspace}"
-                              Height="40" Width="40"
-                              HorizontalContentAlignment="Center"
-                              VerticalContentAlignment="Center"
-                              Padding="0"
-                              ToolTip.Tip="Tools">
-                    <material:MaterialIcon Kind="Toolbox" Width="18" Height="18"/>
-                </ToggleButton>
                 <ToggleButton Command="{Binding ShowEventsCommand}"
                               IsChecked="{Binding IsEventsWorkspace}"
                               Height="40" Width="40"
@@ -299,6 +283,27 @@
                               Padding="0"
                               ToolTip.Tip="Events">
                     <material:MaterialIcon Kind="FlashOutline" Width="18" Height="18"/>
+                </ToggleButton>
+
+                <Separator Margin="0,4"/>
+
+                <ToggleButton Command="{Binding ShowStatsCommand}"
+                              IsChecked="{Binding IsStatsWorkspace}"
+                              Height="40" Width="40"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              Padding="0"
+                              ToolTip.Tip="Stats">
+                    <material:MaterialIcon Kind="ChartBar" Width="18" Height="18"/>
+                </ToggleButton>
+                <ToggleButton Command="{Binding ShowToolsCommand}"
+                              IsChecked="{Binding IsToolsWorkspace}"
+                              Height="40" Width="40"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              Padding="0"
+                              ToolTip.Tip="Tools">
+                    <material:MaterialIcon Kind="Toolbox" Width="18" Height="18"/>
                 </ToggleButton>
                 <ToggleButton Command="{Binding ShowConsoleCommand}"
                               IsChecked="{Binding IsConsoleWorkspace}"
@@ -318,20 +323,32 @@
         <Grid Grid.Column="1" RowDefinitions="Auto,*">
 
             <!-- Shown on every tab when the installed mod is missing or
-                 doesn't match this build. -->
+                 doesn't match this build. Styled as a Card to match the
+                 rest of the app, with a small amber accent on the icon. -->
             <Border Grid.Row="0"
                     IsVisible="{Binding ShowModBanner}"
-                    Background="{DynamicResource SecondaryColor}"
-                    BorderBrush="#f59e0b"
-                    BorderThickness="0,0,0,2"
-                    Padding="16,10">
-                <Grid ColumnDefinitions="Auto,*,Auto">
-                    <material:MaterialIcon Grid.Column="0" Kind="AlertOutline"
-                                           Width="18" Height="18"
-                                           Foreground="#f59e0b"
-                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
-                    <TextBlock Grid.Column="1" Text="{Binding ModBannerText}"
-                               VerticalAlignment="Center" TextWrapping="Wrap" FontSize="12"/>
+                    Classes="Card"
+                    Margin="24,16,24,0"
+                    Padding="14,12">
+                <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+                    <Border Grid.Column="0"
+                            Width="34" Height="34"
+                            CornerRadius="999"
+                            Background="{DynamicResource SecondaryColor}"
+                            Margin="0,0,12,0"
+                            VerticalAlignment="Center">
+                        <material:MaterialIcon Kind="AlertOutline"
+                                               Width="18" Height="18"
+                                               Foreground="#f59e0b"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                    </Border>
+                    <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding ModBannerTitle}"
+                                   FontSize="13" FontWeight="SemiBold"/>
+                        <TextBlock Text="{Binding ModBannerText}"
+                                   FontSize="12" Opacity="0.6" TextWrapping="Wrap"/>
+                    </StackPanel>
                     <Button Grid.Column="2" Classes="Primary"
                             Content="Open Mod Manager"
                             Command="{Binding ShowModManagerCommand}"

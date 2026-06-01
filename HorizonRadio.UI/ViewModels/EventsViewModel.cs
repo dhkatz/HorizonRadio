@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Linq;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using HorizonRadio.Core.Events;
@@ -18,7 +19,7 @@ public sealed partial class EventsViewModel : ViewModelBase, IDisposable
 {
     private readonly EventActionExecutor? _executor;
 
-    public ObservableCollection<EventRuleRow> Rules { get; } = new();
+    public ObservableCollection<EventCategoryGroup> Groups { get; } = new();
     public ObservableCollection<string> Activity { get; } = new();
 
     public int TelemetryPort { get; }
@@ -34,8 +35,11 @@ public sealed partial class EventsViewModel : ViewModelBase, IDisposable
         TelemetryPort = telemetryPort;
 
         var options = BuildOptions();
-        foreach (var info in GameEventKinds.Catalog)
-            Rules.Add(new EventRuleRow(info, options, rules));
+        foreach (var category in GameEventKinds.Catalog.GroupBy(i => i.Category))
+        {
+            var rows = category.Select(info => new EventRuleRow(info, options, rules)).ToList();
+            Groups.Add(new EventCategoryGroup(category.Key, rows));
+        }
 
         if (executor != null) executor.Handled += OnHandled;
     }
@@ -124,3 +128,7 @@ public sealed partial class EventRuleRow : ViewModelBase
 
 /// <summary>A selectable action in the per-event dropdown.</summary>
 public sealed record EventActionOption(string Label, EventAction Action);
+
+/// <summary>A category of events (e.g. "Racing") and its rule rows, for the
+/// grouped Events tab.</summary>
+public sealed record EventCategoryGroup(string Category, IReadOnlyList<EventRuleRow> Rows);

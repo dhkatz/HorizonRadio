@@ -56,9 +56,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         HookModBanner();
     }
 
-    // App-level "mod out of date / not installed" banner, driven by the
-    // Mod Manager's hash check so it's visible from any tab — not just
-    // when the user happens to open Mod Manager.
     private void HookModBanner()
     {
         ModManager.PropertyChanged += (_, e) =>
@@ -66,6 +63,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             if (e.PropertyName == nameof(ModManagerViewModel.Status))
             {
                 OnPropertyChanged(nameof(ShowModBanner));
+                OnPropertyChanged(nameof(ModBannerTitle));
                 OnPropertyChanged(nameof(ModBannerText));
             }
         };
@@ -74,12 +72,17 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public bool ShowModBanner =>
         ModManager.Status is InstallationStatus.InstalledOther or InstallationStatus.NotInstalled;
 
+    public string ModBannerTitle => ModManager.Status switch
+    {
+        InstallationStatus.InstalledOther => "Mod Update Available",
+        InstallationStatus.NotInstalled => "Mod Not Installed",
+        _ => "",
+    };
+
     public string ModBannerText => ModManager.Status switch
     {
-        InstallationStatus.InstalledOther =>
-            "The installed Horizon Radio mod doesn't match this build. Open Mod Manager to replace it.",
-        InstallationStatus.NotInstalled =>
-            "The Horizon Radio mod isn't installed in your game yet. Open Mod Manager to install it.",
+        InstallationStatus.InstalledOther => "A different version is installed in your game folder.",
+        InstallationStatus.NotInstalled => "Horizon Radio isn't set up in your game yet.",
         _ => "",
     };
 
