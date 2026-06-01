@@ -36,6 +36,13 @@ public sealed class LocalFileSource(Playlist playlist) : IAudioSource, ITranspor
     // playlist entry instead of advancing.
     private volatile bool _restartCurrent;
 
+    // Pending shuffle request: -1 none, 0 turn off, 1 turn on. Applied on the
+    // run-loop thread (the only thread allowed to touch the playlist), so the
+    // toggle never races the decode loop. Unlike Next/Previous it does NOT
+    // cancel the current track — the current song keeps playing and the new
+    // order takes effect on the next advance.
+    private volatile int _shuffleReq = -1;
+
     // Pause state. Pump loop polls _paused; PauseGate is signaled when
     // we resume, so the loop can sleep efficiently while paused.
     private volatile bool _paused;
@@ -84,6 +91,15 @@ public sealed class LocalFileSource(Playlist playlist) : IAudioSource, ITranspor
     public bool CanSkipPrevious => playlist.Count > 1;
     public bool IsPaused => _paused;
 
+    public bool CanShuffle => playlist.Count > 1;
+    public bool IsShuffled => playlist.Shuffle;
+
+    public Task SetShuffleAsync(bool enabled)
+    {
+        _shuffleReq = enabled ? 1 : 0;
+        return Task.CompletedTask;
+    }
+
     public Task TogglePauseAsync()
     {
         _paused = !_paused;
@@ -128,6 +144,10 @@ public sealed class LocalFileSource(Playlist playlist) : IAudioSource, ITranspor
         var chunkPeriod = TimeSpan.FromMicroseconds(
             (long)chunkFrames * 1_000_000 / AudioFormat.SampleRate);
 
+        // Apply an initial shuffle request before the first track so a source
+        // that starts shuffled gets a random first track (keepCurrent:false).
+        ApplyShuffleRequest(keepCurrent: false);
+
         while (!ct.IsCancellationRequested)
         {
             var path = playlist.Current;
@@ -158,10 +178,23 @@ public sealed class LocalFileSource(Playlist playlist) : IAudioSource, ITranspor
 
             if (ReferenceEquals(_trackCts, trackCts)) _trackCts = null;
 
+            // Apply a mid-playback shuffle toggle here, while playlist.Current
+            // is still the track that just played, so "keep current, shuffle
+            // rest" pins the right track before we advance.
+            ApplyShuffleRequest(keepCurrent: true);
+
             if (_restartCurrent) _restartCurrent = false; // replay same entry
             else if (_stepBackwards) playlist.Previous();
             else playlist.Next();
         }
+    }
+
+    private void ApplyShuffleRequest(bool keepCurrent)
+    {
+        int req = _shuffleReq;
+        if (req < 0) return;
+        _shuffleReq = -1;
+        playlist.SetShuffle(req == 1, keepCurrent);
     }
 
     private void PublishTrackInfo(string path)
