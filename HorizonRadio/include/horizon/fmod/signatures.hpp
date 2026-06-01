@@ -59,6 +59,19 @@ namespace horizon::inject::signatures {
 inline const MetadataInjectorConfig kFh6Metadata = {
     .class_mangled_name = ".?AV?$_Ref_count_obj2@VRadioStreamFmod@@@std@@",
 
+    // Reach the now-playing metadata block from the RadioStreamFmod instance:
+    //   instance +0x50 -> track list, +0x08 -> block (list[0], the current
+    //   track). The block holds std::string fields at +0x10 (internal event
+    //   id), +0x30 (title), +0x50 (artist).
+    //
+    // Re-derived May 2026 via the in-process discovery dump after a game
+    // update shifted the chain (field offsets match g0ldyy/fh6-universal-radio,
+    // but their build reached the block via +0x48 -> +0x18). Re-run the dump
+    // if a future update breaks it; static RE is useless here (packed binary).
+    .chain_offsets = {0x50, 0x08},
+
+    // Leave the internal event id (+0x10) alone -- writing our track id there
+    // isn't a valid FMOD event name. We only need the visible title/artist.
     .sound_name_offset   = std::nullopt,
     .display_name_offset = 0x30,
     .artist_offset       = 0x50,
@@ -95,11 +108,6 @@ struct GameSignatures {
     std::ptrdiff_t station_chain0_offset;
     std::ptrdiff_t station_chain1_offset;
     std::ptrdiff_t station_name_offset;
-    // u32 playback counter in the SAME sub-object (chain2). It advances
-    // while a station is actively playing and FREEZES when the radio is off
-    // — the only reliable radio on/off signal we found (byte 0x342 ticked
-    // while playing, stopped on "off"). Polled as a heartbeat.
-    std::ptrdiff_t station_play_counter_offset;
 };
 
 inline constexpr GameSignatures kFh6Game = {
@@ -115,10 +123,9 @@ inline constexpr GameSignatures kFh6Game = {
     .race_active_b_offset = 0x69,
     .race_restart_offset  = 0x80,
 
-    .station_chain0_offset       = 0x40,
-    .station_chain1_offset       = 0x50,
-    .station_name_offset         = 0x200,
-    .station_play_counter_offset = 0x340,
+    .station_chain0_offset = 0x40,
+    .station_chain1_offset = 0x50,
+    .station_name_offset   = 0x200,
 };
 
 } // namespace horizon::game::signatures

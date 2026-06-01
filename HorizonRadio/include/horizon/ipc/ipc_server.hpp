@@ -75,13 +75,12 @@ public:
     void publish_source_changed(std::string_view id, std::string_view display);
 
     // Publish a detected in-game event (race_start, race_finish,
-    // race_restart, station_changed, radio_on, radio_off, …). The C# host
-    // maps it to a user-configured action. Cheap when disconnected.
+    // station_changed, …). The C# host maps it to a user-configured
+    // action. Cheap when disconnected.
     void publish_game_event(std::string_view kind);
 
-    // Publish a free-form debug line that the UI surfaces in its Console
-    // tab under `tag`. Used by the state-watch to stream RadioState byte
-    // diffs for offset reverse-engineering. Cheap when disconnected.
+    // Free-form debug line surfaced in the UI Console under `tag`.
+    // Cheap when disconnected.
     void publish_debug(std::string_view tag, std::string_view text);
 
     // Snapshot callback fires whenever a UI client (re)connects. The

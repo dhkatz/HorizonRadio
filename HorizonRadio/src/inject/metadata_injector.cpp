@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <horizon/inject/game_resolver.hpp>
 #include <horizon/inject/heap_scan.hpp>
 #include <horizon/inject/metadata_injector.hpp>
 #include <horizon/inject/msvc_string.hpp>
@@ -176,6 +177,64 @@ int process_one_instance(const void* instance, std::uintptr_t vt_addr, const Met
     } __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION ? EXCEPTION_EXECUTE_HANDLER
                                                                  : EXCEPTION_CONTINUE_SEARCH) {
         return 0;
+    }
+}
+
+// Fixed-buffer snapshot of the title/artist strings at a chain endpoint.
+// Plain old data so it can cross the SEH boundary (the __try body must
+// contain no C++ objects with destructors -- MSVC C2712).
+struct StringSnapshot {
+    char        title[512];
+    std::size_t title_len;
+    char        artist[512];
+    std::size_t artist_len;
+    bool        ok;
+};
+
+// SEH-protected read mirroring process_one_instance's chain walk: re-check
+// the vptr, walk the chain, then copy the display-name + artist MsvcStrings
+// into the snapshot buffers. Used to capture the game's original strings
+// before we overwrite them, so we can put them back when we stop replacing
+// a station.
+void read_strings_one(const void* instance, std::uintptr_t vt_addr, const MetadataInjectorConfig& cfg,
+                      const std::ptrdiff_t* chain_ptr, std::size_t chain_size, StringSnapshot* out) {
+    out->ok         = false;
+    out->title_len  = 0;
+    out->artist_len = 0;
+    __try {
+        const auto vptr = *static_cast<const std::uintptr_t*>(instance);
+        if (vptr != vt_addr)
+            return;
+        auto current = reinterpret_cast<std::uintptr_t>(instance);
+        for (std::size_t i = 0; i < chain_size; ++i) {
+            current = *reinterpret_cast<const std::uintptr_t*>(current + static_cast<std::uintptr_t>(chain_ptr[i]));
+            if (current == 0)
+                return;
+        }
+        if (cfg.display_name_offset) {
+            const auto* s = reinterpret_cast<const MsvcString*>(current + *cfg.display_name_offset);
+            if (plausible_msvc_string(s)) {
+                const std::size_t len = s->size < sizeof(out->title) ? s->size : sizeof(out->title);
+                const char*       src = data(*s);
+                for (std::size_t i = 0; i < len; ++i)
+                    out->title[i] = src[i];
+                out->title_len = len;
+            }
+        }
+        if (cfg.artist_offset) {
+            const auto* s = reinterpret_cast<const MsvcString*>(current + *cfg.artist_offset);
+            if (plausible_msvc_string(s)) {
+                const std::size_t len = s->size < sizeof(out->artist) ? s->size : sizeof(out->artist);
+                const char*       src = data(*s);
+                for (std::size_t i = 0; i < len; ++i)
+                    out->artist[i] = src[i];
+                out->artist_len = len;
+            }
+        }
+        out->ok = true;
+    } __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION ? EXCEPTION_EXECUTE_HANDLER
+                                                                 : EXCEPTION_CONTINUE_SEARCH) {
+        out->ok = false;
     }
 }
 
@@ -382,15 +441,19 @@ bool candidate_looks_active(const std::uint8_t* view_buf, std::size_t size) {
     return false;
 }
 
-// Walk view_buf for QWORDs that look like heap pointers; for the first
-// `max_pointers` of them, dump bytes_per_target bytes at the target
-// and run the MsvcString detector. Lets us discover where the radio's
-// strings live without trusting a hardcoded offset chain.
+// Dump the targets of the first `max_pointers` heap pointers in view_buf and
+// scan each for MsvcStrings -- finds where the radio's strings live without a
+// hardcoded chain. `depth` follows pointer hops: depth 2 also recurses into
+// each target's pointers, which is what reaches a two-level chain
+// (instance -> list -> block) like FH6's track metadata.
 void dump_pointer_targets(std::string& out, const std::uint8_t* view_buf, std::size_t view_size,
-                          std::size_t max_pointers = 4, std::size_t bytes_per_target = 192) {
-    out += "  heap pointers found in view A and what they point to:\n";
+                          std::size_t max_pointers = 4, std::size_t bytes_per_target = 192, int depth = 1,
+                          const char* indent = "  ") {
+    char line[200];
+    std::snprintf(line, sizeof(line), "%sheap pointers found and what they point to:\n", indent);
+    out += line;
     std::size_t reported = 0;
-    for (std::size_t off = 8; off + 8 <= view_size; off += 8) {
+    for (std::size_t off = (depth == 1 ? 8 : 0); off + 8 <= view_size; off += 8) {
         if (reported >= max_pointers)
             break;
         std::uintptr_t v = 0;
@@ -406,15 +469,25 @@ void dump_pointer_targets(std::string& out, const std::uint8_t* view_buf, std::s
         if (!looks_like_heap(tgt))
             continue;
 
-        char header[160];
-        int  n = std::snprintf(header, sizeof(header), "    field +0x%03zx -> 0x%llx (192 bytes):\n", off,
-                               static_cast<unsigned long long>(v));
-        out.append(header, static_cast<std::size_t>(n));
+        int n = std::snprintf(line, sizeof(line), "%s  field +0x%03zx -> 0x%llx (%zu bytes):\n", indent, off,
+                              static_cast<unsigned long long>(v), bytes_per_target);
+        out.append(line, static_cast<std::size_t>(n));
         dump_hex_block(out, tgt, bytes_per_target);
         ++reported;
+
+        // Recurse one more hop so two-level chains (wrapper -> body)
+        // get their strings dumped, not just the wrapper bytes.
+        if (depth > 1) {
+            std::vector<std::uint8_t> child(bytes_per_target);
+            if (safe_read_bytes(child.data(), tgt, child.size())) {
+                dump_pointer_targets(out, child.data(), child.size(), max_pointers, bytes_per_target, depth - 1,
+                                     "        ");
+            }
+        }
     }
     if (reported == 0) {
-        out += "    (no heap-arena pointers in view A)\n";
+        std::snprintf(line, sizeof(line), "%s(no heap-arena pointers)\n", indent);
+        out += line;
     }
 }
 
@@ -431,21 +504,15 @@ std::string MetadataInjector::dump_candidates(std::size_t bytes_per_dump) const 
 
     const auto vt_addr = reinterpret_cast<std::uintptr_t>(vt_->address);
 
-    auto raw_instances = find_heap_instances(*vt_);
-    // Strip stack-frame coincidences.
-    std::vector<const void*> instances;
-    instances.reserve(raw_instances.size());
-    for (auto* p : raw_instances) {
-        if (looks_like_heap(p))
-            instances.push_back(p);
-    }
+    // Same SEH-safe, refcount-validated heap-arena scan the periodic writer
+    // uses -- not the brute-force find_heap_instances, which reads every
+    // committed word unguarded and crashed the game during discovery.
+    std::vector<const void*> instances = horizon::game::find_instances_in_heap_arenas(vt_->address, image_);
 
     char header[200];
     int  n = std::snprintf(header, sizeof(header),
-                           "[discovery] vtable=%p  raw_candidates=%zu  heap_candidates=%zu  "
-                            "chain_steps=%zu  dump_bytes=%zu\n",
-                           vt_->address, raw_instances.size(), instances.size(), config_.chain_offsets.size(),
-                           bytes_per_dump);
+                           "[discovery] vtable=%p  heap_candidates=%zu  chain_steps=%zu  dump_bytes=%zu\n",
+                           vt_->address, instances.size(), config_.chain_offsets.size(), bytes_per_dump);
     out.append(header, static_cast<std::size_t>(n));
 
     // We pre-scan each candidate, dropping ones that look entirely
@@ -482,22 +549,26 @@ std::string MetadataInjector::dump_candidates(std::size_t bytes_per_dump) const 
                           instance);
         out.append(header, static_cast<std::size_t>(n));
 
-        // View A: 128 bytes at the instance itself.
-        std::uint8_t view_a[128];
+        // View A: 512 bytes at the instance itself. The RadioStreamFmod
+        // object extends well past the first 128 bytes; a *direct* pointer
+        // to the current track's properties may live deeper in, which would
+        // give a clean one-hop chain instead of walking the playlist array.
+        // 512 bytes: the object extends well past the first 128.
+        std::uint8_t view_a[512];
         if (!safe_read_bytes(view_a, instance, sizeof(view_a))) {
             out += "  (instance unreadable)\n";
             continue;
         }
-        out += "  view A -- 128 bytes at the instance itself:\n";
+        out += "  view A -- 512 bytes at the instance itself:\n";
         for (std::size_t off = 0; off + 16 <= sizeof(view_a); off += 16) {
             append_hex_line(out, static_cast<std::ptrdiff_t>(off), view_a + off);
         }
         out += "    detected MsvcString-shaped slots in view A:\n";
         scan_for_msvc_strings(out, view_a, sizeof(view_a), instance);
 
-        // For every heap-looking pointer in view A, dump the target.
-        // One of these should reveal the SampleProperties struct.
-        dump_pointer_targets(out, view_a, sizeof(view_a));
+        // Follow the instance's heap pointers two hops so a two-level chain
+        // (instance -> list -> metadata block) reaches the string block.
+        dump_pointer_targets(out, view_a, sizeof(view_a), 8, 192, 2);
     }
 
     return out;
@@ -515,6 +586,20 @@ int MetadataInjector::write_to_instance(const void* instance, std::string_view s
                                               config_.chain_offsets.size(), sound_name, display_name, artist);
     total_writes_.fetch_add(static_cast<std::uint64_t>(n), std::memory_order_relaxed);
     return n;
+}
+
+bool MetadataInjector::read_instance_strings(const void* instance, std::string& out_title,
+                                             std::string& out_artist) const {
+    if (!vt_)
+        return false;
+    const auto     vt_addr = reinterpret_cast<std::uintptr_t>(vt_->address);
+    StringSnapshot snap;
+    read_strings_one(instance, vt_addr, config_, config_.chain_offsets.data(), config_.chain_offsets.size(), &snap);
+    if (!snap.ok)
+        return false;
+    out_title.assign(snap.title, snap.title_len);
+    out_artist.assign(snap.artist, snap.artist_len);
+    return true;
 }
 
 } // namespace horizon::inject

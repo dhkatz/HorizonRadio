@@ -87,6 +87,12 @@ public:
     int write_to_instance(const void* instance, std::string_view sound_name, std::string_view display_name,
                           std::string_view artist);
 
+    // Read the current title/artist at the chain endpoint into std::strings.
+    // Snapshots the game's originals before we overwrite them, so the caller
+    // can restore them when it stops replacing a station. SEH-safe; returns
+    // false if the chain doesn't resolve to a valid string block.
+    bool read_instance_strings(const void* instance, std::string& out_title, std::string& out_artist) const;
+
     std::uint64_t total_writes() const noexcept {
         return total_writes_.load(std::memory_order_relaxed);
     }

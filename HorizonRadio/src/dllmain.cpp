@@ -104,6 +104,15 @@ std::mutex        g_track_mutex;
 TrackInfo         g_current_track;
 std::atomic<bool> g_have_track{false};
 
+// Station targeting. The UI picks which in-game station Horizon Radio
+// replaces via {"cmd":"set_target_station"}. Empty = replace whatever
+// station is active (legacy behavior). g_on_target_station is recomputed
+// each poll (active station name == target) and gates DSP attach +
+// metadata so other stations keep playing the game's own music.
+std::mutex         g_target_mutex;
+std::string        g_target_station;            // empty = any
+std::atomic<bool>  g_on_target_station{true};   // default: replace active
+
 // IPC server exposed to the HorizonRadio.UI desktop companion app.
 // Lives for the entire DLL lifetime; events flow out as source
 // callbacks fire (track changes) and as the periodic writer ticks
@@ -332,18 +341,15 @@ void* resolve_radiostate_global(const PeImage& game_image) {
     return slot;
 }
 
-// Follow radio_state -> +chain0 -> +chain1 -> the station sub-object, and
-// read the station NAME (MSVC std::string @ +name_off) plus the playback
-// counter (u32 @ +play_counter_off). These live two pointer-hops away,
-// which is why they never showed up watching RadioState directly.
-// out_play_counter is 0 if unreadable. Returns true if the name resolved.
-bool read_station_state(std::uintptr_t base, std::string& out_name, std::uint32_t& out_play_counter) {
+// Follow radio_state -> +chain0 -> +chain1 -> the station sub-object and
+// read the station NAME (MSVC std::string @ +name_off). It lives two
+// pointer-hops away, which is why it never showed up watching RadioState
+// directly. Returns true if the name resolved.
+bool read_station_state(std::uintptr_t base, std::string& out_name) {
     using horizon::inject::MsvcString;
     using horizon::inject::safe_read_bytes;
     using horizon::inject::safe_read_qword;
     const auto& g = horizon::game::signatures::kFh6Game;
-
-    out_play_counter = 0;
 
     const auto p1 = safe_read_qword(reinterpret_cast<const void*>(base + g.station_chain0_offset));
     if (p1 == 0)
@@ -367,10 +373,6 @@ bool read_station_state(std::uintptr_t base, std::string& out_name, std::uint32_
         return false; // heap: chars live at u.ptr
     }
     out_name.assign(buf, s.size);
-
-    std::uint32_t counter = 0;
-    if (safe_read_bytes(&counter, reinterpret_cast<const void*>(p2 + g.station_play_counter_offset), 4))
-        out_play_counter = counter;
     return true;
 }
 
@@ -383,188 +385,51 @@ void poll_game_events(void* radio_state) {
         return;
 
     using horizon::inject::safe_read_bytes;
-    using horizon::inject::safe_read_qword;
 
     const auto& g    = horizon::game::signatures::kFh6Game;
     const auto  base = reinterpret_cast<std::uintptr_t>(radio_state);
 
-    // Live state-watch: when a "horizon-radio.watch" file sits next to the
-    // DLL, stream byte-level diffs of the RadioState struct to the UI's
-    // Console tab. Toggle the radio / restart / finish a race and read off
-    // which offsets move — the way to pin down radio on/off, the restart
-    // sentinel, station id, etc. on a given build. Opt-in so it never spams
-    // during normal play.
-    static bool         s_watch_path_init = false;
-    static std::wstring s_watch_path;
-    if (!s_watch_path_init) {
-        s_watch_path_init = true;
-        wchar_t mp[MAX_PATH];
-        if (GetModuleFileNameW(g_module, mp, MAX_PATH) != 0)
-            s_watch_path = (std::filesystem::path(mp).parent_path() / L"horizon-radio.watch").wstring();
-    }
-    static int  s_watch_check = 0;
-    static bool s_watching    = false;
-    if (!s_watch_path.empty() && (s_watch_check++ % 10 == 0)) {
-        std::error_code ec;
-        const bool      now_watching = std::filesystem::exists(s_watch_path, ec);
-        if (now_watching && !s_watching)
-            g_ipc_server.publish_debug("state", "watch armed -- capturing RadioState[0x00..0xFF] baseline");
-        s_watching = now_watching;
-    }
-    if (s_watching) {
-        // Window widened to 0x400: the radio on/off flag isn't in the
-        // first 0x100. Read in 0x40-byte chunks so an unmapped tail page
-        // can't kill the whole dump. Adaptive noise filter (mute after N
-        // changes) keeps it sparse even armed from game launch.
-        constexpr std::size_t   kWin            = 0x400;
-        constexpr std::size_t   kChunk          = 0x40;
-        constexpr std::uint16_t kNoiseThreshold = 16;
-        static std::uint8_t     s_prev[kWin]    = {};
-        static std::uint16_t    s_chg[kWin]     = {};
-        static bool             s_chunk_valid[kWin / kChunk] = {};
-
-        std::string msg = "d";
-        char        tmp[56];
-        bool        any = false;
-        for (std::size_t c = 0; c < kWin; c += kChunk) {
-            std::uint8_t cur[kChunk] = {};
-            if (!safe_read_bytes(cur, reinterpret_cast<const void*>(base + c), kChunk))
-                continue;
-            const std::size_t ci = c / kChunk;
-            if (!s_chunk_valid[ci]) {
-                s_chunk_valid[ci] = true;
-                std::memcpy(s_prev + c, cur, kChunk);
-                continue;
-            }
-            for (std::size_t j = 0; j < kChunk; ++j) {
-                const std::size_t i = c + j;
-                if (cur[j] == s_prev[i])
-                    continue;
-                if (s_chg[i] < 0xFFFF)
-                    ++s_chg[i];
-                if (s_chg[i] <= kNoiseThreshold) {
-                    std::snprintf(tmp, sizeof(tmp), " +0x%03zx:%02X->%02X%s", i, s_prev[i], cur[j],
-                                  s_chg[i] == kNoiseThreshold ? "(muting)" : "");
-                    msg += tmp;
-                    any = true;
-                }
-                s_prev[i] = cur[j];
-            }
-        }
-        if (any)
-            g_ipc_server.publish_debug("state", msg);
-    }
-
-    // Also watch the station SUB-OBJECT around the name (chain2 + ~0x200).
-    // Radio on/off isn't in RadioState, and the name itself stays put when
-    // toggled off, so the off flag most likely lives next to the name in
-    // this sub-object. Diffs reported under the "station_obj" tag.
-    if (s_watching) {
-        const auto wp1 = safe_read_qword(reinterpret_cast<const void*>(base + g.station_chain0_offset));
-        const auto wp2 = wp1 ? safe_read_qword(reinterpret_cast<const void*>(wp1 + g.station_chain1_offset)) : 0;
-        if (wp2 != 0) {
-            // Scan the whole chain2 sub-object (chunked, adaptive-muted) —
-            // the radio toggle flag wasn't in the 0x1C0..0x240 window.
-            constexpr std::size_t   kWin                       = 0x400;
-            constexpr std::size_t   kChunk                     = 0x40;
-            constexpr std::uint16_t kThresh                    = 16;
-            static std::uint8_t     o_prev[kWin]               = {};
-            static std::uint16_t    o_chg[kWin]                = {};
-            static bool             o_chunk_valid[kWin / kChunk] = {};
-
-            std::string msg = "obj";
-            char        tmp[56];
-            bool        any = false;
-            for (std::size_t c = 0; c < kWin; c += kChunk) {
-                std::uint8_t cur[kChunk] = {};
-                if (!safe_read_bytes(cur, reinterpret_cast<const void*>(wp2 + c), kChunk))
-                    continue;
-                const std::size_t ci = c / kChunk;
-                if (!o_chunk_valid[ci]) {
-                    o_chunk_valid[ci] = true;
-                    std::memcpy(o_prev + c, cur, kChunk);
-                    continue;
-                }
-                for (std::size_t j = 0; j < kChunk; ++j) {
-                    const std::size_t i = c + j;
-                    if (cur[j] == o_prev[i])
-                        continue;
-                    if (o_chg[i] < 0xFFFF)
-                        ++o_chg[i];
-                    if (o_chg[i] <= kThresh) {
-                        std::snprintf(tmp, sizeof(tmp), " +0x%03zx:%02X->%02X%s", i, o_prev[i], cur[j],
-                                      o_chg[i] == kThresh ? "(muting)" : "");
-                        msg += tmp;
-                        any = true;
-                    }
-                    o_prev[i] = cur[j];
-                }
-            }
-            if (any)
-                g_ipc_server.publish_debug("station_obj", msg);
-        }
-    }
-
-    // Race active flags (both nonzero ⇒ in a race) + restart sentinel.
+    // Race active flags (both nonzero => in a race). Edge-detect start/finish.
     std::uint8_t ra = 0, rb = 0;
-    std::int32_t restart = 0;
     safe_read_bytes(&ra, reinterpret_cast<const void*>(base + g.race_active_a_offset), 1);
     safe_read_bytes(&rb, reinterpret_cast<const void*>(base + g.race_active_b_offset), 1);
-    safe_read_bytes(&restart, reinterpret_cast<const void*>(base + g.race_restart_offset), 4);
     const bool active = (ra != 0) && (rb != 0);
 
-    static bool         s_init    = false;
-    static bool         s_active  = false;
-    static std::int32_t s_restart = 0;
-    if (!s_init) {
-        s_init    = true;
-        s_active  = active;
-        s_restart = restart;
-    } else {
-        if (active && !s_active)
-            g_ipc_server.publish_game_event("race_start");
-        if (!active && s_active)
-            g_ipc_server.publish_game_event("race_finish");
-        if (restart == -1 && s_restart != -1) {
-            // Field testing showed 0x80 -> -1 also fires when CROSSING THE
-            // FINISH LINE, not only on restart — emitting race_restart here
-            // produced false positives at race end. Log it to the watch
-            // instead of acting on it until a real restart can be told
-            // apart from a finish. (race_finish above still fires from the
-            // race-active edge.)
-            g_ipc_server.publish_debug("state", "restart(0x80) -> -1 (suppressed: also fires at finish line)");
-        }
-        s_active  = active;
-        s_restart = restart;
+    static bool s_race_init = false;
+    static bool s_active     = false;
+    if (!s_race_init) {
+        s_race_init = true;
+        s_active    = active;
+    } else if (active != s_active) {
+        s_active = active;
+        g_ipc_server.publish_game_event(active ? "race_start" : "race_finish");
     }
 
-    std::string   name;
-    std::uint32_t play_counter = 0;
-    const bool    got          = read_station_state(base, name, play_counter);
-    if (!got)
+    // Which station is tuned in. Drives station_changed and the targeting
+    // gate (only replace the station the user chose; empty target = any).
+    // The name changes on station switching but NOT on radio power off,
+    // which is why on/off isn't a supported event (see notes in git log).
+    std::string name;
+    if (!read_station_state(base, name) || name.empty())
         return;
-    (void)play_counter;
-    // NOTE: manual radio on/off is intentionally NOT emitted. We exhausted
-    // every signal — the station name doesn't change on off, no boolean
-    // flag tracks the toggle, and the playback counter (0x340) freezes on
-    // station changes, pauses, AND ordinary playback gaps (DJ/track
-    // transitions), so it can't distinguish "off" from those. Station
-    // SELECTION (the name) is reliable, so that's what we drive.
 
-    // Station SELECTION tracking. Logs each distinct station to the Console
-    // ("station" tag) and drives station_changed. The name changes when you
-    // switch stations (reliable); it does NOT change on radio power off.
-    if (!name.empty()) {
-        static bool        s_st_init = false;
-        static std::string s_station;
-        if (!s_st_init || name != s_station) {
-            const bool first = !s_st_init;
-            s_st_init = true;
-            s_station = name;
-            g_ipc_server.publish_debug("station", "current: '" + name + "'");
-            if (!first)
-                g_ipc_server.publish_game_event("station_changed");
+    {
+        std::string target;
+        {
+            std::lock_guard lock(g_target_mutex);
+            target = g_target_station;
         }
+        g_on_target_station.store(target.empty() || name == target, std::memory_order_release);
+    }
+
+    static bool        s_st_init = false;
+    static std::string s_station;
+    if (!s_st_init) {
+        s_st_init = true;
+        s_station = name;
+    } else if (name != s_station) {
+        s_station = name;
+        g_ipc_server.publish_game_event("station_changed");
     }
 }
 
@@ -775,6 +640,19 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
                     b->set_master_gain(static_cast<float>(gain));
                 logf(L"[horizon-radio] cmd set_gain: %.3f\n", gain);
             }
+        } else if (cmd == "set_target_station") {
+            // Which in-game station Horizon Radio replaces. Empty string
+            // (or "*") = replace whatever station is active.
+            std::string station;
+            json_extract_string(line, "station", station);
+            if (station == "*")
+                station.clear();
+            {
+                std::lock_guard lock(g_target_mutex);
+                g_target_station = station;
+            }
+            std::wstring ws(station.begin(), station.end());
+            logf(L"[horizon-radio] cmd set_target_station: '%ls'\n", ws.c_str());
         }
     });
 
@@ -841,18 +719,11 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
             log_w(L"[horizon-radio] metadata: periodic writer arming "
                   L"(first attempt in 10s, then 5 Hz)\n");
             std::thread([] {
-                OutputDebugStringW(L"[horizon-radio] periodic thread: alive\n");
                 std::this_thread::sleep_for(std::chrono::seconds(10));
-                OutputDebugStringW(L"[horizon-radio] periodic thread: past initial sleep, entering loop\n");
 
-                // Tick rate: 20 Hz matches g0ldyy's reference mod
-                // (their 50 Hz is the upper bound; 20 Hz is enough
-                // for radio-toggle and song-change transitions to
-                // feel instantaneous). FmodBridge::tick() is now
-                // cheap in steady state (one memory read + a compare;
-                // no FMOD calls), so the cost per tick is microseconds.
-                // The metadata write + bridge tick combined run in
-                // well under 1 ms even with 5 candidates.
+                // 20 Hz: fast enough that song-change / radio-toggle
+                // transitions feel instant; tick() is microseconds in steady
+                // state (one read + compare, no FMOD calls).
                 constexpr auto kTickInterval  = std::chrono::milliseconds(50);
                 constexpr int  kRescanIters   = 100; // ~5 s between heap scans
                 int            last_write_n   = -1;
@@ -869,6 +740,27 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
                     if (rs_slot)
                         poll_game_events(safe_deref_slot(rs_slot));
 
+                    // Title write/restore state (persists across ticks). We
+                    // write our title into ONE block (the instance we inject
+                    // audio into), snapshot its originals first, and write them
+                    // back when we stop replacing it. Hoisted above the
+                    // have-track gate so the restore runs even once the source
+                    // stops.
+                    static const void* md_written_instance = nullptr;
+                    static std::string md_saved_title;        // game's title to restore
+                    static std::string md_saved_artist;       //   (kept in sync below)
+                    static bool        md_saved_valid = false;
+                    static std::string md_last_written_title; // what WE put in the block last tick
+                    static std::string md_last_written_artist;
+                    static bool        md_have_last_written = false;
+                    auto               restore_original_title = [&](horizon::inject::MetadataInjector* injector) {
+                        if (md_written_instance && md_saved_valid && injector)
+                            injector->write_to_instance(md_written_instance, "", md_saved_title, md_saved_artist);
+                        md_written_instance  = nullptr;
+                        md_saved_valid       = false;
+                        md_have_last_written = false;
+                    };
+
                     if (inj && rs_slot && vt && g_have_track.load(std::memory_order_acquire)) {
                         TrackInfo t;
                         {
@@ -877,19 +769,22 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
                         }
                         const std::string sound = t.id.empty() ? t.title : t.id;
 
+                        // Only replace the station the user targeted (empty
+                        // target = replace whatever's active). When off our
+                        // station we skip metadata + detach the DSP so the
+                        // game's own station plays untouched.
+                        const bool on_target = g_on_target_station.load(std::memory_order_acquire);
+
                         void* radio_state = safe_deref_slot(rs_slot);
 
-                        // Cache: scan all heap-shaped arenas once and
-                        // hold onto the instance list. The custom
-                        // allocator scatters RadioStreamFmod across
-                        // many arenas (not just RadioState's), so we
-                        // need the whole-process scan; but it's
-                        // expensive enough that we don't want to redo
-                        // it every tick. Re-scan every kRescanIters
-                        // iterations.
+                        // Cache the instance list; the heap-arena scan is too
+                        // expensive to redo every tick. Scan every ~4 ticks
+                        // until found (fast attach), then back off to
+                        // kRescanIters once we have instances.
                         static std::vector<const void*> cached_instances;
                         std::vector<const void*>&       instances = cached_instances;
-                        if (radio_state && (iter % kRescanIters == 0)) {
+                        const int scan_interval = cached_instances.empty() ? 4 : kRescanIters;
+                        if (radio_state && (iter % scan_interval == 0)) {
                             const auto t0    = std::chrono::steady_clock::now();
                             cached_instances = horizon::game::find_instances_in_heap_arenas(vt, game_image);
                             const auto ms    = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -901,24 +796,10 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
                             OutputDebugStringW(scan_msg);
                         }
 
-                        // "Preferred instance" stickiness: a radio
-                        // station may have multiple chain-valid
-                        // RadioStreamFmod instances at the same time
-                        // (e.g. music + host segment). If we pick
-                        // "first chain-valid" each tick we ping-pong
-                        // between music and host channels, producing
-                        // audible stutter. Instead we lock onto one
-                        // instance and only switch if it falls out of
-                        // the scan entirely. When its channel goes
-                        // dead (host segment starts on a different
-                        // instance), we uninstall the DSP — the game
-                        // plays its host audio naturally — and
-                        // reattach when the music channel returns.
+                        // Lock onto one instance so multiple chain-valid
+                        // instances (e.g. music + host segment) don't make us
+                        // ping-pong; only re-pick when it leaves the scan.
                         static const void* preferred_instance = nullptr;
-
-                        // Drop the preferred if the scan no longer
-                        // contains it (instance got freed / station
-                        // reallocated).
                         if (preferred_instance) {
                             bool still_present = false;
                             for (auto* inst : instances) {
@@ -931,23 +812,83 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
                                 preferred_instance = nullptr;
                         }
 
-                        int n = 0;
-                        for (const void* inst : instances) {
-                            const int wrote = inj->write_to_instance(inst, sound, t.title, t.artist);
-                            // Adopt as preferred only if we don't
-                            // already have one. Once locked, we stay
-                            // on it across host segments.
-                            if (wrote && preferred_instance == nullptr) {
-                                preferred_instance = inst;
+                        // Pick the single instance we replace: the one whose
+                        // FMOD system resolves (the audible station). Selecting
+                        // by audio — not metadata-write success — keeps the
+                        // title on the station the audio is on, and avoids
+                        // stamping it onto other loaded stations' blocks (which
+                        // share the same vtable).
+                        auto fmod_resolves = [&](const void* inst) {
+                            auto* rs = const_cast<std::byte*>(static_cast<const std::byte*>(inst) + 0x10);
+                            return horizon::fmod::resolve_fmod_system_from_stream(game_image, rs) != nullptr;
+                        };
+                        const void* active_instance = nullptr;
+                        if (on_target) {
+                            if (preferred_instance && fmod_resolves(preferred_instance)) {
+                                active_instance = preferred_instance;
+                            } else {
+                                for (const void* inst : instances) {
+                                    if (fmod_resolves(inst)) {
+                                        active_instance = inst;
+                                        break;
+                                    }
+                                }
+                                preferred_instance = active_instance;
                             }
-                            n += wrote;
                         }
-                        const void* active_instance = preferred_instance;
 
-                        // Log only on transitions to keep DebugView
-                        // readable at 5 Hz tick rate. Steady state of
-                        // "1 successful write per tick" prints once
-                        // and stays quiet.
+                        // Write our title/artist to ONLY that instance, after
+                        // snapshotting its originals on first touch. If we were
+                        // replacing a different instance before, restore it.
+                        int n = 0;
+                        if (md_written_instance && md_written_instance != active_instance) {
+                            bool present = false;
+                            for (auto* x : instances) {
+                                if (x == md_written_instance) {
+                                    present = true;
+                                    break;
+                                }
+                            }
+                            if (present)
+                                restore_original_title(inj);
+                            else {
+                                md_written_instance = nullptr;
+                                md_saved_valid      = false;
+                            }
+                        }
+                        if (active_instance) {
+                            if (md_written_instance != active_instance) {
+                                // First touch of this block: snapshot the game's
+                                // current title/artist as the restore value.
+                                md_saved_valid      = inj->read_instance_strings(active_instance, md_saved_title,
+                                                                                 md_saved_artist);
+                                md_written_instance  = active_instance;
+                                md_have_last_written = false;
+                            } else if (md_have_last_written) {
+                                // Keep the restore value synced to the game's
+                                // real track: the block holds what we wrote last
+                                // tick UNLESS the game advanced its own track, in
+                                // which case it now holds the game's new title.
+                                // Comparing against our last write (not our
+                                // current one) avoids mistaking our own title for
+                                // the game's on the tick our song changes.
+                                std::string cur_title, cur_artist;
+                                if (inj->read_instance_strings(active_instance, cur_title, cur_artist) &&
+                                    (cur_title != md_last_written_title || cur_artist != md_last_written_artist)) {
+                                    md_saved_title  = cur_title;
+                                    md_saved_artist = cur_artist;
+                                    md_saved_valid  = true;
+                                }
+                            }
+                            n = inj->write_to_instance(active_instance, sound, t.title, t.artist);
+                            if (n) {
+                                md_last_written_title  = t.title;
+                                md_last_written_artist = t.artist;
+                                md_have_last_written   = true;
+                            }
+                        }
+
+                        // Log only on transitions (keeps DebugView readable).
                         if (n != last_write_n) {
                             wchar_t msg[240];
                             swprintf_s(msg,
@@ -958,39 +899,29 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
                             last_write_n = n;
                         }
 
-                        // Audio bridge: when we have a chain-valid
-                        // RadioStreamFmod, resolve FMOD System*
-                        // (radio_stream + 0x08 + 0xC0) and hand both
-                        // to the bridge. tick() reads the channel
-                        // handle at radio_stream + 0x20 and installs
-                        // / retargets the DSP. (The earlier
-                        // `horizon-radio.bridge-on` trigger-file
-                        // gate has been retired now that the install
-                        // path has been verified to be crash-safe;
-                        // see set_target + SEH-wrapped FMOD calls.)
+                        // Audio bridge: resolve FMOD System* from the stream
+                        // and hand both to the bridge; tick() installs /
+                        // retargets the DSP on the stream's channel.
                         auto* bridge_for_install = g_bridge_for_push.load(std::memory_order_acquire);
-                        // Track the system-resolve state across ticks
-                        // so we only log on transitions (radio
-                        // off↔on) instead of every 200 ms while it's
-                        // unresolved.
+                        // Track resolve state so we only log on transitions.
                         static bool last_sys_resolved = true;
-                        if (active_instance && bridge_for_install) {
+                        if (!on_target && bridge_for_install) {
+                            // Off the targeted station: detach our DSP so
+                            // the game's own station audio plays untouched.
+                            // Drop the preferred instance so we re-pick when
+                            // the user tunes back to our station.
+                            bridge_for_install->set_target(nullptr, nullptr);
+                            bridge_for_install->tick();
+                            preferred_instance = nullptr;
+                        } else if (active_instance && bridge_for_install) {
                             auto* radio_stream =
                                 const_cast<std::byte*>(static_cast<const std::byte*>(active_instance) + 0x10);
                             auto* sys = horizon::fmod::resolve_fmod_system_from_stream(game_image, radio_stream);
                             if (sys == nullptr) {
-                                // Radio is OFF (chain endpoint goes
-                                // null when the user turns the radio
-                                // off in-game; channel handle is also
-                                // stale). Proactively clear the
-                                // bridge target so it uninstalls our
-                                // DSP from the dead channel — leaves
-                                // a clean slate to install on the
-                                // fresh channel when radio comes
-                                // back on. Otherwise bridge would
-                                // hold a stale current_handle_ and
-                                // removeDsp would target a destroyed
-                                // FMOD channel during recovery.
+                                // Radio off / channel dead: clear the target so
+                                // the DSP uninstalls cleanly (a stale handle
+                                // would make removeDsp hit a destroyed channel
+                                // on recovery).
                                 bridge_for_install->set_target(nullptr, nullptr);
                                 bridge_for_install->tick();
                                 if (last_sys_resolved) {
@@ -1001,11 +932,6 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
                                                iter);
                                     OutputDebugStringW(smsg);
                                     last_sys_resolved = false;
-                                    // radio on/off now comes from the
-                                    // RadioState 0x6d flag in poll_game_events
-                                    // (reliable in Streamer Mode); the
-                                    // system-resolve transition is kept only
-                                    // for bridge install/teardown + logging.
                                 }
                             } else {
                                 if (!last_sys_resolved) {
@@ -1028,21 +954,19 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
                                                now_installed ? 1 : 0, sys, radio_stream, iter);
                                     OutputDebugStringW(bmsg);
                                     last_installed = now_installed;
-                                    // Note: deliberately NO source
-                                    // restart on detach. The source
-                                    // keeps decoding and looping
-                                    // internally; when the bridge
-                                    // reattaches the drain-on-stall
-                                    // logic discards any queued
-                                    // audio and we resume from
-                                    // "wherever the source is now."
-                                    // This matches real-radio
-                                    // semantics: turning the radio
-                                    // off and back on doesn't rewind
-                                    // the song.
+                                    // No source restart on detach: the source
+                                    // keeps running, so re-attach resumes from
+                                    // wherever it is now (real-radio semantics).
                                 }
                             }
                         }
+                    } else if (md_written_instance && inj) {
+                        // Not writing this tick (no track / unresolved): put the
+                        // game's original title back so a stopped source doesn't
+                        // leave ours frozen on the station. write_to_instance is
+                        // SEH-safe and re-checks the vptr, so restoring a block
+                        // that was freed since is a no-op, not a crash.
+                        restore_original_title(inj);
                     }
                     ++iter;
                     std::this_thread::sleep_for(kTickInterval);
@@ -1050,57 +974,73 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
             }).detach();
         }
 
-        // Discovery dump (still opt-in via file). Stays available
-        // even after offsets are configured, in case the user wants
-        // to verify the layout against the live game.
-        if (!cfg.sound_name_offset && !cfg.display_name_offset && !cfg.artist_offset) {
-            log_w(L"[horizon-radio] discovery: field offsets unconfigured. "
-                  L"Discovery is OPT-IN. To trigger one dump: create an empty "
-                  L"file named 'horizon-radio.discover' next to version.dll. "
-                  L"The file is deleted after the dump; recreate to trigger again.\n");
-            std::thread([] {
-                wchar_t module_path[MAX_PATH];
-                if (GetModuleFileNameW(g_module, module_path, MAX_PATH) == 0)
-                    return;
-                const std::filesystem::path trigger_path =
-                    std::filesystem::path(module_path).parent_path() / L"horizon-radio.discover";
+        // Discovery dump. Always available (even with offsets configured)
+        // so we can re-verify the layout against a live build whose offsets
+        // shifted under a game update. Opt-in via a trigger file so it never
+        // runs unprompted. Output goes to both DebugView and the UI Console
+        // (tag "discover") so it can be captured without a debugger attached.
+        log_w(L"[horizon-radio] discovery: OPT-IN. To trigger one dump, create an "
+              L"empty file named 'horizon-radio.discover' next to version.dll "
+              L"(it's deleted after the dump; recreate to trigger again). "
+              L"Output appears in the UI Console under the 'discover' tag.\n");
+        std::thread([] {
+            wchar_t module_path[MAX_PATH];
+            if (GetModuleFileNameW(g_module, module_path, MAX_PATH) == 0)
+                return;
+            const std::filesystem::path trigger_path =
+                std::filesystem::path(module_path).parent_path() / L"horizon-radio.discover";
 
-                int dump_count = 0;
-                while (true) {
-                    std::this_thread::sleep_for(std::chrono::seconds(5));
+            int dump_count = 0;
+            while (true) {
+                std::this_thread::sleep_for(std::chrono::seconds(2));
 
-                    std::error_code ec;
-                    if (!std::filesystem::exists(trigger_path, ec))
-                        continue;
+                std::error_code ec;
+                if (!std::filesystem::exists(trigger_path, ec))
+                    continue;
 
-                    // Delete first so a failed dump doesn't loop forever.
-                    std::filesystem::remove(trigger_path, ec);
+                // Delete first so a failed dump doesn't loop forever.
+                std::filesystem::remove(trigger_path, ec);
 
-                    auto* inj = g_metadata_injector.load(std::memory_order_acquire);
-                    if (!inj)
-                        continue;
+                auto* inj = g_metadata_injector.load(std::memory_order_acquire);
+                if (!inj)
+                    continue;
 
-                    wchar_t marker[96];
-                    swprintf_s(marker, L"[horizon-radio] --- discovery dump #%d (user-triggered) ---\n", dump_count++);
-                    OutputDebugStringW(marker);
+                char marker[96];
+                int  mn = std::snprintf(marker, sizeof(marker), "--- discovery dump #%d ---", dump_count++);
+                g_ipc_server.publish_debug("discover", std::string_view(marker, static_cast<std::size_t>(mn)));
+                g_ipc_server.publish_debug("discover", "scanning heap (this can take a few seconds)...");
+                OutputDebugStringW(L"[horizon-radio] discovery dump begin\n");
 
-                    std::string  dump = inj->dump_candidates();
-                    std::wstring wide;
-                    wide.reserve(dump.size());
-                    for (char c : dump)
+                const std::string dump = inj->dump_candidates();
+
+                // Breadcrumb so we can tell an empty dump apart from a lost
+                // one: report size before streaming the lines.
+                char szmsg[96];
+                int  sn    = std::snprintf(szmsg, sizeof(szmsg), "dump_candidates returned %zu bytes", dump.size());
+                g_ipc_server.publish_debug("discover", std::string_view(szmsg, static_cast<std::size_t>(sn)));
+
+                std::size_t pos       = 0;
+                int         emitted   = 0;
+                while (pos < dump.size()) {
+                    std::size_t end = dump.find('\n', pos);
+                    if (end == std::string::npos)
+                        end = dump.size();
+                    std::string_view line(dump.data() + pos, end - pos);
+                    g_ipc_server.publish_debug("discover", line);
+                    ++emitted;
+                    std::wstring wide(L"[horizon-radio] ");
+                    for (char c : line)
                         wide.push_back(static_cast<wchar_t>(c));
-                    std::size_t pos = 0;
-                    while (pos < wide.size()) {
-                        std::size_t end = wide.find(L'\n', pos);
-                        if (end == std::wstring::npos)
-                            end = wide.size();
-                        std::wstring line = L"[horizon-radio] " + std::wstring(wide.data() + pos, end - pos) + L"\n";
-                        OutputDebugStringW(line.c_str());
-                        pos = end + 1;
-                    }
+                    wide.push_back(L'\n');
+                    OutputDebugStringW(wide.c_str());
+                    pos = end + 1;
                 }
-            }).detach();
-        }
+
+                char endmsg[96];
+                int  en = std::snprintf(endmsg, sizeof(endmsg), "--- discovery dump end (%d lines) ---", emitted);
+                g_ipc_server.publish_debug("discover", std::string_view(endmsg, static_cast<std::size_t>(en)));
+            }
+        }).detach();
     }
 
     // Periodic loop: ticks at 2 Hz for IPC stats publishing (the UI
@@ -1165,7 +1105,10 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID /*reserved*/) {
         // rather than hitting a stuck handle on FH6 exit.
         g_ipc_server.stop();
         g_pcm_pipe.stop();
-        // TODO: signal bridge_init_thread to stop and join.
+        // The worker threads (bridge init, periodic writer, discovery) are
+        // detached deliberately: joining here would deadlock under the loader
+        // lock, and on process exit the OS has already terminated them before
+        // DLL_PROCESS_DETACH runs.
         break;
     }
     return TRUE;
