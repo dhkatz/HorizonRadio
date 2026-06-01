@@ -26,6 +26,16 @@ public sealed partial class SourcesViewModel : ViewModelBase
     public ObservableCollection<IAudioSourceFactory> AvailableSources { get; } = new();
     public ObservableCollection<ConfigFieldViewModel> CurrentSchema { get; } = new();
 
+    /// <summary>In-game radio stations Horizon Radio can replace ("Any
+    /// station" + the fixed FH6 list).</summary>
+    public ObservableCollection<string> Stations { get; } = new(StationCatalog.All);
+
+    /// <summary>Raised when the user picks a different station to replace.
+    /// App wires this to push the choice to the DLL over IPC.</summary>
+    public event Action<string>? TargetStationChanged;
+
+    [ObservableProperty] private string selectedStation;
+
     [ObservableProperty] private IAudioSourceFactory? selectedFactory;
     [ObservableProperty] private bool isRunning;
     [ObservableProperty] private string statusMessage = "";
@@ -46,6 +56,14 @@ public sealed partial class SourcesViewModel : ViewModelBase
         var initial = SourceCatalog.Find(store.LastSelectedId ?? "")
                    ?? AvailableSources.FirstOrDefault();
         SelectedFactory = initial;
+
+        // Assign the backing field directly so loading the saved choice
+        // doesn't fire OnSelectedStationChanged (which would re-persist and
+        // push before App has wired TargetStationChanged).
+        var savedStation = store.TargetStation;
+        selectedStation = !string.IsNullOrEmpty(savedStation) && StationCatalog.All.Contains(savedStation)
+            ? savedStation!
+            : StationCatalog.AnyLabel;
     }
 
     /// <summary>Designer-only ctor (so Avalonia previewer can construct
@@ -65,6 +83,13 @@ public sealed partial class SourcesViewModel : ViewModelBase
         RebuildSchema(value);
         _store.LastSelectedId = value?.Id;
         _store.SaveToDisk();
+    }
+
+    partial void OnSelectedStationChanged(string value)
+    {
+        _store.TargetStation = value;
+        _store.SaveToDisk();
+        TargetStationChanged?.Invoke(value);
     }
 
     private void RebuildSchema(IAudioSourceFactory? factory)

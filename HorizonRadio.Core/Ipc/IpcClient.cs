@@ -74,6 +74,19 @@ public sealed class IpcClient(string pipeName = IpcClient.DefaultPipeName) : IAs
         return SendRaw(line);
     }
 
+    /// <summary>Tell the DLL which in-game station to replace. Pass the
+    /// station name, or "*"/empty for "replace whatever's active". The DLL
+    /// only injects audio + metadata while that station is tuned in.</summary>
+    public bool SendTargetStation(string? station)
+    {
+        var s = string.IsNullOrEmpty(station) ? "*" : station;
+        var json = new StringBuilder(96);
+        json.Append("{\"cmd\":\"set_target_station\"");
+        AppendJsonField(json, "station", s);
+        json.Append("}\n");
+        return SendRaw(json.ToString());
+    }
+
     private bool SendRaw(string line)
     {
         NamedPipeClientStream? pipe;
@@ -194,7 +207,13 @@ public sealed class IpcClient(string pipeName = IpcClient.DefaultPipeName) : IAs
                 case "stats": DispatchStats(doc.RootElement); break;
                 case "source_changed": DispatchSourceChanged(doc.RootElement); break;
                 case "game_event": DispatchGameEvent(doc.RootElement); break;
-                case "debug": DispatchDebug(doc.RootElement); break;
+                case "debug":
+                {
+                    var tag = GetString(doc.RootElement, "tag") ?? "dll";
+                    var text = GetString(doc.RootElement, "text") ?? "";
+                    if (text.Length > 0) HorizonRadio.Core.Diagnostics.ProcessConsole.Append(tag, text);
+                    break;
+                }
             }
         }
         catch (JsonException ex)
@@ -224,14 +243,6 @@ public sealed class IpcClient(string pipeName = IpcClient.DefaultPipeName) : IAs
             Underruns: el.TryGetProperty("underruns", out var un) ? un.GetUInt64() : 0,
             NormalizerGain: el.TryGetProperty("normalizer_gain", out var ng) ? ng.GetSingle() : 1.0f,
             LimiterGain: el.TryGetProperty("limiter_gain", out var lg) ? lg.GetSingle() : 1.0f));
-    }
-
-    private static void DispatchDebug(JsonElement el)
-    {
-        var tag = GetString(el, "tag") ?? "dll";
-        var text = GetString(el, "text") ?? "";
-        if (text.Length > 0)
-            HorizonRadio.Core.Diagnostics.ProcessConsole.Append(tag, text);
     }
 
     private void DispatchGameEvent(JsonElement el)

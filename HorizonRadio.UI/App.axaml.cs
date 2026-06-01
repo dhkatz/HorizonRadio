@@ -72,7 +72,16 @@ public partial class App : Application
             var vm = new MainWindowViewModel(_runner, _store, metaVm, toolRegistry, installers, eventsVm);
             desktop.MainWindow = new MainWindow { DataContext = vm };
 
-            _ipc.Connected += () => Dispatcher.UIThread.Post(() => vm.SetConnection(ConnectionState.Connected));
+            // Station targeting: push the chosen station to the DLL on change
+            // and re-send it whenever the DLL (re)connects, so it knows which
+            // station to replace.
+            vm.Sources.TargetStationChanged += s => _ipc?.SendTargetStation(StationCatalog.ToWire(s));
+
+            _ipc.Connected += () =>
+            {
+                Dispatcher.UIThread.Post(() => vm.SetConnection(ConnectionState.Connected));
+                _ipc?.SendTargetStation(StationCatalog.ToWire(vm.Sources.SelectedStation));
+            };
             _ipc.Disconnected += () => Dispatcher.UIThread.Post(() => vm.SetConnection(ConnectionState.Disconnected));
             _ipc.StatsUpdated += s => Dispatcher.UIThread.Post(() => vm.Stats.Apply(s));
             _ipc.Start();

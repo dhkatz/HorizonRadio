@@ -30,6 +30,10 @@ public sealed class SourceConfigStore
 {
     public string? LastSelectedId { get; set; }
 
+    /// <summary>Which in-game radio station Horizon Radio replaces (null/Any
+    /// = whatever's active). Persisted so the choice survives restarts.</summary>
+    public string? TargetStation { get; set; }
+
     private readonly Dictionary<string, Dictionary<string, object?>> _perSource = new();
 
     private static string DefaultPath =>
@@ -75,6 +79,9 @@ public sealed class SourceConfigStore
             if (root.TryGetProperty("lastSelected", out var sel) && sel.ValueKind == JsonValueKind.String)
                 store.LastSelectedId = sel.GetString();
 
+            if (root.TryGetProperty("targetStation", out var tgt) && tgt.ValueKind == JsonValueKind.String)
+                store.TargetStation = tgt.GetString();
+
             if (root.TryGetProperty("perSource", out var per) && per.ValueKind == JsonValueKind.Object)
             {
                 foreach (var src in per.EnumerateObject())
@@ -106,6 +113,7 @@ public sealed class SourceConfigStore
 
             writer.WriteStartObject();
             if (LastSelectedId != null) writer.WriteString("lastSelected", LastSelectedId);
+            if (TargetStation != null) writer.WriteString("targetStation", TargetStation);
             writer.WriteStartObject("perSource");
             foreach (var (sourceId, bag) in _perSource)
             {
