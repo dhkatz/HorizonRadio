@@ -4,6 +4,31 @@ Technical and maintenance notes for Horizon Radio. The README is user-facing;
 this file holds the internals, build gotchas, and the runbooks you need when a
 Forza update breaks something.
 
+## Contributing workflow
+
+These rules are mandatory for every change, human or agent.
+
+- **ALWAYS start a new branch for a feature or fix.** Never commit work directly
+  to `main`. Branch off the latest `main` and name the branch with a Conventional
+  Commit type prefix, e.g. `feat/per-station-targeting`, `fix/metadata-leak`,
+  `ci/pr-title-check`.
+- **Commits MUST follow [Conventional Commits](https://www.conventionalcommits.org).**
+  Format: `type(optional-scope): summary`, where `type` is one of `build`,
+  `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, or
+  `test`. Append `!` (or a `BREAKING CHANGE:` footer) for breaking changes.
+- **PR titles MUST follow Conventional Commits too.** The
+  [`PR title`](.github/workflows/pr-title.yml) workflow enforces this on every PR
+  and fails the check otherwise.
+- **You MUST run the linters on ALL projects before pushing a branch or opening a
+  PR.** Both the managed and native checks under [Code quality](#code-quality)
+  must pass — `dotnet format --verify-no-changes` and the build for the C# side,
+  `clang-format` and the analysis build for the C++ side.
+- **You SHOULD update [`CHANGELOG.md`](CHANGELOG.md) with any relevant changes**
+  at a high level — user-facing changes or important internal changes (licensing,
+  IPC contract, build process). Add entries under the `Unreleased` section.
+  Purely internal churn (typo fixes, refactors with no observable effect) can be
+  skipped.
+
 ## Architecture
 
 ```
