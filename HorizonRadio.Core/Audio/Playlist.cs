@@ -10,38 +10,59 @@ namespace HorizonRadio.Core.Audio;
 /// build one from a directory walk or an M3U file; the LocalFileSource
 /// reads through it, looping when it reaches the end. Thread-safety
 /// isn't built in — callers serialize via the source's own state lock.
+///
+/// Iteration order is delegated to <see cref="PlayOrder"/>, which is the
+/// identity sequence until <see cref="SetShuffle"/> flips it to a random
+/// permutation.
 /// </summary>
 public sealed class Playlist
 {
     private readonly List<string> _tracks = new();
-    private int _cursor;
+    private readonly PlayOrder _order = new();
 
     public int Count => _tracks.Count;
 
-    public string? Current => _cursor < _tracks.Count ? _tracks[_cursor] : null;
+    /// <summary>Whether tracks are currently played in a shuffled order.</summary>
+    public bool Shuffle => _order.Shuffled;
+
+    public string? Current
+    {
+        get
+        {
+            int i = _order.CurrentIndex;
+            return i >= 0 && i < _tracks.Count ? _tracks[i] : null;
+        }
+    }
 
     /// <summary>Advance and wrap around at the end. Returns the new current track.</summary>
     public string? Next()
     {
-        if (_tracks.Count == 0) return null;
-        _cursor = (_cursor + 1) % _tracks.Count;
-        return _tracks[_cursor];
+        _order.Advance(wrap: true);
+        return Current;
     }
 
     /// <summary>Step back and wrap around at the start.</summary>
     public string? Previous()
     {
-        if (_tracks.Count == 0) return null;
-        _cursor = (_cursor - 1 + _tracks.Count) % _tracks.Count;
-        return _tracks[_cursor];
+        _order.Retreat(wrap: true);
+        return Current;
     }
 
-    public void Add(string path) => _tracks.Add(path);
+    /// <summary>Enable/disable shuffle. <paramref name="keepCurrent"/> (default)
+    /// keeps the current track playing and shuffles the rest around it; pass
+    /// false to fully randomize from the start (e.g. starting shuffled).</summary>
+    public void SetShuffle(bool on, bool keepCurrent = true) => _order.SetShuffle(on, keepCurrent);
+
+    public void Add(string path)
+    {
+        _tracks.Add(path);
+        _order.Append();
+    }
 
     public void Clear()
     {
         _tracks.Clear();
-        _cursor = 0;
+        _order.Reset(0);
     }
 
     // -- Loaders ---------------------------------------------------------
@@ -56,7 +77,7 @@ public sealed class Playlist
         {
             var ext = Path.GetExtension(path).ToLowerInvariant();
             if (ext is ".m3u" or ".m3u8") LoadM3uInto(path, p);
-            else                          p.Add(path);
+            else p.Add(path);
         }
         else if (Directory.Exists(path))
         {

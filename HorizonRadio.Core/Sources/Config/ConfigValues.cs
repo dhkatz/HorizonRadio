@@ -37,9 +37,9 @@ public sealed class ConfigValues
         return v switch
         {
             double d => d,
-            int    i => i,
-            long   l => l,
-            _        => fallback,
+            int i => i,
+            long l => l,
+            _ => fallback,
         };
     }
 

@@ -13,6 +13,10 @@ vcpkg_installed/
 # `cargo install --root` cache.
 build/Librespot/
 
+# Local dev helper: builds Release + copies version.dll into the game
+# folder. Personal (machine-specific game path), not for the repo.
+deploy.ps1
+
 # Visual Studio / Rider local state
 .vs/
 .idea/
@@ -51,3 +55,6 @@ horizon-radio.discover
 Thumbs.db
 .DS_Store
 desktop.ini
+
+# Stray tool config written to a literal ~ instead of $HOME
+/~/

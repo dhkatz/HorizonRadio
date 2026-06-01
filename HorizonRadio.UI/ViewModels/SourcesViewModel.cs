@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.UI.Tools;
 
 namespace HorizonRadio.UI.ViewModels;
 
@@ -18,22 +19,34 @@ namespace HorizonRadio.UI.ViewModels;
 /// </summary>
 public sealed partial class SourcesViewModel : ViewModelBase
 {
-    private readonly SourceRunner       _runner;
-    private readonly SourceConfigStore  _store;
+    private readonly SourceRunner _runner;
+    private readonly SourceConfigStore _store;
+    private readonly ToolRegistry? _registry;
 
     public ObservableCollection<IAudioSourceFactory> AvailableSources { get; } = new();
-    public ObservableCollection<ConfigFieldViewModel> CurrentSchema   { get; } = new();
+    public ObservableCollection<ConfigFieldViewModel> CurrentSchema { get; } = new();
+
+    /// <summary>In-game radio stations Horizon Radio can replace ("Any
+    /// station" + the fixed FH6 list).</summary>
+    public ObservableCollection<string> Stations { get; } = new(StationCatalog.All);
+
+    /// <summary>Raised when the user picks a different station to replace.
+    /// App wires this to push the choice to the DLL over IPC.</summary>
+    public event Action<string>? TargetStationChanged;
+
+    [ObservableProperty] private string selectedStation;
 
     [ObservableProperty] private IAudioSourceFactory? selectedFactory;
-    [ObservableProperty] private bool   isRunning;
+    [ObservableProperty] private bool isRunning;
     [ObservableProperty] private string statusMessage = "";
-    [ObservableProperty] private bool   hasError;
-    [ObservableProperty] private bool   hasNoSchema;
+    [ObservableProperty] private bool hasError;
+    [ObservableProperty] private bool hasNoSchema;
 
-    public SourcesViewModel(SourceRunner runner, SourceConfigStore store)
+    public SourcesViewModel(SourceRunner runner, SourceConfigStore store, ToolRegistry? registry = null)
     {
         _runner = runner;
-        _store  = store;
+        _store = store;
+        _registry = registry;
 
         foreach (var f in SourceCatalog.All) AvailableSources.Add(f);
 
@@ -43,13 +56,22 @@ public sealed partial class SourcesViewModel : ViewModelBase
         var initial = SourceCatalog.Find(store.LastSelectedId ?? "")
                    ?? AvailableSources.FirstOrDefault();
         SelectedFactory = initial;
+
+        // Assign the backing field directly so loading the saved choice
+        // doesn't fire OnSelectedStationChanged (which would re-persist and
+        // push before App has wired TargetStationChanged).
+        var savedStation = store.TargetStation;
+        selectedStation = !string.IsNullOrEmpty(savedStation) && StationCatalog.All.Contains(savedStation)
+            ? savedStation!
+            : StationCatalog.AnyLabel;
     }
 
     /// <summary>Designer-only ctor (so Avalonia previewer can construct
     /// the view without a runner).</summary>
     public SourcesViewModel() : this(
         new SourceRunner(new NullSink()),
-        new SourceConfigStore()) { }
+        new SourceConfigStore())
+    { }
 
     private sealed class NullSink : Core.Sources.IPcmSink
     {
@@ -63,6 +85,13 @@ public sealed partial class SourcesViewModel : ViewModelBase
         _store.SaveToDisk();
     }
 
+    partial void OnSelectedStationChanged(string value)
+    {
+        _store.TargetStation = value;
+        _store.SaveToDisk();
+        TargetStationChanged?.Invoke(value);
+    }
+
     private void RebuildSchema(IAudioSourceFactory? factory)
     {
         CurrentSchema.Clear();
@@ -73,7 +102,7 @@ public sealed partial class SourcesViewModel : ViewModelBase
 
         foreach (var field in factory.Schema)
         {
-            var fvm = ConfigFieldViewModel.For(field);
+            var fvm = ConfigFieldViewModel.For(field, _registry);
             if (stored.TryGetValue(field.Key, out var v)) fvm.SetValue(v);
             CurrentSchema.Add(fvm);
         }

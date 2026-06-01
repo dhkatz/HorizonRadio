@@ -2,7 +2,6 @@
 
 #include <horizon/fmod/types.hpp>
 #include <horizon/inject/sigscan.hpp>
-
 #include <string_view>
 
 namespace horizon::fmod {
@@ -26,7 +25,9 @@ struct SignaturePattern {
     std::string_view anchor{};
     std::string_view pattern{};
 
-    bool empty() const noexcept { return pattern.empty(); }
+    bool empty() const noexcept {
+        return pattern.empty();
+    }
 };
 
 // Bundle of signatures for the FMOD entry points we resolve. Slots
@@ -72,19 +73,21 @@ struct ResolverReport {
 // game whose FMOD entry points we want to find.
 class FmodResolver {
 public:
-    FmodResolver(const horizon::inject::PeImage& image, SignatureSet sigs);
+    FmodResolver(const inject::PeImage& image, SignatureSet sigs);
 
     // Try to resolve every configured entry point. Returns a partial
     // ResolvedHooks; unresolved slots are nullptr. Call report() to
     // see which slots were filled.
     ResolvedHooks resolve();
 
-    const ResolverReport& report() const noexcept { return report_; }
+    const ResolverReport& report() const noexcept {
+        return report_;
+    }
 
 private:
-    const horizon::inject::PeImage& image_;
-    SignatureSet   sigs_;
-    ResolverReport report_;
+    const inject::PeImage& image_;
+    SignatureSet           sigs_;
+    ResolverReport         report_;
 };
 
 } // namespace horizon::fmod

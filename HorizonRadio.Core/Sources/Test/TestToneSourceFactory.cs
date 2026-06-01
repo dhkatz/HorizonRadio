@@ -1,8 +1,6 @@
-using System;
-using System.Collections.Generic;
 using HorizonRadio.Core.Sources.Config;
 
-namespace HorizonRadio.Core.Sources;
+namespace HorizonRadio.Core.Sources.Test;
 
 /// <summary>
 /// Factory for <see cref="TestToneSource"/>. One numeric field for the
@@ -13,8 +11,8 @@ public sealed class TestToneSourceFactory : IAudioSourceFactory
 {
     public const string KeyFrequency = "frequency";
 
-    public string  Id          => "testtone";
-    public string  DisplayName => "Test Tone";
+    public string Id => "testtone";
+    public string DisplayName => "Test Tone";
     public string? Description => "Diagnostic sine wave for verifying the audio pipe end-to-end.";
 
     public IReadOnlyList<ConfigField> Schema { get; } = new ConfigField[]

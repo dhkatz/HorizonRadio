@@ -1,12 +1,9 @@
-#include <doctest/doctest.h>
-
-#include <horizon/inject/msvc_string.hpp>
-
-#include <windows.h>
-
 #include <cstring>
+#include <doctest/doctest.h>
+#include <horizon/inject/msvc_string.hpp>
 #include <ostream>
 #include <string>
+#include <windows.h>
 
 using namespace horizon::inject;
 
@@ -16,32 +13,38 @@ void init_sso(MsvcString& s, std::string_view value) {
     REQUIRE(value.size() <= 15);
     std::memcpy(s.u.buf, value.data(), value.size());
     s.u.buf[value.size()] = '\0';
-    s.size     = value.size();
-    s.capacity = 15;
+    s.size                = value.size();
+    s.capacity            = 15;
 }
 
-// Allocate a heap buffer via VirtualAlloc so the test can free it
-// symmetrically after the test (matching the writer's allocation
-// strategy). Returns the pointer in `s.u.ptr` and sets size+capacity.
+// Allocate the test's own heap buffer via VirtualAlloc so the test can
+// VirtualFree it symmetrically afterwards. (The writer allocates its
+// replacement buffers from a private HeapAlloc heap, not VirtualAlloc --
+// those are writer-owned and must not be VirtualFree'd by the test.)
+// Returns the pointer in `s.u.ptr` and sets size+capacity.
 void init_heap(MsvcString& s, std::string_view value, std::size_t cap) {
     REQUIRE(value.size() <= cap);
     REQUIRE(cap > 15);
-    auto* buf = static_cast<char*>(
-        VirtualAlloc(nullptr, cap + 1, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
+    auto* buf = static_cast<char*>(VirtualAlloc(nullptr, cap + 1, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE));
     REQUIRE(buf != nullptr);
     std::memcpy(buf, value.data(), value.size());
     buf[value.size()] = '\0';
-    s.u.ptr    = buf;
-    s.size     = value.size();
-    s.capacity = cap;
+    s.u.ptr           = buf;
+    s.size            = value.size();
+    s.capacity        = cap;
 }
 
 } // namespace
 
 TEST_CASE("MsvcString layout sanity") {
     static_assert(sizeof(MsvcString) == 32);
-    static_assert(offsetof(MsvcString, size)     == 16);
+#if defined(__clang__) || defined(__GNUC__)
+    static_assert(__builtin_offsetof(MsvcString, size) == 16);
+    static_assert(__builtin_offsetof(MsvcString, capacity) == 24);
+#else
+    static_assert(offsetof(MsvcString, size) == 16);
     static_assert(offsetof(MsvcString, capacity) == 24);
+#endif
 }
 
 TEST_CASE("MsvcString: read returns the SSO contents") {
@@ -79,7 +82,7 @@ TEST_CASE("MsvcString: write 15-char value still fits SSO") {
     MsvcString s{};
     init_sso(s, "");
 
-    REQUIRE(write_msvc_string(s, "123456789012345"));  // exactly 15
+    REQUIRE(write_msvc_string(s, "123456789012345")); // exactly 15
     CHECK(is_sso(s));
     CHECK(s.size == 15);
     CHECK(view(s) == "123456789012345");
@@ -97,7 +100,11 @@ TEST_CASE("MsvcString: write promotes SSO to heap when >15 chars") {
     CHECK(s.capacity >= 50);
     CHECK(view(s) == long_val);
 
-    VirtualFree(s.u.ptr, 0, MEM_RELEASE);
+    // Do NOT free s.u.ptr: the writer allocated it from its private
+    // HeapAlloc heap, not VirtualAlloc. VirtualFree'ing a heap pointer
+    // corrupts that heap and crashes a later test's allocation. The
+    // writer intentionally never frees these (game-owned std::string);
+    // leaking it in this short-lived test process is fine.
 }
 
 TEST_CASE("MsvcString: write reuses heap when new value fits in current capacity") {
@@ -108,9 +115,9 @@ TEST_CASE("MsvcString: write reuses heap when new value fits in current capacity
     const std::string new_val(100, 'b');
     REQUIRE(write_msvc_string(s, new_val));
 
-    CHECK(s.u.ptr == original_ptr);     // same buffer reused
+    CHECK(s.u.ptr == original_ptr); // same buffer reused
     CHECK(s.size == 100);
-    CHECK(s.capacity == 200);           // capacity unchanged on in-place
+    CHECK(s.capacity == 200); // capacity unchanged on in-place
     CHECK(view(s) == new_val);
 
     VirtualFree(s.u.ptr, 0, MEM_RELEASE);
@@ -124,16 +131,18 @@ TEST_CASE("MsvcString: write reallocates heap when new value exceeds capacity") 
     const std::string new_val(80, 'c');
     REQUIRE(write_msvc_string(s, new_val));
 
-    CHECK(s.u.ptr != old_ptr);          // fresh allocation
+    CHECK(s.u.ptr != old_ptr); // fresh allocation
     CHECK(s.size == 80);
     CHECK(s.capacity >= 80);
     CHECK(view(s) == new_val);
 
-    // Old buffer was intentionally leaked by writer; free it here for
-    // the test. Writer's behavior is correct -- the old buffer's
-    // allocator isn't ours to free in production.
+    // Free the old buffer we VirtualAlloc'd in init_heap. The new buffer
+    // (s.u.ptr) comes from the writer's private HeapAlloc heap, not
+    // VirtualAlloc -- VirtualFree'ing it would be invalid (and crashes).
+    // The writer intentionally never frees these (the game owns the
+    // std::string and may still read it), so we leak it here too; the
+    // test process is short-lived.
     VirtualFree(old_ptr, 0, MEM_RELEASE);
-    VirtualFree(s.u.ptr, 0, MEM_RELEASE);
 }
 
 TEST_CASE("MsvcString: write short into heap demotes back to SSO") {

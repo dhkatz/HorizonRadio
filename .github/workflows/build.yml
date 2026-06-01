@@ -32,6 +32,9 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Verify C# formatting
+        run: dotnet format HorizonRadio.UI.slnx --verify-no-changes --verbosity minimal
+
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:

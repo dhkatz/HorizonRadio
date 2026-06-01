@@ -30,6 +30,14 @@ public sealed class SourceConfigStore
 {
     public string? LastSelectedId { get; set; }
 
+    /// <summary>Which in-game radio station Horizon Radio replaces (null/Any
+    /// = whatever's active). Persisted so the choice survives restarts.</summary>
+    public string? TargetStation { get; set; }
+
+    /// <summary>Global shuffle preference (applies to whichever source is
+    /// active). Persisted so the choice survives restarts.</summary>
+    public bool Shuffle { get; set; }
+
     private readonly Dictionary<string, Dictionary<string, object?>> _perSource = new();
 
     private static string DefaultPath =>
@@ -69,11 +77,18 @@ public sealed class SourceConfigStore
             if (!File.Exists(path)) return store;
 
             using var stream = File.OpenRead(path);
-            using var doc    = JsonDocument.Parse(stream);
-            var root         = doc.RootElement;
+            using var doc = JsonDocument.Parse(stream);
+            var root = doc.RootElement;
 
             if (root.TryGetProperty("lastSelected", out var sel) && sel.ValueKind == JsonValueKind.String)
                 store.LastSelectedId = sel.GetString();
+
+            if (root.TryGetProperty("targetStation", out var tgt) && tgt.ValueKind == JsonValueKind.String)
+                store.TargetStation = tgt.GetString();
+
+            if (root.TryGetProperty("shuffle", out var shuf) &&
+                (shuf.ValueKind == JsonValueKind.True || shuf.ValueKind == JsonValueKind.False))
+                store.Shuffle = shuf.GetBoolean();
 
             if (root.TryGetProperty("perSource", out var per) && per.ValueKind == JsonValueKind.Object)
             {
@@ -106,6 +121,8 @@ public sealed class SourceConfigStore
 
             writer.WriteStartObject();
             if (LastSelectedId != null) writer.WriteString("lastSelected", LastSelectedId);
+            if (TargetStation != null) writer.WriteString("targetStation", TargetStation);
+            writer.WriteBoolean("shuffle", Shuffle);
             writer.WriteStartObject("perSource");
             foreach (var (sourceId, bag) in _perSource)
             {
@@ -125,24 +142,24 @@ public sealed class SourceConfigStore
     private static object? JsonElementToObject(JsonElement el) => el.ValueKind switch
     {
         JsonValueKind.String => el.GetString(),
-        JsonValueKind.True   => true,
-        JsonValueKind.False  => false,
+        JsonValueKind.True => true,
+        JsonValueKind.False => false,
         JsonValueKind.Number => el.TryGetInt64(out var i) ? i : el.GetDouble(),
-        JsonValueKind.Null   => null,
-        _                    => el.GetRawText(),
+        JsonValueKind.Null => null,
+        _ => el.GetRawText(),
     };
 
     private static void WriteValue(Utf8JsonWriter w, string name, object? v)
     {
         switch (v)
         {
-            case null:           w.WriteNull(name); break;
-            case string s:       w.WriteString(name, s); break;
-            case bool b:         w.WriteBoolean(name, b); break;
-            case int i:          w.WriteNumber(name, i); break;
-            case long l:         w.WriteNumber(name, l); break;
-            case double d:       w.WriteNumber(name, d); break;
-            default:             w.WriteString(name, v.ToString() ?? ""); break;
+            case null: w.WriteNull(name); break;
+            case string s: w.WriteString(name, s); break;
+            case bool b: w.WriteBoolean(name, b); break;
+            case int i: w.WriteNumber(name, i); break;
+            case long l: w.WriteNumber(name, l); break;
+            case double d: w.WriteNumber(name, d); break;
+            default: w.WriteString(name, v.ToString() ?? ""); break;
         }
     }
 }

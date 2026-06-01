@@ -26,14 +26,19 @@ namespace HorizonRadio.Core.Sources;
 /// version, because ProcessStartInfo.RedirectStandardOutput plumbs it
 /// through a managed stream that we own exclusively.
 /// </summary>
-public sealed class SubprocessPcmSource : IAsyncDisposable
+public sealed class SubprocessPcmSource(SubprocessPcmSource.Config config) : IAsyncDisposable
 {
     /// <summary>Configuration knobs the wrapper supplies.</summary>
     public sealed class Config
     {
-        public required string   ExecutablePath { get; init; }
-        public required string[] Args           { get; init; }
-        public string?           WorkingDirectory { get; init; }
+        public required string ExecutablePath { get; init; }
+        public required string[] Args { get; init; }
+        public string? WorkingDirectory { get; init; }
+
+        /// <summary>Logical name this process's stderr is tagged with in
+        /// the Console tab (e.g. "librespot", "ffmpeg"). Defaults to the
+        /// executable's file name.</summary>
+        public string? ToolName { get; init; }
 
         /// <summary>Frames per chunk read out of the child's stdout.
         /// 2048 ≈ 46 ms at 44.1 kHz, matches LocalFileSource.</summary>
@@ -44,17 +49,20 @@ public sealed class SubprocessPcmSource : IAsyncDisposable
         public Action<string>? OnStderrLine { get; init; }
     }
 
-    private readonly Config _config;
-    private Process?                 _process;
-    private Task?                    _readerTask;
-    private Task?                    _stderrTask;
+    private Process? _process;
+    private Task? _stderrTask;
     private CancellationTokenSource? _cts;
-
-    public SubprocessPcmSource(Config config) { _config = config; }
 
     private static void Log(string msg) => Debug.WriteLine($"[hzn-subproc] {msg}");
 
     public bool IsRunning => _process is { HasExited: false };
+
+    /// <summary>Task that completes when the PCM read loop exits (EOF,
+    /// cancellation, or stream error). Null until <see cref="StartAsync"/>
+    /// has been called. Wrappers that drive a sequence of subprocesses
+    /// (e.g. YouTube playlist) await this to know when one process is
+    /// done so they can start the next.</summary>
+    public Task? Completion { get; private set; }
 
     public async Task StartAsync(IPcmSink sink, CancellationToken ct)
     {
@@ -62,13 +70,13 @@ public sealed class SubprocessPcmSource : IAsyncDisposable
 
         var psi = new ProcessStartInfo
         {
-            FileName               = _config.ExecutablePath,
-            WorkingDirectory       = _config.WorkingDirectory ?? "",
-            UseShellExecute        = false,
-            CreateNoWindow         = true,
+            FileName = config.ExecutablePath,
+            WorkingDirectory = config.WorkingDirectory ?? "",
+            UseShellExecute = false,
+            CreateNoWindow = true,
             RedirectStandardOutput = true,
-            RedirectStandardError  = true,
-            RedirectStandardInput  = false,
+            RedirectStandardError = true,
+            RedirectStandardInput = false,
             // librespot (and most Rust programs) write UTF-8 to stderr,
             // but the default StreamReader uses the console code page,
             // which on US Windows is usually CP1252. That mangles any
@@ -77,30 +85,33 @@ public sealed class SubprocessPcmSource : IAsyncDisposable
             // intact. StandardOutputEncoding only applies to the
             // TextReader path; our PCM ReadAsync against BaseStream
             // bypasses it, so this is safe to set.
-            StandardErrorEncoding  = System.Text.Encoding.UTF8,
+            StandardErrorEncoding = System.Text.Encoding.UTF8,
             StandardOutputEncoding = System.Text.Encoding.UTF8,
         };
-        foreach (var arg in _config.Args) psi.ArgumentList.Add(arg);
+        foreach (var arg in config.Args) psi.ArgumentList.Add(arg);
 
         _process = Process.Start(psi)
-                ?? throw new InvalidOperationException($"failed to spawn {_config.ExecutablePath}");
-        _cts     = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                ?? throw new InvalidOperationException($"failed to spawn {config.ExecutablePath}");
+        _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
         // Make sure the child dies if our process dies. ProcessStartInfo
         // doesn't expose Win32 job objects, but Process.Kill(true) in
         // the finally path is enough for the user-driven stop case.
         // For host-crash scenarios we'd need a managed job-object
         // wrapper — out of scope for the source migration.
-        Log($"started pid={_process.Id} cmd={_config.ExecutablePath}");
+        Log($"started pid={_process.Id} cmd={config.ExecutablePath}");
 
-        _stderrTask = Task.Run(() => DrainStderrAsync(_process, _cts.Token));
-        _readerTask = Task.Run(() => ReadPcmLoopAsync(_process, sink, _cts.Token));
+        _stderrTask = Task.Run(() => DrainStderrAsync(_process, _cts.Token), _cts.Token);
+        Completion = Task.Run(() => ReadPcmLoopAsync(_process, sink, _cts.Token), _cts.Token);
 
         await Task.CompletedTask;
     }
 
     private async Task DrainStderrAsync(Process proc, CancellationToken ct)
     {
+        var toolName = string.IsNullOrEmpty(config.ToolName)
+            ? Path.GetFileNameWithoutExtension(config.ExecutablePath)
+            : config.ToolName;
         try
         {
             using var reader = proc.StandardError;
@@ -108,7 +119,8 @@ public sealed class SubprocessPcmSource : IAsyncDisposable
             while ((line = await reader.ReadLineAsync(ct).ConfigureAwait(false)) != null)
             {
                 if (string.IsNullOrEmpty(line)) continue;
-                try { _config.OnStderrLine?.Invoke(line); }
+                Diagnostics.ProcessConsole.Append(toolName, line);
+                try { config.OnStderrLine?.Invoke(line); }
                 catch (Exception ex) { Log($"stderr handler threw: {ex.Message}"); }
             }
         }
@@ -118,11 +130,11 @@ public sealed class SubprocessPcmSource : IAsyncDisposable
 
     private async Task ReadPcmLoopAsync(Process proc, IPcmSink sink, CancellationToken ct)
     {
-        int chunkFrames = _config.ReadChunkFrames;
+        int chunkFrames = config.ReadChunkFrames;
         int bytesPerFrame = AudioFormat.BytesPerFrame;
-        int chunkBytes    = chunkFrames * bytesPerFrame;
-        var buffer        = new byte[chunkBytes];
-        var samples       = new short[chunkFrames * AudioFormat.Channels];
+        int chunkBytes = chunkFrames * bytesPerFrame;
+        var buffer = new byte[chunkBytes];
+        var samples = new short[chunkFrames * AudioFormat.Channels];
 
         var chunkPeriod = TimeSpan.FromMicroseconds(
             (long)chunkFrames * 1_000_000 / AudioFormat.SampleRate);
@@ -151,7 +163,7 @@ public sealed class SubprocessPcmSource : IAsyncDisposable
                 catch (OperationCanceledException) { return; }
                 catch (Exception ex) { Log($"stdout read: {ex.Message}"); return; }
                 if (got <= 0) { Log($"stdout EOF after {totalBytes} bytes"); return; }
-                filled     += got;
+                filled += got;
                 totalBytes += (ulong)got;
             }
 
@@ -194,12 +206,12 @@ public sealed class SubprocessPcmSource : IAsyncDisposable
         }
         catch (Exception ex) { Log($"kill: {ex.Message}"); }
 
-        if (_readerTask != null) { try { await _readerTask.ConfigureAwait(false); } catch { } }
+        if (Completion != null) { try { await Completion.ConfigureAwait(false); } catch { } }
         if (_stderrTask != null) { try { await _stderrTask.ConfigureAwait(false); } catch { } }
 
         try { proc.Dispose(); } catch { }
-        _process    = null;
-        _readerTask = null;
+        _process = null;
+        Completion = null;
         _stderrTask = null;
         _cts?.Dispose();
         _cts = null;

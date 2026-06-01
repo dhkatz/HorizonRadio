@@ -1,8 +1,6 @@
-#include <doctest/doctest.h>
-
-#include <horizon/fmod/types.hpp>
-
 #include <cstring>
+#include <doctest/doctest.h>
+#include <horizon/fmod/types.hpp>
 
 using namespace horizon::fmod;
 
@@ -25,9 +23,9 @@ TEST_CASE("DspDescription matches expected FMOD wire layout") {
 
     CHECK(d.pluginsdkversion == kPluginSdkVersion);
     CHECK(std::strncmp(d.name, "Horizon Test", sizeof(d.name)) == 0);
-    CHECK(d.version          == 0x00010000u);
+    CHECK(d.version == 0x00010000u);
     CHECK(d.numoutputbuffers == 1);
-    CHECK(d.read             == nullptr);
+    CHECK(d.read == nullptr);
     CHECK(reinterpret_cast<std::uintptr_t>(d.userdata) == 0xDEADBEEFCAFEBABEull);
 }
 
@@ -47,8 +45,8 @@ TEST_CASE("Function pointer typedefs accept matching signatures") {
         return Result::Ok;
     };
 
-    CHECK(create_fn  != nullptr);
-    CHECK(add_fn     != nullptr);
-    CHECK(remove_fn  != nullptr);
+    CHECK(create_fn != nullptr);
+    CHECK(add_fn != nullptr);
+    CHECK(remove_fn != nullptr);
     CHECK(release_fn != nullptr);
 }

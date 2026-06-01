@@ -1,7 +1,5 @@
-using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -26,11 +24,11 @@ public sealed class MetadataCache
     private readonly ConcurrentDictionary<string, Entry?> _memoryCache = new();
 
     public sealed record Entry(
-        string?  Title,
-        string?  Artist,
-        string?  Album,
-        byte[]?  AlbumArt,
-        string?  Mbid);
+        string? Title,
+        string? Artist,
+        string? Album,
+        byte[]? AlbumArt,
+        string? Mbid);
 
     public MetadataCache(string? root = null)
     {
@@ -45,7 +43,7 @@ public sealed class MetadataCache
     public static string Key(string enricherId, string query)
     {
         var bytes = Encoding.UTF8.GetBytes($"{enricherId}:{query}");
-        var hash  = SHA256.HashData(bytes);
+        var hash = SHA256.HashData(bytes);
         // Hex prefix is enough — full SHA-256 hex is overkill for path safety.
         return Convert.ToHexString(hash, 0, 16);
     }
@@ -67,14 +65,14 @@ public sealed class MetadataCache
         try
         {
             using var stream = File.OpenRead(path);
-            using var doc    = JsonDocument.Parse(stream);
-            var r            = doc.RootElement;
+            using var doc = JsonDocument.Parse(stream);
+            var r = doc.RootElement;
             var entry = new Entry(
-                Title:    GetString(r, "title"),
-                Artist:   GetString(r, "artist"),
-                Album:    GetString(r, "album"),
+                Title: GetString(r, "title"),
+                Artist: GetString(r, "artist"),
+                Album: GetString(r, "album"),
                 AlbumArt: GetBase64(r, "art_b64"),
-                Mbid:     GetString(r, "mbid"));
+                Mbid: GetString(r, "mbid"));
             _memoryCache[key] = entry;
             return entry;
         }
@@ -94,10 +92,10 @@ public sealed class MetadataCache
             using var stream = File.Create(PathFor(key));
             using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = false });
             writer.WriteStartObject();
-            if (entry.Title  != null) writer.WriteString("title",  entry.Title);
+            if (entry.Title != null) writer.WriteString("title", entry.Title);
             if (entry.Artist != null) writer.WriteString("artist", entry.Artist);
-            if (entry.Album  != null) writer.WriteString("album",  entry.Album);
-            if (entry.Mbid   != null) writer.WriteString("mbid",   entry.Mbid);
+            if (entry.Album != null) writer.WriteString("album", entry.Album);
+            if (entry.Mbid != null) writer.WriteString("mbid", entry.Mbid);
             if (entry.AlbumArt is { Length: > 0 })
                 writer.WriteString("art_b64", Convert.ToBase64String(entry.AlbumArt));
             writer.WriteEndObject();

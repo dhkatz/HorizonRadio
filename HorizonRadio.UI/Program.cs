@@ -1,6 +1,6 @@
-﻿using Avalonia;
-using Avalonia.Media;
 using System;
+using Avalonia;
+using Avalonia.Media;
 
 namespace HorizonRadio.UI;
 

@@ -7,45 +7,23 @@ using System.Threading.Tasks;
 using HorizonRadio.Core.Models;
 using SpotifyAPI.Web;
 
-namespace HorizonRadio.Core.Metadata;
+namespace HorizonRadio.Core.Metadata.Spotify;
 
-/// <summary>
-/// Enriches Tracks via the Spotify Web API. Two paths:
-///
-///   1. Spotify Connect tracks (<see cref="Track.ExternalId"/> is a
-///      <c>spotify:track:...</c> URI): direct <c>/v1/tracks/{id}</c>
-///      lookup. Always exact.
-///   2. Other sources (LocalFile mostly): full-text search via
-///      <c>/v1/search?q=track:"X" artist:"Y"&amp;type=track</c>, take
-///      the top hit. Heuristic match like SpotifyMatch.NET does.
-///
-/// Uses Client Credentials auth (no user OAuth needed) — read-only
-/// access to public catalog. The user supplies a client_id +
-/// client_secret pair from developer.spotify.com.
-///
-/// Album art comes from <c>album.images</c>; we pick the smallest
-/// image at or above 300px to match the UI's 180×180 HUD tile without
-/// downloading megabyte-sized originals.
-/// </summary>
-public sealed class SpotifyEnricher : IMetadataEnricher
+public sealed class SpotifyProvider : IMetadataProvider
 {
     public string Id => "spotify";
 
     private readonly MetadataCache _cache;
-    private readonly string        _clientId;
-    private readonly string        _clientSecret;
-
+    private readonly string _clientId;
+    private readonly string _clientSecret;
     private readonly HttpClient _httpForArt = new() { Timeout = TimeSpan.FromSeconds(15) };
-
-    // Re-used across calls. SpotifyAPI-NET's ClientCredentialsAuthenticator
-    // handles token refresh internally.
-    private SpotifyClient?     _client;
     private readonly SemaphoreSlim _initGate = new(1, 1);
+    private SpotifyClient? _client;
 
-    public SpotifyEnricher(MetadataCache cache, string clientId, string clientSecret)
+    public SpotifyProvider(MetadataCache cache, string clientId, string clientSecret)
     {
-        _cache        = cache;
-        _clientId     = clientId;
+        _cache = cache;
+        _clientId = clientId;
         _clientSecret = clientSecret;
     }
 
@@ -53,9 +31,9 @@ public sealed class SpotifyEnricher : IMetadataEnricher
 
     public async Task<Track?> EnrichAsync(Track track, CancellationToken ct)
     {
-        // Cache key: Spotify URI is strongest; otherwise (artist,title).
         string? queryKey =
-            !string.IsNullOrEmpty(track.ExternalId) && track.ExternalId.StartsWith("spotify:track:")
+            !string.IsNullOrEmpty(track.ExternalId) &&
+            track.ExternalId.StartsWith("spotify:track:", StringComparison.Ordinal)
                 ? "uri=" + track.ExternalId
                 : !string.IsNullOrEmpty(track.Title) && !string.IsNullOrEmpty(track.Artist)
                     ? $"text={track.Artist.ToLowerInvariant()}|{track.Title.ToLowerInvariant()}"
@@ -63,10 +41,10 @@ public sealed class SpotifyEnricher : IMetadataEnricher
         if (queryKey == null) return null;
 
         var cacheKey = MetadataCache.Key(Id, queryKey);
-        var hit      = _cache.TryGet(cacheKey);
+        var hit = _cache.TryGet(cacheKey);
         if (hit != null) return ApplyEntry(track, hit);
 
-        var entry = queryKey.StartsWith("uri=")
+        var entry = queryKey.StartsWith("uri=", StringComparison.Ordinal)
             ? await EnrichByUriAsync(track.ExternalId!, ct).ConfigureAwait(false)
             : await EnrichByTextAsync(track.Artist, track.Title, ct).ConfigureAwait(false);
 
@@ -81,9 +59,9 @@ public sealed class SpotifyEnricher : IMetadataEnricher
             e.AlbumArt == null && e.Mbid == null) return null;
         return t with
         {
-            Album      = !string.IsNullOrEmpty(t.Album)  ? t.Album  : e.Album,
-            Artist     = !string.IsNullOrEmpty(t.Artist) ? t.Artist : e.Artist ?? "",
-            AlbumArt   = t.AlbumArt ?? e.AlbumArt,
+            Album = !string.IsNullOrEmpty(t.Album) ? t.Album : e.Album,
+            Artist = !string.IsNullOrEmpty(t.Artist) ? t.Artist : e.Artist ?? "",
+            AlbumArt = t.AlbumArt ?? e.AlbumArt,
             ExternalId = string.IsNullOrEmpty(t.ExternalId) ? e.Mbid : t.ExternalId,
         };
     }
@@ -111,9 +89,9 @@ public sealed class SpotifyEnricher : IMetadataEnricher
     {
         try
         {
-            var id     = spotifyUri.Substring("spotify:track:".Length);
+            var id = spotifyUri.Substring("spotify:track:".Length);
             var client = await GetClientAsync(ct).ConfigureAwait(false);
-            var track  = await client.Tracks.Get(id).ConfigureAwait(false);
+            var track = await client.Tracks.Get(id, ct).ConfigureAwait(false);
             return await BuildEntry(track, ct).ConfigureAwait(false);
         }
         catch (APIException ex)
@@ -135,21 +113,18 @@ public sealed class SpotifyEnricher : IMetadataEnricher
         {
             var client = await GetClientAsync(ct).ConfigureAwait(false);
 
-            // Use Spotify's field-qualified syntax to get a tight match.
-            // Strip a leading "The " from artist names which often
-            // mismatch ("The Beatles" search returns better than
-            // artist:"The Beatles" in some MB-normalized corpora).
+            // Strip leading "The " — "The Beatles" search returns better
+            // hits than artist:"The Beatles" in MB-normalized corpora.
             var qArtist = artist.StartsWith("The ", StringComparison.OrdinalIgnoreCase)
                 ? artist.Substring(4) : artist;
             var query = $"track:\"{Escape(title)}\" artist:\"{Escape(qArtist)}\"";
-            var resp  = await client.Search.Item(
-                new SearchRequest(SearchRequest.Types.Track, query) { Limit = 1 }
-            ).ConfigureAwait(false);
+            var resp = await client.Search.Item(
+                new SearchRequest(SearchRequest.Types.Track, query) { Limit = 1 }, ct)
+                .ConfigureAwait(false);
 
             var first = resp.Tracks?.Items?.FirstOrDefault();
             if (first == null) return null;
-            var entry = await BuildEntry(first, ct).ConfigureAwait(false);
-            return entry;
+            return await BuildEntry(first, ct).ConfigureAwait(false);
         }
         catch (APIException ex)
         {
@@ -166,11 +141,10 @@ public sealed class SpotifyEnricher : IMetadataEnricher
     private async Task<MetadataCache.Entry?> BuildEntry(FullTrack t, CancellationToken ct)
     {
         var artistName = t.Artists?.FirstOrDefault()?.Name;
-        var albumName  = t.Album?.Name;
+        var albumName = t.Album?.Name;
 
-        // Pick the smallest image ≥ 300 px on the long edge. Spotify
-        // images come in 640 / 300 / 64 typically; the 300 is plenty for
-        // a 180×180 HUD tile.
+        // Smallest image ≥ 300 px; matches the 180×180 HUD tile without
+        // pulling a megabyte original.
         byte[]? art = null;
         if (t.Album?.Images is { Count: > 0 } imgs)
         {
@@ -186,16 +160,15 @@ public sealed class SpotifyEnricher : IMetadataEnricher
         }
 
         return new MetadataCache.Entry(
-            Title:    t.Name,
-            Artist:   artistName,
-            Album:    albumName,
+            Title: t.Name,
+            Artist: artistName,
+            Album: albumName,
             AlbumArt: art,
-            Mbid:     t.Uri);
+            Mbid: t.Uri);
     }
 
     private static string Escape(string s)
     {
-        // Spotify search syntax: escape backslashes + quotes only.
         var sb = new System.Text.StringBuilder(s.Length + 4);
         foreach (var c in s)
         {
@@ -203,5 +176,12 @@ public sealed class SpotifyEnricher : IMetadataEnricher
             sb.Append(c);
         }
         return sb.ToString();
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _httpForArt.Dispose();
+        _initGate.Dispose();
+        return ValueTask.CompletedTask;
     }
 }

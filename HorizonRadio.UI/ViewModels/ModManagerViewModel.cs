@@ -49,33 +49,33 @@ public sealed partial class ModManagerViewModel : ViewModelBase
     private InstallationStatus status = InstallationStatus.PathInvalid;
 
     [ObservableProperty] private string? lastActionMessage;
-    [ObservableProperty] private bool    lastActionFailed;
+    [ObservableProperty] private bool lastActionFailed;
 
     public string StatusLabel => Status switch
     {
         InstallationStatus.InstalledMatch => "Installed",
         InstallationStatus.InstalledOther => "Different version installed",
-        InstallationStatus.NotInstalled   => "Not installed",
-        _                                 => "No game folder selected",
+        InstallationStatus.NotInstalled => "Not installed",
+        _ => "No game folder selected",
     };
 
     public string StatusDetail => Status switch
     {
         InstallationStatus.InstalledMatch => "Ready. FH6 will load on next launch.",
         InstallationStatus.InstalledOther => "Another version.dll is present. Install will back it up first.",
-        InstallationStatus.NotInstalled   => "Click Install to drop the DLL in.",
-        _                                 => "Pick your FH6 folder above.",
+        InstallationStatus.NotInstalled => "Click Install to drop the DLL in.",
+        _ => "Pick your FH6 folder above.",
     };
 
     public string StatusBrush => Status switch
     {
         InstallationStatus.InstalledMatch => "#22c55e", // green
         InstallationStatus.InstalledOther => "#f59e0b", // amber
-        InstallationStatus.NotInstalled   => "#6b7280", // grey
-        _                                 => "#6b7280",
+        InstallationStatus.NotInstalled => "#6b7280", // grey
+        _ => "#6b7280",
     };
 
-    public bool CanInstall   => HasGamePath
+    public bool CanInstall => HasGamePath
                               && _installer.HasBundledDll
                               && Status != InstallationStatus.PathInvalid
                               && Status != InstallationStatus.InstalledMatch;
@@ -103,7 +103,7 @@ public sealed partial class ModManagerViewModel : ViewModelBase
             // Auto-pick the first hit so the dropdown's closed state
             // isn't blank. If there are several, the user can change it.
             SelectedDetected = Detected[0];
-            GamePath         = Detected[0].Path;
+            GamePath = Detected[0].Path;
         }
 
         Refresh();
@@ -140,12 +140,12 @@ public sealed partial class ModManagerViewModel : ViewModelBase
     {
         if (string.IsNullOrEmpty(GamePath)) return;
         LastActionMessage = "Installing…";
-        LastActionFailed  = false;
+        LastActionFailed = false;
         // Run on a background thread; copy involves disk I/O that can
         // stall on slow drives or AV scans.
         var result = await Task.Run(() => _installer.Install(GamePath!));
         LastActionMessage = result.Message;
-        LastActionFailed  = !result.Success;
+        LastActionFailed = !result.Success;
         Refresh();
     }
 
@@ -154,10 +154,10 @@ public sealed partial class ModManagerViewModel : ViewModelBase
     {
         if (string.IsNullOrEmpty(GamePath)) return;
         LastActionMessage = "Uninstalling…";
-        LastActionFailed  = false;
+        LastActionFailed = false;
         var result = await Task.Run(() => _installer.Uninstall(GamePath!));
         LastActionMessage = result.Message;
-        LastActionFailed  = !result.Success;
+        LastActionFailed = !result.Success;
         Refresh();
     }
 

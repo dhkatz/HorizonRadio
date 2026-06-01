@@ -45,18 +45,20 @@ public:
 
     // True while a UI client is connected. Used by publishers to
     // skip the JSON-formatting cost when nobody's listening.
-    bool connected() const noexcept { return client_connected_.load(std::memory_order_acquire); }
+    bool connected() const noexcept {
+        return client_connected_.load(std::memory_order_acquire);
+    }
 
     // ----- Event publishers (cheap when disconnected) ---------------
 
     struct TrackEvent {
-        std::string title;
-        std::string artist;
-        std::string album;            // may be empty
-        std::string source_id;        // "local", "spotify", ...
-        std::string source_display;
-        const std::uint8_t* art_bytes = nullptr;  // optional, base64-encoded for transport
-        std::size_t art_size          = 0;
+        std::string         title;
+        std::string         artist;
+        std::string         album;     // may be empty
+        std::string         source_id; // "local", "spotify", ...
+        std::string         source_display;
+        const std::uint8_t* art_bytes = nullptr; // optional, base64-encoded for transport
+        std::size_t         art_size  = 0;
     };
 
     struct StatsEvent {
@@ -71,6 +73,15 @@ public:
     void publish_track(const TrackEvent& e);
     void publish_stats(const StatsEvent& e);
     void publish_source_changed(std::string_view id, std::string_view display);
+
+    // Publish a detected in-game event (race_start, race_finish,
+    // station_changed, …). The C# host maps it to a user-configured
+    // action. Cheap when disconnected.
+    void publish_game_event(std::string_view kind);
+
+    // Free-form debug line surfaced in the UI Console under `tag`.
+    // Cheap when disconnected.
+    void publish_debug(std::string_view tag, std::string_view text);
 
     // Snapshot callback fires whenever a UI client (re)connects. The
     // callback is expected to re-publish the latest track + active
@@ -97,22 +108,22 @@ private:
     void send_line_locked(const std::string& line);
     void send_hello();
 
-    std::atomic<bool>    running_{false};
-    std::atomic<bool>    client_connected_{false};
-    std::atomic<bool>    pipe_broken_{false};
-    std::thread          thread_;
+    std::atomic<bool> running_{false};
+    std::atomic<bool> client_connected_{false};
+    std::atomic<bool> pipe_broken_{false};
+    std::thread       thread_;
 
     // Pipe handle is touched from the listener thread (server side)
     // and from publish_* (any thread). The mutex serializes WriteFile
     // calls so concurrent publishes don't interleave JSON lines.
-    std::mutex           pipe_mutex_;
-    void*                pipe_handle_ = nullptr;   // HANDLE
+    std::mutex pipe_mutex_;
+    void*      pipe_handle_ = nullptr; // HANDLE
 
-    std::mutex           snapshot_mutex_;
-    SnapshotFn           snapshot_cb_;
+    std::mutex snapshot_mutex_;
+    SnapshotFn snapshot_cb_;
 
-    std::mutex           command_mutex_;
-    CommandFn            command_cb_;
+    std::mutex command_mutex_;
+    CommandFn  command_cb_;
 };
 
 } // namespace horizon::ipc

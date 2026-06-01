@@ -1,13 +1,10 @@
+#include <algorithm>
 #include <doctest/doctest.h>
-
 #include <horizon/inject/heap_scan.hpp>
 #include <horizon/inject/msvc_rtti.hpp>
-
-#include <windows.h>
-
-#include <algorithm>
 #include <memory>
 #include <vector>
+#include <windows.h>
 
 using namespace horizon::inject;
 
@@ -17,7 +14,9 @@ using namespace horizon::inject;
 class HorizonHeapScanTarget {
 public:
     virtual ~HorizonHeapScanTarget() = default;
-    virtual int identifier() const { return 0xBEE; }
+    virtual int identifier() const {
+        return 0xBEE;
+    }
     // Padding fields so a candidate match at the vtable position is
     // less likely to be coincidence in a small test exe.
     std::uint64_t pad_a = 0xCAFE'BABE'1234'5678ull;
@@ -29,11 +28,11 @@ TEST_CASE("find_heap_instances locates live instances by their vtable") {
     REQUIRE(img.valid());
 
     MsvcRtti rtti(img);
-    auto td  = rtti.find_type_descriptor(".?AVHorizonHeapScanTarget@@");
+    auto     td = rtti.find_type_descriptor(".?AVHorizonHeapScanTarget@@");
     REQUIRE(td.has_value());
     auto col = rtti.find_complete_object_locator(*td);
     REQUIRE(col.has_value());
-    auto vt  = rtti.find_vtable(*col);
+    auto vt = rtti.find_vtable(*col);
     REQUIRE(vt.has_value());
 
     auto a = std::make_unique<HorizonHeapScanTarget>();
@@ -62,15 +61,15 @@ TEST_CASE("find_heap_instances completes without crashing on a clean target") {
     REQUIRE(img.valid());
 
     MsvcRtti rtti(img);
-    auto td  = rtti.find_type_descriptor(".?AVHorizonHeapScanTarget@@");
+    auto     td = rtti.find_type_descriptor(".?AVHorizonHeapScanTarget@@");
     REQUIRE(td.has_value());
     auto col = rtti.find_complete_object_locator(*td);
     REQUIRE(col.has_value());
-    auto vt  = rtti.find_vtable(*col);
+    auto vt = rtti.find_vtable(*col);
     REQUIRE(vt.has_value());
 
     auto instances = find_heap_instances(*vt);
-    CHECK(instances.size() < 100000);  // sanity: scanner didn't run away
+    CHECK(instances.size() < 100000); // sanity: scanner didn't run away
 }
 
 TEST_CASE("find_heap_instances finds multiple instances under shared_ptr") {
@@ -78,11 +77,11 @@ TEST_CASE("find_heap_instances finds multiple instances under shared_ptr") {
     REQUIRE(img.valid());
 
     MsvcRtti rtti(img);
-    auto td  = rtti.find_type_descriptor(".?AVHorizonHeapScanTarget@@");
+    auto     td = rtti.find_type_descriptor(".?AVHorizonHeapScanTarget@@");
     REQUIRE(td.has_value());
     auto col = rtti.find_complete_object_locator(*td);
     REQUIRE(col.has_value());
-    auto vt  = rtti.find_vtable(*col);
+    auto vt = rtti.find_vtable(*col);
     REQUIRE(vt.has_value());
 
     std::vector<std::shared_ptr<HorizonHeapScanTarget>> kept;
@@ -91,10 +90,9 @@ TEST_CASE("find_heap_instances finds multiple instances under shared_ptr") {
     }
 
     auto instances = find_heap_instances(*vt);
-    int found = 0;
+    int  found     = 0;
     for (const auto& sp : kept) {
-        if (std::find(instances.begin(), instances.end(), sp.get())
-            != instances.end()) {
+        if (std::find(instances.begin(), instances.end(), sp.get()) != instances.end()) {
             ++found;
         }
     }

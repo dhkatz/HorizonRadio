@@ -20,18 +20,13 @@ namespace HorizonRadio.Core.ModInstall;
 /// </summary>
 public static class Fh6Detection
 {
-    /// <summary>Folder names Steam uses for the game. The actual name
-    /// depends on how the developer set it up in Steamworks; including
-    /// both common shapes covers the obvious bases.</summary>
-    private static readonly string[] FolderCandidates = new[]
-    {
-        "ForzaHorizon6",
-        "Forza Horizon 6",
-    };
+    private static readonly string[] FolderCandidates = ["ForzaHorizon6", "Forza Horizon 6"];
 
     public static IReadOnlyList<DetectedInstall> Detect()
     {
         var hits = new List<DetectedInstall>();
+        if (!OperatingSystem.IsWindows()) return hits;
+
         try { TryDetectSteam(hits); }
         catch (System.Exception ex) { Debug.WriteLine($"[hzn-detect] steam: {ex.Message}"); }
         return hits;
@@ -54,7 +49,6 @@ public static class Fh6Detection
     [SupportedOSPlatform("windows")]
     private static IEnumerable<string> EnumerateSteamLibraries()
     {
-        // Steam's install path. WOW6432Node because Steam is 32-bit.
         string? steamRoot = null;
         try
         {
@@ -62,11 +56,10 @@ public static class Fh6Detection
                          ?? Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Valve\Steam");
             steamRoot = key?.GetValue("InstallPath") as string;
         }
-        catch { /* registry inaccessible; fall back to common paths */ }
+        catch { }
 
         if (string.IsNullOrEmpty(steamRoot))
         {
-            // Common manual Steam locations as a fallback.
             foreach (var p in new[]
             {
                 @"C:\Program Files (x86)\Steam",
@@ -82,15 +75,6 @@ public static class Fh6Detection
         if (string.IsNullOrEmpty(steamRoot)) yield break;
         yield return steamRoot;
 
-        // libraryfolders.vdf lists every secondary library the user
-        // added. Format (KeyValue VDF):
-        //   "libraryfolders"
-        //   {
-        //     "0" { "path" "C:\\Program Files (x86)\\Steam" ... }
-        //     "1" { "path" "E:\\Games\\Steam" ... }
-        //   }
-        // We don't bother with a real VDF parser; the only field we
-        // need is "path", which is always on its own line.
         var vdf = Path.Combine(steamRoot, "steamapps", "libraryfolders.vdf");
         if (!File.Exists(vdf)) yield break;
 
@@ -100,16 +84,11 @@ public static class Fh6Detection
 
         foreach (Match m in Regex.Matches(text, "\"path\"\\s+\"([^\"]+)\""))
         {
-            // VDF escapes backslashes as `\\` — un-escape before use.
-            var raw  = m.Groups[1].Value.Replace(@"\\", @"\");
+            var raw = m.Groups[1].Value.Replace(@"\\", @"\");
             if (!string.Equals(raw, steamRoot, System.StringComparison.OrdinalIgnoreCase))
                 yield return raw;
         }
     }
 }
 
-/// <summary>Where the detector found a Forza Horizon 6 install.
-/// Source explains the provenance ("Steam", future "Xbox", etc.) and
-/// is shown in the picker so the user can disambiguate when they have
-/// multiple copies.</summary>
 public sealed record DetectedInstall(string Source, string Path);

@@ -1,8 +1,6 @@
-#include <doctest/doctest.h>
-
-#include <horizon/audio/ring_buffer.hpp>
-
 #include <array>
+#include <doctest/doctest.h>
+#include <horizon/audio/ring_buffer.hpp>
 #include <thread>
 #include <vector>
 
@@ -17,7 +15,7 @@ TEST_CASE("empty after construction") {
 
 TEST_CASE("push and pop roundtrip") {
     SpscRingBuffer<int> rb(16);
-    const int in[] = {1, 2, 3, 4};
+    const int           in[] = {1, 2, 3, 4};
     CHECK(rb.push(in, 4) == 4);
     CHECK(rb.readable() == 4);
 
@@ -30,7 +28,7 @@ TEST_CASE("push and pop roundtrip") {
 
 TEST_CASE("push truncates at capacity") {
     SpscRingBuffer<int> rb(4);
-    const int in[] = {1, 2, 3, 4, 5, 6};
+    const int           in[] = {1, 2, 3, 4, 5, 6};
     CHECK(rb.push(in, 6) == 4);
     CHECK(rb.writable() == 0);
     CHECK(rb.readable() == 4);
@@ -38,7 +36,7 @@ TEST_CASE("push truncates at capacity") {
 
 TEST_CASE("pop truncates at available") {
     SpscRingBuffer<int> rb(16);
-    const int in[] = {1, 2};
+    const int           in[] = {1, 2};
     rb.push(in, 2);
     int out[10] = {};
     CHECK(rb.pop(out, 10) == 2);
@@ -46,7 +44,7 @@ TEST_CASE("pop truncates at available") {
 
 TEST_CASE("wraps across the buffer boundary") {
     SpscRingBuffer<int> rb(4);
-    const int in1[] = {1, 2, 3};
+    const int           in1[] = {1, 2, 3};
     rb.push(in1, 3);
     int discard[3] = {};
     rb.pop(discard, 3);
@@ -64,7 +62,7 @@ TEST_CASE("wraps across the buffer boundary") {
 
 TEST_CASE("reset clears state") {
     SpscRingBuffer<int> rb(16);
-    const int in[] = {1, 2, 3};
+    const int           in[] = {1, 2, 3};
     rb.push(in, 3);
     rb.reset();
     CHECK(rb.readable() == 0);
@@ -73,17 +71,19 @@ TEST_CASE("reset clears state") {
 
 TEST_CASE("concurrent producer and consumer preserve order") {
     SpscRingBuffer<int> rb(1024);
-    constexpr int N = 100'000;
+    constexpr int       N = 100'000;
 
     std::thread producer([&] {
-        int produced = 0;
+        int                 produced = 0;
         std::array<int, 64> chunk{};
         while (produced < N) {
             int batch = std::min<int>(64, N - produced);
-            for (int j = 0; j < batch; ++j) chunk[j] = produced + j;
+            for (int j = 0; j < batch; ++j)
+                chunk[j] = produced + j;
             const std::size_t pushed = rb.push(chunk.data(), batch);
             produced += static_cast<int>(pushed);
-            if (pushed < static_cast<std::size_t>(batch)) std::this_thread::yield();
+            if (pushed < static_cast<std::size_t>(batch))
+                std::this_thread::yield();
         }
     });
 
@@ -92,8 +92,10 @@ TEST_CASE("concurrent producer and consumer preserve order") {
     std::array<int, 64> out{};
     while (static_cast<int>(received.size()) < N) {
         const std::size_t got = rb.pop(out.data(), out.size());
-        for (std::size_t j = 0; j < got; ++j) received.push_back(out[j]);
-        if (got == 0) std::this_thread::yield();
+        for (std::size_t j = 0; j < got; ++j)
+            received.push_back(out[j]);
+        if (got == 0)
+            std::this_thread::yield();
     }
     producer.join();
 

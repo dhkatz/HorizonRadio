@@ -49,18 +49,23 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     [ObservableProperty] private bool canSkipPrevious;
     [ObservableProperty] private bool isPaused;
     [ObservableProperty] private bool hasTransport;
+    [ObservableProperty] private bool canShuffle;
+    [ObservableProperty] private bool isShuffleEnabled;
 
-    private readonly SourceRunner?      _runner;
+    private readonly SourceRunner? _runner;
     private readonly SourceConfigStore? _store;
     private bool _suppressSwitch;
+    // Guards IsShuffleEnabled while RebindTransport seeds it from the persisted
+    // preference, so syncing the toggle doesn't re-fire a write/apply.
+    private bool _suppressShuffle;
     private ITransportControls? _transport;
 
     public IReadOnlyList<IAudioSourceFactory> AvailableSources { get; }
 
     public NowPlayingViewModel(SourceRunner runner, SourceConfigStore store)
     {
-        _runner          = runner;
-        _store           = store;
+        _runner = runner;
+        _store = store;
         AvailableSources = SourceCatalog.All;
 
         // Keep the dropdown in sync when the runner is driven from the
@@ -81,12 +86,51 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     {
         if (_transport != null) _transport.PausedChanged -= OnPausedChanged;
         _transport = _runner?.ActiveSource as ITransportControls;
-        HasTransport     = _transport != null;
-        CanPause         = _transport?.CanPause        ?? false;
-        CanSkipNext      = _transport?.CanSkipNext     ?? false;
-        CanSkipPrevious  = _transport?.CanSkipPrevious ?? false;
-        IsPaused         = _transport?.IsPaused        ?? false;
+        HasTransport = _transport != null;
+        IsPaused = _transport?.IsPaused ?? false;
+        RefreshCapabilities();
+
+        // Reflect the persisted preference (the runner already applied it to the
+        // source as it started). Suppress so this sync doesn't re-persist/apply.
+        _suppressShuffle = true;
+        IsShuffleEnabled = _store?.Shuffle ?? false;
+        _suppressShuffle = false;
+
         if (_transport != null) _transport.PausedChanged += OnPausedChanged;
+    }
+
+    /// <summary>Re-read the source's CanX capabilities. Called on (re)bind and
+    /// again on each track update, because some sources only learn their track
+    /// count after start — YouTube resolves its playlist asynchronously, so
+    /// CanShuffle / CanSkipNext aren't known until the first track arrives.</summary>
+    private void RefreshCapabilities()
+    {
+        CanPause = _transport?.CanPause ?? false;
+        CanSkipNext = _transport?.CanSkipNext ?? false;
+        CanSkipPrevious = _transport?.CanSkipPrevious ?? false;
+        CanShuffle = _transport?.CanShuffle ?? false;
+    }
+
+    partial void OnIsShuffleEnabledChanged(bool value)
+    {
+        if (_suppressShuffle) return;
+
+        // Persist as a global preference and keep the runner in sync so the
+        // next source start honors it...
+        if (_runner != null) _runner.Shuffle = value;
+        if (_store != null)
+        {
+            _store.Shuffle = value;
+            _store.SaveToDisk();
+        }
+
+        // ...and apply live to the running source (keeps current track, shuffles
+        // the rest).
+        if (_transport != null)
+        {
+            try { _ = _transport.SetShuffleAsync(value); }
+            catch (Exception ex) { Debug.WriteLine($"[hzn-now-vm] shuffle: {ex.Message}"); }
+        }
     }
 
     private void OnPausedChanged(bool paused) =>
@@ -155,12 +199,16 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     /// </summary>
     public void Apply(Track track)
     {
-        Title          = string.IsNullOrWhiteSpace(track.Title)  ? "Unknown track"  : track.Title;
-        Artist         = string.IsNullOrWhiteSpace(track.Artist) ? "Unknown artist" : track.Artist;
-        Album          = track.Album;
-        SourceId       = track.SourceId;
-        SourceDisplay  = track.SourceDisplay;
-        AlbumArt       = DecodeArt(track.AlbumArt);
+        Title = string.IsNullOrWhiteSpace(track.Title) ? "Unknown track" : track.Title;
+        Artist = string.IsNullOrWhiteSpace(track.Artist) ? "Unknown artist" : track.Artist;
+        Album = track.Album;
+        SourceId = track.SourceId;
+        SourceDisplay = track.SourceDisplay;
+        AlbumArt = DecodeArt(track.AlbumArt);
+
+        // Capabilities may have only just become known (e.g. YouTube finished
+        // resolving its playlist), so re-evaluate them as tracks come in.
+        RefreshCapabilities();
     }
 
     public void SetConnectionState(bool connected)
@@ -169,12 +217,12 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         if (!connected)
         {
             // Reset to placeholder so stale data doesn't linger after FH6 closes.
-            Title         = "Nothing playing";
-            Artist        = "Launch Forza Horizon 6 with the mod installed";
-            Album         = null;
+            Title = "Nothing playing";
+            Artist = "Launch Forza Horizon 6 with the mod installed";
+            Album = null;
             SourceDisplay = "—";
-            SourceId      = "";
-            AlbumArt      = null;
+            SourceId = "";
+            AlbumArt = null;
         }
     }
 

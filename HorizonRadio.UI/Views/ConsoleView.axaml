@@ -1,0 +1,85 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
+             x:Class="HorizonRadio.UI.Views.ConsoleView"
+             x:DataType="vm:ConsoleViewModel">
+
+    <Design.DataContext>
+        <vm:ConsoleViewModel />
+    </Design.DataContext>
+
+    <Grid Margin="24" RowDefinitions="Auto,Auto,*">
+
+        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,12">
+            <TextBlock Text="Console" FontSize="20" FontWeight="SemiBold"/>
+            <TextBlock Text="Live output from the external tools Horizon Radio runs (librespot, ffmpeg, yt-dlp)."
+                       FontSize="12" Opacity="0.6"/>
+        </StackPanel>
+
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="0,0,0,12">
+            <ComboBox Grid.Column="0"
+                      MinWidth="150"
+                      ItemsSource="{Binding Tools}"
+                      SelectedItem="{Binding SelectedTool}"
+                      ToolTip.Tip="Filter by tool"/>
+            <CheckBox Grid.Column="1"
+                      Content="Auto-scroll"
+                      IsChecked="{Binding AutoScroll}"
+                      Margin="14,0,0,0"
+                      VerticalAlignment="Center"/>
+            <Button Grid.Column="3"
+                    Classes="Ghost"
+                    Content="Copy"
+                    Click="Copy_Click"/>
+            <Button Grid.Column="4"
+                    Classes="Ghost"
+                    Content="Clear"
+                    Command="{Binding ClearCommand}"
+                    Margin="8,0,0,0"/>
+        </Grid>
+
+        <Border Grid.Row="2" Classes="Card" Padding="2">
+            <ListBox x:Name="LogList"
+                     ItemsSource="{Binding Lines}"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     FontFamily="Consolas,Cascadia Mono,monospace"
+                     FontSize="12"
+                     SelectionMode="Multiple"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto">
+                <ListBox.Styles>
+                    <!-- Tight rows: the default ListBoxItem padding is
+                         sized for touch lists and wastes vertical space
+                         in a dense log. -->
+                    <Style Selector="ListBoxItem">
+                        <Setter Property="Padding" Value="6,1"/>
+                        <Setter Property="MinHeight" Value="0"/>
+                    </Style>
+                </ListBox.Styles>
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ConsoleLineViewModel">
+                        <Grid ColumnDefinitions="Auto,Auto,*">
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding Time}"
+                                       Opacity="0.45"
+                                       Margin="0,0,10,0"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding Tool}"
+                                       Foreground="{Binding ToolBrush}"
+                                       FontWeight="Medium"
+                                       Width="78"
+                                       Margin="0,0,8,0"/>
+                            <TextBlock Grid.Column="2"
+                                       Text="{Binding Text}"
+                                       TextWrapping="Wrap"/>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+    </Grid>
+</UserControl>

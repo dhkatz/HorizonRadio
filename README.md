@@ -9,6 +9,8 @@ Play your own music through Forza Horizon 6's in-game radio.
 - Sources
   - Local (folders, M3U playlists, single files)
   - Spotify Connect
+- Shuffle
+  - Toggle on the Now Playing page for local-file and YouTube playback (remembered across runs)
 - Track Metadata Sources
   - MusicBrainz
   - Spotify
@@ -54,6 +56,10 @@ To produce a release zip locally:
 dotnet publish HorizonRadio.UI/HorizonRadio.UI.csproj -c Release -r win-x64 --self-contained
 # Output: build/release/HorizonRadio.zip
 ```
+
+For architecture, internals, code-quality tooling, and maintenance runbooks
+(including how to re-derive the FMOD offsets after a game update), see
+[AGENTS.md](AGENTS.md).
 
 ## License
 

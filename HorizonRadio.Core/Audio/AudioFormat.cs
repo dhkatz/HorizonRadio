@@ -10,7 +10,7 @@ namespace HorizonRadio.Core.Audio;
 public static class AudioFormat
 {
     public const int SampleRate = 44100;
-    public const int Channels   = 2;
+    public const int Channels = 2;
     public const int BytesPerSample = 2;          // s16
-    public const int BytesPerFrame  = Channels * BytesPerSample;
+    public const int BytesPerFrame = Channels * BytesPerSample;
 }

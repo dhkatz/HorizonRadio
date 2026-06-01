@@ -12,8 +12,6 @@
         <vm:SourcesViewModel />
     </Design.DataContext>
 
-    <!-- Per-field-type templates. Avalonia picks the right one off the
-         item's runtime type, so no selector logic is needed. -->
     <UserControl.DataTemplates>
         <DataTemplate DataType="{x:Type vm:DirectoryFieldViewModel}">
             <StackPanel Spacing="4">
@@ -21,7 +19,7 @@
                 <Grid ColumnDefinitions="*,Auto">
                     <TextBox Grid.Column="0"
                              Text="{Binding Path, Mode=TwoWay}"
-                             Watermark="Pick a folder..." />
+                             PlaceholderText="Pick a folder..." />
                     <Button Grid.Column="1"
                             Classes="Outline"
                             Content="Browse"
@@ -42,7 +40,7 @@
                 <Grid ColumnDefinitions="*,Auto">
                     <TextBox Grid.Column="0"
                              Text="{Binding Path, Mode=TwoWay}"
-                             Watermark="Pick a file..." />
+                             PlaceholderText="Pick a file..." />
                     <Button Grid.Column="1"
                             Classes="Outline"
                             Content="Browse"
@@ -57,11 +55,58 @@
             </StackPanel>
         </DataTemplate>
 
+        <DataTemplate DataType="{x:Type vm:ToolFieldViewModel}">
+            <StackPanel Spacing="4">
+                <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="Medium"/>
+
+                <ComboBox ItemsSource="{Binding Available}"
+                          HorizontalAlignment="Stretch"
+                          SelectionChanged="ToolPick_SelectionChanged"
+                          Tag="{Binding}"
+                          IsVisible="{Binding HasAvailable}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Border Background="{DynamicResource MutedColor}"
+                                        CornerRadius="4"
+                                        Padding="6,1">
+                                    <TextBlock Text="Installed"
+                                               FontSize="10"
+                                               Foreground="{DynamicResource MutedForegroundColor}"/>
+                                </Border>
+                                <TextBlock Text="{Binding Path}" FontSize="12"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBox Grid.Column="0"
+                             Text="{Binding Path, Mode=TwoWay}"
+                             PlaceholderText="Or paste a custom path..." />
+                    <Button Grid.Column="1"
+                            Classes="Outline"
+                            Content="Browse"
+                            Margin="6,0,0,0"
+                            Click="BrowseTool_Click"
+                            Tag="{Binding}"/>
+                </Grid>
+
+                <TextBlock Text="{Binding Description}"
+                           FontSize="11" Opacity="0.55"
+                           TextWrapping="Wrap"
+                           IsVisible="{Binding Description, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                <TextBlock Text="Not installed. Open the Tools tab to download."
+                           FontSize="11" Opacity="0.55"
+                           IsVisible="{Binding !HasAvailable}"/>
+            </StackPanel>
+        </DataTemplate>
+
         <DataTemplate DataType="{x:Type vm:TextFieldViewModel}">
             <StackPanel Spacing="4">
                 <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="Medium"/>
                 <TextBox Text="{Binding Text, Mode=TwoWay}"
-                         Watermark="{Binding Placeholder}"/>
+                         PlaceholderText="{Binding Placeholder}"/>
                 <TextBlock Text="{Binding Description}"
                            FontSize="11" Opacity="0.55"
                            TextWrapping="Wrap"
@@ -122,6 +167,15 @@
                                FontSize="11" Opacity="0.6"
                                TextWrapping="Wrap"
                                IsVisible="{Binding SelectedFactory.Description, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+
+                    <Separator Margin="0,6"/>
+
+                    <TextBlock Text="Replace station" FontSize="12" FontWeight="Medium" Opacity="0.7"/>
+                    <ComboBox ItemsSource="{Binding Stations}"
+                              SelectedItem="{Binding SelectedStation, Mode=TwoWay}"
+                              HorizontalAlignment="Stretch"/>
+                    <TextBlock Text="Which in-game station Horizon Radio takes over. “Any station” replaces whichever one you tune to; pick a specific station to leave the rest as the game's own music."
+                               FontSize="11" Opacity="0.55" TextWrapping="Wrap"/>
                 </StackPanel>
             </Border>
 

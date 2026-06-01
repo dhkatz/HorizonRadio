@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Text.Json;
 using HorizonRadio.Core.Sources.Config;
 
@@ -52,8 +49,8 @@ public sealed class MetadataConfigStore
         {
             if (!File.Exists(path)) return store;
             using var stream = File.OpenRead(path);
-            using var doc    = JsonDocument.Parse(stream);
-            var root         = doc.RootElement;
+            using var doc = JsonDocument.Parse(stream);
+            var root = doc.RootElement;
 
             if (root.TryGetProperty("selected", out var sel) && sel.ValueKind == JsonValueKind.String)
                 store.SelectedProviderId = sel.GetString();
@@ -100,24 +97,24 @@ public sealed class MetadataConfigStore
     private static object? JsonToObject(JsonElement el) => el.ValueKind switch
     {
         JsonValueKind.String => el.GetString(),
-        JsonValueKind.True   => true,
-        JsonValueKind.False  => false,
+        JsonValueKind.True => true,
+        JsonValueKind.False => false,
         JsonValueKind.Number => el.TryGetInt64(out var i) ? i : el.GetDouble(),
-        JsonValueKind.Null   => null,
-        _                    => el.GetRawText(),
+        JsonValueKind.Null => null,
+        _ => el.GetRawText(),
     };
 
     private static void WriteValue(Utf8JsonWriter w, string name, object? v)
     {
         switch (v)
         {
-            case null:           w.WriteNull(name); break;
-            case string s:       w.WriteString(name, s); break;
-            case bool b:         w.WriteBoolean(name, b); break;
-            case int i:          w.WriteNumber(name, i); break;
-            case long l:         w.WriteNumber(name, l); break;
-            case double d:       w.WriteNumber(name, d); break;
-            default:             w.WriteString(name, v.ToString() ?? ""); break;
+            case null: w.WriteNull(name); break;
+            case string s: w.WriteString(name, s); break;
+            case bool b: w.WriteBoolean(name, b); break;
+            case int i: w.WriteNumber(name, i); break;
+            case long l: w.WriteNumber(name, l); break;
+            case double d: w.WriteNumber(name, d); break;
+            default: w.WriteString(name, v.ToString() ?? ""); break;
         }
     }
 }

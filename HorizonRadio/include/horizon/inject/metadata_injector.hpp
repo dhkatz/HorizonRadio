@@ -1,12 +1,9 @@
 #pragma once
 
+#include <atomic>
+#include <cstdint>
 #include <horizon/inject/msvc_rtti.hpp>
 #include <horizon/inject/sigscan.hpp>
-
-#include <atomic>
-#include <cstddef>
-#include <cstdint>
-#include <mutex>
 #include <optional>
 #include <span>
 #include <string>
@@ -55,8 +52,7 @@ struct MetadataInjectorConfig {
 // Helper exposed for testing. Each chain step: add `offset` to the
 // current address, then dereference. Returns nullptr if the
 // dereference yields zero at any step.
-const void* walk_offset_chain(const void* start,
-                              std::span<const std::ptrdiff_t> chain);
+const void* walk_offset_chain(const void* start, std::span<const std::ptrdiff_t> chain);
 
 // Glue between MsvcRtti, find_heap_instances, and write_msvc_string.
 //
@@ -72,22 +68,30 @@ public:
     // Resolve the configured class's vtable via MsvcRtti. Returns false
     // if any of TD / COL / vtable lookups fail.
     bool resolve();
-    bool resolved() const noexcept { return vt_.has_value(); }
+    bool resolved() const noexcept {
+        return vt_.has_value();
+    }
 
     // The vtable found during resolve(). Exposed to callers that
     // want to use the resolved address (e.g. the periodic writer's
     // refcount-validated heap-arena scan).
-    std::optional<Vtable> vtable() const noexcept { return vt_; }
+    std::optional<Vtable> vtable() const noexcept {
+        return vt_;
+    }
 
     // Write to a specific known instance. Walks the configured
     // chain from `instance`, validates the chain endpoint is a
     // plausible string region (rejects spurious vtable matches),
     // and writes the configured field offsets. Returns 1 on
     // success, 0 on validation failure or null chain.
-    int write_to_instance(const void* instance,
-                          std::string_view sound_name,
-                          std::string_view display_name,
+    int write_to_instance(const void* instance, std::string_view sound_name, std::string_view display_name,
                           std::string_view artist);
+
+    // Read the current title/artist at the chain endpoint into std::strings.
+    // Snapshots the game's originals before we overwrite them, so the caller
+    // can restore them when it stops replacing a station. SEH-safe; returns
+    // false if the chain doesn't resolve to a valid string block.
+    bool read_instance_strings(const void* instance, std::string& out_title, std::string& out_artist) const;
 
     std::uint64_t total_writes() const noexcept {
         return total_writes_.load(std::memory_order_relaxed);
