@@ -9,6 +9,8 @@ Play your own music through Forza Horizon 6's in-game radio.
 - Sources
   - Local (folders, M3U playlists, single files)
   - Spotify Connect
+- Shuffle
+  - Toggle on the Now Playing page for local-file and YouTube playback (remembered across runs)
 - Track Metadata Sources
   - MusicBrainz
   - Spotify

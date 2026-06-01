@@ -34,6 +34,10 @@ public sealed class SourceConfigStore
     /// = whatever's active). Persisted so the choice survives restarts.</summary>
     public string? TargetStation { get; set; }
 
+    /// <summary>Global shuffle preference (applies to whichever source is
+    /// active). Persisted so the choice survives restarts.</summary>
+    public bool Shuffle { get; set; }
+
     private readonly Dictionary<string, Dictionary<string, object?>> _perSource = new();
 
     private static string DefaultPath =>
@@ -82,6 +86,10 @@ public sealed class SourceConfigStore
             if (root.TryGetProperty("targetStation", out var tgt) && tgt.ValueKind == JsonValueKind.String)
                 store.TargetStation = tgt.GetString();
 
+            if (root.TryGetProperty("shuffle", out var shuf) &&
+                (shuf.ValueKind == JsonValueKind.True || shuf.ValueKind == JsonValueKind.False))
+                store.Shuffle = shuf.GetBoolean();
+
             if (root.TryGetProperty("perSource", out var per) && per.ValueKind == JsonValueKind.Object)
             {
                 foreach (var src in per.EnumerateObject())
@@ -114,6 +122,7 @@ public sealed class SourceConfigStore
             writer.WriteStartObject();
             if (LastSelectedId != null) writer.WriteString("lastSelected", LastSelectedId);
             if (TargetStation != null) writer.WriteString("targetStation", TargetStation);
+            writer.WriteBoolean("shuffle", Shuffle);
             writer.WriteStartObject("perSource");
             foreach (var (sourceId, bag) in _perSource)
             {

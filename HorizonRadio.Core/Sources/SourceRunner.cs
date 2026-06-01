@@ -12,6 +12,12 @@ public sealed class SourceRunner(IPcmSink sink) : IAsyncDisposable
     public IAudioSource? ActiveSource => _active;
     public bool IsRunning => _active != null;
 
+    /// <summary>Global shuffle preference applied to each source as it starts
+    /// (sources that support it; see <see cref="ITransportControls.CanShuffle"/>).
+    /// The UI keeps this in sync with the persisted preference and toggles the
+    /// already-running source directly via its transport controls.</summary>
+    public bool Shuffle { get; set; }
+
     public event Action<Track>? TrackChanged;
     public event Action<IAudioSourceFactory?>? ActiveSourceChanged;
 
@@ -26,6 +32,11 @@ public sealed class SourceRunner(IPcmSink sink) : IAsyncDisposable
         _active = source;
         ActiveFactory = factory;
         ActiveSourceChanged?.Invoke(factory);
+
+        // Apply the persisted shuffle preference before the source's run loop
+        // starts, so a shuffle-on session randomizes from the first track.
+        if (Shuffle && source is ITransportControls tc && tc.CanShuffle)
+            await tc.SetShuffleAsync(true).ConfigureAwait(false);
 
         try
         {

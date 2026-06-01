@@ -29,7 +29,8 @@ public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITrans
     private CancellationTokenSource? _stopCts;
     private Task? _runLoop;
     private List<YtDlpClient.Entry> _entries = new();
-    private int _cursor;
+    // Iteration order over _entries (identity until shuffled). Holds the cursor.
+    private readonly PlayOrder _order = new();
 
     // Per-track cancellation: separates "skip current track" from "stop
     // the source". NextAsync / PreviousAsync cancel just this; StopAsync
@@ -39,6 +40,11 @@ public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITrans
     // Set by RestartAsync: cancels the current entry but replays it instead
     // of advancing the cursor.
     private volatile bool _restartCurrent;
+
+    // Pending shuffle request: -1 none, 0 off, 1 on. Applied on the run-loop
+    // thread (sole owner of _order) so the toggle never races playback. Does
+    // not cancel the current track — the new order takes effect on advance.
+    private volatile int _shuffleReq = -1;
 
     private volatile bool _paused;
     private readonly ManualResetEventSlim _resumeGate = new(initialState: true);
@@ -91,6 +97,15 @@ public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITrans
     public bool CanSkipNext => _entries.Count > 1;
     public bool CanSkipPrevious => _entries.Count > 1;
     public bool IsPaused => _paused;
+
+    public bool CanShuffle => _entries.Count > 1;
+    public bool IsShuffled => _order.Shuffled;
+
+    public Task SetShuffleAsync(bool enabled)
+    {
+        _shuffleReq = enabled ? 1 : 0;
+        return Task.CompletedTask;
+    }
 
     public Task TogglePauseAsync()
     {
@@ -168,16 +183,21 @@ public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITrans
             return;
         }
 
-        _cursor = 0;
+        _order.Reset(_entries.Count);
 
-        while (!ct.IsCancellationRequested && _cursor < _entries.Count && _cursor >= 0)
+        // Apply an initial shuffle request before the first entry so a source
+        // that starts shuffled gets a random first track (keepCurrent:false).
+        ApplyShuffleRequest(keepCurrent: false);
+
+        while (!ct.IsCancellationRequested && _order.CurrentIndex >= 0)
         {
             using var trackCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             _trackCts = trackCts;
             _stepBackwards = false;
 
-            var entry = _entries[_cursor];
-            Log($"track {_cursor + 1}/{_entries.Count}: {entry.Title}");
+            int idx = _order.CurrentIndex;
+            var entry = _entries[idx];
+            Log($"track {idx + 1}/{_entries.Count}: {entry.Title}");
 
             try
             {
@@ -198,10 +218,22 @@ public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITrans
 
             if (ReferenceEquals(_trackCts, trackCts)) _trackCts = null;
 
+            // Apply a mid-playback shuffle toggle while the current entry is
+            // still current, so "keep current, shuffle rest" pins it correctly.
+            ApplyShuffleRequest(keepCurrent: true);
+
             if (_restartCurrent) _restartCurrent = false; // replay same entry
-            else _cursor += _stepBackwards ? -1 : +1;
-            if (_cursor < 0) _cursor = 0; // clamp at start; don't wrap
+            else if (_stepBackwards) _order.Retreat(wrap: false); // clamp at start
+            else _order.Advance(wrap: false); // walks off the end -> loop ends
         }
+    }
+
+    private void ApplyShuffleRequest(bool keepCurrent)
+    {
+        int req = _shuffleReq;
+        if (req < 0) return;
+        _shuffleReq = -1;
+        _order.SetShuffle(req == 1, keepCurrent);
     }
 
     private async Task PlayEntryAsync(

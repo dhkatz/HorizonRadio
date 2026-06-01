@@ -44,7 +44,7 @@ public partial class App : Application
             _pcm.Start();
             var sink = new PcmPipeSink(_pcm);
 
-            _runner = new SourceRunner(sink);
+            _runner = new SourceRunner(sink) { Shuffle = _store.Shuffle };
 
             _metaStore = MetadataConfigStore.LoadFromDisk();
             var cache = new MetadataCache();

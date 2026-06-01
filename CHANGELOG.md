@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Shuffle toggle on the Now Playing page for local-file and YouTube playback.
+  The choice is remembered across runs; toggling mid-playback keeps the current
+  track and shuffles the rest, and a shuffled order reshuffles when it wraps.
 - Live per-station targeting: replace the radio on a chosen station only, or any
   station when left empty.
 - Now-playing title/artist injection into the Forza Horizon 6 radio HUD.

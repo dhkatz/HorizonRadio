@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
              xmlns:shad="clr-namespace:ShadUI;assembly=ShadUI"
+             xmlns:material="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="480"
              x:Class="HorizonRadio.UI.Views.NowPlayingView"
              x:DataType="vm:NowPlayingViewModel">
@@ -88,6 +89,15 @@
                     HorizontalAlignment="Center"
                     Spacing="8"
                     IsVisible="{Binding HasTransport}">
+            <ToggleButton IsChecked="{Binding IsShuffleEnabled, Mode=TwoWay}"
+                          IsVisible="{Binding CanShuffle}"
+                          Width="44" Height="44"
+                          Padding="0"
+                          HorizontalContentAlignment="Center"
+                          VerticalContentAlignment="Center"
+                          ToolTip.Tip="Shuffle">
+                <material:MaterialIcon Kind="Shuffle" Width="18" Height="18"/>
+            </ToggleButton>
             <Button Classes="Secondary"
                     Command="{Binding PreviousCommand}"
                     IsEnabled="{Binding CanSkipPrevious}"

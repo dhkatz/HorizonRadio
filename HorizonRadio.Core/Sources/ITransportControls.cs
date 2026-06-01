@@ -33,6 +33,19 @@ public interface ITransportControls
     /// playlist sources override it to replay the current entry.</summary>
     Task RestartAsync() => Task.CompletedTask;
 
+    /// <summary>Whether this source can play in a shuffled order — typically
+    /// true only for a multi-track playlist. Defaults false so non-playlist
+    /// sources need not opt in.</summary>
+    bool CanShuffle => false;
+
+    /// <summary>Whether shuffle is currently on. Defaults false.</summary>
+    bool IsShuffled => false;
+
+    /// <summary>Turn shuffle on or off live. Toggling mid-playback keeps the
+    /// current track playing and shuffles the remaining order around it.
+    /// Default is a no-op for sources that don't support it.</summary>
+    Task SetShuffleAsync(bool enabled) => Task.CompletedTask;
+
     /// <summary>Raised when pause state changes (either via
     /// TogglePauseAsync or by the source itself, e.g. EOF stall).</summary>
     event Action<bool>? PausedChanged;
