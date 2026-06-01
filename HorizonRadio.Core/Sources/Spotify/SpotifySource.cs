@@ -235,6 +235,14 @@ public sealed class SpotifySource(SpotifyOptions options) : IAudioSource
             "--cache",                         o.CacheDirectory,
             "--volume-ctrl",                   "fixed",
 
+            // Force autoplay on. Without this librespot follows the Spotify
+            // account's autoplay toggle, so when the user's queue/playlist
+            // ends it stops and won't resume on its own — surprising for a
+            // background "radio". On = keep playing related tracks instead.
+            // (Note: this can't help the OTHER stop cause, a Connect session
+            // drop, which only the Spotify app/protocol can resume.)
+            "--autoplay",                      "on",
+
             // Player-event hook used to time the in-game title to actual
             // playback (see class docs). librespot splits this string on
             // whitespace and spawns it per event with PLAYER_EVENT/TRACK_ID
