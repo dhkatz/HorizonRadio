@@ -1,8 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Metadata;
-using HorizonRadio.Core.ModInstall;
 using HorizonRadio.Core.Models;
+using HorizonRadio.Core.ModInstall;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.UI.Tools;

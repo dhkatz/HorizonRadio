@@ -208,12 +208,12 @@ public sealed class IpcClient(string pipeName = IpcClient.DefaultPipeName) : IAs
                 case "source_changed": DispatchSourceChanged(doc.RootElement); break;
                 case "game_event": DispatchGameEvent(doc.RootElement); break;
                 case "debug":
-                {
-                    var tag = GetString(doc.RootElement, "tag") ?? "dll";
-                    var text = GetString(doc.RootElement, "text") ?? "";
-                    if (text.Length > 0) HorizonRadio.Core.Diagnostics.ProcessConsole.Append(tag, text);
-                    break;
-                }
+                    {
+                        var tag = GetString(doc.RootElement, "tag") ?? "dll";
+                        var text = GetString(doc.RootElement, "text") ?? "";
+                        if (text.Length > 0) HorizonRadio.Core.Diagnostics.ProcessConsole.Append(tag, text);
+                        break;
+                    }
             }
         }
         catch (JsonException ex)
