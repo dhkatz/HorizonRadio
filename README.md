@@ -71,6 +71,12 @@ _Libraries_
 
 - [librespot](https://github.com/librespot-org/librespot) - Spotify Connect client (Rust)
 - [ShadUI](https://github.com/accntech/shad-ui/) - UI framework (C#)
+- [SharpHook](https://github.com/TolikPylypchuk/SharpHook) - cross-platform global keyboard/mouse hooks (C#)
+- [SDL3-CS](https://github.com/edwardgushchin/SDL3-CS) - SDL3 bindings for controller/wheel/joystick input (C#)
+
+_Assets_
+
+- [Kenney Input Prompts](https://kenney.nl/assets/input-prompts) - keyboard/mouse/controller glyphs in the Controls tab ([CC0](https://creativecommons.org/publicdomain/zero/1.0/))
 
 _References_
 

@@ -3,6 +3,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using HorizonRadio.Core.Events;
+using HorizonRadio.Core.Input;
 using HorizonRadio.Core.Ipc;
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Models;
@@ -28,6 +29,7 @@ public partial class App : Application
     private MetadataConfigStore? _metaStore;
     private EventActionExecutor? _eventExecutor;
     private ForzaTelemetryListener? _telemetry;
+    private InputBindingService? _inputService;
 
     public override void Initialize()
     {
@@ -64,12 +66,24 @@ public partial class App : Application
             _ipc = new IpcClient();
             var eventRules = EventRuleStore.LoadFromDisk();
             _telemetry = new ForzaTelemetryListener();
+
+            // One dispatcher turns an EventAction into a transport/source/volume
+            // call; both the Events tab (game events) and the Controls tab
+            // (input bindings) feed it, so they share capability checks.
+            var dispatcher = new ActionDispatcher(_runner, _store, _ipc.SendGain);
             _eventExecutor = new EventActionExecutor(
-                new IGameEventSource[] { _ipc, _telemetry },
-                _runner, _store, eventRules, _ipc.SendGain);
+                new IGameEventSource[] { _ipc, _telemetry }, eventRules, dispatcher);
             var eventsVm = new EventsViewModel(eventRules, _eventExecutor, ForzaTelemetryListener.DefaultPort);
 
-            var vm = new MainWindowViewModel(_runner, _store, metaVm, toolRegistry, installers, eventsVm);
+            // Controls: global keyboard/mouse (SharpHook) + controllers (SDL),
+            // mapped to the same actions through the shared dispatcher.
+            var controlsStore = InputBindingStore.LoadFromDisk();
+            _inputService = new InputBindingService(
+                new IInputBackend[] { new SharpHookBackend(), new SdlInputBackend() },
+                controlsStore, dispatcher);
+            var controlsVm = new ControlsViewModel(controlsStore, _inputService);
+
+            var vm = new MainWindowViewModel(_runner, _store, metaVm, toolRegistry, installers, eventsVm, controlsVm);
             desktop.MainWindow = new MainWindow { DataContext = vm };
 
             // Station targeting: push the chosen station to the DLL on change
@@ -86,6 +100,7 @@ public partial class App : Application
             _ipc.StatsUpdated += s => Dispatcher.UIThread.Post(() => vm.Stats.Apply(s));
             _ipc.Start();
             _telemetry.Start();
+            _inputService.Start();
 
             _runner.TrackChanged += t =>
             {
@@ -102,6 +117,7 @@ public partial class App : Application
             desktop.ShutdownRequested += async (_, _) =>
             {
                 _eventExecutor?.Dispose();
+                _inputService?.Dispose();
                 _telemetry?.Dispose();
                 if (_enricher != null) await _enricher.DisposeAsync();
                 if (_runner != null) await _runner.DisposeAsync();

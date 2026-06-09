@@ -27,6 +27,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public MetadataViewModel Metadata { get; }
     public ToolsViewModel ToolsTab { get; }
     public EventsViewModel Events { get; }
+    public ControlsViewModel Controls { get; }
     public ConsoleViewModel Console { get; } = new();
 
     public MainWindowViewModel()
@@ -37,6 +38,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Metadata = new MetadataViewModel();
         ToolsTab = new ToolsViewModel();
         Events = new EventsViewModel();
+        Controls = new ControlsViewModel();
         HookModBanner();
     }
 
@@ -45,7 +47,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                                MetadataViewModel metadata,
                                ToolRegistry registry,
                                System.Collections.Generic.IEnumerable<IToolInstaller> installers,
-                               EventsViewModel events)
+                               EventsViewModel events,
+                               ControlsViewModel controls)
     {
         Sources = new SourcesViewModel(runner, store, registry);
         NowPlaying = new NowPlayingViewModel(runner, store);
@@ -53,6 +56,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Metadata = metadata;
         ToolsTab = new ToolsViewModel(registry, installers);
         Events = events;
+        Controls = controls;
         HookModBanner();
     }
 
@@ -86,7 +90,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _ => "",
     };
 
-    // 0 = Now Playing, 1 = Sources, 2 = Metadata, 3 = Stats, 4 = Mod Manager, 5 = Tools, 6 = Events, 7 = Console
+    // 0 = Now Playing, 1 = Sources, 2 = Metadata, 3 = Stats, 4 = Mod Manager, 5 = Tools, 6 = Events, 7 = Console, 8 = Controls
     [ObservableProperty] private int selectedWorkspaceIndex;
 
     public bool IsNowPlayingWorkspace => SelectedWorkspaceIndex == 0;
@@ -97,6 +101,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public bool IsToolsWorkspace => SelectedWorkspaceIndex == 5;
     public bool IsEventsWorkspace => SelectedWorkspaceIndex == 6;
     public bool IsConsoleWorkspace => SelectedWorkspaceIndex == 7;
+    public bool IsControlsWorkspace => SelectedWorkspaceIndex == 8;
 
     public string CurrentRoute => SelectedWorkspaceIndex switch
     {
@@ -107,6 +112,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         5 => "tools",
         6 => "events",
         7 => "console",
+        8 => "controls",
         _ => "now-playing",
     };
 
@@ -126,6 +132,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsToolsWorkspace));
         OnPropertyChanged(nameof(IsEventsWorkspace));
         OnPropertyChanged(nameof(IsConsoleWorkspace));
+        OnPropertyChanged(nameof(IsControlsWorkspace));
         OnPropertyChanged(nameof(CurrentRoute));
     }
 
@@ -143,6 +150,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand] private void ShowTools() => SelectedWorkspaceIndex = 5;
     [RelayCommand] private void ShowEvents() => SelectedWorkspaceIndex = 6;
     [RelayCommand] private void ShowConsole() => SelectedWorkspaceIndex = 7;
+    [RelayCommand] private void ShowControls() => SelectedWorkspaceIndex = 8;
 
     public void SetConnection(ConnectionState state)
     {
