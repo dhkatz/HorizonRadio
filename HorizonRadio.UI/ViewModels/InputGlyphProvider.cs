@@ -134,45 +134,84 @@ public static class InputGlyphProvider
 
     private static readonly Dictionary<string, string> Xbox = WithDpad("xbox", new()
     {
-        ["a"] = "xbox_button_a", ["b"] = "xbox_button_b", ["x"] = "xbox_button_x", ["y"] = "xbox_button_y",
-        ["lb"] = "xbox_lb", ["rb"] = "xbox_rb", ["lt"] = "xbox_lt", ["rt"] = "xbox_rt",
-        ["start"] = "xbox_button_menu", ["back"] = "xbox_button_view", ["guide"] = "xbox_guide",
-        ["ls"] = "xbox_stick_l", ["rs"] = "xbox_stick_r",
+        ["a"] = "xbox_button_a",
+        ["b"] = "xbox_button_b",
+        ["x"] = "xbox_button_x",
+        ["y"] = "xbox_button_y",
+        ["lb"] = "xbox_lb",
+        ["rb"] = "xbox_rb",
+        ["lt"] = "xbox_lt",
+        ["rt"] = "xbox_rt",
+        ["start"] = "xbox_button_menu",
+        ["back"] = "xbox_button_view",
+        ["guide"] = "xbox_guide",
+        ["ls"] = "xbox_stick_l",
+        ["rs"] = "xbox_stick_r",
     });
 
     private static readonly Dictionary<string, string> PlayStation = WithDpad("playstation", new()
     {
-        ["a"] = "playstation_button_cross", ["b"] = "playstation_button_circle",
-        ["x"] = "playstation_button_square", ["y"] = "playstation_button_triangle",
-        ["lb"] = "playstation_trigger_l1", ["rb"] = "playstation_trigger_r1",
-        ["lt"] = "playstation_trigger_l2", ["rt"] = "playstation_trigger_r2",
-        ["start"] = "playstation5_button_options", ["back"] = "playstation5_button_create",
-        ["ls"] = "playstation_button_l3", ["rs"] = "playstation_button_r3",
+        ["a"] = "playstation_button_cross",
+        ["b"] = "playstation_button_circle",
+        ["x"] = "playstation_button_square",
+        ["y"] = "playstation_button_triangle",
+        ["lb"] = "playstation_trigger_l1",
+        ["rb"] = "playstation_trigger_r1",
+        ["lt"] = "playstation_trigger_l2",
+        ["rt"] = "playstation_trigger_r2",
+        ["start"] = "playstation5_button_options",
+        ["back"] = "playstation5_button_create",
+        ["ls"] = "playstation_button_l3",
+        ["rs"] = "playstation_button_r3",
     });
 
     private static readonly Dictionary<string, string> Switch = WithDpad("switch", new()
     {
-        ["a"] = "switch_button_a", ["b"] = "switch_button_b", ["x"] = "switch_button_x", ["y"] = "switch_button_y",
-        ["lb"] = "switch_button_l", ["rb"] = "switch_button_r", ["lt"] = "switch_button_zl", ["rt"] = "switch_button_zr",
-        ["start"] = "switch_button_plus", ["back"] = "switch_button_minus", ["guide"] = "switch_button_home",
-        ["ls"] = "switch_stick_l", ["rs"] = "switch_stick_r",
+        ["a"] = "switch_button_a",
+        ["b"] = "switch_button_b",
+        ["x"] = "switch_button_x",
+        ["y"] = "switch_button_y",
+        ["lb"] = "switch_button_l",
+        ["rb"] = "switch_button_r",
+        ["lt"] = "switch_button_zl",
+        ["rt"] = "switch_button_zr",
+        ["start"] = "switch_button_plus",
+        ["back"] = "switch_button_minus",
+        ["guide"] = "switch_button_home",
+        ["ls"] = "switch_stick_l",
+        ["rs"] = "switch_stick_r",
     });
 
     private static readonly Dictionary<string, string> SteamDeck = WithDpad("steamdeck", new()
     {
-        ["a"] = "steamdeck_button_a", ["b"] = "steamdeck_button_b",
-        ["x"] = "steamdeck_button_x", ["y"] = "steamdeck_button_y",
-        ["lb"] = "steamdeck_button_l1", ["rb"] = "steamdeck_button_r1",
-        ["lt"] = "steamdeck_button_l2", ["rt"] = "steamdeck_button_r2",
-        ["start"] = "steamdeck_button_options", ["back"] = "steamdeck_button_view", ["guide"] = "steamdeck_button_guide",
-        ["ls"] = "steamdeck_stick_l", ["rs"] = "steamdeck_stick_r",
+        ["a"] = "steamdeck_button_a",
+        ["b"] = "steamdeck_button_b",
+        ["x"] = "steamdeck_button_x",
+        ["y"] = "steamdeck_button_y",
+        ["lb"] = "steamdeck_button_l1",
+        ["rb"] = "steamdeck_button_r1",
+        ["lt"] = "steamdeck_button_l2",
+        ["rt"] = "steamdeck_button_r2",
+        ["start"] = "steamdeck_button_options",
+        ["back"] = "steamdeck_button_view",
+        ["guide"] = "steamdeck_button_guide",
+        ["ls"] = "steamdeck_stick_l",
+        ["rs"] = "steamdeck_stick_r",
     });
 
     private static readonly Dictionary<string, string> SteamController = WithDpad("steam", new()
     {
-        ["a"] = "steam_button_a", ["b"] = "steam_button_b", ["x"] = "steam_button_x", ["y"] = "steam_button_y",
-        ["lb"] = "steam_lb", ["rb"] = "steam_rb", ["lt"] = "steam_lt", ["rt"] = "steam_rt",
-        ["start"] = "steam_button_start_icon", ["back"] = "steam_button_back_icon",
-        ["ls"] = "steam_button_lp", ["rs"] = "steam_button_rp",
+        ["a"] = "steam_button_a",
+        ["b"] = "steam_button_b",
+        ["x"] = "steam_button_x",
+        ["y"] = "steam_button_y",
+        ["lb"] = "steam_lb",
+        ["rb"] = "steam_rb",
+        ["lt"] = "steam_lt",
+        ["rt"] = "steam_rt",
+        ["start"] = "steam_button_start_icon",
+        ["back"] = "steam_button_back_icon",
+        ["ls"] = "steam_button_lp",
+        ["rs"] = "steam_button_rp",
     });
 }
