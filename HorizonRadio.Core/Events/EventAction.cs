@@ -9,6 +9,7 @@ public enum EventActionType
     RestartTrack,
     Pause,
     Resume,
+    TogglePause,  // play/pause on one binding — the natural hotkey shape
     SwitchSource, // Param = source id (e.g. "local")
     SetVolume,    // Param = level 0..1 as invariant string (e.g. "0.3" to duck)
 }
