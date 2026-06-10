@@ -90,21 +90,36 @@ public sealed class SpeakerPcmSink : IPcmSink, IDisposable
                 catch (Exception ex2) { Log($"no render device available: {ex2.Message}"); return; }
             }
 
-            // ~200 ms of shared-mode latency keeps preview responsive without
-            // starving on a busy machine.
-            var output = new WasapiOut(device, AudioClientShareMode.Shared, useEventSync: true, latency: 200);
-            var buffer = new BufferedWaveProvider(_format)
+            try
             {
-                BufferDuration = TimeSpan.FromMilliseconds(500),
-                DiscardOnBufferOverflow = true,
-            };
-            output.Init(buffer);
-            output.Play();
+                // ~200 ms of shared-mode latency keeps preview responsive
+                // without starving on a busy machine.
+                var output = new WasapiOut(device, AudioClientShareMode.Shared, useEventSync: true, latency: 200);
+                var buffer = new BufferedWaveProvider(_format)
+                {
+                    BufferDuration = TimeSpan.FromMilliseconds(500),
+                    DiscardOnBufferOverflow = true,
+                };
+                output.Init(buffer);
+                output.Play();
 
-            _output = output;
-            _buffer = buffer;
-            device.Dispose();
-            Log("playback started");
+                _output = output;
+                _buffer = buffer;
+                Log("playback started");
+            }
+            catch (Exception ex)
+            {
+                // Device found but couldn't be opened (held exclusively, format
+                // unsupported, yanked between enumerate and Init). Leave
+                // _output/_buffer null so IsPlaying reports false and callers
+                // treat the output as unreachable — never throw out of Start
+                // (it runs from a binding setter on the UI thread).
+                Log($"failed to open output: {ex.Message}");
+            }
+            finally
+            {
+                device.Dispose();
+            }
         }
     }
 
@@ -131,24 +146,23 @@ public sealed class SpeakerPcmSink : IPcmSink, IDisposable
         lock (_gate) { buffer = _buffer; vol = _volume; }
         if (buffer == null) return false;
 
-        // Apply the monitor gain in software. At unity we copy straight through;
-        // otherwise scale each s16 sample (with clamp) into a temp buffer.
-        byte[] bytes;
+        // Apply the monitor gain in software, writing s16 little-endian into a
+        // single buffer. At unity we copy straight through; otherwise scale each
+        // sample (with clamp). One allocation per chunk on either path.
+        var bytes = new byte[samples.Length * sizeof(short)];
         if (vol >= 0.999f)
         {
-            bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(samples).ToArray();
+            System.Runtime.InteropServices.MemoryMarshal.AsBytes(samples).CopyTo(bytes);
         }
         else
         {
-            var scaled = new short[samples.Length];
             for (var i = 0; i < samples.Length; i++)
             {
                 var v = (int)(samples[i] * vol);
-                scaled[i] = (short)(v > short.MaxValue ? short.MaxValue
-                                  : v < short.MinValue ? short.MinValue : v);
+                v = v > short.MaxValue ? short.MaxValue : v < short.MinValue ? short.MinValue : v;
+                bytes[2 * i] = (byte)v;
+                bytes[2 * i + 1] = (byte)(v >> 8);
             }
-            bytes = new byte[scaled.Length * sizeof(short)];
-            Buffer.BlockCopy(scaled, 0, bytes, 0, bytes.Length);
         }
 
         try

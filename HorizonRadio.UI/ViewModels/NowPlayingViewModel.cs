@@ -124,8 +124,13 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
             foreach (var d in PreviewController.Devices)
                 OutputTargets.Add(new OutputTarget(false, d.Id, d.Name));
 
+            // When enabled, reflect the controller's actual destination. If the
+            // saved device is gone, the controller falls back to the default
+            // speaker — so select the first local target (default), not the
+            // bridge, otherwise the picker would lie about where audio is going.
             selectedOutput = _preview.Enabled
                 ? OutputTargets.FirstOrDefault(t => !t.IsBridge && t.DeviceId == _preview.DeviceId)
+                  ?? OutputTargets.FirstOrDefault(t => !t.IsBridge)
                   ?? OutputTargets[0]
                 : OutputTargets[0];
             previewVolume = _preview.Volume;
@@ -289,7 +294,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         }
         else
         {
-            _toasts.CreateToast("Forza Horizon 6 isn't running")
+            _toasts.CreateToast($"{OutputTarget.Bridge.Name} isn't running")
                 .WithContent("Playback paused. Launch the game with the mod installed, or choose a local output device to test.")
                 .WithDelay(6)
                 .DismissOnClick()
