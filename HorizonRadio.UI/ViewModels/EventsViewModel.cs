@@ -65,6 +65,8 @@ public sealed partial class EventsViewModel : ViewModelBase, IDisposable
             new("Restart track", new EventAction(EventActionType.RestartTrack)),
             new("Pause", new EventAction(EventActionType.Pause)),
             new("Resume", new EventAction(EventActionType.Resume)),
+            new("Next profile", new EventAction(EventActionType.NextProfile)),
+            new("Previous profile", new EventAction(EventActionType.PreviousProfile)),
         };
         foreach (var f in SourceCatalog.All)
             list.Add(new EventActionOption($"Switch to: {f.DisplayName}",
@@ -80,6 +82,8 @@ public sealed partial class EventsViewModel : ViewModelBase, IDisposable
     {
         EventActionType.None => "(no action)",
         EventActionType.SwitchSource => $"switch to {a.Param}",
+        EventActionType.NextProfile => "next profile",
+        EventActionType.PreviousProfile => "previous profile",
         EventActionType.SetVolume => $"volume {a.Param}",
         _ => a.Type.ToString(),
     };

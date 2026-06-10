@@ -87,6 +87,16 @@ public sealed class InputBindingStore
             _byKey.TryRemove(stale, out _);
     }
 
+    /// <summary>Remove every binding mapped to <paramref name="action"/> (any slot).
+    /// Reaps orphaned bindings when the thing they target — e.g. a profile — is
+    /// deleted. Returns true if anything was removed.</summary>
+    public bool ClearBindingsForAction(EventAction action)
+    {
+        var stale = _byKey.Where(kv => kv.Value.Action == action).Select(kv => kv.Key).ToList();
+        foreach (var key in stale) _byKey.TryRemove(key, out _);
+        return stale.Count > 0;
+    }
+
     public static InputBindingStore LoadFromDisk(string? path = null)
     {
         path ??= DefaultPath;

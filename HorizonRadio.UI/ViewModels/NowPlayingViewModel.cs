@@ -64,6 +64,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     private readonly SourceRunner? _runner;
     private readonly SourceConfigStore? _store;
     private readonly SourceProfileStore? _profiles;
+    private readonly ProfileSwitcher? _switcher;
     private bool _suppressSwitch;
     private bool _suppressProfile;
     // Guards IsShuffleEnabled while RebindTransport seeds it from the persisted
@@ -73,11 +74,13 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
 
     public IReadOnlyList<IAudioSourceFactory> AvailableSources { get; }
 
-    public NowPlayingViewModel(SourceRunner runner, SourceConfigStore store, SourceProfileStore profiles)
+    public NowPlayingViewModel(SourceRunner runner, SourceConfigStore store,
+        SourceProfileStore profiles, ProfileSwitcher switcher)
     {
         _runner = runner;
         _store = store;
         _profiles = profiles;
+        _switcher = switcher;
         AvailableSources = SourceCatalog.All;
 
         _profiles.Changed += () => Dispatcher.UIThread.Post(RefreshProfiles);
@@ -235,7 +238,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     // dropdown going stale when the source is switched elsewhere.
     partial void OnSelectedProfileChanged(SourceProfile? value)
     {
-        if (_suppressProfile || _runner == null || _store == null || value == null) return;
+        if (_suppressProfile || _switcher == null || value == null) return;
 
         var profile = value;
         _suppressProfile = true;
@@ -246,25 +249,18 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
 
     private async Task SwitchProfileAsync(SourceProfile profile)
     {
-        if (_runner == null || _store == null) return;
-
-        var resolved = ProfileLauncher.Resolve(profile, _store);
-        if (resolved == null) { SwitchStatus = $"{profile.Name}: source unavailable"; return; }
-
-        var (factory, values) = resolved.Value;
-        var unset = ProfileLauncher.FirstUnsetEnvironmentField(factory, values);
-        if (unset != null) { SwitchStatus = $"{profile.Name}: set the {unset} in the Sources tab first."; return; }
+        if (_switcher == null) return;
 
         SwitchStatus = $"Starting {profile.Name}...";
         try
         {
-            await _runner.StartAsync(factory, values);
+            await _switcher.SwitchToAsync(profile.Id);
             SwitchStatus = null;
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"[hzn-now-vm] profile switch failed: {ex.Message}");
-            SwitchStatus = $"{profile.Name}: {ex.Message}";
+            SwitchStatus = ex.Message; // already includes the profile name
         }
     }
 

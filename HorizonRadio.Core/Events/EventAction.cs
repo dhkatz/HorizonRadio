@@ -11,6 +11,9 @@ public enum EventActionType
     Resume,
     TogglePause,  // play/pause on one binding — the natural hotkey shape
     SwitchSource, // Param = source id (e.g. "local")
+    SwitchProfile,   // Param = profile id — switch to a specific saved profile
+    NextProfile,     // cycle to the next saved profile
+    PreviousProfile, // cycle to the previous saved profile
     SetVolume,    // Param = level 0..1 as invariant string (e.g. "0.3" to duck)
 }
 

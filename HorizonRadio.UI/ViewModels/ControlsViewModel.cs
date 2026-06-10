@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Input;
+using HorizonRadio.Core.Sources.Profiles;
 
 namespace HorizonRadio.UI.ViewModels;
 
@@ -23,9 +24,14 @@ namespace HorizonRadio.UI.ViewModels;
 /// </summary>
 public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
 {
+    private readonly InputBindingStore _store;
     private readonly InputBindingService? _service;
+    private readonly SourceProfileStore? _profiles;
 
+    /// <summary>Playback action rows (Play/Pause, Next/Previous/Restart Track).</summary>
     public ObservableCollection<ControlBindingRow> Rows { get; } = new();
+    /// <summary>Profile-switch rows: Next/Previous Profile + one per saved profile.</summary>
+    public ObservableCollection<ControlBindingRow> ProfileRows { get; } = new();
     public ObservableCollection<string> Activity { get; } = new();
 
     /// <summary>Connected controllers to choose between (gamepad, wheel, …).</summary>
@@ -47,21 +53,84 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
         ("Restart Track", "Restart the current track from the beginning.", new EventAction(EventActionType.RestartTrack)),
     };
 
+    // Profile-switch actions that don't depend on a specific profile.
+    private static readonly IReadOnlyList<(string Name, string Description, EventAction Action)> FixedProfileActions = new[]
+    {
+        ("Next Profile", "Cycle to the next saved profile.", new EventAction(EventActionType.NextProfile)),
+        ("Previous Profile", "Cycle to the previous saved profile.", new EventAction(EventActionType.PreviousProfile)),
+    };
+
     // Design-time / fallback ctor.
     public ControlsViewModel() : this(new InputBindingStore(), null) { }
 
-    public ControlsViewModel(InputBindingStore store, InputBindingService? service)
+    public ControlsViewModel(InputBindingStore store, InputBindingService? service, SourceProfileStore? profiles = null)
     {
+        _store = store;
         _service = service;
+        _profiles = profiles;
+
         foreach (var (name, description, action) in Bindable)
             Rows.Add(new ControlBindingRow(name, description, action, store, service));
+
+        // Fixed profile-switch rows live for the VM's lifetime; the per-profile
+        // rows below them are synced in place as profiles change.
+        foreach (var (name, description, action) in FixedProfileActions)
+            ProfileRows.Add(new ControlBindingRow(name, description, action, store, service));
 
         if (service != null)
         {
             service.Triggered += OnTriggered;
             service.ControllerDevicesChanged += OnDevicesChanged;
         }
+        if (_profiles != null) _profiles.Changed += OnProfilesChanged;
         RefreshControllers();
+        RefreshProfileRows();
+    }
+
+    private void OnProfilesChanged() => Dispatcher.UIThread.Post(RefreshProfileRows);
+
+    // In-place sync of the per-profile rows: only add new profiles, drop deleted
+    // ones, and replace renamed ones. Untouched rows stay — preserving any
+    // in-flight binding capture on an unrelated row (a full rebuild would cancel
+    // it). The fixed Next/Previous rows are never touched here.
+    private void RefreshProfileRows()
+    {
+        if (_profiles == null) return;
+        var profiles = _profiles.All;
+        var reaped = false;
+
+        for (var i = ProfileRows.Count - 1; i >= 0; i--)
+        {
+            var row = ProfileRows[i];
+            if (row.Action.Type != EventActionType.SwitchProfile) continue;
+
+            var p = profiles.FirstOrDefault(x => x.Id == row.Action.Param);
+            if (p == null)
+            {
+                // Profile deleted: drop its row and reap any orphaned bindings to it.
+                reaped |= _store.ClearBindingsForAction(row.Action);
+                row.Dispose();
+                ProfileRows.RemoveAt(i);
+            }
+            else if (p.Name != row.DisplayName)
+            {
+                // Renamed: drop and re-add below (binding keys on id, so it survives).
+                row.Dispose();
+                ProfileRows.RemoveAt(i);
+            }
+        }
+
+        foreach (var p in profiles)
+        {
+            if (ProfileRows.Any(r => r.Action.Type == EventActionType.SwitchProfile && r.Action.Param == p.Id))
+                continue;
+            var row = new ControlBindingRow(p.Name, "Switch to this profile.",
+                new EventAction(EventActionType.SwitchProfile, p.Id), _store, _service);
+            row.Controller.SetDevice(SelectedController);
+            ProfileRows.Add(row);
+        }
+
+        if (reaped) _store.SaveToDisk();
     }
 
     private void OnDevicesChanged() => Dispatcher.UIThread.Post(RefreshControllers);
@@ -91,6 +160,7 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
     partial void OnSelectedControllerChanged(string? value)
     {
         foreach (var row in Rows) row.Controller.SetDevice(value);
+        foreach (var row in ProfileRows) row.Controller.SetDevice(value);
     }
 
     private void OnTriggered(InputBinding binding, EventAction action)
@@ -104,12 +174,15 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
         });
     }
 
-    private static string Describe(EventAction a) => a.Type switch
+    private string Describe(EventAction a) => a.Type switch
     {
         EventActionType.TogglePause => "Play / Pause",
         EventActionType.NextTrack => "Next Track",
         EventActionType.PreviousTrack => "Previous Track",
         EventActionType.RestartTrack => "Restart Track",
+        EventActionType.NextProfile => "Next Profile",
+        EventActionType.PreviousProfile => "Previous Profile",
+        EventActionType.SwitchProfile => _profiles?.Get(a.Param ?? "") is { } p ? $"Profile: {p.Name}" : "Switch Profile",
         _ => a.Type.ToString(),
     };
 
@@ -120,7 +193,9 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
             _service.Triggered -= OnTriggered;
             _service.ControllerDevicesChanged -= OnDevicesChanged;
         }
+        if (_profiles != null) _profiles.Changed -= OnProfilesChanged;
         foreach (var row in Rows) row.Dispose();
+        foreach (var row in ProfileRows) row.Dispose();
     }
 }
 
@@ -130,6 +205,7 @@ public sealed class ControlBindingRow : IDisposable
 {
     public string DisplayName { get; }
     public string Description { get; }
+    public EventAction Action { get; }
     public BindingSlot Keyboard { get; }
     public BindingSlot Controller { get; }
 
@@ -138,6 +214,7 @@ public sealed class ControlBindingRow : IDisposable
     {
         DisplayName = name;
         Description = description;
+        Action = action;
         Keyboard = new BindingSlot(InputCategory.KeyboardMouse, action, store, service);
         Controller = new BindingSlot(InputCategory.Controller, action, store, service);
     }

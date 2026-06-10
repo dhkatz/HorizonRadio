@@ -68,10 +68,15 @@ public partial class App : Application
             var eventRules = EventRuleStore.LoadFromDisk();
             _telemetry = new ForzaTelemetryListener();
 
-            // One dispatcher turns an EventAction into a transport/source/volume
-            // call; both the Events tab (game events) and the Controls tab
+            // Saved source profiles + the single switcher all launches route
+            // through (owns the "current profile" notion for Next/Previous).
+            var profileStore = SourceProfileStore.LoadFromDisk();
+            var profileSwitcher = new ProfileSwitcher(profileStore, _store, _runner);
+
+            // One dispatcher turns an EventAction into a transport/source/profile/
+            // volume call; both the Events tab (game events) and the Controls tab
             // (input bindings) feed it, so they share capability checks.
-            var dispatcher = new ActionDispatcher(_runner, _store, _ipc.SendGain);
+            var dispatcher = new ActionDispatcher(_runner, _store, profileSwitcher, _ipc.SendGain);
             _eventExecutor = new EventActionExecutor(
                 new IGameEventSource[] { _ipc, _telemetry }, eventRules, dispatcher);
             var eventsVm = new EventsViewModel(eventRules, _eventExecutor, ForzaTelemetryListener.DefaultPort);
@@ -82,13 +87,9 @@ public partial class App : Application
             _inputService = new InputBindingService(
                 new IInputBackend[] { new SharpHookBackend(), new SdlInputBackend() },
                 controlsStore, dispatcher);
-            var controlsVm = new ControlsViewModel(controlsStore, _inputService);
+            var controlsVm = new ControlsViewModel(controlsStore, _inputService, profileStore);
 
-            // Saved source profiles (shared by the Profiles tab and the Now
-            // Playing quick-switch).
-            var profileStore = SourceProfileStore.LoadFromDisk();
-
-            var vm = new MainWindowViewModel(_runner, _store, profileStore, metaVm, toolRegistry, installers, eventsVm, controlsVm);
+            var vm = new MainWindowViewModel(_runner, _store, profileStore, profileSwitcher, metaVm, toolRegistry, installers, eventsVm, controlsVm);
             desktop.MainWindow = new MainWindow { DataContext = vm };
 
             // Station targeting: push the chosen station to the DLL on change
@@ -123,6 +124,7 @@ public partial class App : Application
             {
                 _eventExecutor?.Dispose();
                 _inputService?.Dispose();
+                profileSwitcher.Dispose();
                 _telemetry?.Dispose();
                 if (_enricher != null) await _enricher.DisposeAsync();
                 if (_runner != null) await _runner.DisposeAsync();
