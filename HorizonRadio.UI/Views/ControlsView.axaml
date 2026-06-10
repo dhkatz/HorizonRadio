@@ -69,6 +69,32 @@
                 </Button>
             </Grid>
         </DataTemplate>
+
+        <!-- One mapping-table row: action name + a binding slot per device column.
+             Implicit so both the playback list and the profile list reuse it. -->
+        <DataTemplate DataType="{x:Type vm:ControlBindingRow}">
+            <Border Background="{DynamicResource CardBackgroundColor}"
+                    BorderBrush="{DynamicResource BorderColor}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="14,8"
+                    Margin="0,0,0,6">
+                <Grid VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="158"/>
+                        <ColumnDefinition Width="158"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="{Binding DisplayName}"
+                               ToolTip.Tip="{Binding Description}"
+                               FontSize="14" FontWeight="Medium"
+                               VerticalAlignment="Center"/>
+                    <ContentControl Grid.Column="1" Content="{Binding Keyboard}" Margin="6,0"/>
+                    <ContentControl Grid.Column="2" Content="{Binding Controller}" Margin="6,0"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
     </UserControl.DataTemplates>
 
     <ScrollViewer>
@@ -116,33 +142,13 @@
                                HorizontalAlignment="Center" Margin="6,0"/>
                 </Grid>
 
-                <ItemsControl ItemsSource="{Binding Rows}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="{x:Type vm:ControlBindingRow}">
-                            <Border Background="{DynamicResource CardBackgroundColor}"
-                                    BorderBrush="{DynamicResource BorderColor}"
-                                    BorderThickness="1"
-                                    CornerRadius="8"
-                                    Padding="14,8"
-                                    Margin="0,0,0,6">
-                                <Grid VerticalAlignment="Center">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="158"/>
-                                        <ColumnDefinition Width="158"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0"
-                                               Text="{Binding DisplayName}"
-                                               ToolTip.Tip="{Binding Description}"
-                                               FontSize="14" FontWeight="Medium"
-                                               VerticalAlignment="Center"/>
-                                    <ContentControl Grid.Column="1" Content="{Binding Keyboard}" Margin="6,0"/>
-                                    <ContentControl Grid.Column="2" Content="{Binding Controller}" Margin="6,0"/>
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                <ItemsControl ItemsSource="{Binding Rows}"/>
+
+                <!-- Profiles section: Next/Previous + one row per saved profile. -->
+                <TextBlock Text="PROFILES"
+                           FontSize="11" FontWeight="SemiBold" Opacity="0.5"
+                           Margin="14,10,14,6"/>
+                <ItemsControl ItemsSource="{Binding ProfileRows}"/>
             </StackPanel>
 
             <!-- Recent activity -->

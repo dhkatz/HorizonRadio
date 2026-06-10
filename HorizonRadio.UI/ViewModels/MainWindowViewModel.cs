@@ -48,6 +48,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public MainWindowViewModel(SourceRunner runner,
                                SourceConfigStore store,
                                SourceProfileStore profileStore,
+                               ProfileSwitcher profileSwitcher,
                                MetadataViewModel metadata,
                                ToolRegistry registry,
                                System.Collections.Generic.IEnumerable<IToolInstaller> installers,
@@ -55,13 +56,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                                ControlsViewModel controls)
     {
         Sources = new SourcesViewModel(runner, store, registry);
-        NowPlaying = new NowPlayingViewModel(runner, store, profileStore);
+        NowPlaying = new NowPlayingViewModel(runner, store, profileStore, profileSwitcher);
         Stats = new StatsViewModel(runner);
         Metadata = metadata;
         ToolsTab = new ToolsViewModel(registry, installers);
         Events = events;
         Controls = controls;
-        Profiles = new ProfilesViewModel(profileStore, store, runner, registry);
+        Profiles = new ProfilesViewModel(profileStore, profileSwitcher, registry);
         HookModBanner();
     }
 

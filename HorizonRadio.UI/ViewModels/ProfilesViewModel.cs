@@ -25,8 +25,7 @@ namespace HorizonRadio.UI.ViewModels;
 public sealed partial class ProfilesViewModel : ViewModelBase
 {
     private readonly SourceProfileStore _store;
-    private readonly SourceConfigStore _configStore;
-    private readonly SourceRunner _runner;
+    private readonly ProfileSwitcher _switcher;
     private readonly ToolRegistry? _registry;
 
     public ObservableCollection<ProfileRow> Profiles { get; } = new();
@@ -50,13 +49,11 @@ public sealed partial class ProfilesViewModel : ViewModelBase
 
     public ProfilesViewModel(
         SourceProfileStore store,
-        SourceConfigStore configStore,
-        SourceRunner runner,
+        ProfileSwitcher switcher,
         ToolRegistry? registry = null)
     {
         _store = store;
-        _configStore = configStore;
-        _runner = runner;
+        _switcher = switcher;
         _registry = registry;
 
         foreach (var f in SourceCatalog.All) AvailableSources.Add(f);
@@ -68,8 +65,7 @@ public sealed partial class ProfilesViewModel : ViewModelBase
     /// <summary>Designer-only ctor.</summary>
     public ProfilesViewModel() : this(
         new SourceProfileStore(),
-        new SourceConfigStore(),
-        new SourceRunner(new NullSink()))
+        new ProfileSwitcher(new SourceProfileStore(), new SourceConfigStore(), new SourceRunner(new NullSink())))
     { }
 
     private sealed class NullSink : IPcmSink
@@ -169,18 +165,11 @@ public sealed partial class ProfilesViewModel : ViewModelBase
         var profile = _store.Get(id);
         if (profile is null) return;
 
-        var resolved = ProfileLauncher.Resolve(profile, _configStore);
-        if (resolved is null) { Fail($"'{profile.Name}': its source ({profile.SourceId}) is unavailable."); return; }
-
-        var (factory, values) = resolved.Value;
-        var unset = ProfileLauncher.FirstUnsetEnvironmentField(factory, values);
-        if (unset != null) { Fail($"Set the {unset} in the Sources tab first."); return; }
-
         HasError = false;
         StatusMessage = $"Starting {profile.Name}…";
         try
         {
-            await _runner.StartAsync(factory, values);
+            await _switcher.SwitchToAsync(id);
             StatusMessage = $"Playing: {profile.Name}";
         }
         catch (Exception ex)

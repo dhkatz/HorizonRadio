@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Input;
+using HorizonRadio.Core.Sources.Profiles;
 
 namespace HorizonRadio.UI.ViewModels;
 
@@ -23,9 +24,14 @@ namespace HorizonRadio.UI.ViewModels;
 /// </summary>
 public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
 {
+    private readonly InputBindingStore _store;
     private readonly InputBindingService? _service;
+    private readonly SourceProfileStore? _profiles;
 
+    /// <summary>Playback action rows (Play/Pause, Next/Previous/Restart Track).</summary>
     public ObservableCollection<ControlBindingRow> Rows { get; } = new();
+    /// <summary>Profile-switch rows: Next/Previous Profile + one per saved profile.</summary>
+    public ObservableCollection<ControlBindingRow> ProfileRows { get; } = new();
     public ObservableCollection<string> Activity { get; } = new();
 
     /// <summary>Connected controllers to choose between (gamepad, wheel, …).</summary>
@@ -47,12 +53,22 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
         ("Restart Track", "Restart the current track from the beginning.", new EventAction(EventActionType.RestartTrack)),
     };
 
+    // Profile-switch actions that don't depend on a specific profile.
+    private static readonly IReadOnlyList<(string Name, string Description, EventAction Action)> FixedProfileActions = new[]
+    {
+        ("Next Profile", "Cycle to the next saved profile.", new EventAction(EventActionType.NextProfile)),
+        ("Previous Profile", "Cycle to the previous saved profile.", new EventAction(EventActionType.PreviousProfile)),
+    };
+
     // Design-time / fallback ctor.
     public ControlsViewModel() : this(new InputBindingStore(), null) { }
 
-    public ControlsViewModel(InputBindingStore store, InputBindingService? service)
+    public ControlsViewModel(InputBindingStore store, InputBindingService? service, SourceProfileStore? profiles = null)
     {
+        _store = store;
         _service = service;
+        _profiles = profiles;
+
         foreach (var (name, description, action) in Bindable)
             Rows.Add(new ControlBindingRow(name, description, action, store, service));
 
@@ -61,7 +77,30 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
             service.Triggered += OnTriggered;
             service.ControllerDevicesChanged += OnDevicesChanged;
         }
+        if (_profiles != null) _profiles.Changed += OnProfilesChanged;
         RefreshControllers();
+        RefreshProfileRows();
+    }
+
+    private void OnProfilesChanged() => Dispatcher.UIThread.Post(RefreshProfileRows);
+
+    private void RefreshProfileRows()
+    {
+        foreach (var row in ProfileRows) row.Dispose();
+        ProfileRows.Clear();
+
+        foreach (var (name, description, action) in FixedProfileActions)
+            ProfileRows.Add(new ControlBindingRow(name, description, action, _store, _service));
+
+        if (_profiles != null)
+            foreach (var p in _profiles.All)
+                ProfileRows.Add(new ControlBindingRow(p.Name, "Switch to this profile.",
+                    new EventAction(EventActionType.SwitchProfile, p.Id), _store, _service));
+
+        // Newly-built rows' controller slots default to no device; point them at
+        // the currently-selected controller (the fixed Rows get this via the
+        // SelectedController change, but these are created after that fired).
+        foreach (var row in ProfileRows) row.Controller.SetDevice(SelectedController);
     }
 
     private void OnDevicesChanged() => Dispatcher.UIThread.Post(RefreshControllers);
@@ -91,6 +130,7 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
     partial void OnSelectedControllerChanged(string? value)
     {
         foreach (var row in Rows) row.Controller.SetDevice(value);
+        foreach (var row in ProfileRows) row.Controller.SetDevice(value);
     }
 
     private void OnTriggered(InputBinding binding, EventAction action)
@@ -104,12 +144,15 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
         });
     }
 
-    private static string Describe(EventAction a) => a.Type switch
+    private string Describe(EventAction a) => a.Type switch
     {
         EventActionType.TogglePause => "Play / Pause",
         EventActionType.NextTrack => "Next Track",
         EventActionType.PreviousTrack => "Previous Track",
         EventActionType.RestartTrack => "Restart Track",
+        EventActionType.NextProfile => "Next Profile",
+        EventActionType.PreviousProfile => "Previous Profile",
+        EventActionType.SwitchProfile => _profiles?.Get(a.Param ?? "") is { } p ? $"Profile: {p.Name}" : "Switch Profile",
         _ => a.Type.ToString(),
     };
 
@@ -120,7 +163,9 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
             _service.Triggered -= OnTriggered;
             _service.ControllerDevicesChanged -= OnDevicesChanged;
         }
+        if (_profiles != null) _profiles.Changed -= OnProfilesChanged;
         foreach (var row in Rows) row.Dispose();
+        foreach (var row in ProfileRows) row.Dispose();
     }
 }
 
