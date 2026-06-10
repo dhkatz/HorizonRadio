@@ -61,6 +61,7 @@
         </StackPanel>
     </shadui:Window.RightWindowTitleBarContent>
 
+    <Panel>
     <Grid ColumnDefinitions="Auto,*">
 
         <!-- Expanded sidebar -->
@@ -426,4 +427,9 @@
             </Panel>
         </Grid>
     </Grid>
+
+        <!-- Toast overlay: transient notifications (e.g. output-unavailable
+             errors) float above all workspace content. -->
+        <shadui:ToastHost Manager="{Binding ToastManager}"/>
+    </Panel>
 </shadui:Window>

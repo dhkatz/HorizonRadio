@@ -8,10 +8,12 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Profiles;
+using ShadUI;
 
 namespace HorizonRadio.UI.ViewModels;
 
@@ -61,10 +63,27 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     [ObservableProperty] private bool canShuffle;
     [ObservableProperty] private bool isShuffleEnabled;
 
+    /// <summary>Where the active source's audio goes: the in-game bridge
+    /// (default) or a local speaker for testing without the game. Modeled as a
+    /// single picker so it sits naturally beside the source dropdown — an
+    /// output preference, not a per-source setting.</summary>
+    public ObservableCollection<OutputTarget> OutputTargets { get; } = new();
+    [ObservableProperty] private OutputTarget? selectedOutput;
+
+    /// <summary>Local monitor volume (0..1). Only applies when a local output
+    /// device is selected; the in-game bridge ignores it.</summary>
+    [ObservableProperty] private double previewVolume = 1.0;
+
+    /// <summary>True when a local device (not the in-game bridge) is the chosen
+    /// output — gates the volume slider's enabled state.</summary>
+    public bool IsLocalOutput => SelectedOutput is { IsBridge: false };
+
     private readonly SourceRunner? _runner;
     private readonly SourceConfigStore? _store;
     private readonly SourceProfileStore? _profiles;
     private readonly ProfileSwitcher? _switcher;
+    private readonly PreviewController? _preview;
+    private readonly ToastManager? _toasts;
     private bool _suppressSwitch;
     private bool _suppressProfile;
     // Guards IsShuffleEnabled while RebindTransport seeds it from the persisted
@@ -72,19 +91,45 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     private bool _suppressShuffle;
     private ITransportControls? _transport;
 
+    // Output-availability tracking, edge-triggered: a source playing into an
+    // unreachable output (game closed / dead device) pauses + toasts once. We
+    // deliberately do NOT auto-resume when it's reachable again — the user
+    // presses play, so a burst of audio can't catch them off guard.
+    private bool _outputAvailable = true;
+    private bool _needsOutputPause;
+
     public IReadOnlyList<IAudioSourceFactory> AvailableSources { get; }
 
     public NowPlayingViewModel(SourceRunner runner, SourceConfigStore store,
-        SourceProfileStore profiles, ProfileSwitcher switcher)
+        SourceProfileStore profiles, ProfileSwitcher switcher,
+        PreviewController? preview = null, ToastManager? toasts = null)
     {
         _runner = runner;
         _store = store;
         _profiles = profiles;
         _switcher = switcher;
+        _preview = preview;
+        _toasts = toasts;
         AvailableSources = SourceCatalog.All;
 
         _profiles.Changed += () => Dispatcher.UIThread.Post(RefreshProfiles);
         RefreshProfiles();
+
+        // Build the output picker: the in-game bridge first, then every local
+        // render device. Assign the backing fields directly so seeding the saved
+        // choice doesn't fire the OnChanged handlers back into the controller.
+        if (_preview != null)
+        {
+            OutputTargets.Add(OutputTarget.Bridge);
+            foreach (var d in PreviewController.Devices)
+                OutputTargets.Add(new OutputTarget(false, d.Id, d.Name));
+
+            selectedOutput = _preview.Enabled
+                ? OutputTargets.FirstOrDefault(t => !t.IsBridge && t.DeviceId == _preview.DeviceId)
+                  ?? OutputTargets[0]
+                : OutputTargets[0];
+            previewVolume = _preview.Volume;
+        }
 
         // Keep the dropdown in sync when the runner is driven from the
         // Sources tab (or anywhere else). Suppress the resulting set so
@@ -97,6 +142,18 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
                 SelectedFactory = factory;
                 _suppressSwitch = false;
                 RebindTransport();
+
+                if (factory == null)
+                {
+                    // Source stopped: clear the output-pause state so the next
+                    // start re-evaluates reachability from a clean slate.
+                    _outputAvailable = true;
+                    _needsOutputPause = false;
+                }
+                else
+                {
+                    ReevaluateOutput();
+                }
             });
     }
 
@@ -151,6 +208,102 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         }
     }
 
+    partial void OnSelectedOutputChanged(OutputTarget? value)
+    {
+        OnPropertyChanged(nameof(IsLocalOutput));
+        if (_preview == null || value == null) return;
+        if (value.IsBridge)
+        {
+            _preview.SetEnabled(false);
+        }
+        else
+        {
+            _preview.SetDevice(value.DeviceId);
+            _preview.SetEnabled(true);
+        }
+        // The destination changed under a (possibly running) source — re-check
+        // reachability so we pause/resume + toast as appropriate.
+        ReevaluateOutput();
+    }
+
+    partial void OnPreviewVolumeChanged(double value) => _preview?.SetVolume(value);
+
+    /// <summary>Output-availability guard. When the active output can't be
+    /// played to, pause the source (keeping its metadata + position) and toast.
+    /// We intentionally never auto-resume — the user presses play once they've
+    /// picked a working output, so audio can't suddenly blare. Safe to call
+    /// repeatedly: the toast fires only on the reachable→unreachable edge (so
+    /// reconnect ticks don't spam it), and the pause fires at most once per
+    /// episode (a source's CanPause may only flip true after its first track
+    /// loads, so we keep the intent pending until it can act on it).</summary>
+    private void ReevaluateOutput()
+    {
+        if (_runner?.IsRunning != true) return;
+
+        var nowAvailable = IsCurrentOutputAvailable();
+
+        if (nowAvailable != _outputAvailable)
+        {
+            _outputAvailable = nowAvailable;
+            if (!nowAvailable)
+            {
+                _needsOutputPause = true;
+                ShowOutputUnavailableToast();
+            }
+            else
+            {
+                // Reachable again — stop trying to auto-pause, but don't resume.
+                _needsOutputPause = false;
+            }
+        }
+
+        // Carry out a pending auto-pause once the source can actually pause.
+        // Clearing the flag after means we pause at most once, so a manual
+        // resume while still unreachable isn't overridden.
+        if (_needsOutputPause && _transport is { CanPause: true, IsPaused: false })
+        {
+            _ = SafeTogglePauseAsync();
+            _needsOutputPause = false;
+        }
+    }
+
+    private bool IsCurrentOutputAvailable()
+    {
+        var target = SelectedOutput;
+        if (target == null) return true;          // no picker (designer) — assume reachable
+        return target.IsBridge
+            ? IsConnected                          // bridge reachable iff the game/DLL is connected
+            : _preview?.IsSpeakerActive == true;   // local device opened successfully
+    }
+
+    private void ShowOutputUnavailableToast()
+    {
+        if (_toasts == null) return;
+        if (SelectedOutput is { IsBridge: false } device)
+        {
+            _toasts.CreateToast("Output unavailable")
+                .WithContent($"Couldn't play to “{device.Name}”. Playback paused — pick another output device.")
+                .WithDelay(6)
+                .DismissOnClick()
+                .ShowError();
+        }
+        else
+        {
+            _toasts.CreateToast("Forza Horizon 6 isn't running")
+                .WithContent("Playback paused. Launch the game with the mod installed, or choose a local output device to test.")
+                .WithDelay(6)
+                .DismissOnClick()
+                .ShowError();
+        }
+    }
+
+    private async Task SafeTogglePauseAsync()
+    {
+        if (_transport == null) return;
+        try { await _transport.TogglePauseAsync(); }
+        catch (Exception ex) { Debug.WriteLine($"[hzn-now-vm] output-pause: {ex.Message}"); }
+    }
+
     private void OnPausedChanged(bool paused) =>
         Dispatcher.UIThread.Post(() => IsPaused = paused);
 
@@ -158,6 +311,9 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     private async Task TogglePauseAsync()
     {
         if (_transport == null) return;
+        // A manual play/pause means the user is in control — cancel any pending
+        // output auto-pause so we don't override their choice.
+        _needsOutputPause = false;
         try { await _transport.TogglePauseAsync(); }
         catch (Exception ex) { Debug.WriteLine($"[hzn-now-vm] pause: {ex.Message}"); }
     }
@@ -280,14 +436,23 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         // Capabilities may have only just become known (e.g. YouTube finished
         // resolving its playlist), so re-evaluate them as tracks come in.
         RefreshCapabilities();
+
+        // Now that CanPause may have flipped true, enforce the output-pause if
+        // the destination is unreachable (the start-time check can run before a
+        // source knows it can pause).
+        ReevaluateOutput();
     }
 
     public void SetConnectionState(bool connected)
     {
         IsConnected = connected;
-        if (!connected)
+
+        // Only fall back to the placeholder when nothing is actually playing. A
+        // local source playing to a speaker keeps its metadata even while the
+        // game (and its IPC pipe) is disconnected — otherwise the periodic
+        // reconnect attempts would wipe Now Playing every few seconds.
+        if (!connected && _runner?.IsRunning != true)
         {
-            // Reset to placeholder so stale data doesn't linger after FH6 closes.
             Title = "Nothing playing";
             Artist = "Launch Forza Horizon 6 with the mod installed";
             Album = null;
@@ -295,6 +460,11 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
             SourceId = "";
             AlbumArt = null;
         }
+
+        // The bridge's reachability tracks the game connection, so a source
+        // playing to the bridge pauses when the game quits and resumes when it
+        // returns.
+        ReevaluateOutput();
     }
 
     private static Bitmap? DecodeArt(byte[]? bytes)

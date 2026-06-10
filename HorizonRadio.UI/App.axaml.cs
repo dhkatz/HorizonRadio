@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Input;
 using HorizonRadio.Core.Ipc;
@@ -24,6 +25,7 @@ public partial class App : Application
 {
     private IpcClient? _ipc;
     private PcmPipeClient? _pcm;
+    private PreviewController? _preview;
     private SourceRunner? _runner;
     private SourceConfigStore? _store;
     private EnrichmentService? _enricher;
@@ -45,9 +47,12 @@ public partial class App : Application
 
             _pcm = new PcmPipeClient();
             _pcm.Start();
-            var sink = new PcmPipeSink(_pcm);
+            // Tee the pipeline so the active source can play to the game pipe
+            // and (optionally) to local speakers for in-app test playback.
+            var tee = new TeePcmSink(new PcmPipeSink(_pcm));
+            _preview = new PreviewController(tee, _store);
 
-            _runner = new SourceRunner(sink) { Shuffle = _store.Shuffle };
+            _runner = new SourceRunner(tee) { Shuffle = _store.Shuffle };
 
             _metaStore = MetadataConfigStore.LoadFromDisk();
             var cache = new MetadataCache();
@@ -89,7 +94,8 @@ public partial class App : Application
                 controlsStore, dispatcher);
             var controlsVm = new ControlsViewModel(controlsStore, _inputService, profileStore);
 
-            var vm = new MainWindowViewModel(_runner, _store, profileStore, profileSwitcher, metaVm, toolRegistry, installers, eventsVm, controlsVm);
+            var toasts = new ShadUI.ToastManager();
+            var vm = new MainWindowViewModel(_runner, _store, profileStore, profileSwitcher, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, toasts);
             desktop.MainWindow = new MainWindow { DataContext = vm };
 
             // Station targeting: push the chosen station to the DLL on change
@@ -125,6 +131,7 @@ public partial class App : Application
                 _eventExecutor?.Dispose();
                 _inputService?.Dispose();
                 profileSwitcher.Dispose();
+                _preview?.Dispose();
                 _telemetry?.Dispose();
                 if (_enricher != null) await _enricher.DisposeAsync();
                 if (_runner != null) await _runner.DisposeAsync();
