@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
@@ -9,6 +11,7 @@ using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Core.Sources.Profiles;
 
 namespace HorizonRadio.UI.ViewModels;
 
@@ -44,6 +47,12 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     [ObservableProperty] private IAudioSourceFactory? selectedFactory;
     [ObservableProperty] private string? switchStatus;
 
+    /// <summary>Saved profiles for the quick-switch dropdown, kept in sync with
+    /// the Profiles tab via the shared store's Changed event.</summary>
+    public ObservableCollection<SourceProfile> Profiles { get; } = new();
+    [ObservableProperty] private SourceProfile? selectedProfile;
+    public bool HasProfiles => Profiles.Count > 0;
+
     [ObservableProperty] private bool canPause;
     [ObservableProperty] private bool canSkipNext;
     [ObservableProperty] private bool canSkipPrevious;
@@ -54,7 +63,9 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
 
     private readonly SourceRunner? _runner;
     private readonly SourceConfigStore? _store;
+    private readonly SourceProfileStore? _profiles;
     private bool _suppressSwitch;
+    private bool _suppressProfile;
     // Guards IsShuffleEnabled while RebindTransport seeds it from the persisted
     // preference, so syncing the toggle doesn't re-fire a write/apply.
     private bool _suppressShuffle;
@@ -62,11 +73,15 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
 
     public IReadOnlyList<IAudioSourceFactory> AvailableSources { get; }
 
-    public NowPlayingViewModel(SourceRunner runner, SourceConfigStore store)
+    public NowPlayingViewModel(SourceRunner runner, SourceConfigStore store, SourceProfileStore profiles)
     {
         _runner = runner;
         _store = store;
+        _profiles = profiles;
         AvailableSources = SourceCatalog.All;
+
+        _profiles.Changed += () => Dispatcher.UIThread.Post(RefreshProfiles);
+        RefreshProfiles();
 
         // Keep the dropdown in sync when the runner is driven from the
         // Sources tab (or anywhere else). Suppress the resulting set so
@@ -190,6 +205,66 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         {
             Debug.WriteLine($"[hzn-now-vm] switch failed: {ex.Message}");
             SwitchStatus = $"{factory.DisplayName}: {ex.Message}";
+        }
+    }
+
+    // In-place sync (add/remove by id) rather than Clear()+Add, so editing one
+    // profile elsewhere doesn't tear down and rebuild the whole bound dropdown.
+    private void RefreshProfiles()
+    {
+        if (_profiles == null) return;
+        var desired = _profiles.All;
+
+        for (int i = Profiles.Count - 1; i >= 0; i--)
+            if (!desired.Any(p => p.Id == Profiles[i].Id)) Profiles.RemoveAt(i);
+
+        foreach (var p in desired)
+        {
+            var idx = -1;
+            for (int i = 0; i < Profiles.Count; i++)
+                if (Profiles[i].Id == p.Id) { idx = i; break; }
+            if (idx < 0) Profiles.Add(p);
+            else if (!Equals(Profiles[idx], p)) Profiles[idx] = p; // name/content changed
+        }
+        OnPropertyChanged(nameof(HasProfiles));
+    }
+
+    // The dropdown is a "jump to profile" launcher, not a mirror of what's
+    // playing: on pick we reset the selection to null (so re-picking the same
+    // profile re-fires) and launch the captured choice. This avoids the
+    // dropdown going stale when the source is switched elsewhere.
+    partial void OnSelectedProfileChanged(SourceProfile? value)
+    {
+        if (_suppressProfile || _runner == null || _store == null || value == null) return;
+
+        var profile = value;
+        _suppressProfile = true;
+        SelectedProfile = null;
+        _suppressProfile = false;
+        _ = SwitchProfileAsync(profile);
+    }
+
+    private async Task SwitchProfileAsync(SourceProfile profile)
+    {
+        if (_runner == null || _store == null) return;
+
+        var resolved = ProfileLauncher.Resolve(profile, _store);
+        if (resolved == null) { SwitchStatus = $"{profile.Name}: source unavailable"; return; }
+
+        var (factory, values) = resolved.Value;
+        var unset = ProfileLauncher.FirstUnsetEnvironmentField(factory, values);
+        if (unset != null) { SwitchStatus = $"{profile.Name}: set the {unset} in the Sources tab first."; return; }
+
+        SwitchStatus = $"Starting {profile.Name}...";
+        try
+        {
+            await _runner.StartAsync(factory, values);
+            SwitchStatus = null;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[hzn-now-vm] profile switch failed: {ex.Message}");
+            SwitchStatus = $"{profile.Name}: {ex.Message}";
         }
     }
 

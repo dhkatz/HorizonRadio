@@ -33,12 +33,16 @@ public sealed class SpotifySourceFactory : IAudioSourceFactory
 
         Schema = new ConfigField[]
         {
+            // librespot.exe and the cache dir are machine/environment config —
+            // flagged so source profiles don't freeze them; they come from the
+            // global per-source config at launch.
             new FileField(
                 Key:             KeyExecutable,
                 Label:           "librespot.exe path",
                 ExtensionFilter: ExeExtensions,
                 Default:         defaultExe,
-                Description:     "Full path to librespot.exe. Bundled copy auto-detected if it lives next to the UI."),
+                Description:     "Full path to librespot.exe. Bundled copy auto-detected if it lives next to the UI.")
+                { IsEnvironment = true },
 
             new TextField(
                 Key:         KeyDeviceName,
@@ -51,7 +55,8 @@ public sealed class SpotifySourceFactory : IAudioSourceFactory
                 Key:         KeyCacheDir,
                 Label:       "Cache directory",
                 Default:     defaultCache,
-                Description: "librespot's OAuth + audio cache. Login is cached here so re-handshake isn't required on restart."),
+                Description: "librespot's OAuth + audio cache. Login is cached here so re-handshake isn't required on restart.")
+                { IsEnvironment = true },
 
             new EnumField(
                 Key:         KeyBitrate,

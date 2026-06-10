@@ -9,6 +9,7 @@ using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Core.Sources.Profiles;
 using HorizonRadio.UI.Tools;
 using HorizonRadio.UI.ViewModels;
 using HorizonRadio.UI.Views;
@@ -83,7 +84,11 @@ public partial class App : Application
                 controlsStore, dispatcher);
             var controlsVm = new ControlsViewModel(controlsStore, _inputService);
 
-            var vm = new MainWindowViewModel(_runner, _store, metaVm, toolRegistry, installers, eventsVm, controlsVm);
+            // Saved source profiles (shared by the Profiles tab and the Now
+            // Playing quick-switch).
+            var profileStore = SourceProfileStore.LoadFromDisk();
+
+            var vm = new MainWindowViewModel(_runner, _store, profileStore, metaVm, toolRegistry, installers, eventsVm, controlsVm);
             desktop.MainWindow = new MainWindow { DataContext = vm };
 
             // Station targeting: push the chosen station to the DLL on change

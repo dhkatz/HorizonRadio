@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             xmlns:views="using:HorizonRadio.UI.Views"
              xmlns:shad="clr-namespace:ShadUI;assembly=ShadUI"
              mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="480"
              x:Class="HorizonRadio.UI.Views.SourcesView"
@@ -11,136 +12,6 @@
     <Design.DataContext>
         <vm:SourcesViewModel />
     </Design.DataContext>
-
-    <UserControl.DataTemplates>
-        <DataTemplate DataType="{x:Type vm:DirectoryFieldViewModel}">
-            <StackPanel Spacing="4">
-                <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="Medium"/>
-                <Grid ColumnDefinitions="*,Auto">
-                    <TextBox Grid.Column="0"
-                             Text="{Binding Path, Mode=TwoWay}"
-                             PlaceholderText="Pick a folder..." />
-                    <Button Grid.Column="1"
-                            Classes="Outline"
-                            Content="Browse"
-                            Margin="6,0,0,0"
-                            Click="BrowseDirectory_Click"
-                            Tag="{Binding}"/>
-                </Grid>
-                <TextBlock Text="{Binding Description}"
-                           FontSize="11" Opacity="0.55"
-                           TextWrapping="Wrap"
-                           IsVisible="{Binding Description, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-            </StackPanel>
-        </DataTemplate>
-
-        <DataTemplate DataType="{x:Type vm:FileFieldViewModel}">
-            <StackPanel Spacing="4">
-                <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="Medium"/>
-                <Grid ColumnDefinitions="*,Auto">
-                    <TextBox Grid.Column="0"
-                             Text="{Binding Path, Mode=TwoWay}"
-                             PlaceholderText="Pick a file..." />
-                    <Button Grid.Column="1"
-                            Classes="Outline"
-                            Content="Browse"
-                            Margin="6,0,0,0"
-                            Click="BrowseFile_Click"
-                            Tag="{Binding}"/>
-                </Grid>
-                <TextBlock Text="{Binding Description}"
-                           FontSize="11" Opacity="0.55"
-                           TextWrapping="Wrap"
-                           IsVisible="{Binding Description, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-            </StackPanel>
-        </DataTemplate>
-
-        <DataTemplate DataType="{x:Type vm:ToolFieldViewModel}">
-            <StackPanel Spacing="4">
-                <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="Medium"/>
-
-                <ComboBox ItemsSource="{Binding Available}"
-                          HorizontalAlignment="Stretch"
-                          SelectionChanged="ToolPick_SelectionChanged"
-                          Tag="{Binding}"
-                          IsVisible="{Binding HasAvailable}">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Border Background="{DynamicResource MutedColor}"
-                                        CornerRadius="4"
-                                        Padding="6,1">
-                                    <TextBlock Text="Installed"
-                                               FontSize="10"
-                                               Foreground="{DynamicResource MutedForegroundColor}"/>
-                                </Border>
-                                <TextBlock Text="{Binding Path}" FontSize="12"/>
-                            </StackPanel>
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-
-                <Grid ColumnDefinitions="*,Auto">
-                    <TextBox Grid.Column="0"
-                             Text="{Binding Path, Mode=TwoWay}"
-                             PlaceholderText="Or paste a custom path..." />
-                    <Button Grid.Column="1"
-                            Classes="Outline"
-                            Content="Browse"
-                            Margin="6,0,0,0"
-                            Click="BrowseTool_Click"
-                            Tag="{Binding}"/>
-                </Grid>
-
-                <TextBlock Text="{Binding Description}"
-                           FontSize="11" Opacity="0.55"
-                           TextWrapping="Wrap"
-                           IsVisible="{Binding Description, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-                <TextBlock Text="Not installed. Open the Tools tab to download."
-                           FontSize="11" Opacity="0.55"
-                           IsVisible="{Binding !HasAvailable}"/>
-            </StackPanel>
-        </DataTemplate>
-
-        <DataTemplate DataType="{x:Type vm:TextFieldViewModel}">
-            <StackPanel Spacing="4">
-                <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="Medium"/>
-                <TextBox Text="{Binding Text, Mode=TwoWay}"
-                         PlaceholderText="{Binding Placeholder}"/>
-                <TextBlock Text="{Binding Description}"
-                           FontSize="11" Opacity="0.55"
-                           TextWrapping="Wrap"
-                           IsVisible="{Binding Description, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-            </StackPanel>
-        </DataTemplate>
-
-        <DataTemplate DataType="{x:Type vm:BoolFieldViewModel}">
-            <Grid ColumnDefinitions="*,Auto">
-                <StackPanel Grid.Column="0" Spacing="2">
-                    <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="Medium"/>
-                    <TextBlock Text="{Binding Description}"
-                               FontSize="11" Opacity="0.55"
-                               TextWrapping="Wrap"
-                               IsVisible="{Binding Description, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-                </StackPanel>
-                <ToggleSwitch Grid.Column="1"
-                              IsChecked="{Binding IsOn, Mode=TwoWay}"/>
-            </Grid>
-        </DataTemplate>
-
-        <DataTemplate DataType="{x:Type vm:EnumFieldViewModel}">
-            <StackPanel Spacing="4">
-                <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="Medium"/>
-                <ComboBox ItemsSource="{Binding Options}"
-                          SelectedItem="{Binding Selected, Mode=TwoWay}"
-                          HorizontalAlignment="Stretch"/>
-                <TextBlock Text="{Binding Description}"
-                           FontSize="11" Opacity="0.55"
-                           TextWrapping="Wrap"
-                           IsVisible="{Binding Description, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-            </StackPanel>
-        </DataTemplate>
-    </UserControl.DataTemplates>
 
     <ScrollViewer>
         <Grid Margin="24" RowDefinitions="Auto,Auto,*,Auto,Auto">
@@ -182,11 +53,7 @@
             <Border Grid.Row="2" Classes="Card" Padding="16" Margin="0,0,0,16">
                 <StackPanel Spacing="14">
                     <TextBlock Text="Configuration" FontSize="12" FontWeight="Medium" Opacity="0.7"/>
-                    <ItemsControl ItemsSource="{Binding CurrentSchema}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate><StackPanel Spacing="14"/></ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
+                    <views:ConfigFormView Fields="{Binding CurrentSchema}"/>
                     <TextBlock Text="(This source has no settings.)"
                                FontSize="11" Opacity="0.5" FontStyle="Italic"
                                IsVisible="{Binding HasNoSchema}"/>
