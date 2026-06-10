@@ -17,6 +17,13 @@ public abstract record ConfigField(string Key, string Label, string? Description
     /// <summary>Default value to seed the UI control with when no
     /// persisted value exists yet. May be null.</summary>
     public abstract object? DefaultValue { get; }
+
+    /// <summary>Marks a field as machine/environment config (a tool path, a
+    /// local cache dir) rather than per-preset content. Source profiles capture
+    /// only non-environment fields; environment values stay in the global
+    /// per-source config so they aren't frozen per profile. <see cref="ToolField"/>
+    /// is always environment; other field types opt in via this flag.</summary>
+    public bool IsEnvironment { get; init; }
 }
 
 /// <summary>Filesystem directory. UI renders a textbox + Browse button
