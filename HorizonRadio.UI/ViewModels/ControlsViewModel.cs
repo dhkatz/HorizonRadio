@@ -72,6 +72,11 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
         foreach (var (name, description, action) in Bindable)
             Rows.Add(new ControlBindingRow(name, description, action, store, service));
 
+        // Fixed profile-switch rows live for the VM's lifetime; the per-profile
+        // rows below them are synced in place as profiles change.
+        foreach (var (name, description, action) in FixedProfileActions)
+            ProfileRows.Add(new ControlBindingRow(name, description, action, store, service));
+
         if (service != null)
         {
             service.Triggered += OnTriggered;
@@ -84,23 +89,48 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
 
     private void OnProfilesChanged() => Dispatcher.UIThread.Post(RefreshProfileRows);
 
+    // In-place sync of the per-profile rows: only add new profiles, drop deleted
+    // ones, and replace renamed ones. Untouched rows stay — preserving any
+    // in-flight binding capture on an unrelated row (a full rebuild would cancel
+    // it). The fixed Next/Previous rows are never touched here.
     private void RefreshProfileRows()
     {
-        foreach (var row in ProfileRows) row.Dispose();
-        ProfileRows.Clear();
+        if (_profiles == null) return;
+        var profiles = _profiles.All;
+        var reaped = false;
 
-        foreach (var (name, description, action) in FixedProfileActions)
-            ProfileRows.Add(new ControlBindingRow(name, description, action, _store, _service));
+        for (var i = ProfileRows.Count - 1; i >= 0; i--)
+        {
+            var row = ProfileRows[i];
+            if (row.Action.Type != EventActionType.SwitchProfile) continue;
 
-        if (_profiles != null)
-            foreach (var p in _profiles.All)
-                ProfileRows.Add(new ControlBindingRow(p.Name, "Switch to this profile.",
-                    new EventAction(EventActionType.SwitchProfile, p.Id), _store, _service));
+            var p = profiles.FirstOrDefault(x => x.Id == row.Action.Param);
+            if (p == null)
+            {
+                // Profile deleted: drop its row and reap any orphaned bindings to it.
+                reaped |= _store.ClearBindingsForAction(row.Action);
+                row.Dispose();
+                ProfileRows.RemoveAt(i);
+            }
+            else if (p.Name != row.DisplayName)
+            {
+                // Renamed: drop and re-add below (binding keys on id, so it survives).
+                row.Dispose();
+                ProfileRows.RemoveAt(i);
+            }
+        }
 
-        // Newly-built rows' controller slots default to no device; point them at
-        // the currently-selected controller (the fixed Rows get this via the
-        // SelectedController change, but these are created after that fired).
-        foreach (var row in ProfileRows) row.Controller.SetDevice(SelectedController);
+        foreach (var p in profiles)
+        {
+            if (ProfileRows.Any(r => r.Action.Type == EventActionType.SwitchProfile && r.Action.Param == p.Id))
+                continue;
+            var row = new ControlBindingRow(p.Name, "Switch to this profile.",
+                new EventAction(EventActionType.SwitchProfile, p.Id), _store, _service);
+            row.Controller.SetDevice(SelectedController);
+            ProfileRows.Add(row);
+        }
+
+        if (reaped) _store.SaveToDisk();
     }
 
     private void OnDevicesChanged() => Dispatcher.UIThread.Post(RefreshControllers);
@@ -175,6 +205,7 @@ public sealed class ControlBindingRow : IDisposable
 {
     public string DisplayName { get; }
     public string Description { get; }
+    public EventAction Action { get; }
     public BindingSlot Keyboard { get; }
     public BindingSlot Controller { get; }
 
@@ -183,6 +214,7 @@ public sealed class ControlBindingRow : IDisposable
     {
         DisplayName = name;
         Description = description;
+        Action = action;
         Keyboard = new BindingSlot(InputCategory.KeyboardMouse, action, store, service);
         Controller = new BindingSlot(InputCategory.Controller, action, store, service);
     }

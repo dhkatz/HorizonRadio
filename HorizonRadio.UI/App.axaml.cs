@@ -124,6 +124,7 @@ public partial class App : Application
             {
                 _eventExecutor?.Dispose();
                 _inputService?.Dispose();
+                profileSwitcher.Dispose();
                 _telemetry?.Dispose();
                 if (_enricher != null) await _enricher.DisposeAsync();
                 if (_runner != null) await _runner.DisposeAsync();
