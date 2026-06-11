@@ -165,12 +165,43 @@
                     </ComboBox.ItemTemplate>
                 </ComboBox>
             </StackPanel>
+            <!-- Output picker: where the active source plays. Defaults to the
+                 in-game bridge; pick a local device to test without the game. -->
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center"
+                        IsVisible="{Binding SelectedOutput, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <TextBlock Text="Output:" VerticalAlignment="Center" Opacity="0.6" />
+                <ComboBox ItemsSource="{Binding OutputTargets}"
+                          SelectedItem="{Binding SelectedOutput, Mode=TwoWay}"
+                          MinWidth="220">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Name}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+            </StackPanel>
             <TextBlock Text="{Binding SwitchStatus}"
                        FontSize="11"
                        Opacity="0.7"
                        HorizontalAlignment="Center"
                        TextWrapping="Wrap"
                        IsVisible="{Binding SwitchStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+        </StackPanel>
+
+        <!-- Local monitor volume, parked in the lower-right corner so it
+             doesn't crowd the centered controls. Applies to local-device
+             output only (the bridge level is the game's own). A future static
+             bottom bar will absorb this alongside transport + sources. -->
+        <StackPanel Grid.Row="0" Grid.RowSpan="3"
+                    Orientation="Horizontal" Spacing="6"
+                    HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                    IsEnabled="{Binding IsLocalOutput}"
+                    ToolTip.Tip="Local monitor volume">
+            <material:MaterialIcon Kind="VolumeHigh" Width="16" Height="16"
+                                   VerticalAlignment="Center" Opacity="0.6"/>
+            <Slider Width="120" Minimum="0" Maximum="1"
+                    Value="{Binding PreviewVolume, Mode=TwoWay}"
+                    VerticalAlignment="Center"/>
         </StackPanel>
     </Grid>
 </UserControl>

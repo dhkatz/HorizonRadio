@@ -7,6 +7,7 @@ using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Profiles;
 using HorizonRadio.UI.Tools;
+using ShadUI;
 
 namespace HorizonRadio.UI.ViewModels;
 
@@ -32,8 +33,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public ProfilesViewModel Profiles { get; }
     public ConsoleViewModel Console { get; } = new();
 
+    /// <summary>Toast host bound in <c>MainWindow.axaml</c>; view models raise
+    /// transient notifications through it (e.g. output-unavailable errors).</summary>
+    public ToastManager ToastManager { get; }
+
     public MainWindowViewModel()
     {
+        ToastManager = new ToastManager();
         Sources = new SourcesViewModel();
         NowPlaying = new NowPlayingViewModel();
         Stats = new StatsViewModel();
@@ -53,10 +59,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                                ToolRegistry registry,
                                System.Collections.Generic.IEnumerable<IToolInstaller> installers,
                                EventsViewModel events,
-                               ControlsViewModel controls)
+                               ControlsViewModel controls,
+                               Core.Audio.PreviewController preview,
+                               ToastManager toasts)
     {
+        ToastManager = toasts;
         Sources = new SourcesViewModel(runner, store, registry);
-        NowPlaying = new NowPlayingViewModel(runner, store, profileStore, profileSwitcher);
+        NowPlaying = new NowPlayingViewModel(runner, store, profileStore, profileSwitcher, preview, toasts);
         Stats = new StatsViewModel(runner);
         Metadata = metadata;
         ToolsTab = new ToolsViewModel(registry, installers);

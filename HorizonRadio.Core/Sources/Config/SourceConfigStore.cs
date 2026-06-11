@@ -38,6 +38,17 @@ public sealed class SourceConfigStore
     /// active). Persisted so the choice survives restarts.</summary>
     public bool Shuffle { get; set; }
 
+    /// <summary>Whether to also play the active source's audio out of a local
+    /// speaker ("test playback"), independent of the in-game pipe.</summary>
+    public bool PreviewEnabled { get; set; }
+
+    /// <summary>Render endpoint id for preview playback (null = system
+    /// default). Matches <c>MMDevice.ID</c>.</summary>
+    public string? PreviewDeviceId { get; set; }
+
+    /// <summary>Preview playback volume in [0, 1].</summary>
+    public double PreviewVolume { get; set; } = 1.0;
+
     private readonly Dictionary<string, Dictionary<string, object?>> _perSource = new();
 
     private static string DefaultPath =>
@@ -90,6 +101,16 @@ public sealed class SourceConfigStore
                 (shuf.ValueKind == JsonValueKind.True || shuf.ValueKind == JsonValueKind.False))
                 store.Shuffle = shuf.GetBoolean();
 
+            if (root.TryGetProperty("previewEnabled", out var pe) &&
+                (pe.ValueKind == JsonValueKind.True || pe.ValueKind == JsonValueKind.False))
+                store.PreviewEnabled = pe.GetBoolean();
+
+            if (root.TryGetProperty("previewDeviceId", out var pd) && pd.ValueKind == JsonValueKind.String)
+                store.PreviewDeviceId = pd.GetString();
+
+            if (root.TryGetProperty("previewVolume", out var pv) && pv.ValueKind == JsonValueKind.Number)
+                store.PreviewVolume = pv.GetDouble();
+
             if (root.TryGetProperty("perSource", out var per) && per.ValueKind == JsonValueKind.Object)
             {
                 foreach (var src in per.EnumerateObject())
@@ -123,6 +144,9 @@ public sealed class SourceConfigStore
             if (LastSelectedId != null) writer.WriteString("lastSelected", LastSelectedId);
             if (TargetStation != null) writer.WriteString("targetStation", TargetStation);
             writer.WriteBoolean("shuffle", Shuffle);
+            writer.WriteBoolean("previewEnabled", PreviewEnabled);
+            if (PreviewDeviceId != null) writer.WriteString("previewDeviceId", PreviewDeviceId);
+            writer.WriteNumber("previewVolume", PreviewVolume);
             writer.WriteStartObject("perSource");
             foreach (var (sourceId, bag) in _perSource)
             {
