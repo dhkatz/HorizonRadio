@@ -51,6 +51,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # We intentionally branch on gh's exit code (release may not
+          # exist yet); stop pwsh 7.4+ from throwing on native nonzero.
+          $PSNativeCommandUseErrorActionPreference = $false
           $tag  = 'tools'
           $name = '${{ steps.asset.outputs.name }}'
 

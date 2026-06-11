@@ -122,6 +122,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # The delete is expected to fail on the very first run (no prior
+          # nightly); stop pwsh 7.4+ from throwing on that native nonzero.
+          $PSNativeCommandUseErrorActionPreference = $false
           gh release delete nightly --yes --cleanup-tag 2>$null
           $notes = @"
           Rolling nightly build of ``main``. Ephemeral — replaced by the next nightly.
