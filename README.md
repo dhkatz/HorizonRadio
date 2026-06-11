@@ -22,7 +22,6 @@ Play your own music through Forza Horizon 6's in-game radio.
 
 In FH6's audio settings:
 - **Radio DJ: Off**
-- **Streamer Mode: On**
 
 ## Installation
 
@@ -47,11 +46,6 @@ cmake --preset windows-x64
 cmake --build --preset windows-x64-release
 dotnet build HorizonRadio.UI.slnx
 ```
-
-`librespot.exe` is no longer built from source locally — CI builds it
-and attaches it as a standalone asset on every release. The UI fetches
-it on demand. To bump the rev, edit the `Pin` step in
-`.github/actions/build-librespot/action.yml`.
 
 To produce a release zip locally:
 
