@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- C++ side now builds with CMake (`CMakeLists.txt` + `CMakePresets.json`)
+  instead of MSBuild `.vcxproj` files. The `windows-x64` preset uses
+  Ninja Multi-Config so a future clang-cl / cross-compiler swap is a
+  compiler change, not a generator change. `HorizonRadio.slnx` is
+  removed; the C# UI continues to build via `HorizonRadio.UI.slnx`.
+- Dropped vcpkg entirely. External C++ deps (currently just doctest)
+  are now fetched via CMake's `FetchContent` at configure time, so
+  the `vcpkg/` submodule, `vcpkg.json`, and the bootstrap step in CI
+  are all gone.
+- `version.dll` can now be cross-compiled from Linux or macOS using
+  clang + mingw-w64 (see the `linux-cross-x64` / `macos-cross-x64`
+  presets and `cmake/toolchain-clang-mingw.cmake`). The 17 system
+  `version.dll` export forwarders moved out of `dllmain.cpp`'s
+  `#pragma comment(linker)` block and into plain dllexport
+  trampolines in `src/version_proxy.cpp`, which both MSVC and
+  clang+MinGW accept.
+- librespot is no longer compiled in-tree on every C++ build. A
+  dedicated GitHub Actions composite action
+  (`.github/actions/build-librespot`) builds it once per pinned rev
+  and caches the result, and every GitHub release now carries a
+  standalone `librespot.exe` asset.
+
 ## [0.2.0] - 2026-06-01
 
 ### Added

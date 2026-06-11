@@ -1,0 +1,110 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "windows-x64",
+      "displayName": "Windows x64 (Ninja Multi-Config, MSVC)",
+      "description": "Default Windows preset. Uses MSVC via Ninja Multi-Config so a future clang-cl/cross swap is a compiler change, not a generator change.",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/build/cmake-windows-x64",
+      "architecture": { "value": "x64", "strategy": "external" },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "windows-x64-analysis",
+      "inherits": "windows-x64",
+      "displayName": "Windows x64 + clang-tidy",
+      "description": "Same as windows-x64 but runs clang-tidy on every TU. Roughly triples compile time; CI uses this for the analysis job.",
+      "binaryDir": "${sourceDir}/build/cmake-windows-x64-analysis",
+      "cacheVariables": {
+        "HORIZON_RUN_CLANG_TIDY": "ON"
+      }
+    },
+    {
+      "name": "cross-clang-mingw-x64",
+      "hidden": true,
+      "description": "Shared base for cross-compile presets — clang + mingw-w64 sysroot. Inherited by per-host variants so cache keys (and CI matrices) can distinguish Linux from macOS builds.",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/build/cmake-${presetName}",
+      "toolchainFile": "${sourceDir}/cmake/toolchain-clang-mingw.cmake"
+    },
+    {
+      "name": "linux-cross-x64",
+      "inherits": "cross-clang-mingw-x64",
+      "displayName": "Linux → Windows x64 (clang + mingw-w64)",
+      "description": "Cross-compile version.dll from Linux. Requires `apt install clang lld mingw-w64`.",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "macos-cross-x64",
+      "inherits": "cross-clang-mingw-x64",
+      "displayName": "macOS → Windows x64 (clang + mingw-w64)",
+      "description": "Cross-compile version.dll from macOS. Requires `brew install llvm mingw-w64`.",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-x64-debug",
+      "configurePreset": "windows-x64",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-x64-release",
+      "configurePreset": "windows-x64",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-x64-analysis-debug",
+      "configurePreset": "windows-x64-analysis",
+      "configuration": "Debug"
+    },
+    {
+      "name": "linux-cross-x64-debug",
+      "configurePreset": "linux-cross-x64",
+      "configuration": "Debug"
+    },
+    {
+      "name": "linux-cross-x64-release",
+      "configurePreset": "linux-cross-x64",
+      "configuration": "Release"
+    },
+    {
+      "name": "macos-cross-x64-debug",
+      "configurePreset": "macos-cross-x64",
+      "configuration": "Debug"
+    },
+    {
+      "name": "macos-cross-x64-release",
+      "configurePreset": "macos-cross-x64",
+      "configuration": "Release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-x64-debug",
+      "configurePreset": "windows-x64",
+      "configuration": "Debug",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "windows-x64-release",
+      "configurePreset": "windows-x64",
+      "configuration": "Release",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}

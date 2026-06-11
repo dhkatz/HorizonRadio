@@ -65,31 +65,22 @@
       single output dir.
 
       Path notes:
-        - librespot.exe lives in build/Librespot/bin/ regardless of
-          configuration — cargo install always emits Release.
+        - librespot.exe lives in build/librespot/. CI builds it via
+          .github/actions/build-librespot and attaches it as a
+          standalone release asset; local devs either drop a copy
+          there manually or run cargo install per AGENTS.md.
         - version.dll has separate Debug / Release build outputs; we
           always copy from Release because Debug version.dll isn't
-          useful (FH6 doesn't reload a CRT-debug-DLL).
+          useful (FH6 doesn't reload a CRT-debug-DLL). CMake produces
+          this from CMakeLists.txt at the repo root.
 
       Each item is gated on Exists() so a fresh checkout that hasn't
-      built the C++ side yet still produces a buildable UI — the user
-      just won't get auto-discovery / a bundled DLL until they run the
-      C++ build (HorizonRadio.slnx) at least once.
-
-      ProjectReference to the vcxprojs is intentionally NOT used: a
-      csproj→vcxproj reference re-triggers the MSB4236 SDK resolver
-      mess that the dual-slnx setup exists to dodge.
-    -->
-    <!--
-      Resolve build-output paths to absolute paths up front so both
-      the Condition's Exists() check and Include path see the same
-      normalized string. The relative `..\build\...` form worked
-      from `dotnet build` (cwd happens to be the project) but
-      silently dropped these from `dotnet publish` runs invoked
-      from the repo root.
+      built the C++ side or fetched librespot still produces a buildable
+      UI — the user just won't get auto-discovery / a bundled DLL until
+      both are present.
     -->
     <PropertyGroup>
-      <_LibrespotExePath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\build\Librespot\bin\librespot.exe'))</_LibrespotExePath>
+      <_LibrespotExePath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\build\librespot\librespot.exe'))</_LibrespotExePath>
       <_VersionDllPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\build\Release\version.dll'))</_VersionDllPath>
     </PropertyGroup>
 

@@ -3,15 +3,6 @@ build/
 bin/
 obj/
 
-# vcpkg's per-build install dir (manifest mode places deps here).
-# The vcpkg/ submodule itself stays tracked via .gitmodules.
-vcpkg_installed/
-
-# Cargo build outputs from the Librespot project. The final
-# librespot.exe gets copied into build/{Configuration}/ which is
-# already ignored above; this entry covers the intermediate
-# `cargo install --root` cache.
-build/Librespot/
 
 # Local dev helper: builds Release + copies version.dll into the game
 # folder. Personal (machine-specific game path), not for the repo.

@@ -11,21 +11,16 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
 
-    env:
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-binary-cache
-
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
-      - name: Set up MSBuild
-        uses: microsoft/setup-msbuild@v2
-
-      - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Set up MSVC dev environment
+        uses: ilammy/msvc-dev-cmd@v1
         with:
-          targets: x86_64-pc-windows-msvc
+          arch: x64
+
+      - name: Set up Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
 
       - name: Set up .NET 10 SDK
         uses: actions/setup-dotnet@v4
@@ -35,36 +30,18 @@ jobs:
       - name: Verify C# formatting
         run: dotnet format HorizonRadio.UI.slnx --verify-no-changes --verbosity minimal
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-          key: cargo-${{ runner.os }}-${{ hashFiles('Librespot/Librespot.vcxproj') }}
-          restore-keys: |
-            cargo-${{ runner.os }}-
+      - name: Build librespot
+        id: librespot
+        uses: ./.github/actions/build-librespot
 
-      - name: Bootstrap vcpkg
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
-          .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
-
-      - name: Cache vcpkg binary cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', '.gitmodules') }}
-          restore-keys: |
-            vcpkg-${{ runner.os }}-
+      - name: Configure CMake (Debug)
+        run: cmake --preset windows-x64
 
       - name: Build C++ side (Debug, x64)
-        run: msbuild HorizonRadio.slnx /p:Configuration=Debug /p:Platform=x64 /m /v:minimal
+        run: cmake --build --preset windows-x64-debug
 
       - name: Run C++ tests
-        run: build/Debug/HorizonRadio.Tests.exe
+        run: ctest --preset windows-x64-debug
 
       # C# side runs second so the C++ outputs (version.dll +
       # librespot.exe) are already on disk by the time the UI's
@@ -77,4 +54,11 @@ jobs:
         with:
           name: version-dll
           path: build/Debug/version.dll
+          if-no-files-found: error
+
+      - name: Upload librespot.exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: librespot-exe
+          path: build/librespot/librespot.exe
           if-no-files-found: error

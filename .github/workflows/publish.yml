@@ -19,52 +19,22 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
 
-    env:
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-binary-cache
-
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-        with:
-          submodules: recursive
 
-      - name: Set up MSBuild
-        uses: microsoft/setup-msbuild@v2
-
-      - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Set up MSVC dev environment
+        uses: ilammy/msvc-dev-cmd@v1
         with:
-          targets: x86_64-pc-windows-msvc
+          arch: x64
+
+      - name: Set up Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
 
       - name: Set up .NET 10 SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-          key: cargo-${{ runner.os }}-${{ hashFiles('Librespot/Librespot.vcxproj') }}
-          restore-keys: |
-            cargo-${{ runner.os }}-
-
-      - name: Bootstrap vcpkg
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
-          .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
-
-      - name: Cache vcpkg binary cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', '.gitmodules') }}
-          restore-keys: |
-            vcpkg-${{ runner.os }}-
 
       - name: Resolve release tag
         id: release
@@ -86,14 +56,21 @@ jobs:
           "safe_tag=$safeTag" >> $env:GITHUB_OUTPUT
           "semver=$semver"    >> $env:GITHUB_OUTPUT
 
-      # Builds version.dll + librespot.exe into build/Release/. The
-      # HorizonRadio.UI csproj's <None Include> items pick these up
+      - name: Build librespot
+        id: librespot
+        uses: ./.github/actions/build-librespot
+
+      - name: Configure CMake
+        run: cmake --preset windows-x64
+
+      # Builds version.dll into build/Release/. The HorizonRadio.UI
+      # csproj's <None Include> items pick this and librespot.exe up
       # automatically and copy them into the UI's publish output.
       - name: Build C++ side (Release, x64)
-        run: msbuild HorizonRadio.slnx /p:Configuration=Release /p:Platform=x64 /m /v:minimal
+        run: cmake --build --preset windows-x64-release
 
       - name: Run C++ tests
-        run: build/Release/HorizonRadio.Tests.exe
+        run: ctest --preset windows-x64-release
 
       # Self-contained publish so end users don't need a separate
       # .NET runtime install. The csproj's ZipPublishOutput target
@@ -123,3 +100,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release upload '${{ steps.release.outputs.tag }}' '${{ steps.archive.outputs.zip }}' --clobber
+
+      - name: Attach librespot.exe + version.dll to release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload '${{ steps.release.outputs.tag }}' 'build/librespot/librespot.exe' --clobber
+          gh release upload '${{ steps.release.outputs.tag }}' 'build/Release/version.dll' --clobber

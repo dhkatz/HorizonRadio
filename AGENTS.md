@@ -53,17 +53,61 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
 
 ## Building
 
-`.slnx` solutions route through an SDK/Rust resolver that fails in some
-environments — **build the project files directly** instead.
+The C++ side builds with CMake (`CMakeLists.txt`) via the `windows-x64`
+preset; the C# side builds with `dotnet`. They are intentionally
+decoupled so a CMake / .NET resolver mishap on one side can't take down
+the other.
 
-C++ DLL (MSVC from VS 2022 Build Tools; `vswhere` hides Build Tools unless you
-pass `-products *`):
+C++ DLL + tests:
 
 ```powershell
-$msb = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
-  -products * -latest -find "MSBuild\**\Bin\MSBuild.exe" | Select-Object -First 1
-& $msb HorizonRadio\HorizonRadio.vcxproj /p:Configuration=Release /p:Platform=x64 /m
+cmake --preset windows-x64
+cmake --build --preset windows-x64-release      # → build/Release/version.dll
+ctest --preset windows-x64-release
 ```
+
+The preset assumes `cl.exe` is on `PATH` (CI uses
+`ilammy/msvc-dev-cmd`; locally, run from a "Developer Command Prompt
+for VS 2022" shell, or invoke `vcvarsall.bat x64` first). External C++
+deps are pulled via CMake's `FetchContent` at configure time (currently
+just doctest, header-only) — no package manager is involved.
+
+### Cross-compiling from Linux or macOS
+
+`version.dll` can also be built from a non-Windows host via clang +
+mingw-w64. The clang/MinGW combination is what makes this work: clang
+keeps SEH (`__try`/`__except`) and the MSVC-style secure CRT calls
+intact; mingw-w64 supplies the Windows headers and import libs as a
+normal package, so there's no manual MSVC-SDK download step.
+
+```bash
+# macOS
+brew install llvm lld mingw-w64 ninja
+
+# Linux (Debian/Ubuntu)
+apt install clang lld mingw-w64 ninja-build
+
+# Configure + build
+cmake --preset macos-cross-x64                  # or linux-cross-x64
+cmake --build --preset macos-cross-x64-release  # → build/Release/version.dll
+```
+
+The toolchain requires lld specifically (not mingw-w64's bundled BFD
+ld): clang+gcc-libstdc++ produces RTTI section size mismatches that
+BFD ld refuses but lld merges cleanly. clang+mingw also drops the C++
+stdlib include search paths and SEH support — the toolchain file
+(`cmake/toolchain-clang-mingw.cmake`) wires those back up.
+
+Tests build under the cross preset too, but the resulting
+`HorizonRadio.Tests.exe` is a Windows binary — running `ctest` from a
+non-Windows host won't work without Wine. The Windows CI flow is the
+authoritative test runner.
+
+The 17 `version.dll` exports come from `src/version_proxy.cpp` —
+plain `__declspec(dllexport)` trampolines that lazy-load
+`C:\Windows\System32\version.dll`. They compile identically under
+MSVC and clang+MinGW; if you add or remove a forwarded export, edit
+that file, not the linker flags.
 
 C# UI / Core — if `dotnet build` crashes with `MSB4014: The path is empty`, an
 empty `MSBuild*` env var is to blame; clear it first:
@@ -74,9 +118,20 @@ Remove-Item Env:MSBuildAdditionalSdkResolversFolder -ErrorAction SilentlyContinu
 dotnet build HorizonRadio.UI\HorizonRadio.UI.csproj -c Release
 ```
 
-The first C++ build compiles `librespot` from source (~5–10 min cold). The
-C++ test project (`HorizonRadio.Tests`, doctest) resolves includes via
-`$(SolutionDir)`, so build it with `/p:SolutionDir=<repo>\`.
+### librespot
+
+`librespot.exe` is no longer compiled in-tree. CI builds it (see
+`.github/actions/build-librespot`) and attaches it as a standalone
+asset on every release; the UI fetches it on demand at runtime.
+
+To bump the pinned rev, edit the `Pin` step in
+`.github/actions/build-librespot/action.yml` (cache keys rotate
+automatically since they incorporate the rev). For local hacking on a
+not-yet-released rev — e.g. testing a Spotify-protocol patch before
+merging the pin bump — install the Rust toolchain and run the same
+`cargo install` command the composite action runs; copy the resulting
+exe into `build/librespot/librespot.exe` and the UI's `<None Include>`
+pickup will bundle it.
 
 ### Dev deploy loop
 
@@ -158,5 +213,10 @@ Native code: `.clang-format` + `.clang-tidy` (install LLVM).
 
 ```powershell
 clang-format -i (rg --files HorizonRadio HorizonRadio.Tests -g '*.cpp' -g '*.hpp')
-msbuild HorizonRadio.slnx /p:Configuration=Debug /p:Platform=x64 /p:RunCppAnalysis=true /m:1
+cmake --preset windows-x64-analysis
+cmake --build --preset windows-x64-analysis-debug
 ```
+
+The `analysis` preset flips on `CMAKE_CXX_CLANG_TIDY` so every TU is
+linted during compile. It's ~3× slower than a plain build; keep it
+off for the dev iteration loop.
