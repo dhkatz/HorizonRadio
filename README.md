@@ -22,7 +22,6 @@ Play your own music through Forza Horizon 6's in-game radio.
 
 In FH6's audio settings:
 - **Radio DJ: Off**
-- **Streamer Mode: On**
 
 ## Installation
 
@@ -35,20 +34,18 @@ In FH6's audio settings:
 
 ## Building
 
-| Solution               | Builds              | Requires                                        |
-|------------------------|---------------------|-------------------------------------------------|
-| `HorizonRadio.slnx`    | C++ DLL + librespot | VS 2022 Build Tools (MSVC v143), Rust toolchain |
-| `HorizonRadio.UI.slnx` | C# UI               | .NET 10 SDK                                     |
+| Build                  | Produces                 | Requires                                                |
+|------------------------|--------------------------|---------------------------------------------------------|
+| `CMakeLists.txt`       | `version.dll` + test exe | Windows: VS 2022 Build Tools. Linux/macOS: clang + mingw-w64. CMake ≥ 3.25, Ninja. |
+| `HorizonRadio.UI.slnx` | C# UI                    | .NET 10 SDK                                             |
 
 ```powershell
-git clone --recurse-submodules https://github.com/dhkatz/horizon-radio.git
+git clone https://github.com/dhkatz/horizon-radio.git
 cd horizon-radio
-.\vcpkg\bootstrap-vcpkg.bat
-msbuild HorizonRadio.slnx /p:Configuration=Release /p:Platform=x64
+cmake --preset windows-x64
+cmake --build --preset windows-x64-release
 dotnet build HorizonRadio.UI.slnx
 ```
-
-The first build compiles `librespot` from source (~5–10 min cold).
 
 To produce a release zip locally:
 

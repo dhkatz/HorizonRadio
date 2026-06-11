@@ -11,21 +11,27 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
 
-    env:
-      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-binary-cache
-
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
-      - name: Set up MSBuild
-        uses: microsoft/setup-msbuild@v2
-
-      - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Set up MSVC dev environment
+        uses: ilammy/msvc-dev-cmd@v1
         with:
-          targets: x86_64-pc-windows-msvc
+          arch: x64
+
+      # ilammy/msvc-dev-cmd exports Platform=x64. dotnet promotes that to
+      # a global MSBuild property and every dotnet step against the .slnx
+      # then fails (the C# projects only define AnyCPU): `dotnet format`
+      # dies with "Restore operation failed", `dotnet build`/`publish`
+      # with MSB4126 "Debug|x64 is invalid". cmake + Ninja determine the
+      # arch from the compiler on PATH and ignore Platform, so clearing it
+      # is safe for the C++ build.
+      - name: Clear MSVC Platform var (breaks dotnet on the .slnx)
+        shell: pwsh
+        run: '"Platform=" >> $env:GITHUB_ENV'
+
+      - name: Set up Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
 
       - name: Set up .NET 10 SDK
         uses: actions/setup-dotnet@v4
@@ -35,46 +41,109 @@ jobs:
       - name: Verify C# formatting
         run: dotnet format HorizonRadio.UI.slnx --verify-no-changes --verbosity minimal
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-          key: cargo-${{ runner.os }}-${{ hashFiles('Librespot/Librespot.vcxproj') }}
-          restore-keys: |
-            cargo-${{ runner.os }}-
+      - name: Build librespot
+        id: librespot
+        uses: ./.github/actions/build-librespot
 
-      - name: Bootstrap vcpkg
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE | Out-Null
-          .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+      - name: Configure CMake
+        run: cmake --preset windows-x64
 
-      - name: Cache vcpkg binary cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', '.gitmodules') }}
-          restore-keys: |
-            vcpkg-${{ runner.os }}-
-
+      # Tests run against the Debug build (asserts on). version.dll itself
+      # isn't exercised here — the test exe links the production TUs
+      # directly (see HorizonRadio.Tests/CMakeLists.txt).
       - name: Build C++ side (Debug, x64)
-        run: msbuild HorizonRadio.slnx /p:Configuration=Debug /p:Platform=x64 /m /v:minimal
+        run: cmake --build --preset windows-x64-debug
 
       - name: Run C++ tests
-        run: build/Debug/HorizonRadio.Tests.exe
+        run: ctest --preset windows-x64-debug
 
-      # C# side runs second so the C++ outputs (version.dll +
-      # librespot.exe) are already on disk by the time the UI's
-      # <None Include> items try to pick them up.
+      # The C# UI's <None Include> picks up version.dll from build/Release/
+      # specifically (a Debug version.dll is useless to FH6 — see the
+      # csproj comment), so we must build the Release DLL for the bundle
+      # step to have anything to copy. This is also the artifact we ship.
+      - name: Build C++ side (Release, x64)
+        run: cmake --build --preset windows-x64-release
+
+      # C# side runs after the C++ outputs (version.dll + librespot.exe)
+      # are on disk so the UI's <None Include> items pick them up.
       - name: Build C# UI
         run: dotnet build HorizonRadio.UI.slnx -c Debug --nologo
+
+      # Guard the bundling itself: a regression in the csproj's path or
+      # Exists() gate would otherwise silently ship a UI with no DLL.
+      - name: Verify version.dll was bundled into the UI output
+        shell: pwsh
+        run: |
+          $dll = 'HorizonRadio.UI/bin/Debug/net10.0/version.dll'
+          if (-not (Test-Path $dll)) {
+            throw "version.dll was not copied into the UI build output ($dll). " +
+                  "Check HorizonRadio.UI.csproj's _VersionDllPath and the Release C++ build."
+          }
+          Write-Host "OK: $dll"
 
       - name: Upload version.dll artifact
         uses: actions/upload-artifact@v4
         with:
           name: version-dll
-          path: build/Debug/version.dll
+          path: build/Release/version.dll
+          if-no-files-found: error
+
+      - name: Upload librespot.exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: librespot-exe
+          path: build/librespot/librespot.exe
+          if-no-files-found: error
+
+  # Exercises the clang + mingw-w64 cross-compile path (the migration's
+  # headline feature) so the toolchain file and the cross presets can't
+  # rot undetected. The resulting HorizonRadio.Tests.exe is a Windows
+  # binary, so we build but don't run it here — Windows CI above is the
+  # authoritative test runner.
+  cross-build:
+    name: Cross-compile version.dll (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            preset: linux-cross-x64
+          - os: macos-latest
+            preset: macos-cross-x64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang + lld + mingw-w64 + ninja (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld mingw-w64 ninja-build
+
+      - name: Install LLVM + lld + mingw-w64 + ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install llvm lld mingw-w64 ninja
+
+      # Homebrew LLVM is keg-only; the toolchain file finds it explicitly,
+      # but lld must be on PATH for -fuse-ld=lld to resolve.
+      - name: Put Homebrew LLVM on PATH (macOS)
+        if: runner.os == 'macOS'
+        run: echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+
+      - name: Configure CMake
+        run: cmake --preset ${{ matrix.preset }}
+
+      - name: Build version.dll (Release)
+        run: cmake --build --preset ${{ matrix.preset }}-release
+
+      - name: Verify version.dll was produced
+        run: test -f build/Release/version.dll
+
+      - name: Upload cross-built version.dll
+        uses: actions/upload-artifact@v4
+        with:
+          name: version-dll-${{ matrix.preset }}
+          path: build/Release/version.dll
           if-no-files-found: error

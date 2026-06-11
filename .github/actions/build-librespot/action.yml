@@ -1,0 +1,103 @@
+name: Build librespot
+description: >
+  Build (or restore from cache) librespot.exe for the pinned rev below,
+  drop it at build/librespot/librespot.exe, and surface its absolute
+  path as an output.
+
+  Why a composite action: build.yml and publish.yml both need this, and
+  duplicating the "restore cache → cargo install → copy" flow across
+  two workflows is exactly the kind of drift that bites six months
+  later when one is updated and the other isn't. Bumping librespot is
+  a single-line edit in the Pin step.
+
+outputs:
+  exe-path:
+    description: Absolute path to the built librespot.exe.
+    value: ${{ steps.locate.outputs.path }}
+  rev:
+    description: The librespot git rev that was built.
+    value: ${{ steps.pin.outputs.rev }}
+
+runs:
+  using: composite
+  steps:
+    # Pinned librespot rev. Single source of truth — bump here.
+    #
+    # Why this dev-branch SHA and not a crates.io release: v0.8.0 has a
+    # Connect-protocol state-machine quirk where every track 'loads' but
+    # never enters Playing — Spotify then cycles through tracks one per
+    # second forever. dev has fixes ahead of v0.8.0.
+    #
+    # Why these feature flags:
+    #   rustls-tls-webpki-roots — pure-Rust TLS, no OpenSSL headers
+    #   with-libmdns           — pure-Rust mDNS, no Apple Bonjour
+    - name: Pin
+      id: pin
+      shell: pwsh
+      run: |
+        $rev      = '33bf3a77ed4b549df67e8347d7d6e55b007b3ec2'
+        $git      = 'https://github.com/librespot-org/librespot'
+        $target   = 'x86_64-pc-windows-msvc'
+        $features = 'rustls-tls-webpki-roots,with-libmdns'
+        # actions/cache keys must not contain commas, so emit a
+        # comma-free variant for the cache key. cargo still gets the
+        # real comma-separated list via the `features` output.
+        $featuresKey = $features -replace ',', '_'
+        "rev=$rev"                   >> $env:GITHUB_OUTPUT
+        "git=$git"                   >> $env:GITHUB_OUTPUT
+        "target=$target"             >> $env:GITHUB_OUTPUT
+        "features=$features"         >> $env:GITHUB_OUTPUT
+        "features_key=$featuresKey"  >> $env:GITHUB_OUTPUT
+
+    # Cache the built exe directly, keyed on the rev. Hits are O(seconds);
+    # misses fall through to cargo install. We also cache the cargo
+    # registry/git db separately so a cache miss on the exe (e.g. after a
+    # rev bump) still gets warm dep downloads.
+    - name: Restore built librespot.exe
+      id: cache-exe
+      uses: actions/cache@v4
+      with:
+        path: build/librespot/librespot.exe
+        key: librespot-exe-${{ runner.os }}-${{ steps.pin.outputs.target }}-${{ steps.pin.outputs.rev }}-${{ steps.pin.outputs.features_key }}
+
+    - name: Set up Rust toolchain
+      if: steps.cache-exe.outputs.cache-hit != 'true'
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ steps.pin.outputs.target }}
+
+    - name: Cache cargo registry
+      if: steps.cache-exe.outputs.cache-hit != 'true'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git/db
+        key: cargo-${{ runner.os }}-${{ steps.pin.outputs.rev }}
+        restore-keys: |
+          cargo-${{ runner.os }}-
+
+    - name: Build librespot
+      if: steps.cache-exe.outputs.cache-hit != 'true'
+      shell: pwsh
+      run: |
+        $cacheRoot = "$pwd/build/librespot-cargo"
+        New-Item -ItemType Directory -Force -Path "$pwd/build/librespot" | Out-Null
+        cargo install `
+          --git "${{ steps.pin.outputs.git }}" `
+          --rev "${{ steps.pin.outputs.rev }}" `
+          --target "${{ steps.pin.outputs.target }}" `
+          --no-default-features `
+          --features "${{ steps.pin.outputs.features }}" `
+          --locked `
+          --root "$cacheRoot" `
+          librespot
+        Copy-Item "$cacheRoot/bin/librespot.exe" "$pwd/build/librespot/librespot.exe" -Force
+
+    - name: Locate exe
+      id: locate
+      shell: pwsh
+      run: |
+        $path = (Resolve-Path "build/librespot/librespot.exe").Path
+        "path=$path" >> $env:GITHUB_OUTPUT

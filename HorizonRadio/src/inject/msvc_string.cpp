@@ -1,3 +1,4 @@
+#include <cstring>
 #include <horizon/inject/msvc_string.hpp>
 #include <windows.h>
 
