@@ -18,13 +18,19 @@ namespace HorizonRadio.Core.Sources.YouTube;
 /// playback. ffmpeg then fetches that URL itself — letting us swap in
 /// HLS / DASH formats later without changing the pump.
 /// </summary>
-public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITransportControls
+public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITransportControls, IPlaybackProgress
 {
     public string Id => "youtube";
     public string DisplayName => "YouTube";
 
     public event Action<Track>? TrackChanged;
     public event Action<bool>? PausedChanged;
+
+    // Progress: position comes from the active ffmpeg subprocess's elapsed
+    // (we pace its reads to real time and own transport, so there's no
+    // external seek to drift against); duration comes from yt-dlp metadata.
+    private volatile SubprocessPcmSource? _activeSubproc;
+    private long _durationTicks;
 
     private CancellationTokenSource? _stopCts;
     private Task? _runLoop;
@@ -100,6 +106,17 @@ public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITrans
 
     public bool CanShuffle => _entries.Count > 1;
     public bool IsShuffled => _order.Shuffled;
+
+    // -- IPlaybackProgress (read-only; seeking ffmpeg mid-stream is deferred) --
+
+    public TimeSpan? Duration
+    {
+        get { var d = Interlocked.Read(ref _durationTicks); return d > 0 ? new TimeSpan(d) : null; }
+    }
+
+    public TimeSpan Position => _activeSubproc?.Elapsed ?? TimeSpan.Zero;
+
+    public bool CanSeek => false;
 
     public Task SetShuffleAsync(bool enabled)
     {
@@ -260,6 +277,9 @@ public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITrans
             ? await TryDownloadThumbnailAsync(resolved.ThumbnailUrl, ct).ConfigureAwait(false)
             : null;
 
+        // Publish this track's length for the progress bar (null = hide it).
+        Interlocked.Exchange(ref _durationTicks, resolved.Duration?.Ticks ?? 0);
+
         TrackChanged?.Invoke(new Track(
             Title: resolved.Title,
             Artist: resolved.Uploader,
@@ -286,19 +306,27 @@ public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITrans
         });
 
         await subproc.StartAsync(pausingSink, pumpCts.Token).ConfigureAwait(false);
+        _activeSubproc = subproc; // expose elapsed for the progress bar
 
         // Wait for ffmpeg to finish (EOF on stdout = full track played)
         // or for the per-track CTS to fire (Skip / Stop).
-        if (subproc.Completion is { } completion)
+        try
         {
-            try
+            if (subproc.Completion is { } completion)
             {
-                await completion.ConfigureAwait(false);
+                try
+                {
+                    await completion.ConfigureAwait(false);
+                }
+                catch
+                {
+                    /* StopAsync below handles cleanup */
+                }
             }
-            catch
-            {
-                /* StopAsync below handles cleanup */
-            }
+        }
+        finally
+        {
+            if (ReferenceEquals(_activeSubproc, subproc)) _activeSubproc = null;
         }
     }
 

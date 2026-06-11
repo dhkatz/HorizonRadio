@@ -62,7 +62,9 @@
     </shadui:Window.RightWindowTitleBarContent>
 
     <Panel>
-    <Grid ColumnDefinitions="Auto,*">
+    <!-- Row 0: sidebar + workspace content. Row 1: persistent player bar. -->
+    <Grid RowDefinitions="*,Auto">
+    <Grid Grid.Row="0" ColumnDefinitions="Auto,*">
 
         <!-- Expanded sidebar -->
         <shadui:Sidebar Grid.Column="0"
@@ -426,6 +428,10 @@
             </Grid>
             </Panel>
         </Grid>
+    </Grid>
+
+        <!-- Persistent player bar, shown across every tab. -->
+        <views:PlayerBarView Grid.Row="1" DataContext="{Binding NowPlaying}"/>
     </Grid>
 
         <!-- Toast overlay: transient notifications (e.g. output-unavailable

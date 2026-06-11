@@ -15,13 +15,25 @@ namespace HorizonRadio.Core.Sources.Local;
 /// all work — pause halts PCM pumping, next/prev cancel the current
 /// file's decode loop and the outer playlist runner advances.
 /// </summary>
-public sealed class LocalFileSource(Playlist playlist) : IAudioSource, ITransportControls
+public sealed class LocalFileSource(Playlist playlist) : IAudioSource, ITransportControls, IPlaybackProgress
 {
     public string Id => "local";
     public string DisplayName => "Local Files";
 
     public event Action<Track>? TrackChanged;
     public event Action<bool>? PausedChanged;
+
+    // Progress state, owned by the pump thread (writes) and read by the UI
+    // poll. Ticks so we can use Interlocked for torn-free 64-bit access.
+    // _pendingSeekTicks: -1 = none, else the target the pump applies next loop.
+    // _trackGen increments per track; a pending seek is stamped with the gen it
+    // was issued for, so a seek released right as a track ends can't be applied
+    // to the next (different-length) track.
+    private long _positionTicks;
+    private long _durationTicks;
+    private long _pendingSeekTicks = -1;
+    private long _pendingSeekGen = -1;
+    private long _trackGen;
 
     private CancellationTokenSource? _stopCts;
     private Task? _runLoop;
@@ -93,6 +105,29 @@ public sealed class LocalFileSource(Playlist playlist) : IAudioSource, ITranspor
 
     public bool CanShuffle => playlist.Count > 1;
     public bool IsShuffled => playlist.Shuffle;
+
+    public TimeSpan? Duration
+    {
+        get { var d = Interlocked.Read(ref _durationTicks); return d > 0 ? new TimeSpan(d) : null; }
+    }
+
+    public TimeSpan Position => new(Interlocked.Read(ref _positionTicks));
+
+    public bool CanSeek => true;
+
+    public Task SeekAsync(TimeSpan position)
+    {
+        var ticks = position.Ticks < 0 ? 0 : position.Ticks;
+        // The pump thread owns the reader; hand it the target and let it apply
+        // the seek at the top of its next iteration. Stamp the current track gen
+        // (set before ticks) so the pump rejects it if the track advanced in the
+        // meantime. Reflect it in Position immediately so the bar tracks the
+        // user's drag without lag.
+        Interlocked.Exchange(ref _pendingSeekGen, Interlocked.Read(ref _trackGen));
+        Interlocked.Exchange(ref _pendingSeekTicks, ticks);
+        Interlocked.Exchange(ref _positionTicks, ticks);
+        return Task.CompletedTask;
+    }
 
     public Task SetShuffleAsync(bool enabled)
     {
@@ -246,6 +281,14 @@ public sealed class LocalFileSource(Playlist playlist) : IAudioSource, ITranspor
                 samples, AudioFormat.SampleRate);
         }
 
+        // Publish this track's length + reset position for the progress bar.
+        // Bump the track generation so a seek issued against the previous track
+        // (and not yet consumed) is rejected below rather than mis-applied here.
+        var gen = Interlocked.Increment(ref _trackGen);
+        Interlocked.Exchange(ref _durationTicks, reader.TotalTime.Ticks);
+        Interlocked.Exchange(ref _positionTicks, 0);
+        Interlocked.Exchange(ref _pendingSeekTicks, -1);
+
         var floatBuf = new float[chunkFrames * AudioFormat.Channels];
         var shortBuf = new short[chunkFrames * AudioFormat.Channels];
 
@@ -262,8 +305,22 @@ public sealed class LocalFileSource(Playlist playlist) : IAudioSource, ITranspor
                 if (ct.IsCancellationRequested) return;
             }
 
+            // Apply a pending seek before reading the next chunk — only the
+            // pump thread touches the reader, so this never races the decode.
+            // Ignore a seek stamped for a previous track (released at EOF).
+            var seek = Interlocked.Exchange(ref _pendingSeekTicks, -1);
+            if (seek >= 0 && Interlocked.Read(ref _pendingSeekGen) == gen)
+            {
+                try { reader.CurrentTime = new TimeSpan(seek); }
+                catch (Exception ex) { Log($"seek failed: {ex.Message}"); }
+                stopwatch.Restart();
+                nextChunk = TimeSpan.Zero;
+            }
+
             int read = samples.Read(floatBuf, 0, floatBuf.Length);
             if (read == 0) return;
+
+            Interlocked.Exchange(ref _positionTicks, reader.CurrentTime.Ticks);
 
             for (int i = 0; i < read; ++i) shortBuf[i] = ToInt16(floatBuf[i]);
             for (int i = read; i < shortBuf.Length; ++i) shortBuf[i] = 0;

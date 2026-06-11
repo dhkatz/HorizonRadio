@@ -1,0 +1,205 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             xmlns:views="using:HorizonRadio.UI.Views"
+             xmlns:material="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="1024" d:DesignHeight="84"
+             x:Class="HorizonRadio.UI.Views.PlayerBarView"
+             x:DataType="vm:NowPlayingViewModel">
+
+    <Design.DataContext>
+        <vm:NowPlayingViewModel />
+    </Design.DataContext>
+
+    <!-- Fixed bar height (MinHeight) with all three sections vertically centered,
+         so the left track info and right controls stay centered regardless of how
+         tall the center transport+progress stack is. Keep vertical padding
+         SYMMETRIC — asymmetric/negative padding drags the centered row off-center
+         (that's what pushed the side controls to the bottom). To make the center
+         controls sit a little higher/lower, nudge ONLY the center stack via its
+         Margin (below), which doesn't move the sides.
+         Knobs: MinHeight = overall bar height; center StackPanel Margin = control
+         bias (down = more space above transport, less below progress); seek Grid
+         Margin = transport<->progress gap. -->
+    <Border Background="{DynamicResource CardBackgroundColor}"
+            BorderBrush="{DynamicResource BorderColor}"
+            BorderThickness="0,1,0,0"
+            Padding="16,6"
+            MinHeight="84">
+        <Grid ColumnDefinitions="*,2*,*" VerticalAlignment="Center">
+
+            <!-- Left: track info -->
+            <views:TrackInfoView Grid.Column="0"
+                                 Compact="True"
+                                 VerticalAlignment="Center"
+                                 HorizontalAlignment="Left" />
+
+            <!-- Center: transport + seek bar. Both are always present (transport
+                 dimmed/disabled, seek dimmed) when nothing's playing, so the bar
+                 never changes height or shifts as playback starts/stops, and new
+                 users learn where the controls are. Transport buttons are
+                 background-less icons; only play/pause keeps its accent circle. -->
+            <!-- Margin top nudges JUST the controls down (more space above the
+                 transport, less below the progress) without moving the centered
+                 left/right sections. -->
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="0"
+                        Margin="0,4,0,-8">
+                <StackPanel Orientation="Horizontal"
+                            HorizontalAlignment="Center"
+                            Spacing="10"
+                            Margin="0,0,0,0">
+                    <ToggleButton IsChecked="{Binding IsShuffleEnabled, Mode=TwoWay}"
+                                  IsEnabled="{Binding CanShuffle}"
+                                  Background="Transparent" BorderThickness="0"
+                                  Width="32" Height="32" Padding="0"
+                                  HorizontalContentAlignment="Center"
+                                  VerticalContentAlignment="Center"
+                                  ToolTip.Tip="Shuffle">
+                        <material:MaterialIcon Kind="Shuffle" Width="16" Height="16"/>
+                    </ToggleButton>
+                    <Button Command="{Binding PreviousCommand}"
+                            IsEnabled="{Binding CanSkipPrevious}"
+                            Background="Transparent" BorderThickness="0"
+                            Width="32" Height="32" Padding="0"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            ToolTip.Tip="Previous">
+                        <material:MaterialIcon Kind="SkipPrevious" Width="22" Height="22"/>
+                    </Button>
+                    <Button Command="{Binding TogglePauseCommand}"
+                            IsEnabled="{Binding CanPause}"
+                            Classes="Primary"
+                            Width="34" Height="34" CornerRadius="17" Padding="0"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            ToolTip.Tip="Play/Pause">
+                        <Panel Width="18" Height="18">
+                            <material:MaterialIcon Kind="Play" Width="18" Height="18"
+                                                   IsVisible="{Binding IsPaused}"/>
+                            <material:MaterialIcon Kind="Pause" Width="18" Height="18"
+                                                   IsVisible="{Binding !IsPaused}"/>
+                        </Panel>
+                    </Button>
+                    <Button Command="{Binding NextCommand}"
+                            IsEnabled="{Binding CanSkipNext}"
+                            Background="Transparent" BorderThickness="0"
+                            Width="32" Height="32" Padding="0"
+                            HorizontalContentAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            ToolTip.Tip="Next">
+                        <material:MaterialIcon Kind="SkipNext" Width="22" Height="22"/>
+                    </Button>
+                </StackPanel>
+
+                <!-- Always laid out (dimmed when no real progress) so it never
+                     pops in and shifts the bar. IsHitTestVisible=CanSeek keeps it
+                     display-only for sources that report position but can't seek. -->
+                <!-- Top margin = the transport <-> progress gap (negative pulls
+                     the progress up toward the controls). -->
+                <!-- Outer columns are spacers; the middle one sets the progress
+                     width (2 of 4 = ~50% of the center column). Make the bar
+                     wider/narrower by changing the "2*" ratio. -->
+                <Grid ColumnDefinitions="*,2*,*" Margin="0,-8,0,0">
+                    <Grid Grid.Column="1"
+                          ColumnDefinitions="Auto,*,Auto"
+                          Opacity="{Binding SeekOpacity}">
+                        <TextBlock Grid.Column="0"
+                                   Text="{Binding PositionText}"
+                                   FontSize="11" Opacity="0.6"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0" MinWidth="32"
+                                   TextAlignment="Right"/>
+                        <Slider x:Name="SeekSlider" Grid.Column="1"
+                                Minimum="0"
+                                Maximum="{Binding SeekMaximum}"
+                                Value="{Binding PositionSeconds, Mode=TwoWay}"
+                                IsHitTestVisible="{Binding CanSeek}"
+                                VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="2"
+                                   Text="{Binding DurationText}"
+                                   FontSize="11" Opacity="0.6"
+                                   VerticalAlignment="Center"
+                                   Margin="8,0,0,0" MinWidth="32"/>
+                    </Grid>
+                </Grid>
+            </StackPanel>
+
+            <!-- Right: source + output as icon buttons that pop a selection list
+                 above them, then the volume slider. -->
+            <StackPanel Grid.Column="2"
+                        Orientation="Horizontal"
+                        Spacing="6"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center">
+                <Button x:Name="SourceButton"
+                        Background="Transparent" BorderThickness="0"
+                        Width="36" Height="36" Padding="0"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center"
+                        ToolTip.Tip="{Binding SelectedFactory.DisplayName, FallbackValue='Source'}">
+                    <material:MaterialIcon Kind="Music" Width="18" Height="18"/>
+                    <Button.Flyout>
+                        <Flyout Placement="Top">
+                            <ListBox ItemsSource="{Binding AvailableSources}"
+                                     SelectedItem="{Binding SelectedFactory, Mode=TwoWay}"
+                                     MinWidth="180"
+                                     Tapped="OnSourceTapped">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding DisplayName}" />
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+
+                <Button x:Name="OutputButton"
+                        Background="Transparent" BorderThickness="0"
+                        Width="36" Height="36" Padding="0"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center"
+                        IsVisible="{Binding SelectedOutput, Converter={x:Static ObjectConverters.IsNotNull}}"
+                        ToolTip.Tip="{Binding SelectedOutput.Name, FallbackValue='Output'}">
+                    <material:MaterialIcon Kind="Cast" Width="18" Height="18"/>
+                    <Button.Flyout>
+                        <Flyout Placement="Top">
+                            <ListBox ItemsSource="{Binding OutputTargets}"
+                                     SelectedItem="{Binding SelectedOutput, Mode=TwoWay}"
+                                     MinWidth="180"
+                                     Tapped="OnOutputTapped">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Name}" />
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+
+                <Button Command="{Binding ToggleMuteCommand}"
+                        IsEnabled="{Binding IsLocalOutput}"
+                        Background="Transparent" BorderThickness="0"
+                        Width="36" Height="36" Padding="0"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center"
+                        ToolTip.Tip="Mute / unmute">
+                    <Panel Width="18" Height="18">
+                        <material:MaterialIcon Kind="VolumeHigh" Width="18" Height="18"
+                                               IsVisible="{Binding !IsMuted}"/>
+                        <material:MaterialIcon Kind="VolumeOff" Width="18" Height="18"
+                                               IsVisible="{Binding IsMuted}"/>
+                    </Panel>
+                </Button>
+                <Slider Width="90" Minimum="0" Maximum="1"
+                        Value="{Binding PreviewVolume, Mode=TwoWay}"
+                        IsEnabled="{Binding IsLocalOutput}"
+                        VerticalAlignment="Center"
+                        ToolTip.Tip="Local monitor volume"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

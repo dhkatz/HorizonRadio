@@ -1,0 +1,83 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="360" d:DesignHeight="200"
+             x:Class="HorizonRadio.UI.Views.TrackInfoView"
+             x:Name="Root"
+             x:DataType="vm:NowPlayingViewModel">
+
+    <Panel>
+        <!-- Large layout (Dashboard): big art on the left, text on the right. -->
+        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,*"
+              IsVisible="{Binding !#Root.Compact}">
+            <Border Grid.Row="0" Grid.RowSpan="4" Grid.Column="0"
+                    Width="180" Height="180"
+                    CornerRadius="8"
+                    Background="{DynamicResource MutedColor}"
+                    Margin="0,0,24,0"
+                    ClipToBounds="True">
+                <Image Source="{Binding AlbumArt}"
+                       Stretch="UniformToFill"
+                       IsVisible="{Binding AlbumArt, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </Border>
+
+            <Border Grid.Row="0" Grid.Column="1"
+                    Padding="8,3"
+                    CornerRadius="999"
+                    Background="{DynamicResource PrimaryColor}"
+                    HorizontalAlignment="Left"
+                    Margin="0,0,0,12"
+                    IsVisible="{Binding HasActiveSource}">
+                <TextBlock Text="{Binding SourceDisplay}"
+                           FontSize="11"
+                           FontWeight="Medium"
+                           Foreground="{DynamicResource PrimaryForegroundColor}" />
+            </Border>
+
+            <TextBlock Grid.Row="1" Grid.Column="1"
+                       Text="{Binding Title}"
+                       FontSize="28" FontWeight="Bold"
+                       TextWrapping="Wrap" />
+            <TextBlock Grid.Row="2" Grid.Column="1"
+                       Text="{Binding Artist}"
+                       FontSize="16" Opacity="0.72"
+                       Margin="0,4,0,0"
+                       TextWrapping="Wrap" />
+            <TextBlock Grid.Row="3" Grid.Column="1"
+                       Text="{Binding Album}"
+                       FontSize="13" Opacity="0.55"
+                       Margin="0,8,0,0"
+                       IsVisible="{Binding Album, Converter={x:Static ObjectConverters.IsNotNull}}"
+                       TextWrapping="Wrap" />
+        </Grid>
+
+        <!-- Compact layout (player bar): small art + title/artist. Art is fixed,
+             text takes the remaining column width. The title is NOT trimmed —
+             it shows in full, bounded only by the (left) column so it can't
+             spill into the center controls. -->
+        <Grid ColumnDefinitions="Auto,*"
+              VerticalAlignment="Center"
+              IsVisible="{Binding #Root.Compact}">
+            <Border Grid.Column="0"
+                    Width="48" Height="48"
+                    CornerRadius="4"
+                    Background="{DynamicResource MutedColor}"
+                    ClipToBounds="True"
+                    Margin="0,0,12,0">
+                <Image Source="{Binding AlbumArt}"
+                       Stretch="UniformToFill"
+                       IsVisible="{Binding AlbumArt, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                <TextBlock Text="{Binding Title}"
+                           FontSize="13" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding Artist}"
+                           FontSize="11" Opacity="0.6"
+                           TextTrimming="CharacterEllipsis"
+                           IsVisible="{Binding Artist, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </StackPanel>
+        </Grid>
+    </Panel>
+</UserControl>
