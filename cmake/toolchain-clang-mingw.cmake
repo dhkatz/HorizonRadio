@@ -132,52 +132,79 @@ execute_process(
 get_filename_component(_MINGW_LIBGCC_DIR "${_MINGW_LIBGCC}" DIRECTORY)
 add_link_options(-L${_MINGW_LIBGCC_DIR})
 
-# Same problem on the header side. clang doesn't know about gcc's
-# libstdc++ layout in the sysroot (<sysroot>/include/c++/<ver>/...)
-# or about gcc's own intrinsics/fixed headers
-# (<toolchain>/lib/gcc/<triple>/<ver>/{include,include-fixed}). Glob
-# the version dirs so we don't hardcode 15.2.0 here, then `-isystem`
-# each one.
-# SHELL: prefix prevents CMake from de-duplicating the repeated
-# `-isystem` flag — without it, only the first path actually reaches
-# the compiler and the rest fall through as bare positional args.
-#
-# Only the libstdc++ paths are added; the C-internal "compiler builtin"
-# directory (<toolchain>/lib/gcc/<triple>/<ver>/include) is NOT added
-# because it ships gcc-flavored x86 intrinsics that clang can't parse.
-# clang supplies its own intrinsics from its resource dir, which is on
-# the search path automatically.
 # SEH (__try/__except) is an MSVC-extension keyword. clang only
 # recognizes it when -fms-extensions is on. The Windows MSVC target
 # turns this on by default; the MinGW target does not, so we opt in
 # explicitly. safe_mem.hpp + metadata_injector.cpp depend on it.
 add_compile_options(-fms-extensions)
 
-# Pick the libstdc++ headers that MATCH the libgcc we link against. The
-# version is the basename of the libgcc dir (…/lib/gcc/<triple>/<ver>/),
-# and libstdc++ headers live at <sysroot>/include/c++/<ver>/. On a host
-# with two mingw gcc versions installed, blindly taking the first glob
-# entry can pair <ver-A> headers with <ver-B> libs → RTTI/ABI skew. Match
-# by version; fall back to the highest version present if the layout
-# doesn't line up.
-get_filename_component(_MINGW_GCC_VER "${_MINGW_LIBGCC_DIR}" NAME)
-file(GLOB _MINGW_CXX_DIRS LIST_DIRECTORIES TRUE "${_MINGW_SYSROOT}/include/c++/*")
-list(SORT _MINGW_CXX_DIRS COMPARE NATURAL ORDER DESCENDING)
-set(_MINGW_CXX_INC "")
-foreach(_dir IN LISTS _MINGW_CXX_DIRS)
-  if(_dir MATCHES "/${_MINGW_GCC_VER}$")
-    set(_MINGW_CXX_INC "${_dir}")
-    break()
-  endif()
-endforeach()
-if(NOT _MINGW_CXX_INC AND _MINGW_CXX_DIRS)
-  list(GET _MINGW_CXX_DIRS 0 _MINGW_CXX_INC) # highest version (sorted desc)
+# clang doesn't know where gcc keeps its libstdc++ headers, and the
+# layout is packager-specific: Homebrew puts them under
+# <sysroot>/include/c++/<ver>/, but Debian/Ubuntu put them under
+# /usr/lib/gcc/<triple>/<ver>/include/c++/. Rather than hardcode either,
+# ask the matching g++ for its own header search list and replay it to
+# clang as -isystem — the one method that works on every distro because
+# it's the compiler's own answer.
+#
+# SHELL: prefix stops CMake de-duplicating the repeated -isystem flag —
+# without it only the first path reaches the compiler. We skip gcc's
+# intrinsic/fixed-include dirs (…/lib/gcc/<triple>/<ver>/{include,
+# include-fixed}): they hold gcc-flavored x86 intrinsics clang can't
+# parse, and clang supplies its own from its resource dir. The libstdc++
+# dirs (…/include/c++/…) and the sysroot include are kept.
+find_program(_MINGW_GXX NAMES x86_64-w64-mingw32-g++)
+set(_MINGW_ISYSTEM_COUNT 0)
+if(_MINGW_GXX)
+  execute_process(
+    COMMAND "${_MINGW_GXX}" -E -x c++ -v -
+    INPUT_FILE /dev/null
+    OUTPUT_QUIET
+    ERROR_VARIABLE _MINGW_GXX_VERBOSE)
+  string(REPLACE "\n" ";" _MINGW_GXX_LINES "${_MINGW_GXX_VERBOSE}")
+  set(_in_search_block FALSE)
+  foreach(_line IN LISTS _MINGW_GXX_LINES)
+    string(STRIP "${_line}" _line)
+    if(_line MATCHES "search starts here:")
+      set(_in_search_block TRUE)
+    elseif(_line MATCHES "End of search list")
+      set(_in_search_block FALSE)
+    elseif(_in_search_block AND _line AND IS_DIRECTORY "${_line}"
+           AND NOT _line MATCHES "/lib/gcc/.*/(include|include-fixed)$")
+      add_compile_options("SHELL:-isystem ${_line}")
+      math(EXPR _MINGW_ISYSTEM_COUNT "${_MINGW_ISYSTEM_COUNT} + 1")
+    endif()
+  endforeach()
 endif()
-if(_MINGW_CXX_INC)
-  add_compile_options(
-    "SHELL:-isystem ${_MINGW_CXX_INC}"
-    "SHELL:-isystem ${_MINGW_CXX_INC}/${_triple}"
-    "SHELL:-isystem ${_MINGW_CXX_INC}/backward")
+
+# Fallback for layouts where the g++ probe yielded nothing (keeps the
+# Homebrew path working if the verbose-output format ever changes):
+# glob the libstdc++ version dirs under the sysroot, preferring the one
+# matching the libgcc version, else the highest present.
+if(_MINGW_ISYSTEM_COUNT EQUAL 0)
+  get_filename_component(_MINGW_GCC_VER "${_MINGW_LIBGCC_DIR}" NAME)
+  file(GLOB _MINGW_CXX_DIRS LIST_DIRECTORIES TRUE "${_MINGW_SYSROOT}/include/c++/*")
+  list(SORT _MINGW_CXX_DIRS COMPARE NATURAL ORDER DESCENDING)
+  set(_MINGW_CXX_INC "")
+  foreach(_dir IN LISTS _MINGW_CXX_DIRS)
+    if(_dir MATCHES "/${_MINGW_GCC_VER}$")
+      set(_MINGW_CXX_INC "${_dir}")
+      break()
+    endif()
+  endforeach()
+  if(NOT _MINGW_CXX_INC AND _MINGW_CXX_DIRS)
+    list(GET _MINGW_CXX_DIRS 0 _MINGW_CXX_INC)
+  endif()
+  if(_MINGW_CXX_INC)
+    add_compile_options(
+      "SHELL:-isystem ${_MINGW_CXX_INC}"
+      "SHELL:-isystem ${_MINGW_CXX_INC}/${_triple}"
+      "SHELL:-isystem ${_MINGW_CXX_INC}/backward")
+  else()
+    message(FATAL_ERROR
+      "Could not locate the mingw-w64 libstdc++ headers via g++ -v or by "
+      "globbing ${_MINGW_SYSROOT}/include/c++. Set the include paths "
+      "manually or check the mingw-w64 g++ install.")
+  endif()
 endif()
 
 # Headers + libs come from the sysroot; programs (compilers, linkers)
