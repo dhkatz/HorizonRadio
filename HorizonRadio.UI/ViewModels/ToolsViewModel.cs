@@ -26,6 +26,7 @@ public sealed class ToolsViewModel : ViewModelBase
     {
         new YtDlpInstaller(),
         new FfmpegInstaller(),
+        new LibrespotInstaller(),
     })
     { }
 }

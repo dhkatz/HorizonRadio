@@ -17,13 +17,19 @@ outputs:
   rev:
     description: The librespot git rev that was built.
     value: ${{ steps.pin.outputs.rev }}
+  rev12:
+    description: First 12 chars of the rev (used in the blobstore asset name).
+    value: ${{ steps.pin.outputs.rev12 }}
 
 runs:
   using: composite
   steps:
-    # Pinned librespot rev. Single source of truth — bump here.
+    # Pinned librespot rev. Single source of truth is tools.manifest.json
+    # (tools.librespot.version) so the app's embedded manifest and this
+    # build can never disagree — bump the rev THERE, not here. See
+    # docs/tool-provisioning.md.
     #
-    # Why this dev-branch SHA and not a crates.io release: v0.8.0 has a
+    # Why a dev-branch SHA and not a crates.io release: v0.8.0 has a
     # Connect-protocol state-machine quirk where every track 'loads' but
     # never enters Playing — Spotify then cycles through tracks one per
     # second forever. dev has fixes ahead of v0.8.0.
@@ -35,7 +41,12 @@ runs:
       id: pin
       shell: pwsh
       run: |
-        $rev      = '33bf3a77ed4b549df67e8347d7d6e55b007b3ec2'
+        $manifest = Get-Content 'tools.manifest.json' -Raw | ConvertFrom-Json
+        $rev = $manifest.tools.librespot.version
+        if ([string]::IsNullOrWhiteSpace($rev)) {
+          throw 'tools.manifest.json is missing tools.librespot.version'
+        }
+        $rev12    = $rev.Substring(0, 12)
         $git      = 'https://github.com/librespot-org/librespot'
         $target   = 'x86_64-pc-windows-msvc'
         $features = 'rustls-tls-webpki-roots,with-libmdns'
@@ -44,6 +55,7 @@ runs:
         # real comma-separated list via the `features` output.
         $featuresKey = $features -replace ',', '_'
         "rev=$rev"                   >> $env:GITHUB_OUTPUT
+        "rev12=$rev12"               >> $env:GITHUB_OUTPUT
         "git=$git"                   >> $env:GITHUB_OUTPUT
         "target=$target"             >> $env:GITHUB_OUTPUT
         "features=$features"         >> $env:GITHUB_OUTPUT

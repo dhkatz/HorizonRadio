@@ -64,6 +64,7 @@ public partial class App : Application
             {
                 new YtDlpInstaller(),
                 new FfmpegInstaller(),
+                new LibrespotInstaller(),
             };
 
             // IPC client doubles as a game-event source (the DLL's memory

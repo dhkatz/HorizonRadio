@@ -1,0 +1,137 @@
+name: Nightly
+
+# Daily build of main, published as a single rolling `nightly`
+# prerelease. The app zip (with its bundled version.dll) is the asset;
+# external tools resolve from the permanent blobstore (see
+# docs/tool-provisioning.md), so old nightlies keep working as long as
+# their tools were fetched at least once.
+on:
+  schedule:
+    - cron: '0 7 * * *' # 07:00 UTC daily
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  nightly:
+    name: Build + publish nightly
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tags (version base) + full history for the commit guard
+
+      # Don't burn a build (or churn the release) when main hasn't moved
+      # since the last nightly. The previous nightly records its commit
+      # in the release body as "commit: <sha>".
+      - name: Skip if main has not moved since the last nightly
+        id: guard
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $head = (git rev-parse HEAD).Trim()
+          "head=$head" >> $env:GITHUB_OUTPUT
+          $body = ''
+          try { $body = gh release view nightly --json body --jq '.body' 2>$null } catch { }
+          if ($body -match 'commit:\s*([0-9a-fA-F]{40})' -and $Matches[1].ToLower() -eq $head.ToLower()) {
+            Write-Host "Nightly already built for $head; skipping."
+            "skip=true" >> $env:GITHUB_OUTPUT
+          } else {
+            "skip=false" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Set up MSVC dev environment
+        if: steps.guard.outputs.skip != 'true'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Clear MSVC Platform var (breaks dotnet on the .slnx)
+        if: steps.guard.outputs.skip != 'true'
+        shell: pwsh
+        run: '"Platform=" >> $env:GITHUB_ENV'
+
+      - name: Set up Ninja
+        if: steps.guard.outputs.skip != 'true'
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Set up .NET 10 SDK
+        if: steps.guard.outputs.skip != 'true'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # base-nightly.<date>+<shortsha>: SemVer prerelease + build metadata.
+      # Base comes from the latest v* release tag (else 0.0.0).
+      - name: Compute nightly version
+        id: ver
+        if: steps.guard.outputs.skip != 'true'
+        shell: pwsh
+        run: |
+          $base = (git describe --tags --abbrev=0 --match 'v*' 2>$null)
+          $base = if ([string]::IsNullOrWhiteSpace($base)) { '0.0.0' } else { $base -replace '^v', '' }
+          $date  = Get-Date -Format 'yyyyMMdd'
+          $short = (git rev-parse --short HEAD).Trim()
+          $version = "$base-nightly.$date+$short"
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "short=$short"     >> $env:GITHUB_OUTPUT
+          "date=$date"       >> $env:GITHUB_OUTPUT
+          Write-Host "nightly version: $version"
+
+      - name: Build librespot
+        if: steps.guard.outputs.skip != 'true'
+        uses: ./.github/actions/build-librespot
+
+      - name: Configure CMake
+        if: steps.guard.outputs.skip != 'true'
+        run: cmake --preset windows-x64
+
+      - name: Build C++ side (Release, x64)
+        if: steps.guard.outputs.skip != 'true'
+        run: cmake --build --preset windows-x64-release
+
+      # Self-contained publish; version.dll + librespot.exe are bundled by
+      # the csproj. ZipPublishOutput drops build/release/HorizonRadio.zip.
+      - name: Publish UI + create zip
+        if: steps.guard.outputs.skip != 'true'
+        run: >
+          dotnet publish HorizonRadio.UI/HorizonRadio.UI.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:Version=${{ steps.ver.outputs.version }}
+
+      - name: Name the nightly zip
+        id: zip
+        if: steps.guard.outputs.skip != 'true'
+        shell: pwsh
+        run: |
+          $dst = "build/release/HorizonRadio-nightly-${{ steps.ver.outputs.date }}-${{ steps.ver.outputs.short }}.zip"
+          Move-Item 'build/release/HorizonRadio.zip' $dst -Force
+          "path=$dst" >> $env:GITHUB_OUTPUT
+
+      # Rolling release: recreate `nightly` each run so there's exactly one
+      # current nightly. The body records the commit for the skip-guard.
+      - name: Publish rolling nightly release
+        if: steps.guard.outputs.skip != 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete nightly --yes --cleanup-tag 2>$null
+          $notes = @"
+          Rolling nightly build of ``main``. Ephemeral — replaced by the next nightly.
+
+          commit: ${{ steps.guard.outputs.head }}
+          version: ${{ steps.ver.outputs.version }}
+          "@
+          gh release create nightly `
+            --title 'Nightly (${{ steps.ver.outputs.date }})' `
+            --notes $notes `
+            --prerelease `
+            --target ${{ steps.guard.outputs.head }} `
+            '${{ steps.zip.outputs.path }}'

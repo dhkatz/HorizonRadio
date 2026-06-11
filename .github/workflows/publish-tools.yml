@@ -1,0 +1,100 @@
+name: Publish tools
+
+# Publishes the tools we build ourselves (currently just librespot) into
+# the permanent, append-only `tools` release that serves as the blob
+# store. Addressed by tool version, not by app build — so release,
+# nightly, and dev builds that pin the same rev all resolve the same
+# durable asset. See docs/tool-provisioning.md.
+#
+# Runs when the pin or the build recipe changes; also manually.
+on:
+  push:
+    branches: [main]
+    paths:
+      - tools.manifest.json
+      - .github/actions/build-librespot/**
+      - .github/workflows/publish-tools.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  librespot:
+    name: Publish librespot to the tools blobstore
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Reads the pinned rev from tools.manifest.json and builds (or
+      # restores from cache) librespot.exe.
+      - name: Build librespot
+        id: librespot
+        uses: ./.github/actions/build-librespot
+
+      - name: Resolve asset name + hash
+        id: asset
+        shell: pwsh
+        run: |
+          $name = "librespot-${{ steps.librespot.outputs.rev12 }}-${{ steps.librespot.outputs.target }}.exe"
+          $exe  = '${{ steps.librespot.outputs.exe-path }}'
+          $sha  = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          "name=$name"  >> $env:GITHUB_OUTPUT
+          "sha256=$sha" >> $env:GITHUB_OUTPUT
+          Write-Host "asset:  $name"
+          Write-Host "sha256: $sha"
+
+      - name: Upload to the tools release (append-only)
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag  = 'tools'
+          $name = '${{ steps.asset.outputs.name }}'
+
+          # Ensure the blobstore release exists (prerelease keeps it out
+          # of "latest"). Created once, then reused forever.
+          gh release view $tag 2>$null | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag `
+              --title 'Tool binaries' `
+              --notes 'Permanent, append-only store of tools Horizon Radio builds (see docs/tool-provisioning.md). Do not delete assets — shipped app builds point here by URL.' `
+              --prerelease
+          }
+
+          # Append-only: never clobber. If this exact (rev-addressed)
+          # asset is already published, the pin is unchanged — skip.
+          $existing = gh release view $tag --json assets --jq '.assets[].name'
+          if ($existing -contains $name) {
+            Write-Host "Asset $name already published; nothing to do."
+          } else {
+            $staged = Join-Path $env:RUNNER_TEMP $name
+            Copy-Item '${{ steps.librespot.outputs.exe-path }}' $staged
+            gh release upload $tag $staged
+            Write-Host "Uploaded $name."
+          }
+
+      # Keep the manifest honest: the URL must point at the asset we just
+      # built, and the recorded hash (once filled in) must match it.
+      - name: Verify manifest matches the built artifact
+        shell: pwsh
+        run: |
+          $manifest = Get-Content 'tools.manifest.json' -Raw | ConvertFrom-Json
+          $platform = $manifest.tools.librespot.platforms.'win-x64'
+          $name     = '${{ steps.asset.outputs.name }}'
+          $actual   = '${{ steps.asset.outputs.sha256 }}'
+
+          if ($platform.url -notmatch [regex]::Escape($name)) {
+            throw "tools.manifest.json librespot win-x64 url does not reference '$name'. Point the url at the built asset."
+          }
+
+          if ([string]::IsNullOrWhiteSpace($platform.sha256)) {
+            Write-Host "::warning::No librespot win-x64 sha256 in tools.manifest.json yet. Fill it in and push:"
+            Write-Host "::warning::  $actual"
+          } elseif ($platform.sha256.ToLower() -ne $actual) {
+            throw "librespot SHA-256 drift.`n  manifest: $($platform.sha256)`n  built:    $actual`nThe pinned rev's binary changed, or the manifest hash is wrong."
+          } else {
+            Write-Host "Manifest hash matches the built artifact."
+          }
