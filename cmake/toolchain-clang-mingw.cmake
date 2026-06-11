@@ -128,10 +128,27 @@ add_link_options(-L${_MINGW_LIBGCC_DIR})
 # explicitly. safe_mem.hpp + metadata_injector.cpp depend on it.
 add_compile_options(-fms-extensions)
 
+# Pick the libstdc++ headers that MATCH the libgcc we link against. The
+# version is the basename of the libgcc dir (…/lib/gcc/<triple>/<ver>/),
+# and libstdc++ headers live at <sysroot>/include/c++/<ver>/. On a host
+# with two mingw gcc versions installed, blindly taking the first glob
+# entry can pair <ver-A> headers with <ver-B> libs → RTTI/ABI skew. Match
+# by version; fall back to the highest version present if the layout
+# doesn't line up.
+get_filename_component(_MINGW_GCC_VER "${_MINGW_LIBGCC_DIR}" NAME)
 file(GLOB _MINGW_CXX_DIRS LIST_DIRECTORIES TRUE "${_MINGW_SYSROOT}/include/c++/*")
-list(LENGTH _MINGW_CXX_DIRS _MINGW_CXX_COUNT)
-if(_MINGW_CXX_COUNT GREATER 0)
-  list(GET _MINGW_CXX_DIRS 0 _MINGW_CXX_INC)
+list(SORT _MINGW_CXX_DIRS COMPARE NATURAL ORDER DESCENDING)
+set(_MINGW_CXX_INC "")
+foreach(_dir IN LISTS _MINGW_CXX_DIRS)
+  if(_dir MATCHES "/${_MINGW_GCC_VER}$")
+    set(_MINGW_CXX_INC "${_dir}")
+    break()
+  endif()
+endforeach()
+if(NOT _MINGW_CXX_INC AND _MINGW_CXX_DIRS)
+  list(GET _MINGW_CXX_DIRS 0 _MINGW_CXX_INC) # highest version (sorted desc)
+endif()
+if(_MINGW_CXX_INC)
   add_compile_options(
     "SHELL:-isystem ${_MINGW_CXX_INC}"
     "SHELL:-isystem ${_MINGW_CXX_INC}/${_triple}"
