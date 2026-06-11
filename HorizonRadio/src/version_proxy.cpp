@@ -11,15 +11,22 @@
 // `#pragma comment(linker, "/export:Name=path.Name")` approach):
 // path-qualified forwarders are MSVC linker syntax — clang in MinGW
 // target mode silently drops them, and `.def` EXPORTS without a path
-// would recurse on our own DLL. Plain dllexport definitions compile
-// identically under MSVC and clang+MinGW, removing the cross-compile
-// blocker.
+// would recurse on our own DLL. Trampolines compile under both
+// toolchains, removing the cross-compile blocker.
 //
-// Disabling C4273 / -Winconsistent-dllimport: <winver.h> declares
-// each of these with WINBASEAPI (dllimport). Our definitions are
-// dllexport. The compilers warn about the linkage mismatch but
-// accept it — the produced export table contains our implementations,
-// which is exactly what we want.
+// How each trampoline is exported differs by compiler, because
+// <winver.h> declares all 16 documented entry points with WINBASEAPI
+// (dllimport):
+//   - clang+MinGW: define them `__declspec(dllexport)`. MinGW only
+//     warns (-Winconsistent-dllimport) about the dllimport→dllexport
+//     mismatch and still exports our implementation. This is the path
+//     the Linux/macOS cross build relies on.
+//   - MSVC: the same mismatch is a hard error (C2375, "redefinition;
+//     different linkage" — not a suppressible warning), so we instead
+//     define them with normal linkage (which matches the header and
+//     compiles clean) and export each via
+//     `#pragma comment(linker, "/EXPORT:Name")`. No `=path`, so it
+//     exports our trampoline rather than forwarding — no recursion.
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -83,14 +90,27 @@ Fn resolve(const char* name) {
 // Return type is taken verbatim — for BOOL functions, returning
 // `Ret{}` (zero) on failure mirrors the real version.dll's behavior
 // when given a bad input.
+//
+// HZN_EXPORT / HZN_EXPORT_NAME select the per-compiler export
+// mechanism described in the file header: dllexport on clang+MinGW,
+// normal linkage plus a `/EXPORT:` linker pragma on MSVC.
+#if defined(_MSC_VER) && !defined(__clang__)
+#define HZN_EXPORT
+#define HZN_EXPORT_NAME(name) __pragma(comment(linker, "/EXPORT:" #name))
+#else
+#define HZN_EXPORT __declspec(dllexport)
+#define HZN_EXPORT_NAME(name)
+#endif
+
 #define HZN_VERSION_PROXY(ret_t, name, params, args)                                                                   \
-    extern "C" __declspec(dllexport) ret_t WINAPI name params {                                                        \
+    extern "C" HZN_EXPORT ret_t WINAPI name params {                                                                   \
         using Fn      = ret_t(WINAPI*) params;                                                                         \
         static Fn ptr = resolve<Fn>(#name);                                                                            \
         if (!ptr)                                                                                                      \
             return ret_t{};                                                                                            \
         return ptr args;                                                                                               \
-    }
+    }                                                                                                                  \
+    HZN_EXPORT_NAME(name)
 
 // Documented (winver.h) exports.
 HZN_VERSION_PROXY(BOOL, GetFileVersionInfoA, (LPCSTR lp, DWORD h, DWORD len, LPVOID data), (lp, h, len, data))
@@ -135,17 +155,22 @@ HZN_VERSION_PROXY(BOOL,
                   (block, sub, out, pcb))
 
 // GetFileVersionInfoByHandle is undocumented and not in winver.h, so
-// no dllimport declaration to clash with. Pass-through signature
-// follows the ordinal-13 export shape used by the OS shim layer.
-extern "C" __declspec(dllexport) DWORD WINAPI GetFileVersionInfoByHandle(INT a, HANDLE b, DWORD c, LPVOID d) {
+// there's no conflicting dllimport declaration — plain dllexport would
+// compile on MSVC here. We still route it through HZN_EXPORT /
+// HZN_EXPORT_NAME to keep one export mechanism per compiler. Pass-through
+// signature follows the ordinal-13 export shape used by the OS shim layer.
+extern "C" HZN_EXPORT DWORD WINAPI GetFileVersionInfoByHandle(INT a, HANDLE b, DWORD c, LPVOID d) {
     using Fn      = DWORD(WINAPI*)(INT, HANDLE, DWORD, LPVOID);
     static Fn ptr = resolve<Fn>("GetFileVersionInfoByHandle");
     if (!ptr)
         return 0;
     return ptr(a, b, c, d);
 }
+HZN_EXPORT_NAME(GetFileVersionInfoByHandle)
 
 #undef HZN_VERSION_PROXY
+#undef HZN_EXPORT
+#undef HZN_EXPORT_NAME
 
 #ifdef _MSC_VER
 #pragma warning(pop)
