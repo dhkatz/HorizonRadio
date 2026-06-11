@@ -9,10 +9,7 @@ name: Publish tools
 # Runs when the pin or the build recipe changes; also manually.
 on:
   push:
-    # TEMP(bootstrap): feat/tool-artifact-management is here only to run
-    # this workflow once before merge so it creates the `tools` release
-    # and prints the librespot SHA-256. Reverted in the same PR.
-    branches: [main, feat/tool-artifact-management]
+    branches: [main]
     paths:
       - tools.manifest.json
       - .github/actions/build-librespot/**
