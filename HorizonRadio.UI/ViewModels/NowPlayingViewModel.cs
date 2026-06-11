@@ -31,8 +31,8 @@ namespace HorizonRadio.UI.ViewModels;
 /// </summary>
 public sealed partial class NowPlayingViewModel : ViewModelBase
 {
-    [ObservableProperty] private string title = "Nothing playing";
-    [ObservableProperty] private string artist = "Launch Forza Horizon 6 with the mod installed";
+    [ObservableProperty] private string title = "Ready to Play";
+    [ObservableProperty] private string artist = "Choose a source to start playing";
     [ObservableProperty] private string? album;
     [ObservableProperty] private string sourceDisplay = "—";
     [ObservableProperty] private string sourceId = "";
@@ -63,6 +63,17 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     [ObservableProperty] private bool canShuffle;
     [ObservableProperty] private bool isShuffleEnabled;
 
+    /// <summary>Progress/seek state for the player bar. <see cref="HasProgress"/>
+    /// gates the whole seek row (only shown when the active source reports a
+    /// duration); <see cref="CanSeek"/> gates dragging. Seconds-typed props back
+    /// the slider; the *Text props are the m:ss labels.</summary>
+    [ObservableProperty] private bool hasProgress;
+    [ObservableProperty] private bool canSeek;
+    [ObservableProperty] private double positionSeconds;
+    [ObservableProperty] private double durationSeconds;
+    [ObservableProperty] private string positionText = "0:00";
+    [ObservableProperty] private string durationText = "0:00";
+
     /// <summary>Where the active source's audio goes: the in-game bridge
     /// (default) or a local speaker for testing without the game. Modeled as a
     /// single picker so it sits naturally beside the source dropdown — an
@@ -73,6 +84,11 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     /// <summary>Local monitor volume (0..1). Only applies when a local output
     /// device is selected; the in-game bridge ignores it.</summary>
     [ObservableProperty] private double previewVolume = 1.0;
+
+    /// <summary>Mute state for the local monitor. Toggled by clicking the volume
+    /// icon; remembers the pre-mute level to restore on unmute.</summary>
+    [ObservableProperty] private bool isMuted;
+    private double _volumeBeforeMute = 1.0;
 
     /// <summary>True when a local device (not the in-game bridge) is the chosen
     /// output — gates the volume slider's enabled state.</summary>
@@ -90,6 +106,13 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     // preference, so syncing the toggle doesn't re-fire a write/apply.
     private bool _suppressShuffle;
     private ITransportControls? _transport;
+
+    // Progress polling: the active source's IPlaybackProgress (if any) is read
+    // on a timer rather than evented. _isSeeking suppresses poll writes while
+    // the user drags the seek bar so the thumb doesn't fight them.
+    private IPlaybackProgress? _progress;
+    private DispatcherTimer? _progressTimer;
+    private bool _isSeeking;
 
     // Output-availability tracking, edge-triggered: a source playing into an
     // unreachable output (game closed / dead device) pauses + toasts once. We
@@ -114,6 +137,11 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
 
         _profiles.Changed += () => Dispatcher.UIThread.Post(RefreshProfiles);
         RefreshProfiles();
+
+        // Drives the seek/progress bar; started only while a progress-capable
+        // source is active (see RebindTransport).
+        _progressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        _progressTimer.Tick += (_, _) => PollProgress();
 
         // Build the output picker: the in-game bridge first, then every local
         // render device. Assign the backing fields directly so seeding the saved
@@ -177,6 +205,83 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         _suppressShuffle = false;
 
         if (_transport != null) _transport.PausedChanged += OnPausedChanged;
+
+        // Rebind the progress capability (independent of transport — Spotify has
+        // progress but no transport). Run the poll timer only while present.
+        _progress = _runner?.ActiveSource as IPlaybackProgress;
+        CanSeek = _progress?.CanSeek ?? false;
+        if (_progress != null)
+        {
+            _progressTimer?.Start();
+            PollProgress();
+        }
+        else
+        {
+            _progressTimer?.Stop();
+            HasProgress = false;
+            PositionSeconds = DurationSeconds = 0;
+        }
+    }
+
+    /// <summary>Poll the active source's position/duration onto the bar. Skips
+    /// the position write while the user is dragging the seek bar.</summary>
+    private void PollProgress()
+    {
+        if (_progress == null) { HasProgress = false; return; }
+
+        var dur = _progress.Duration;
+        HasProgress = dur is { TotalSeconds: > 0 };
+        if (!HasProgress) return;
+
+        DurationSeconds = dur!.Value.TotalSeconds;
+        if (!_isSeeking)
+            PositionSeconds = Math.Min(_progress.Position.TotalSeconds, DurationSeconds);
+    }
+
+    partial void OnPositionSecondsChanged(double value) =>
+        PositionText = FormatTime(value);
+
+    partial void OnDurationSecondsChanged(double value)
+    {
+        DurationText = FormatTime(value);
+        OnPropertyChanged(nameof(SeekMaximum));
+    }
+
+    partial void OnHasProgressChanged(bool value) =>
+        OnPropertyChanged(nameof(SeekOpacity));
+
+    /// <summary>Slider maximum: the real duration, or 1 when unknown so the
+    /// always-present (but inactive) seek bar renders cleanly with Min &lt; Max
+    /// and doesn't pop in/out and shift the bar's layout.</summary>
+    public double SeekMaximum => DurationSeconds > 0 ? DurationSeconds : 1;
+
+    /// <summary>Dim the seek bar when there's no real progress to show.</summary>
+    public double SeekOpacity => HasProgress ? 1.0 : 0.35;
+
+    private static string FormatTime(double seconds)
+    {
+        if (seconds < 0 || double.IsNaN(seconds)) seconds = 0;
+        var t = TimeSpan.FromSeconds(seconds);
+        return $"{(int)t.TotalMinutes}:{t.Seconds:00}";
+    }
+
+    /// <summary>Called from the seek slider's drag/press handlers: suppress poll
+    /// writes during a drag, then commit the seek on release.</summary>
+    public void BeginSeek()
+    {
+        if (CanSeek) _isSeeking = true;
+    }
+
+    public void EndSeek()
+    {
+        if (!_isSeeking) return;
+        _isSeeking = false;
+        if (_progress is { CanSeek: true })
+        {
+            var target = TimeSpan.FromSeconds(PositionSeconds);
+            try { _ = _progress.SeekAsync(target); }
+            catch (Exception ex) { Debug.WriteLine($"[hzn-now-vm] seek: {ex.Message}"); }
+        }
     }
 
     /// <summary>Re-read the source's CanX capabilities. Called on (re)bind and
@@ -231,7 +336,28 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         ReevaluateOutput();
     }
 
-    partial void OnPreviewVolumeChanged(double value) => _preview?.SetVolume(value);
+    partial void OnPreviewVolumeChanged(double value)
+    {
+        _preview?.SetVolume(value);
+        // Dragging the slider up unmutes; keeps the icon honest.
+        if (value > 0 && IsMuted) IsMuted = false;
+    }
+
+    [RelayCommand]
+    private void ToggleMute()
+    {
+        if (IsMuted)
+        {
+            IsMuted = false;
+            PreviewVolume = _volumeBeforeMute;
+        }
+        else
+        {
+            _volumeBeforeMute = PreviewVolume > 0 ? PreviewVolume : 1.0;
+            IsMuted = true;
+            PreviewVolume = 0;
+        }
+    }
 
     /// <summary>Output-availability guard. When the active output can't be
     /// played to, pause the source (keeping its metadata + position) and toast.
@@ -369,6 +495,13 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         {
             Debug.WriteLine($"[hzn-now-vm] switch failed: {ex.Message}");
             SwitchStatus = $"{factory.DisplayName}: {ex.Message}";
+            // The dashboard no longer shows SwitchStatus inline (controls moved
+            // to the player bar), so surface the failure as a toast.
+            _toasts?.CreateToast($"Couldn't start {factory.DisplayName}")
+                .WithContent(ex.Message)
+                .WithDelay(6)
+                .DismissOnClick()
+                .ShowError();
         }
     }
 
@@ -422,6 +555,11 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         {
             Debug.WriteLine($"[hzn-now-vm] profile switch failed: {ex.Message}");
             SwitchStatus = ex.Message; // already includes the profile name
+            _toasts?.CreateToast($"Couldn't start “{profile.Name}”")
+                .WithContent(ex.Message)
+                .WithDelay(6)
+                .DismissOnClick()
+                .ShowError();
         }
     }
 
@@ -458,8 +596,8 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         // reconnect attempts would wipe Now Playing every few seconds.
         if (!connected && _runner?.IsRunning != true)
         {
-            Title = "Nothing playing";
-            Artist = "Launch Forza Horizon 6 with the mod installed";
+            Title = "Ready to Play";
+            Artist = "Choose a source to start playing";
             Album = null;
             SourceDisplay = "—";
             SourceId = "";

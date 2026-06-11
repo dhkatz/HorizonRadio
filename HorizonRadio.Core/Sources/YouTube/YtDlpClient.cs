@@ -32,7 +32,8 @@ public static class YtDlpClient
         string Title,
         string Uploader,
         string? ThumbnailUrl,
-        string? Album);
+        string? Album,
+        TimeSpan? Duration);
 
     /// <summary>
     /// Resolves <paramref name="url"/> into a flat list of entries.
@@ -109,8 +110,13 @@ public static class YtDlpClient
         string uploader = ReadString(root, "uploader") ?? ReadString(root, "channel") ?? "";
         string? thumb = ReadString(root, "thumbnail");
         string? album = ReadString(root, "album"); // populated for Music-style entries
+        // "duration" is the video length in (possibly fractional) seconds;
+        // absent on some live/streamed entries → null (progress bar hides).
+        TimeSpan? duration = ReadDouble(root, "duration") is { } secs && secs > 0
+            ? TimeSpan.FromSeconds(secs)
+            : null;
 
-        return new Resolved(streamUrl, title, uploader, thumb, album);
+        return new Resolved(streamUrl, title, uploader, thumb, album, duration);
     }
 
     private static Entry? TryReadEntry(JsonElement e)
@@ -130,6 +136,11 @@ public static class YtDlpClient
     private static string? ReadString(JsonElement e, string key)
         => e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String
             ? v.GetString()
+            : null;
+
+    private static double? ReadDouble(JsonElement e, string key)
+        => e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.Number
+            ? v.GetDouble()
             : null;
 
     private static async Task<string> RunCapture(

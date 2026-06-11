@@ -52,10 +52,17 @@ public sealed class SubprocessPcmSource(SubprocessPcmSource.Config config) : IAs
     private Process? _process;
     private Task? _stderrTask;
     private CancellationTokenSource? _cts;
+    private long _pcmBytes;
 
     private static void Log(string msg) => Debug.WriteLine($"[hzn-subproc] {msg}");
 
     public bool IsRunning => _process is { HasExited: false };
+
+    /// <summary>Wall-clock audio emitted so far, derived from PCM bytes pushed
+    /// at the canonical format. Stream wrappers (e.g. YouTube) use this as the
+    /// playback position since they pace reads to real time and own transport.</summary>
+    public TimeSpan Elapsed =>
+        TimeSpan.FromSeconds((double)Interlocked.Read(ref _pcmBytes) / AudioFormat.BytesPerFrame / AudioFormat.SampleRate);
 
     /// <summary>Task that completes when the PCM read loop exits (EOF,
     /// cancellation, or stream error). Null until <see cref="StartAsync"/>
@@ -146,7 +153,7 @@ public sealed class SubprocessPcmSource(SubprocessPcmSource.Config config) : IAs
         try { stdout = proc.StandardOutput.BaseStream; }
         catch (Exception ex) { Log($"stdout open: {ex.Message}"); return; }
 
-        ulong totalBytes = 0;
+        Interlocked.Exchange(ref _pcmBytes, 0);
 
         while (!ct.IsCancellationRequested)
         {
@@ -162,9 +169,9 @@ public sealed class SubprocessPcmSource(SubprocessPcmSource.Config config) : IAs
                 }
                 catch (OperationCanceledException) { return; }
                 catch (Exception ex) { Log($"stdout read: {ex.Message}"); return; }
-                if (got <= 0) { Log($"stdout EOF after {totalBytes} bytes"); return; }
+                if (got <= 0) { Log($"stdout EOF after {Interlocked.Read(ref _pcmBytes)} bytes"); return; }
                 filled += got;
-                totalBytes += (ulong)got;
+                Interlocked.Add(ref _pcmBytes, got);
             }
 
             // s16-LE byte buffer → short[] in one go via BlockCopy.

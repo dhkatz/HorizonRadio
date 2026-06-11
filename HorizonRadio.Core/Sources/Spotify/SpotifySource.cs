@@ -30,7 +30,7 @@ namespace HorizonRadio.Core.Sources.Spotify;
 /// and we don't ship a Spotify Web API client. Users pause/skip from
 /// their Spotify app.
 /// </summary>
-public sealed class SpotifySource(SpotifyOptions options) : IAudioSource
+public sealed class SpotifySource(SpotifyOptions options) : IAudioSource, IPlaybackProgress
 {
     public string Id => "spotify";
     public string DisplayName => "Spotify Connect";
@@ -38,6 +38,16 @@ public sealed class SpotifySource(SpotifyOptions options) : IAudioSource
     public event Action<Track>? TrackChanged;
 
     private SubprocessPcmSource? _subprocess;
+
+    // Progress derived from librespot's --onevent breadcrumb: DURATION_MS on
+    // track_changed, POSITION_MS on playing/paused/seeked. We extrapolate
+    // position with a monotonic clock between events, and the `seeked` event
+    // keeps us correct when the user scrubs from their own Spotify app.
+    // All in ms; Interlocked for torn-free 64-bit reads from the UI poll.
+    private long _durationMs;
+    private long _lastPositionMs;
+    private long _lastPosStamp;   // Stopwatch.GetTimestamp() at last SetPosition
+    private volatile bool _isPlaying;
 
     // id (bare base62) -> (title, full spotify URI), cached from librespot's
     // "Loading <title> with Spotify URI <uri>" lines. Accessed only from the
@@ -97,6 +107,47 @@ public sealed class SpotifySource(SpotifyOptions options) : IAudioSource
         if (_subprocess == null) return;
         await _subprocess.DisposeAsync().ConfigureAwait(false);
         _subprocess = null;
+        Interlocked.Exchange(ref _durationMs, 0);
+        Interlocked.Exchange(ref _lastPositionMs, 0);
+        _isPlaying = false;
+    }
+
+    // -- IPlaybackProgress (read-only; transport is owned by Spotify Connect) --
+
+    public TimeSpan? Duration
+    {
+        get { var d = Interlocked.Read(ref _durationMs); return d > 0 ? TimeSpan.FromMilliseconds(d) : null; }
+    }
+
+    public TimeSpan Position
+    {
+        get
+        {
+            var ms = CurrentPositionMs();
+            var dur = Interlocked.Read(ref _durationMs);
+            if (dur > 0 && ms > dur) ms = dur;
+            return TimeSpan.FromMilliseconds(ms < 0 ? 0 : ms);
+        }
+    }
+
+    public bool CanSeek => false;
+
+    private long CurrentPositionMs()
+    {
+        var baseMs = Interlocked.Read(ref _lastPositionMs);
+        if (_isPlaying)
+        {
+            var since = Stopwatch.GetTimestamp() - Interlocked.Read(ref _lastPosStamp);
+            baseMs += (long)(since * 1000.0 / Stopwatch.Frequency);
+        }
+        return baseMs;
+    }
+
+    private void SetPosition(long ms, bool playing)
+    {
+        Interlocked.Exchange(ref _lastPositionMs, ms < 0 ? 0 : ms);
+        Interlocked.Exchange(ref _lastPosStamp, Stopwatch.GetTimestamp());
+        _isPlaying = playing;
     }
 
     public async ValueTask DisposeAsync() => await StopAsync().ConfigureAwait(false);
@@ -128,16 +179,21 @@ public sealed class SpotifySource(SpotifyOptions options) : IAudioSource
 
     private void HandleEvent(string line)
     {
-        // "HZNEV <event> <track_id?>"
+        // "HZNEV <event> <track_id?> <position_ms?> <duration_ms?>"
         var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length < 2) return;
 
         _eventsWorking = true;
 
+        var ev = parts[1];
+
+        // Feed the progress bar from every relevant event (incl. paused/seeked),
+        // then fall through to the HUD-title logic below.
+        UpdateProgress(ev, parts);
+
         // Only a track actually entering playback should move the HUD.
         // preloading / loading / preload_next / end_of_track / seeked /
         // paused / stopped are deliberately ignored here.
-        var ev = parts[1];
         if (ev != "track_changed" && ev != "playing") return;
 
         var rawId = parts.Length >= 3 ? parts[2] : "";
@@ -161,6 +217,35 @@ public sealed class SpotifySource(SpotifyOptions options) : IAudioSource
         // resolved URI.
         var key = validId ? id : track.Value.Uri;
         Announce(key, track.Value.Title, track.Value.Uri);
+    }
+
+    // Parse POSITION_MS / DURATION_MS out of the breadcrumb and update the
+    // extrapolated progress state. Missing/unexpanded tokens (older librespot
+    // that doesn't set these env vars) leave duration 0 → the bar hides.
+    private void UpdateProgress(string ev, string[] parts)
+    {
+        if (parts.Length >= 5 && long.TryParse(parts[4], out var durMs) && durMs > 0)
+            Interlocked.Exchange(ref _durationMs, durMs);
+
+        long? posMs = parts.Length >= 4 && long.TryParse(parts[3], out var p) ? p : null;
+
+        switch (ev)
+        {
+            case "track_changed":
+                SetPosition(posMs ?? 0, playing: _isPlaying);
+                break;
+            case "playing":
+                SetPosition(posMs ?? CurrentPositionMs(), playing: true);
+                break;
+            case "seeked":
+                SetPosition(posMs ?? CurrentPositionMs(), playing: _isPlaying);
+                break;
+            case "paused":
+            case "stopped":
+            case "end_of_track":
+                SetPosition(posMs ?? CurrentPositionMs(), playing: false);
+                break;
+        }
     }
 
     private void Announce(string key, string title, string uri)
@@ -251,7 +336,7 @@ public sealed class SpotifySource(SpotifyOptions options) : IAudioSource
             // "1>&2" keeps it off stdout (that's the PCM pipe). We only key
             // off PLAYER_EVENT + TRACK_ID, both cmd-safe, so there's no
             // quoting hazard from track titles.
-            "--onevent",                       "cmd /c echo HZNEV %PLAYER_EVENT% %TRACK_ID% 1>&2",
+            "--onevent",                       "cmd /c echo HZNEV %PLAYER_EVENT% %TRACK_ID% %POSITION_MS% %DURATION_MS% 1>&2",
         };
         if (o.EnableVolumeNormalisation) list.Add("--enable-volume-normalisation");
         if (!string.IsNullOrEmpty(o.Bitrate) && o.Bitrate != "auto")
