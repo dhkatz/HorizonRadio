@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- librespot is now installable on demand from the Tools tab, downloaded
+  from a permanent, version-addressed tool blobstore (the `tools` GitHub
+  release) and verified against a SHA-256 the app ships in an embedded
+  `tools.manifest.json`. Pins live in one place (the manifest), read by
+  both the app build and the librespot CI build.
+- Nightly builds: a daily workflow publishes a rolling `nightly`
+  prerelease of `main`. External tools resolve from the durable
+  blobstore, so an installed nightly keeps working even after newer
+  nightlies replace it. See `docs/tool-provisioning.md`.
+
 ### Changed
 
 - C++ side now builds with CMake (`CMakeLists.txt` + `CMakePresets.json`)

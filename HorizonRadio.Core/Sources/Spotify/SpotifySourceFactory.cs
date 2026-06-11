@@ -104,9 +104,17 @@ public sealed class SpotifySourceFactory : IAudioSourceFactory
     private static string? DiscoverLibrespotExe()
     {
         var here = AppContext.BaseDirectory;
+        // %LOCALAPPDATA%\HorizonRadio\tools\librespot\librespot.exe — where
+        // the UI's LibrespotInstaller drops the pinned blobstore build.
+        // Mirrors HorizonRadio.UI.Tools.ToolsPaths without taking a UI
+        // dependency from Core (it's just a well-known path string).
+        var toolsLibrespot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "HorizonRadio", "tools", "librespot", "librespot.exe");
         var candidates = new[]
         {
             Path.Combine(here, "librespot.exe"),
+            toolsLibrespot,
             Path.Combine(here, "..", "..", "..", "..", "build", "Librespot", "bin", "librespot.exe"),
             Path.Combine(here, "..", "..", "..", "..", "..", "build", "Librespot", "bin", "librespot.exe"),
         };
