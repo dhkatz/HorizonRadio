@@ -39,10 +39,15 @@ runs:
         $git      = 'https://github.com/librespot-org/librespot'
         $target   = 'x86_64-pc-windows-msvc'
         $features = 'rustls-tls-webpki-roots,with-libmdns'
-        "rev=$rev"           >> $env:GITHUB_OUTPUT
-        "git=$git"           >> $env:GITHUB_OUTPUT
-        "target=$target"     >> $env:GITHUB_OUTPUT
-        "features=$features" >> $env:GITHUB_OUTPUT
+        # actions/cache keys must not contain commas, so emit a
+        # comma-free variant for the cache key. cargo still gets the
+        # real comma-separated list via the `features` output.
+        $featuresKey = $features -replace ',', '_'
+        "rev=$rev"                   >> $env:GITHUB_OUTPUT
+        "git=$git"                   >> $env:GITHUB_OUTPUT
+        "target=$target"             >> $env:GITHUB_OUTPUT
+        "features=$features"         >> $env:GITHUB_OUTPUT
+        "features_key=$featuresKey"  >> $env:GITHUB_OUTPUT
 
     # Cache the built exe directly, keyed on the rev. Hits are O(seconds);
     # misses fall through to cargo install. We also cache the cargo
@@ -53,7 +58,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: build/librespot/librespot.exe
-        key: librespot-exe-${{ runner.os }}-${{ steps.pin.outputs.target }}-${{ steps.pin.outputs.rev }}-${{ steps.pin.outputs.features }}
+        key: librespot-exe-${{ runner.os }}-${{ steps.pin.outputs.target }}-${{ steps.pin.outputs.rev }}-${{ steps.pin.outputs.features_key }}
 
     - name: Set up Rust toolchain
       if: steps.cache-exe.outputs.cache-hit != 'true'
