@@ -20,6 +20,9 @@ outputs:
   rev12:
     description: First 12 chars of the rev (used in the blobstore asset name).
     value: ${{ steps.pin.outputs.rev12 }}
+  target:
+    description: The Rust target triple librespot was built for.
+    value: ${{ steps.pin.outputs.target }}
 
 runs:
   using: composite

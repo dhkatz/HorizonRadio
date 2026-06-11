@@ -7,7 +7,7 @@
       "platforms": {
         "win-x64": {
           "url": "https://github.com/dhkatz/HorizonRadio/releases/download/tools/librespot-33bf3a77ed4b-x86_64-pc-windows-msvc.exe",
-          "sha256": ""
+          "sha256": "a7175f4e2df83489c01da71122b4fb685d08ae0d0ee65d4b166722bda13ec1c3"
         }
       }
     },
