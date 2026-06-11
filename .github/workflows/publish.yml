@@ -28,6 +28,15 @@ jobs:
         with:
           arch: x64
 
+      # ilammy/msvc-dev-cmd exports Platform=x64, which dotnet promotes to
+      # a global MSBuild property and `dotnet publish` of the .slnx then
+      # fails with MSB4126 "Release|x64 is invalid" (the C# projects only
+      # define AnyCPU). cmake + Ninja ignore Platform, so clearing it is
+      # safe for the C++ build.
+      - name: Clear MSVC Platform var (breaks dotnet on the .slnx)
+        shell: pwsh
+        run: '"Platform=" >> $env:GITHUB_ENV'
+
       - name: Set up Ninja
         uses: seanmiddleditch/gha-setup-ninja@v5
 
