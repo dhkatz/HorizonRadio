@@ -19,6 +19,14 @@ on:
 permissions:
   contents: write
 
+# Serialize: the create-release-if-missing probe and the append-only
+# asset upload aren't atomic, so two concurrent runs could both create
+# the release or both upload the same asset. Queue rather than cancel —
+# we don't want to drop a publish.
+concurrency:
+  group: publish-tools
+  cancel-in-progress: false
+
 jobs:
   librespot:
     name: Publish librespot to the tools blobstore

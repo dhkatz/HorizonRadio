@@ -13,6 +13,12 @@ on:
 permissions:
   contents: write
 
+# Only one nightly matters; a newer run supersedes an in-flight one, and
+# this avoids two runs racing the rolling-release delete+create.
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
 jobs:
   nightly:
     name: Build + publish nightly
