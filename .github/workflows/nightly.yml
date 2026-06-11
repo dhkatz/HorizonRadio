@@ -39,16 +39,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # `gh release view nightly` exits nonzero on the first run (no
+          # nightly release yet). Don't throw on that, and don't let its
+          # nonzero linger as the step's exit code — the guard's only job
+          # is to decide skip true/false, so end with `exit 0`.
+          $PSNativeCommandUseErrorActionPreference = $false
           $head = (git rev-parse HEAD).Trim()
           "head=$head" >> $env:GITHUB_OUTPUT
-          $body = ''
-          try { $body = gh release view nightly --json body --jq '.body' 2>$null } catch { }
+          $body = gh release view nightly --json body --jq '.body' 2>$null
+          if ($LASTEXITCODE -ne 0) { $body = '' } # no prior nightly release
           if ($body -match 'commit:\s*([0-9a-fA-F]{40})' -and $Matches[1].ToLower() -eq $head.ToLower()) {
             Write-Host "Nightly already built for $head; skipping."
             "skip=true" >> $env:GITHUB_OUTPUT
           } else {
             "skip=false" >> $env:GITHUB_OUTPUT
           }
+          exit 0
 
       - name: Set up MSVC dev environment
         if: steps.guard.outputs.skip != 'true'
@@ -78,8 +84,11 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         shell: pwsh
         run: |
+          # git describe exits nonzero if there's no v* tag; tolerate that
+          # and fall back to 0.0.0 instead of throwing under pwsh 7.4+.
+          $PSNativeCommandUseErrorActionPreference = $false
           $base = (git describe --tags --abbrev=0 --match 'v*' 2>$null)
-          $base = if ([string]::IsNullOrWhiteSpace($base)) { '0.0.0' } else { $base -replace '^v', '' }
+          if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($base)) { $base = '0.0.0' } else { $base = $base -replace '^v', '' }
           $date  = Get-Date -Format 'yyyyMMdd'
           $short = (git rev-parse --short HEAD).Trim()
           $version = "$base-nightly.$date+$short"
