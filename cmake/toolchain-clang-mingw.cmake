@@ -27,11 +27,13 @@
 set(CMAKE_SYSTEM_NAME      Windows)
 set(CMAKE_SYSTEM_PROCESSOR x86_64)
 
-# Discover the mingw-w64 sysroot. Different package managers lay this
-# out differently (Homebrew nests it under Cellar/, apt at /usr,
-# pacman at /usr) — the only stable answer is to ask gcc itself.
-# `gcc -print-sysroot` returns the toolchain root; the target-specific
-# sysroot (where windows.h lives) is one directory deeper.
+# Discover the mingw-w64 sysroot (the tree that holds windows.h).
+# Package managers lay this out differently and `gcc -print-sysroot` is
+# only populated on some of them — Homebrew returns the Cellar path,
+# but Debian/Ubuntu return an EMPTY string (no sysroot configured;
+# headers sit at /usr/x86_64-w64-mingw32). So rather than trust one
+# method, probe the known locations and take the first that actually
+# contains the Windows headers.
 find_program(_MINGW_GCC NAMES x86_64-w64-mingw32-gcc)
 if(NOT _MINGW_GCC)
   message(FATAL_ERROR
@@ -42,12 +44,35 @@ execute_process(
   COMMAND "${_MINGW_GCC}" -print-sysroot
   OUTPUT_VARIABLE _MINGW_PRINT_SYSROOT
   OUTPUT_STRIP_TRAILING_WHITESPACE)
-set(_MINGW_SYSROOT "${_MINGW_PRINT_SYSROOT}/x86_64-w64-mingw32")
 
-if(NOT EXISTS "${_MINGW_SYSROOT}/include/windows.h")
+# Candidates, in priority order:
+#   <print-sysroot>/x86_64-w64-mingw32   Homebrew / sysroot-style
+#   <print-sysroot>                       headers directly under it
+#   <gcc-prefix>/x86_64-w64-mingw32       Debian/Ubuntu/Arch (e.g. /usr/...)
+#   <gcc-prefix>/.../sys-root/mingw       Fedora
+# Empty/non-existent candidates fall through the EXISTS check below.
+get_filename_component(_MINGW_BINDIR "${_MINGW_GCC}" DIRECTORY)
+get_filename_component(_MINGW_PREFIX "${_MINGW_BINDIR}" DIRECTORY)
+set(_MINGW_SYSROOT_CANDIDATES
+  "${_MINGW_PRINT_SYSROOT}/x86_64-w64-mingw32"
+  "${_MINGW_PRINT_SYSROOT}"
+  "${_MINGW_PREFIX}/x86_64-w64-mingw32"
+  "${_MINGW_PREFIX}/x86_64-w64-mingw32/sys-root/mingw"
+  "/usr/x86_64-w64-mingw32"
+  "/usr/x86_64-w64-mingw32/sys-root/mingw")
+set(_MINGW_SYSROOT "")
+foreach(_cand IN LISTS _MINGW_SYSROOT_CANDIDATES)
+  if(_cand AND EXISTS "${_cand}/include/windows.h")
+    set(_MINGW_SYSROOT "${_cand}")
+    break()
+  endif()
+endforeach()
+if(NOT _MINGW_SYSROOT)
   message(FATAL_ERROR
-    "MinGW sysroot looks malformed: '${_MINGW_SYSROOT}/include/windows.h' is missing. "
-    "Reinstall mingw-w64 or set CMAKE_SYSROOT manually before configuring.")
+    "Could not locate the mingw-w64 sysroot: no 'include/windows.h' found "
+    "under print-sysroot, ${_MINGW_PREFIX}/x86_64-w64-mingw32, "
+    "/usr/x86_64-w64-mingw32, or a Fedora sys-root layout. Reinstall "
+    "mingw-w64 or set CMAKE_SYSROOT manually before configuring.")
 endif()
 
 # macOS's /usr/bin/clang is Apple Clang and lacks the mingw-w64
