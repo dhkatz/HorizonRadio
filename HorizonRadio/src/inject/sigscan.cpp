@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <horizon/inject/sigscan.hpp>
 #include <optional>
 #include <stdexcept>

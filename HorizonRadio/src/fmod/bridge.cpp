@@ -1,5 +1,6 @@
 #include <array>
 #include <chrono>
+#include <cstring>
 #include <horizon/fmod/bridge.hpp>
 #include <horizon/inject/safe_mem.hpp>
 
