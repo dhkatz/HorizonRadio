@@ -2,9 +2,9 @@ using Avalonia.Controls;
 
 namespace HorizonRadio.UI.Views;
 
-public partial class ProfilesView : UserControl
+public partial class MixesView : UserControl
 {
-    public ProfilesView()
+    public MixesView()
     {
         InitializeComponent();
     }

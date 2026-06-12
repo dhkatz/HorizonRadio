@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
-using HorizonRadio.Core.Sources.Profiles;
+using HorizonRadio.Core.Sources.Mixes;
 
 namespace HorizonRadio.Core.Events;
 
@@ -28,20 +28,20 @@ public sealed class ActionDispatcher : IActionDispatcher
 {
     private readonly SourceRunner _runner;
     private readonly SourceConfigStore _configStore;
-    private readonly ProfileSwitcher? _profiles;
+    private readonly MixSwitcher? _mixes;
     private readonly Func<float, bool>? _setGain;
     private readonly string _logChannel;
 
     public ActionDispatcher(
         SourceRunner runner,
         SourceConfigStore configStore,
-        ProfileSwitcher? profiles = null,
+        MixSwitcher? mixes = null,
         Func<float, bool>? setGain = null,
         string logChannel = "events")
     {
         _runner = runner;
         _configStore = configStore;
-        _profiles = profiles;
+        _mixes = mixes;
         _setGain = setGain;
         _logChannel = logChannel;
     }
@@ -75,15 +75,15 @@ public sealed class ActionDispatcher : IActionDispatcher
                 case EventActionType.SwitchSource:
                     await SwitchSourceAsync(action.Param).ConfigureAwait(false);
                     break;
-                case EventActionType.SwitchProfile:
-                    if (_profiles != null && !string.IsNullOrEmpty(action.Param))
-                        await _profiles.SwitchToAsync(action.Param).ConfigureAwait(false);
+                case EventActionType.SwitchMix:
+                    if (_mixes != null && !string.IsNullOrEmpty(action.Param))
+                        await _mixes.SwitchToAsync(action.Param).ConfigureAwait(false);
                     break;
-                case EventActionType.NextProfile:
-                    if (_profiles != null) await _profiles.NextAsync().ConfigureAwait(false);
+                case EventActionType.NextMix:
+                    if (_mixes != null) await _mixes.NextAsync().ConfigureAwait(false);
                     break;
-                case EventActionType.PreviousProfile:
-                    if (_profiles != null) await _profiles.PreviousAsync().ConfigureAwait(false);
+                case EventActionType.PreviousMix:
+                    if (_mixes != null) await _mixes.PreviousAsync().ConfigureAwait(false);
                     break;
                 case EventActionType.SetVolume:
                     SetVolume(action.Param);

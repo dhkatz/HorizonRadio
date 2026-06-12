@@ -12,7 +12,7 @@ using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
-using HorizonRadio.Core.Sources.Profiles;
+using HorizonRadio.Core.Sources.Mixes;
 using ShadUI;
 
 namespace HorizonRadio.UI.ViewModels;
@@ -49,11 +49,11 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     [ObservableProperty] private IAudioSourceFactory? selectedFactory;
     [ObservableProperty] private string? switchStatus;
 
-    /// <summary>Saved profiles for the quick-switch dropdown, kept in sync with
-    /// the Profiles tab via the shared store's Changed event.</summary>
-    public ObservableCollection<SourceProfile> Profiles { get; } = new();
-    [ObservableProperty] private SourceProfile? selectedProfile;
-    public bool HasProfiles => Profiles.Count > 0;
+    /// <summary>Saved mixes for the quick-switch dropdown, kept in sync with the
+    /// Mixes tab via the shared store's Changed event.</summary>
+    public ObservableCollection<Mix> Mixes { get; } = new();
+    [ObservableProperty] private Mix? selectedMix;
+    public bool HasMixes => Mixes.Count > 0;
 
     [ObservableProperty] private bool canPause;
     [ObservableProperty] private bool canSkipNext;
@@ -101,12 +101,12 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
 
     private readonly SourceRunner? _runner;
     private readonly SourceConfigStore? _store;
-    private readonly SourceProfileStore? _profiles;
-    private readonly ProfileSwitcher? _switcher;
+    private readonly MixStore? _mixes;
+    private readonly MixSwitcher? _switcher;
     private readonly PreviewController? _preview;
     private readonly ToastManager? _toasts;
     private bool _suppressSwitch;
-    private bool _suppressProfile;
+    private bool _suppressMix;
     // Guards IsShuffleEnabled while RebindTransport seeds it from the persisted
     // preference, so syncing the toggle doesn't re-fire a write/apply.
     private bool _suppressShuffle;
@@ -129,21 +129,21 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     public IReadOnlyList<IAudioSourceFactory> AvailableSources { get; }
 
     public NowPlayingViewModel(SourceRunner runner, SourceConfigStore store,
-        SourceProfileStore profiles, ProfileSwitcher switcher,
+        MixStore mixes, MixSwitcher switcher,
         StationTargetViewModel station,
         PreviewController? preview = null, ToastManager? toasts = null)
     {
         _runner = runner;
         _store = store;
-        _profiles = profiles;
+        _mixes = mixes;
         _switcher = switcher;
         _preview = preview;
         _toasts = toasts;
         Station = station;
         AvailableSources = SourceCatalog.All;
 
-        _profiles.Changed += () => Dispatcher.UIThread.Post(RefreshProfiles);
-        RefreshProfiles();
+        _mixes.Changed += () => Dispatcher.UIThread.Post(RefreshMixes);
+        RefreshMixes();
 
         // Drives the seek/progress bar; started only while a progress-capable
         // source is active (see RebindTransport).
@@ -526,54 +526,54 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     }
 
     // In-place sync (add/remove by id) rather than Clear()+Add, so editing one
-    // profile elsewhere doesn't tear down and rebuild the whole bound dropdown.
-    private void RefreshProfiles()
+    // mix elsewhere doesn't tear down and rebuild the whole bound dropdown.
+    private void RefreshMixes()
     {
-        if (_profiles == null) return;
-        var desired = _profiles.All;
+        if (_mixes == null) return;
+        var desired = _mixes.All;
 
-        for (int i = Profiles.Count - 1; i >= 0; i--)
-            if (!desired.Any(p => p.Id == Profiles[i].Id)) Profiles.RemoveAt(i);
+        for (int i = Mixes.Count - 1; i >= 0; i--)
+            if (!desired.Any(m => m.Id == Mixes[i].Id)) Mixes.RemoveAt(i);
 
-        foreach (var p in desired)
+        foreach (var m in desired)
         {
             var idx = -1;
-            for (int i = 0; i < Profiles.Count; i++)
-                if (Profiles[i].Id == p.Id) { idx = i; break; }
-            if (idx < 0) Profiles.Add(p);
-            else if (!Equals(Profiles[idx], p)) Profiles[idx] = p; // name/content changed
+            for (int i = 0; i < Mixes.Count; i++)
+                if (Mixes[i].Id == m.Id) { idx = i; break; }
+            if (idx < 0) Mixes.Add(m);
+            else if (!Equals(Mixes[idx], m)) Mixes[idx] = m; // name/entries changed
         }
-        OnPropertyChanged(nameof(HasProfiles));
+        OnPropertyChanged(nameof(HasMixes));
     }
 
-    // The dropdown is a "jump to profile" launcher, not a mirror of what's
-    // playing: on pick we reset the selection to null (so re-picking the same
-    // profile re-fires) and launch the captured choice. This avoids the
-    // dropdown going stale when the source is switched elsewhere.
-    partial void OnSelectedProfileChanged(SourceProfile? value)
+    // The dropdown is a "jump to mix" launcher, not a mirror of what's playing:
+    // on pick we reset the selection to null (so re-picking the same mix
+    // re-fires) and launch the captured choice. This avoids the dropdown going
+    // stale when the source is switched elsewhere.
+    partial void OnSelectedMixChanged(Mix? value)
     {
-        if (_suppressProfile || _switcher == null || value == null) return;
+        if (_suppressMix || _switcher == null || value == null) return;
 
-        var profile = value;
-        _suppressProfile = true;
-        SelectedProfile = null;
-        _suppressProfile = false;
-        _ = SwitchProfileAsync(profile);
+        var mix = value;
+        _suppressMix = true;
+        SelectedMix = null;
+        _suppressMix = false;
+        _ = SwitchMixAsync(mix);
     }
 
-    private async Task SwitchProfileAsync(SourceProfile profile)
+    private async Task SwitchMixAsync(Mix mix)
     {
         if (_switcher == null) return;
 
-        SwitchStatus = $"Starting {profile.Name}...";
+        SwitchStatus = $"Starting {mix.Name}...";
         try
         {
-            await _switcher.SwitchToAsync(profile.Id);
+            await _switcher.SwitchToAsync(mix.Id);
             SwitchStatus = null;
         }
         catch (MissingToolException ex)
         {
-            Debug.WriteLine($"[hzn-now-vm] profile switch blocked: {ex.Message}");
+            Debug.WriteLine($"[hzn-now-vm] mix switch blocked: {ex.Message}");
             SwitchStatus = ex.Message;
             _toasts?.CreateToast("Tool required")
                 .WithContent(ex.Message)
@@ -583,9 +583,9 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[hzn-now-vm] profile switch failed: {ex.Message}");
-            SwitchStatus = ex.Message; // already includes the profile name
-            _toasts?.CreateToast($"Couldn't start “{profile.Name}”")
+            Debug.WriteLine($"[hzn-now-vm] mix switch failed: {ex.Message}");
+            SwitchStatus = ex.Message; // already includes the mix name
+            _toasts?.CreateToast($"Couldn't start “{mix.Name}”")
                 .WithContent(ex.Message)
                 .WithDelay(6)
                 .DismissOnClick()

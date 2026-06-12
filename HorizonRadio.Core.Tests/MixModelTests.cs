@@ -83,4 +83,34 @@ public class MixModelTests
         Assert.Throws<InvalidOperationException>(
             () => resolver.ResolvePlayer(new ContentRef("nope", "whatever")));
     }
+
+    [Fact]
+    public void Migration_converts_content_profiles_and_drops_self_driven()
+    {
+        using var dir = TempDir.Create();
+        var path = Path.Combine(dir.Path, "profiles.json");
+        File.WriteAllText(path, """
+        {
+          "profiles": [
+            { "id": "a", "name": "Tube",   "source": "youtube", "content": { "url": "https://youtu.be/x" } },
+            { "id": "b", "name": "Spot",   "source": "spotify", "content": {} },
+            { "id": "c", "name": "Folder", "source": "local",   "content": { "path": "C:\\Music" } }
+          ]
+        }
+        """);
+
+        var mixes = MixMigration.FromLegacyProfiles(path);
+
+        Assert.Equal(2, mixes.Count); // self-driven Spotify profile dropped
+        Assert.DoesNotContain(mixes, m => m.Id == "b");
+
+        var tube = mixes.First(m => m.Id == "a");
+        Assert.Single(tube.Entries);
+        Assert.Equal("youtube", tube.Entries[0].SourceId);
+        Assert.Equal("https://youtu.be/x", tube.Entries[0].Locator);
+
+        var folder = mixes.First(m => m.Id == "c");
+        Assert.Equal("local", folder.Entries[0].SourceId);
+        Assert.Equal(@"C:\Music", folder.Entries[0].Locator);
+    }
 }

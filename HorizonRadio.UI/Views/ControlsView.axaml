@@ -144,11 +144,11 @@
 
                 <ItemsControl ItemsSource="{Binding Rows}"/>
 
-                <!-- Profiles section: Next/Previous + one row per saved profile. -->
-                <TextBlock Text="PROFILES"
+                <!-- Mixes section: Next/Previous + one row per saved mix. -->
+                <TextBlock Text="MIXES"
                            FontSize="11" FontWeight="SemiBold" Opacity="0.5"
                            Margin="14,10,14,6"/>
-                <ItemsControl ItemsSource="{Binding ProfileRows}"/>
+                <ItemsControl ItemsSource="{Binding MixRows}"/>
             </StackPanel>
 
             <!-- Recent activity -->

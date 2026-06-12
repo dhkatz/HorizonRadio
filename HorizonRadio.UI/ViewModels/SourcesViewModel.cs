@@ -28,6 +28,15 @@ public sealed partial class SourcesViewModel : ViewModelBase
 
     [ObservableProperty] private IAudioSourceFactory? selectedFactory;
     [ObservableProperty] private bool isRunning;
+
+    /// <summary>True when the selected source plays via mixes (content-addressable)
+    /// rather than being started directly. The Sources tab configures its engine
+    /// (tool paths, behavior); what to play is chosen in the Mixes tab.</summary>
+    public bool IsContentSource => SelectedFactory is IContentSourceFactory;
+
+    /// <summary>Only self-driven sources (Spotify Connect, the test tone) start
+    /// from here — content sources need a mix to supply what to play.</summary>
+    public bool CanStartSelected => SelectedFactory is not null and not IContentSourceFactory;
     [ObservableProperty] private string statusMessage = "";
     [ObservableProperty] private bool hasError;
     [ObservableProperty] private bool hasNoSchema;
@@ -63,6 +72,8 @@ public sealed partial class SourcesViewModel : ViewModelBase
     partial void OnSelectedFactoryChanged(IAudioSourceFactory? value)
     {
         RebuildSchema(value);
+        OnPropertyChanged(nameof(IsContentSource));
+        OnPropertyChanged(nameof(CanStartSelected));
         _store.LastSelectedId = value?.Id;
         _store.SaveToDisk();
     }
@@ -75,8 +86,13 @@ public sealed partial class SourcesViewModel : ViewModelBase
         var values = _store.Load(factory.Id, factory.Schema);
         var stored = values.AsReadOnly();
 
+        // The content locator (URL/folder) is no longer a per-source setting — it
+        // lives in mixes. Show only the engine fields (tool paths, behavior).
+        var contentKey = (factory as IContentSourceFactory)?.ContentKey;
+
         foreach (var field in factory.Schema)
         {
+            if (field.Key == contentKey) continue;
             var fvm = ConfigFieldViewModel.For(field, _registry);
             if (stored.TryGetValue(field.Key, out var v)) fvm.SetValue(v);
             CurrentSchema.Add(fvm);

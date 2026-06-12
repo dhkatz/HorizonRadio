@@ -1,0 +1,158 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="640"
+             x:Class="HorizonRadio.UI.Views.MixesView"
+             x:DataType="vm:MixesViewModel">
+
+    <Design.DataContext>
+        <vm:MixesViewModel />
+    </Design.DataContext>
+
+    <ScrollViewer>
+        <StackPanel Margin="24" Spacing="16">
+
+            <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+                <StackPanel Grid.Column="0" Spacing="4">
+                    <TextBlock Text="Mixes" FontSize="20" FontWeight="SemiBold"/>
+                    <TextBlock Text="Cross-source playlists. Mix tracks and playlists from any source, then tune to one in a click."
+                               FontSize="12" Opacity="0.6"/>
+                </StackPanel>
+                <Button Grid.Column="1" Classes="Primary" Content="New Mix"
+                        VerticalAlignment="Center"
+                        Command="{Binding NewCommand}"
+                        IsVisible="{Binding !IsEditing}"/>
+            </Grid>
+
+            <!-- List of mixes -->
+            <StackPanel Spacing="0" IsVisible="{Binding !IsEditing}">
+                <TextBlock Text="No mixes yet. Click “New Mix” to create one."
+                           FontSize="12" Opacity="0.5" Margin="2,4"
+                           IsVisible="{Binding !HasMixes}"/>
+
+                <ItemsControl ItemsSource="{Binding Mixes}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:MixRow}">
+                            <Border Classes="Card" Padding="14" Margin="0,0,0,8">
+                                <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+                                    <StackPanel Grid.Column="0" Spacing="4" VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
+                                                       VerticalAlignment="Center"/>
+                                            <Border Padding="8,2" CornerRadius="999"
+                                                    Background="{DynamicResource SecondaryColor}"
+                                                    VerticalAlignment="Center"
+                                                    IsVisible="{Binding HasStation}">
+                                                <TextBlock Text="{Binding Station}"
+                                                           FontSize="10" FontWeight="Medium"/>
+                                            </Border>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding Summary}"
+                                                   FontSize="11" Opacity="0.55"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                                                VerticalAlignment="Center">
+                                        <Button Classes="Primary" Content="Play" Command="{Binding PlayCommand}"/>
+                                        <Button Classes="Outline" Content="Edit" Command="{Binding EditCommand}"/>
+                                        <Button Classes="Ghost" Command="{Binding DeleteCommand}"
+                                                Padding="8" ToolTip.Tip="Delete mix">
+                                            <materialIcons:MaterialIcon Kind="TrashCanOutline" Width="15" Height="15"/>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <!-- Inline builder -->
+            <Border Classes="Card" Padding="16" IsVisible="{Binding IsEditing}">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="Mix" FontSize="14" FontWeight="SemiBold"/>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Name" FontSize="12" FontWeight="Medium"/>
+                        <TextBox Text="{Binding EditingName, Mode=TwoWay}"
+                                 PlaceholderText="e.g. Drive"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Replace station" FontSize="12" FontWeight="Medium"/>
+                        <ComboBox ItemsSource="{Binding StationOptions}"
+                                  SelectedItem="{Binding EditingStation, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch"/>
+                        <TextBlock Text="Override which in-game station this mix replaces, or use the global default set in the player bar."
+                                   FontSize="11" Opacity="0.55" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Entries" FontSize="12" FontWeight="Medium"/>
+                        <TextBlock Text="Played in order. Each entry can be a single track or a whole playlist/folder."
+                                   FontSize="11" Opacity="0.55" TextWrapping="Wrap"/>
+
+                        <ItemsControl ItemsSource="{Binding EditEntries}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:MixEntryEditRow}">
+                                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,4,0,0">
+                                        <ComboBox Grid.Column="0"
+                                                  ItemsSource="{Binding Sources}"
+                                                  SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
+                                                  MinWidth="120" Margin="0,0,8,0"
+                                                  VerticalAlignment="Center">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding DisplayName}"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+
+                                        <TextBox Grid.Column="1"
+                                                 Text="{Binding Locator, Mode=TwoWay}"
+                                                 PlaceholderText="{Binding LocatorHint}"
+                                                 VerticalAlignment="Center"/>
+
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2"
+                                                    Margin="6,0,0,0" VerticalAlignment="Center">
+                                            <Button Classes="Ghost" Padding="6" Command="{Binding MoveUpCommand}"
+                                                    ToolTip.Tip="Move up">
+                                                <materialIcons:MaterialIcon Kind="ChevronUp" Width="16" Height="16"/>
+                                            </Button>
+                                            <Button Classes="Ghost" Padding="6" Command="{Binding MoveDownCommand}"
+                                                    ToolTip.Tip="Move down">
+                                                <materialIcons:MaterialIcon Kind="ChevronDown" Width="16" Height="16"/>
+                                            </Button>
+                                            <Button Classes="Ghost" Padding="6" Command="{Binding RemoveCommand}"
+                                                    ToolTip.Tip="Remove entry">
+                                                <materialIcons:MaterialIcon Kind="Close" Width="16" Height="16"/>
+                                            </Button>
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Button Classes="Outline" Content="Add Entry" Command="{Binding AddEntryCommand}"
+                                HorizontalAlignment="Left" Margin="0,8,0,0"/>
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                        <Button Classes="Secondary" Content="Cancel" Command="{Binding CancelCommand}"/>
+                        <Button Classes="Primary" Content="Save" Command="{Binding SaveCommand}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Status: Save validation and Play feedback both surface here. -->
+            <TextBlock Text="{Binding StatusMessage}"
+                       FontSize="11" Opacity="0.75" TextWrapping="Wrap"
+                       IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

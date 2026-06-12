@@ -48,6 +48,9 @@
                     <TextBlock Text="(This source has no settings.)"
                                FontSize="11" Opacity="0.5" FontStyle="Italic"
                                IsVisible="{Binding HasNoSchema}"/>
+                    <TextBlock Text="This source plays through mixes — set up its tools here, then add it to a mix in the Mixes tab to choose what to play."
+                               FontSize="11" Opacity="0.6" TextWrapping="Wrap"
+                               IsVisible="{Binding IsContentSource}"/>
                 </StackPanel>
             </Border>
 
@@ -70,7 +73,8 @@
                         IsVisible="{Binding IsRunning}"/>
                 <Button Classes="Primary"
                         Content="Start"
-                        Command="{Binding StartCommand}"/>
+                        Command="{Binding StartCommand}"
+                        IsVisible="{Binding CanStartSelected}"/>
             </StackPanel>
 
         </Grid>

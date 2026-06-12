@@ -116,10 +116,10 @@
                     </shadui:SidebarItem.Icon>
                 </shadui:SidebarItem>
 
-                <shadui:SidebarItem Content="Profiles"
-                                    Command="{Binding ShowProfilesCommand}"
-                                    IsChecked="{Binding IsProfilesWorkspace}"
-                                    Route="profiles">
+                <shadui:SidebarItem Content="Mixes"
+                                    Command="{Binding ShowMixesCommand}"
+                                    IsChecked="{Binding IsMixesWorkspace}"
+                                    Route="mixes">
                     <shadui:SidebarItem.Icon>
                         <material:MaterialIcon Kind="PlaylistMusic" Width="18" Height="18"/>
                     </shadui:SidebarItem.Icon>
@@ -334,13 +334,13 @@
                               ToolTip.Tip="Sources">
                     <material:MaterialIcon Kind="Music" Width="18" Height="18"/>
                 </ToggleButton>
-                <ToggleButton Command="{Binding ShowProfilesCommand}"
-                              IsChecked="{Binding IsProfilesWorkspace}"
+                <ToggleButton Command="{Binding ShowMixesCommand}"
+                              IsChecked="{Binding IsMixesWorkspace}"
                               Height="40" Width="40"
                               HorizontalContentAlignment="Center"
                               VerticalContentAlignment="Center"
                               Padding="0"
-                              ToolTip.Tip="Profiles">
+                              ToolTip.Tip="Mixes">
                     <material:MaterialIcon Kind="PlaylistMusic" Width="18" Height="18"/>
                 </ToggleButton>
                 <ToggleButton Command="{Binding ShowMetadataCommand}"
@@ -471,8 +471,8 @@
             <Grid IsVisible="{Binding IsSourcesWorkspace}">
                 <views:SourcesView DataContext="{Binding Sources}"/>
             </Grid>
-            <Grid IsVisible="{Binding IsProfilesWorkspace}">
-                <views:ProfilesView DataContext="{Binding Profiles}"/>
+            <Grid IsVisible="{Binding IsMixesWorkspace}">
+                <views:MixesView DataContext="{Binding Mixes}"/>
             </Grid>
             <Grid IsVisible="{Binding IsMetadataWorkspace}">
                 <views:MetadataView DataContext="{Binding Metadata}"/>
