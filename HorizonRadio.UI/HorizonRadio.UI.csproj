@@ -11,10 +11,11 @@
         <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
 
         <!--
-          Publish into a single .exe so users see ~4 files in the
-          release zip (UI + version.dll + librespot.exe + docs)
-          instead of the ~150 DLLs that ship with a default Avalonia +
-          self-contained publish.
+          Publish into a single .exe so users see a handful of files in
+          the release zip (UI + version.dll + docs) instead of the ~150
+          DLLs that ship with a default Avalonia + self-contained publish.
+          External tools (yt-dlp, ffmpeg, librespot) are not bundled —
+          they install on demand from the Tools tab.
 
           - PublishSingleFile     bundles every managed assembly into
                                   the .exe.
@@ -69,48 +70,33 @@
     </ItemGroup>
 
     <!--
-      Pull C++-side build outputs into the UI's bin directory so the
-      Spotify source's auto-discovery (SpotifyLibrespotSourceFactory.
-      DiscoverLibrespotExe) finds librespot.exe without the user having
-      to file-pick it, and so the release zip can be assembled from a
-      single output dir.
+      Pull the C++-side version.dll into the UI's bin directory (so the
+      Mods tab finds it) and into the publish output (so the release zip
+      ships it). version.dll is the ONLY bundled binary: it's coupling-
+      locked to the game (FMOD offsets + IPC) and can never be fetched at
+      runtime. External tools (yt-dlp, ffmpeg, librespot) are NOT bundled
+      — they install on demand from the Tools tab via the version-addressed
+      `tools` blobstore. See docs/tool-provisioning.md.
 
-      Path notes:
-        - librespot.exe lives in build/librespot/. CI builds it via
-          .github/actions/build-librespot and attaches it as a
-          standalone release asset; local devs either drop a copy
-          there manually or run cargo install per AGENTS.md.
-        - version.dll has separate Debug / Release build outputs; we
-          always copy from Release because Debug version.dll isn't
-          useful (FH6 doesn't reload a CRT-debug-DLL). CMake produces
-          this from CMakeLists.txt at the repo root.
-
-      Each item is gated on Exists() so a fresh checkout that hasn't
-      built the C++ side or fetched librespot still produces a buildable
-      UI — the user just won't get auto-discovery / a bundled DLL until
-      both are present.
+      version.dll has separate Debug / Release build outputs; we always
+      copy from Release because Debug version.dll isn't useful (FH6 doesn't
+      reload a CRT-debug-DLL). CMake produces it from CMakeLists.txt at the
+      repo root. Gated on Exists() so a fresh checkout that hasn't built
+      the C++ side still produces a buildable UI — the user just won't get
+      a bundled DLL until it's present.
     -->
     <PropertyGroup>
-      <_LibrespotExePath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\build\librespot\librespot.exe'))</_LibrespotExePath>
       <_VersionDllPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\build\Release\version.dll'))</_VersionDllPath>
     </PropertyGroup>
 
     <!--
-      Build-time copy: drop both binaries into bin/{Configuration}/
-      so the dev iteration loop (run from VS / Rider / `dotnet build`)
-      auto-discovers librespot and the Mods tab finds version.dll.
-      No CopyToPublishDirectory here — that path apparently conflicts
-      with CopyToOutputDirectory for self-contained single-file
-      publishes (the build copy lands, the publish copy silently
-      doesn't). CopyToPublishDirectoryForBuild handles publish below.
+      Build-time copy: drop version.dll into bin/{Configuration}/ so the
+      dev iteration loop (run from VS / Rider / `dotnet build`) lets the
+      Mods tab find it. No CopyToPublishDirectory here — that path
+      apparently conflicts with CopyToOutputDirectory for self-contained
+      single-file publishes (the build copy lands, the publish copy
+      silently doesn't). CopyBundledBinariesToPublish handles publish below.
     -->
-    <ItemGroup Condition="Exists('$(_LibrespotExePath)')">
-      <None Include="$(_LibrespotExePath)"
-            Link="librespot.exe"
-            CopyToOutputDirectory="PreserveNewest"
-            Visible="false" />
-    </ItemGroup>
-
     <ItemGroup Condition="Exists('$(_VersionDllPath)')">
       <None Include="$(_VersionDllPath)"
             Link="version.dll"
@@ -119,14 +105,12 @@
     </ItemGroup>
 
     <!--
-      Publish-time copy: drop the same two binaries into PublishDir
-      so the release zip ships them alongside the bundled .exe.
+      Publish-time copy: drop version.dll into PublishDir so the release
+      zip ships it alongside the bundled .exe. Tools are not bundled —
+      they install on demand from the Tools tab.
     -->
     <Target Name="CopyBundledBinariesToPublish" AfterTargets="Publish"
             BeforeTargets="StripPublishPdbs">
-      <Copy SourceFiles="$(_LibrespotExePath)"
-            DestinationFolder="$(PublishDir)"
-            Condition="Exists('$(_LibrespotExePath)')" />
       <Copy SourceFiles="$(_VersionDllPath)"
             DestinationFolder="$(PublishDir)"
             Condition="Exists('$(_VersionDllPath)')" />

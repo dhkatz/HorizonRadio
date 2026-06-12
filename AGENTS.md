@@ -121,17 +121,18 @@ dotnet build HorizonRadio.UI\HorizonRadio.UI.csproj -c Release
 ### librespot
 
 `librespot.exe` is no longer compiled in-tree. CI builds it (see
-`.github/actions/build-librespot`) and attaches it as a standalone
-asset on every release; the UI fetches it on demand at runtime.
+`.github/actions/build-librespot`) and publishes it to the permanent
+`tools` blobstore (`publish-tools.yml`); the UI fetches it on demand
+from the Tools tab. It is not bundled in the app zip.
 
 To bump the pinned rev, edit the `Pin` step in
 `.github/actions/build-librespot/action.yml` (cache keys rotate
 automatically since they incorporate the rev). For local hacking on a
 not-yet-released rev — e.g. testing a Spotify-protocol patch before
 merging the pin bump — install the Rust toolchain and run the same
-`cargo install` command the composite action runs; copy the resulting
-exe into `build/librespot/librespot.exe` and the UI's `<None Include>`
-pickup will bundle it.
+`cargo install` command the composite action runs, then point the
+Spotify source's "librespot.exe path" at the resulting exe (or drop it
+next to the UI exe — `DiscoverLibrespotExe` still probes there).
 
 ### Dev deploy loop
 
