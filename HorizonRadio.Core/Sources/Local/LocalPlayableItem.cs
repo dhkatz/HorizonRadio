@@ -91,6 +91,13 @@ public sealed class LocalPlayableItem : PlayableItem
         return Task.CompletedTask;
     }
 
+    public override async Task<Track?> TryGetMetadataAsync(CancellationToken ct)
+    {
+        // Cheap: a tag read is the same work PrepareAsync does, with no audio decode.
+        await PrepareAsync(ct).ConfigureAwait(false);
+        return Metadata;
+    }
+
     public override async Task PlayAsync(PumpContext ctx, CancellationToken ct)
     {
         await PrepareAsync(ct).ConfigureAwait(false);

@@ -64,6 +64,18 @@ public class QueueModelTests
     }
 
     [Fact]
+    public void MoveExplicitTo_reorders_to_targets_position()
+    {
+        var model = new QueueModel();
+        model.AppendExplicit([Item("a"), Item("b"), Item("c")]);
+        var ids = model.Snapshot().Explicit.Select(q => q.Id).ToArray();
+
+        model.MoveExplicitTo(ids[0], ids[2]); // drop "a" onto "c" → lands at c's slot
+
+        Assert.Equal(new[] { "b", "a", "c" }, model.Snapshot().Explicit.Select(q => q.Metadata.Title));
+    }
+
+    [Fact]
     public void SetContext_records_mix_id_and_signals_work()
     {
         var model = new QueueModel();

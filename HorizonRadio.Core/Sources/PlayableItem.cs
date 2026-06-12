@@ -47,6 +47,17 @@ public abstract class PlayableItem
     public virtual Task PrepareAsync(CancellationToken ct) => Task.CompletedTask;
 
     /// <summary>
+    /// Best-effort metadata for list/queue display ahead of play — canonical
+    /// title/artist/album/art where available — WITHOUT the playback side effects of
+    /// <see cref="PrepareAsync"/> (no signed stream URL warmed, so nothing expires).
+    /// A local file reads its tags; a YouTube item does a metadata-only yt-dlp resolve.
+    /// Returns null when nothing better than the current <see cref="Metadata"/> is
+    /// available. Callers should bound how many items they call this on.
+    /// </summary>
+    public virtual Task<Track?> TryGetMetadataAsync(CancellationToken ct) =>
+        Task.FromResult<Track?>(null);
+
+    /// <summary>
     /// Pump this item's PCM into <paramref name="ctx"/>'s sink until it ends
     /// naturally (returns) or the token fires (throws
     /// <see cref="OperationCanceledException"/> — the engine's "skip"/"stop").

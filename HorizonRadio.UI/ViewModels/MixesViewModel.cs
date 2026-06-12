@@ -37,8 +37,8 @@ public sealed partial class MixesViewModel : ViewModelBase
     private readonly Dictionary<string, string> _entryTitles = new();
 
     // Cap concurrent entry resolves so opening the tab with many YouTube-first mixes
-    // doesn't spawn one yt-dlp process per mix all at once. Static: the cap is an
-    // app-wide limit on enumerate concurrency, and it lives for the process.
+    // doesn't spawn one yt-dlp process per mix all at once — ≤3 enumerate at a time
+    // on the Mixes tab (the queue's metadata-ahead has its own separate ≤3 cap).
     private static readonly System.Threading.SemaphoreSlim ResolveGate = new(3, 3);
 
     public ObservableCollection<MixRow> Mixes { get; } = new();

@@ -175,6 +175,26 @@ public sealed class YouTubePlayableItem : PlayableItem
         return list.ToArray();
     }
 
+    public override async Task<Track?> TryGetMetadataAsync(CancellationToken ct)
+    {
+        // Metadata-only resolve (no stream URL warmed), so we can run it for upcoming
+        // rows without coupling to the signed URL's expiry. Canonical track/artist
+        // (when YouTube tagged it as music) give the metadata pipeline a strong query;
+        // the thumbnail here is a non-square fallback the pipeline replaces with
+        // square cover art when a provider matches. Does NOT touch _resolved/_prepared,
+        // so playback still does its own fresh resolve.
+        var meta = await YtDlpClient.ResolveMetadataAsync(_ytDlpPath, _entry.WebpageUrl, ct)
+            .ConfigureAwait(false);
+        if (meta is null) return null;
+
+        var art = meta.ThumbnailUrl != null
+            ? await TryDownloadThumbnailAsync(meta.ThumbnailUrl, ct).ConfigureAwait(false)
+            : null;
+
+        return BuildTrack(_entry.Id, meta.Title, meta.Uploader,
+            meta.Track, meta.Artist, meta.Album, art, meta.ReleaseYear);
+    }
+
     private static async Task<byte[]?> TryDownloadThumbnailAsync(string url, CancellationToken ct)
     {
         try
