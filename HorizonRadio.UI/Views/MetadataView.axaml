@@ -3,7 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
-             xmlns:shad="clr-namespace:ShadUI;assembly=ShadUI"
+             xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="480"
              x:Class="HorizonRadio.UI.Views.MetadataView"
              x:DataType="vm:MetadataViewModel">
@@ -61,58 +61,96 @@
     </UserControl.DataTemplates>
 
     <ScrollViewer>
-        <Grid Margin="24" RowDefinitions="Auto,Auto,*,Auto,Auto">
+        <StackPanel Margin="24" Spacing="16">
 
-            <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,16">
-                <TextBlock Text="Metadata Provider" FontSize="20" FontWeight="SemiBold"/>
-                <TextBlock Text="Where to look up album art, canonical titles, and other extras after each track change."
+            <StackPanel Spacing="4">
+                <TextBlock Text="Metadata" FontSize="20" FontWeight="SemiBold"/>
+                <TextBlock Text="Where to look up canonical titles, artists, and album art. Providers run after the source in the order below; each fills only what's still missing — unless you override a field on the right."
                            FontSize="12" Opacity="0.6" TextWrapping="Wrap"/>
             </StackPanel>
 
-            <Border Grid.Row="1" Classes="Card" Padding="16" Margin="0,0,0,16">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Provider" FontSize="12" FontWeight="Medium" Opacity="0.7"/>
-                    <ComboBox ItemsSource="{Binding AvailableProviders}"
-                              SelectedItem="{Binding SelectedProvider, Mode=TwoWay}"
-                              HorizontalAlignment="Stretch">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding DisplayName}"/>
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                    <TextBlock Text="{Binding SelectedProvider.Description}"
-                               FontSize="11" Opacity="0.6" TextWrapping="Wrap"
-                               IsVisible="{Binding SelectedProvider.Description, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-                </StackPanel>
-            </Border>
+            <!-- Providers: enable + order + credentials -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="Providers (priority order)" FontSize="12" FontWeight="Medium" Opacity="0.7"/>
+                <ItemsControl ItemsSource="{Binding Providers}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:MetadataProviderRow}">
+                            <Border Classes="Card" Padding="14" Margin="0,0,0,8">
+                                <StackPanel Spacing="10">
+                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                        <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                                  VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding DisplayName}" FontSize="14" FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding Description}" FontSize="11" Opacity="0.55"
+                                                       TextWrapping="Wrap"
+                                                       IsVisible="{Binding Description, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2"
+                                                    VerticalAlignment="Center">
+                                            <Button Classes="Ghost" Padding="6" Command="{Binding MoveUpCommand}"
+                                                    ToolTip.Tip="Higher priority">
+                                                <materialIcons:MaterialIcon Kind="ChevronUp" Width="16" Height="16"/>
+                                            </Button>
+                                            <Button Classes="Ghost" Padding="6" Command="{Binding MoveDownCommand}"
+                                                    ToolTip.Tip="Lower priority">
+                                                <materialIcons:MaterialIcon Kind="ChevronDown" Width="16" Height="16"/>
+                                            </Button>
+                                        </StackPanel>
+                                    </Grid>
 
-            <Border Grid.Row="2" Classes="Card" Padding="16" Margin="0,0,0,16">
-                <StackPanel Spacing="14">
-                    <TextBlock Text="Configuration" FontSize="12" FontWeight="Medium" Opacity="0.7"/>
-                    <ItemsControl ItemsSource="{Binding CurrentSchema}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate><StackPanel Spacing="14"/></ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
-                    <TextBlock Text="(This provider has no settings.)"
-                               FontSize="11" Opacity="0.5" FontStyle="Italic"
-                               IsVisible="{Binding HasNoSchema}"/>
-                </StackPanel>
-            </Border>
-
-            <TextBlock Grid.Row="3"
-                       Text="{Binding StatusMessage}"
-                       FontSize="11"
-                       Margin="0,0,0,12"
-                       IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-
-            <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-                <Button Classes="Primary"
-                        Content="Apply"
-                        Command="{Binding ApplyCommand}"/>
+                                    <ItemsControl ItemsSource="{Binding Fields}" IsVisible="{Binding HasFields}"
+                                                  Margin="34,0,0,0">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><StackPanel Spacing="10"/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
             </StackPanel>
 
-        </Grid>
+            <!-- Per-field overrides -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="Field sources" FontSize="12" FontWeight="Medium" Opacity="0.7"/>
+                <TextBlock Text="Pin a field to one provider, or leave it on Auto to use the order above."
+                           FontSize="11" Opacity="0.55" TextWrapping="Wrap"/>
+                <Border Classes="Card" Padding="14">
+                    <ItemsControl ItemsSource="{Binding Fields}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><StackPanel Spacing="8"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:MetadataFieldRow}">
+                                <Grid ColumnDefinitions="120,*" VerticalAlignment="Center">
+                                    <TextBlock Grid.Column="0" Text="{Binding Label}" FontSize="12"
+                                               VerticalAlignment="Center"/>
+                                    <ComboBox Grid.Column="1" ItemsSource="{Binding Options}"
+                                              SelectedItem="{Binding Selected, Mode=TwoWay}"
+                                              HorizontalAlignment="Stretch">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type vm:OverrideOption}">
+                                                <TextBlock Text="{Binding Label}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+            </StackPanel>
+
+            <TextBlock Text="{Binding StatusMessage}"
+                       FontSize="11" TextWrapping="Wrap"
+                       IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                <Button Classes="Primary" Content="Apply" Command="{Binding ApplyCommand}"/>
+            </StackPanel>
+
+        </StackPanel>
     </ScrollViewer>
 </UserControl>

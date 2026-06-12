@@ -56,7 +56,14 @@ public sealed class MetadataConfigStore
         var store = new MetadataConfigStore();
         try
         {
-            if (!File.Exists(path)) return store;
+            // Fresh install: enable MusicBrainz by default (free, no credentials)
+            // so metadata enrichment works out of the box. An explicit "disable all"
+            // later persists an empty order to the now-existing file.
+            if (!File.Exists(path))
+            {
+                store.Order.Add("musicbrainz");
+                return store;
+            }
             using var stream = File.OpenRead(path);
             using var doc = JsonDocument.Parse(stream);
             var root = doc.RootElement;
