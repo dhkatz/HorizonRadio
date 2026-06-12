@@ -51,8 +51,10 @@ public sealed class QueueModel
     public MixContextProvider? Context { get { lock (_lock) return _context; } }
 
     /// <summary>Whether anything is left to play — used by the engine's idle
-    /// re-check and to gate transport's "next".</summary>
-    public bool HasWork { get { lock (_lock) return _explicit.Count > 0 || _context != null; } }
+    /// re-check and to gate transport's "next". A context only counts if it can
+    /// actually yield tracks; an entry-less context yields null forever, so
+    /// counting it here would spin the engine's idle loop instead of parking it.</summary>
+    public bool HasWork { get { lock (_lock) return _explicit.Count > 0 || (_context?.HasEntries ?? false); } }
 
     // -- engine-side consumption --
 

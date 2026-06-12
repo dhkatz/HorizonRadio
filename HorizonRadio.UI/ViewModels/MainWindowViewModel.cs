@@ -186,7 +186,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     [RelayCommand] private void ToggleSidebar() => IsSidebarExpanded = !IsSidebarExpanded;
-    [RelayCommand] private void ToggleQueue() => IsQueueVisible = !IsQueueVisible;
     [RelayCommand] private void ShowNowPlaying() => SelectedWorkspaceIndex = 0;
     [RelayCommand] private void ShowSources() => SelectedWorkspaceIndex = 1;
     [RelayCommand] private void ShowMetadata() => SelectedWorkspaceIndex = 2;

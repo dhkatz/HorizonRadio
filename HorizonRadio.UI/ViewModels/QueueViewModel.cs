@@ -120,8 +120,13 @@ public sealed partial class QueueViewModel : ViewModelBase
         }
     }
 
+    // The context peek is recomputed on every Changed (twice per track), but it
+    // usually hasn't changed track-to-track. Skip the Clear+Add — which resets the
+    // whole ItemsControl — when the rows are identical (QueuePreview is a record,
+    // so this is structural equality).
     private void SyncContext(IReadOnlyList<QueuePreview> peek)
     {
+        if (ContextUpcoming.SequenceEqual(peek)) return;
         ContextUpcoming.Clear();
         foreach (var p in peek) ContextUpcoming.Add(p);
     }
