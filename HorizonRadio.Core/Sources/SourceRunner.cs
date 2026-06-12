@@ -28,9 +28,20 @@ public sealed class SourceRunner(IPcmSink sink) : IAsyncDisposable
         // source first. Throws MissingToolException with a Tools-tab hint.
         SourceRequirements.EnsureToolsAvailable(factory, values);
 
+        var source = factory.Create(values);
+        await StartSourceAsync(source, factory).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Start an already-built source. The factory path (<see cref="StartAsync"/>)
+    /// funnels here after Create; a mix funnels here directly (it has no single
+    /// factory — pass null, and the mix's own resolver/pre-flight handles its
+    /// entries). <see cref="ActiveFactory"/> is null for a factory-less source.
+    /// </summary>
+    public async Task StartSourceAsync(IAudioSource source, IAudioSourceFactory? factory = null)
+    {
         await StopAsync().ConfigureAwait(false);
 
-        var source = factory.Create(values);
         source.TrackChanged += OnTrackChanged;
 
         _cts = new CancellationTokenSource();

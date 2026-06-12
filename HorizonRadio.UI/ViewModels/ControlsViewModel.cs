@@ -11,7 +11,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Input;
-using HorizonRadio.Core.Sources.Profiles;
+using HorizonRadio.Core.Sources.Mixes;
 
 namespace HorizonRadio.UI.ViewModels;
 
@@ -26,12 +26,12 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
 {
     private readonly InputBindingStore _store;
     private readonly InputBindingService? _service;
-    private readonly SourceProfileStore? _profiles;
+    private readonly MixStore? _mixes;
 
     /// <summary>Playback action rows (Play/Pause, Next/Previous/Restart Track).</summary>
     public ObservableCollection<ControlBindingRow> Rows { get; } = new();
-    /// <summary>Profile-switch rows: Next/Previous Profile + one per saved profile.</summary>
-    public ObservableCollection<ControlBindingRow> ProfileRows { get; } = new();
+    /// <summary>Mix-switch rows: Next/Previous Mix + one per saved mix.</summary>
+    public ObservableCollection<ControlBindingRow> MixRows { get; } = new();
     public ObservableCollection<string> Activity { get; } = new();
 
     /// <summary>Connected controllers to choose between (gamepad, wheel, …).</summary>
@@ -53,81 +53,81 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
         ("Restart Track", "Restart the current track from the beginning.", new EventAction(EventActionType.RestartTrack)),
     };
 
-    // Profile-switch actions that don't depend on a specific profile.
-    private static readonly IReadOnlyList<(string Name, string Description, EventAction Action)> FixedProfileActions = new[]
+    // Mix-switch actions that don't depend on a specific mix.
+    private static readonly IReadOnlyList<(string Name, string Description, EventAction Action)> FixedMixActions = new[]
     {
-        ("Next Profile", "Cycle to the next saved profile.", new EventAction(EventActionType.NextProfile)),
-        ("Previous Profile", "Cycle to the previous saved profile.", new EventAction(EventActionType.PreviousProfile)),
+        ("Next Mix", "Cycle to the next saved mix.", new EventAction(EventActionType.NextMix)),
+        ("Previous Mix", "Cycle to the previous saved mix.", new EventAction(EventActionType.PreviousMix)),
     };
 
     // Design-time / fallback ctor.
     public ControlsViewModel() : this(new InputBindingStore(), null) { }
 
-    public ControlsViewModel(InputBindingStore store, InputBindingService? service, SourceProfileStore? profiles = null)
+    public ControlsViewModel(InputBindingStore store, InputBindingService? service, MixStore? mixes = null)
     {
         _store = store;
         _service = service;
-        _profiles = profiles;
+        _mixes = mixes;
 
         foreach (var (name, description, action) in Bindable)
             Rows.Add(new ControlBindingRow(name, description, action, store, service));
 
-        // Fixed profile-switch rows live for the VM's lifetime; the per-profile
-        // rows below them are synced in place as profiles change.
-        foreach (var (name, description, action) in FixedProfileActions)
-            ProfileRows.Add(new ControlBindingRow(name, description, action, store, service));
+        // Fixed mix-switch rows live for the VM's lifetime; the per-mix rows below
+        // them are synced in place as mixes change.
+        foreach (var (name, description, action) in FixedMixActions)
+            MixRows.Add(new ControlBindingRow(name, description, action, store, service));
 
         if (service != null)
         {
             service.Triggered += OnTriggered;
             service.ControllerDevicesChanged += OnDevicesChanged;
         }
-        if (_profiles != null) _profiles.Changed += OnProfilesChanged;
+        if (_mixes != null) _mixes.Changed += OnMixesChanged;
         RefreshControllers();
-        RefreshProfileRows();
+        RefreshMixRows();
     }
 
-    private void OnProfilesChanged() => Dispatcher.UIThread.Post(RefreshProfileRows);
+    private void OnMixesChanged() => Dispatcher.UIThread.Post(RefreshMixRows);
 
-    // In-place sync of the per-profile rows: only add new profiles, drop deleted
-    // ones, and replace renamed ones. Untouched rows stay — preserving any
-    // in-flight binding capture on an unrelated row (a full rebuild would cancel
-    // it). The fixed Next/Previous rows are never touched here.
-    private void RefreshProfileRows()
+    // In-place sync of the per-mix rows: only add new mixes, drop deleted ones,
+    // and replace renamed ones. Untouched rows stay — preserving any in-flight
+    // binding capture on an unrelated row (a full rebuild would cancel it). The
+    // fixed Next/Previous rows are never touched here.
+    private void RefreshMixRows()
     {
-        if (_profiles == null) return;
-        var profiles = _profiles.All;
+        if (_mixes == null) return;
+        var mixes = _mixes.All;
         var reaped = false;
 
-        for (var i = ProfileRows.Count - 1; i >= 0; i--)
+        for (var i = MixRows.Count - 1; i >= 0; i--)
         {
-            var row = ProfileRows[i];
-            if (row.Action.Type != EventActionType.SwitchProfile) continue;
+            var row = MixRows[i];
+            if (row.Action.Type != EventActionType.SwitchMix) continue;
 
-            var p = profiles.FirstOrDefault(x => x.Id == row.Action.Param);
-            if (p == null)
+            var m = mixes.FirstOrDefault(x => x.Id == row.Action.Param);
+            if (m == null)
             {
-                // Profile deleted: drop its row and reap any orphaned bindings to it.
+                // Mix deleted: drop its row and reap any orphaned bindings to it.
                 reaped |= _store.ClearBindingsForAction(row.Action);
                 row.Dispose();
-                ProfileRows.RemoveAt(i);
+                MixRows.RemoveAt(i);
             }
-            else if (p.Name != row.DisplayName)
+            else if (m.Name != row.DisplayName)
             {
                 // Renamed: drop and re-add below (binding keys on id, so it survives).
                 row.Dispose();
-                ProfileRows.RemoveAt(i);
+                MixRows.RemoveAt(i);
             }
         }
 
-        foreach (var p in profiles)
+        foreach (var m in mixes)
         {
-            if (ProfileRows.Any(r => r.Action.Type == EventActionType.SwitchProfile && r.Action.Param == p.Id))
+            if (MixRows.Any(r => r.Action.Type == EventActionType.SwitchMix && r.Action.Param == m.Id))
                 continue;
-            var row = new ControlBindingRow(p.Name, "Switch to this profile.",
-                new EventAction(EventActionType.SwitchProfile, p.Id), _store, _service);
+            var row = new ControlBindingRow(m.Name, "Switch to this mix.",
+                new EventAction(EventActionType.SwitchMix, m.Id), _store, _service);
             row.Controller.SetDevice(SelectedController);
-            ProfileRows.Add(row);
+            MixRows.Add(row);
         }
 
         if (reaped) _store.SaveToDisk();
@@ -160,7 +160,7 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
     partial void OnSelectedControllerChanged(string? value)
     {
         foreach (var row in Rows) row.Controller.SetDevice(value);
-        foreach (var row in ProfileRows) row.Controller.SetDevice(value);
+        foreach (var row in MixRows) row.Controller.SetDevice(value);
     }
 
     private void OnTriggered(InputBinding binding, EventAction action)
@@ -180,9 +180,9 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
         EventActionType.NextTrack => "Next Track",
         EventActionType.PreviousTrack => "Previous Track",
         EventActionType.RestartTrack => "Restart Track",
-        EventActionType.NextProfile => "Next Profile",
-        EventActionType.PreviousProfile => "Previous Profile",
-        EventActionType.SwitchProfile => _profiles?.Get(a.Param ?? "") is { } p ? $"Profile: {p.Name}" : "Switch Profile",
+        EventActionType.NextMix => "Next Mix",
+        EventActionType.PreviousMix => "Previous Mix",
+        EventActionType.SwitchMix => _mixes?.Get(a.Param ?? "") is { } m ? $"Mix: {m.Name}" : "Switch Mix",
         _ => a.Type.ToString(),
     };
 
@@ -193,9 +193,9 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
             _service.Triggered -= OnTriggered;
             _service.ControllerDevicesChanged -= OnDevicesChanged;
         }
-        if (_profiles != null) _profiles.Changed -= OnProfilesChanged;
+        if (_mixes != null) _mixes.Changed -= OnMixesChanged;
         foreach (var row in Rows) row.Dispose();
-        foreach (var row in ProfileRows) row.Dispose();
+        foreach (var row in MixRows) row.Dispose();
     }
 }
 

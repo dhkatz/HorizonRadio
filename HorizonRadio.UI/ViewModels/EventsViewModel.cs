@@ -65,10 +65,12 @@ public sealed partial class EventsViewModel : ViewModelBase, IDisposable
             new("Restart track", new EventAction(EventActionType.RestartTrack)),
             new("Pause", new EventAction(EventActionType.Pause)),
             new("Resume", new EventAction(EventActionType.Resume)),
-            new("Next profile", new EventAction(EventActionType.NextProfile)),
-            new("Previous profile", new EventAction(EventActionType.PreviousProfile)),
+            new("Next mix", new EventAction(EventActionType.NextMix)),
+            new("Previous mix", new EventAction(EventActionType.PreviousMix)),
         };
-        foreach (var f in SourceCatalog.All)
+        // Only self-driven sources are directly switchable (Spotify Connect, the
+        // test tone). Content sources play via mixes, so they aren't offered here.
+        foreach (var f in SourceCatalog.All.Where(f => f is not IContentSourceFactory))
             list.Add(new EventActionOption($"Switch to: {f.DisplayName}",
                 new EventAction(EventActionType.SwitchSource, f.Id)));
         list.Add(new EventActionOption("Duck volume (30%)",
@@ -82,8 +84,8 @@ public sealed partial class EventsViewModel : ViewModelBase, IDisposable
     {
         EventActionType.None => "(no action)",
         EventActionType.SwitchSource => $"switch to {a.Param}",
-        EventActionType.NextProfile => "next profile",
-        EventActionType.PreviousProfile => "previous profile",
+        EventActionType.NextMix => "next mix",
+        EventActionType.PreviousMix => "previous mix",
         EventActionType.SetVolume => $"volume {a.Param}",
         _ => a.Type.ToString(),
     };

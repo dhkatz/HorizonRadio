@@ -5,7 +5,7 @@ using HorizonRadio.Core.Models;
 using HorizonRadio.Core.ModInstall;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
-using HorizonRadio.Core.Sources.Profiles;
+using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.UI.Tools;
 using ShadUI;
 
@@ -30,7 +30,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public ToolsViewModel ToolsTab { get; }
     public EventsViewModel Events { get; }
     public ControlsViewModel Controls { get; }
-    public ProfilesViewModel Profiles { get; }
+    public MixesViewModel Mixes { get; }
     public ConsoleViewModel Console { get; } = new();
     public AboutViewModel About { get; } = new();
 
@@ -38,9 +38,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// transient notifications through it (e.g. output-unavailable errors).</summary>
     public ToastManager ToastManager { get; }
 
+    /// <summary>Dialog host bound in <c>MainWindow.axaml</c>; drives modal dialogs
+    /// (e.g. the player-bar quick-play prompt). Custom dialog content must be
+    /// registered with it (see App) — ShadUI maps dialog VMs to views via its own
+    /// registry, not the app ViewLocator.</summary>
+    public DialogManager DialogManager { get; }
+
     public MainWindowViewModel()
     {
         ToastManager = new ToastManager();
+        DialogManager = new DialogManager();
         Sources = new SourcesViewModel();
         NowPlaying = new NowPlayingViewModel();
         Stats = new StatsViewModel();
@@ -48,31 +55,34 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ToolsTab = new ToolsViewModel();
         Events = new EventsViewModel();
         Controls = new ControlsViewModel();
-        Profiles = new ProfilesViewModel();
+        Mixes = new MixesViewModel();
         HookModBanner();
     }
 
     public MainWindowViewModel(SourceRunner runner,
                                SourceConfigStore store,
-                               SourceProfileStore profileStore,
-                               ProfileSwitcher profileSwitcher,
+                               MixStore mixStore,
+                               MixSwitcher mixSwitcher,
                                MetadataViewModel metadata,
                                ToolRegistry registry,
                                System.Collections.Generic.IEnumerable<IToolInstaller> installers,
                                EventsViewModel events,
                                ControlsViewModel controls,
                                Core.Audio.PreviewController preview,
-                               ToastManager toasts)
+                               ToastManager toasts,
+                               DialogManager dialogManager)
     {
         ToastManager = toasts;
+        DialogManager = dialogManager;
         Sources = new SourcesViewModel(runner, store, registry);
-        NowPlaying = new NowPlayingViewModel(runner, store, profileStore, profileSwitcher, preview, toasts);
+        var station = new StationTargetViewModel(store);
+        NowPlaying = new NowPlayingViewModel(runner, store, mixStore, mixSwitcher, station, preview, toasts, DialogManager);
         Stats = new StatsViewModel(runner);
         Metadata = metadata;
         ToolsTab = new ToolsViewModel(registry, installers);
         Events = events;
         Controls = controls;
-        Profiles = new ProfilesViewModel(profileStore, profileSwitcher, registry);
+        Mixes = new MixesViewModel(mixStore, mixSwitcher);
         HookModBanner();
     }
 
@@ -118,7 +128,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public bool IsEventsWorkspace => SelectedWorkspaceIndex == 6;
     public bool IsConsoleWorkspace => SelectedWorkspaceIndex == 7;
     public bool IsControlsWorkspace => SelectedWorkspaceIndex == 8;
-    public bool IsProfilesWorkspace => SelectedWorkspaceIndex == 9;
+    public bool IsMixesWorkspace => SelectedWorkspaceIndex == 9;
     public bool IsAboutWorkspace => SelectedWorkspaceIndex == 10;
 
     public string CurrentRoute => SelectedWorkspaceIndex switch
@@ -131,7 +141,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         6 => "events",
         7 => "console",
         8 => "controls",
-        9 => "profiles",
+        9 => "mixes",
         10 => "about",
         _ => "now-playing",
     };
@@ -153,7 +163,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsEventsWorkspace));
         OnPropertyChanged(nameof(IsConsoleWorkspace));
         OnPropertyChanged(nameof(IsControlsWorkspace));
-        OnPropertyChanged(nameof(IsProfilesWorkspace));
+        OnPropertyChanged(nameof(IsMixesWorkspace));
         OnPropertyChanged(nameof(IsAboutWorkspace));
         OnPropertyChanged(nameof(CurrentRoute));
     }
@@ -173,7 +183,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand] private void ShowEvents() => SelectedWorkspaceIndex = 6;
     [RelayCommand] private void ShowConsole() => SelectedWorkspaceIndex = 7;
     [RelayCommand] private void ShowControls() => SelectedWorkspaceIndex = 8;
-    [RelayCommand] private void ShowProfiles() => SelectedWorkspaceIndex = 9;
+    [RelayCommand] private void ShowMixes() => SelectedWorkspaceIndex = 9;
     [RelayCommand] private void ShowAbout() => SelectedWorkspaceIndex = 10;
 
     public void SetConnection(ConnectionState state)

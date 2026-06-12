@@ -61,6 +61,7 @@ public sealed class EventRuleStore
             {
                 if (rule.Value.ValueKind != JsonValueKind.Object) continue;
                 var typeStr = rule.Value.TryGetProperty("type", out var t) ? t.GetString() : null;
+                typeStr = MigrateActionType(typeStr);
                 if (typeStr == null || !Enum.TryParse<EventActionType>(typeStr, out var type)) continue;
                 var param = rule.Value.TryGetProperty("param", out var p) && p.ValueKind == JsonValueKind.String
                     ? p.GetString()
@@ -95,6 +96,16 @@ public sealed class EventRuleStore
         }
         catch (Exception ex) { Log($"save failed: {ex.Message}"); }
     }
+
+    // Map the pre-mixes action names to their renamed equivalents so saved
+    // event rules keep working after profiles became mixes.
+    private static string? MigrateActionType(string? type) => type switch
+    {
+        "SwitchProfile" => nameof(EventActionType.SwitchMix),
+        "NextProfile" => nameof(EventActionType.NextMix),
+        "PreviousProfile" => nameof(EventActionType.PreviousMix),
+        _ => type,
+    };
 
     // -- helpers for the SetVolume param (invariant round-trip) --
 

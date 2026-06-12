@@ -1,19 +1,15 @@
 using System.Diagnostics;
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Models;
-using NAudio.Wave;
 
 namespace HorizonRadio.Core.Sources.Local;
 
 /// <summary>
-/// Plays through a <see cref="Playlist"/> of local audio files. Decodes
-/// each file via NAudio (MP3/WAV/FLAC built-in; OGG via NAudio.Vorbis),
-/// resamples to the canonical 44.1 kHz s16 stereo, and paces the PCM
-/// pump to wall-clock so the DLL ring buffer doesn't get stuffed.
-///
-/// Implements <see cref="ITransportControls"/>: pause/play/next/prev
-/// all work — pause halts PCM pumping, next/prev cancel the current
-/// file's decode loop and the outer playlist runner advances.
+/// Plays through a <see cref="Playlist"/> of local audio files, looping at the
+/// end. Owns the iteration order (incl. shuffle) and transport (pause/next/prev/
+/// restart/seek); the per-file decode, tag read, paced pump, and seek live in
+/// <see cref="LocalPlayableItem"/>, shared with the mix engine so the decode
+/// path exists in exactly one place.
 /// </summary>
 public sealed class LocalFileSource(Playlist playlist) : IAudioSource, ITransportControls, IPlaybackProgress
 {
@@ -23,42 +19,25 @@ public sealed class LocalFileSource(Playlist playlist) : IAudioSource, ITranspor
     public event Action<Track>? TrackChanged;
     public event Action<bool>? PausedChanged;
 
-    // Progress state, owned by the pump thread (writes) and read by the UI
-    // poll. Ticks so we can use Interlocked for torn-free 64-bit access.
-    // _pendingSeekTicks: -1 = none, else the target the pump applies next loop.
-    // _trackGen increments per track; a pending seek is stamped with the gen it
-    // was issued for, so a seek released right as a track ends can't be applied
-    // to the next (different-length) track.
-    private long _positionTicks;
-    private long _durationTicks;
-    private long _pendingSeekTicks = -1;
-    private long _pendingSeekGen = -1;
-    private long _trackGen;
+    // The file currently playing — owns this track's progress/seek/duration.
+    private volatile PlayableItem? _activeItem;
 
     private CancellationTokenSource? _stopCts;
     private Task? _runLoop;
 
-    // Per-track CTS: cancelled to skip the current file (Next/Previous).
-    // Recreated each loop iteration. Holds the direction we want to go
-    // when it gets cancelled — Next or Previous — so the outer loop can
-    // step the right way.
+    // Per-track CTS: cancelled to skip the current file (Next/Previous/Restart).
     private CancellationTokenSource? _trackCts;
     private volatile bool _stepBackwards;
-    // Set by RestartAsync: cancels the current file but replays the same
-    // playlist entry instead of advancing.
     private volatile bool _restartCurrent;
 
-    // Pending shuffle request: -1 none, 0 turn off, 1 turn on. Applied on the
-    // run-loop thread (the only thread allowed to touch the playlist), so the
-    // toggle never races the decode loop. Unlike Next/Previous it does NOT
-    // cancel the current track — the current song keeps playing and the new
-    // order takes effect on the next advance.
+    // Pending shuffle request: -1 none, 0 off, 1 on. Applied on the run-loop
+    // thread (the only thread allowed to touch the playlist).
     private volatile int _shuffleReq = -1;
 
-    // Pause state. Pump loop polls _paused; PauseGate is signaled when
-    // we resume, so the loop can sleep efficiently while paused.
     private volatile bool _paused;
     private readonly ManualResetEventSlim _resumeGate = new(initialState: true);
+
+    private static void Log(string msg) => Debug.WriteLine($"[hzn-local] {msg}");
 
     public Task StartAsync(IPcmSink sink, CancellationToken ct)
     {
@@ -72,17 +51,11 @@ public sealed class LocalFileSource(Playlist playlist) : IAudioSource, ITranspor
     {
         _stopCts?.Cancel();
         _trackCts?.Cancel();
-        _resumeGate.Set(); // unblock pump if paused
+        _resumeGate.Set();
         if (_runLoop != null)
         {
-            try
-            {
-                await _runLoop.ConfigureAwait(false);
-            }
-            catch
-            {
-            }
-
+            try { await _runLoop.ConfigureAwait(false); }
+            catch { }
             _runLoop = null;
         }
 
@@ -90,6 +63,7 @@ public sealed class LocalFileSource(Playlist playlist) : IAudioSource, ITranspor
         _stopCts = null;
         _trackCts?.Dispose();
         _trackCts = null;
+        _activeItem = null;
     }
 
     public async ValueTask DisposeAsync()
@@ -102,30 +76,16 @@ public sealed class LocalFileSource(Playlist playlist) : IAudioSource, ITranspor
     public bool CanSkipNext => playlist.Count > 1;
     public bool CanSkipPrevious => playlist.Count > 1;
     public bool IsPaused => _paused;
-
     public bool CanShuffle => playlist.Count > 1;
     public bool IsShuffled => playlist.Shuffle;
 
-    public TimeSpan? Duration
-    {
-        get { var d = Interlocked.Read(ref _durationTicks); return d > 0 ? new TimeSpan(d) : null; }
-    }
-
-    public TimeSpan Position => new(Interlocked.Read(ref _positionTicks));
-
-    public bool CanSeek => true;
+    public TimeSpan? Duration => _activeItem?.Duration;
+    public TimeSpan Position => _activeItem?.Position ?? TimeSpan.Zero;
+    public bool CanSeek => _activeItem?.CanSeek ?? false;
 
     public Task SeekAsync(TimeSpan position)
     {
-        var ticks = position.Ticks < 0 ? 0 : position.Ticks;
-        // The pump thread owns the reader; hand it the target and let it apply
-        // the seek at the top of its next iteration. Stamp the current track gen
-        // (set before ticks) so the pump rejects it if the track advanced in the
-        // meantime. Reflect it in Position immediately so the bar tracks the
-        // user's drag without lag.
-        Interlocked.Exchange(ref _pendingSeekGen, Interlocked.Read(ref _trackGen));
-        Interlocked.Exchange(ref _pendingSeekTicks, ticks);
-        Interlocked.Exchange(ref _positionTicks, ticks);
+        _activeItem?.Seek(position);
         return Task.CompletedTask;
     }
 
@@ -165,8 +125,6 @@ public sealed class LocalFileSource(Playlist playlist) : IAudioSource, ITranspor
         return Task.CompletedTask;
     }
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-local] {msg}");
-
     private async Task RunAsync(IPcmSink sink, CancellationToken ct)
     {
         if (playlist.Count == 0)
@@ -175,9 +133,17 @@ public sealed class LocalFileSource(Playlist playlist) : IAudioSource, ITranspor
             return;
         }
 
-        const int chunkFrames = 2048;
-        var chunkPeriod = TimeSpan.FromMicroseconds(
-            (long)chunkFrames * 1_000_000 / AudioFormat.SampleRate);
+        var pumpCtx = new PumpContext
+        {
+            Sink = sink,
+            IsPaused = () => _paused,
+            ResumeGate = _resumeGate,
+            OnStarted = item =>
+            {
+                _activeItem = item;
+                TrackChanged?.Invoke(item.Metadata);
+            },
+        };
 
         // Apply an initial shuffle request before the first track so a source
         // that starts shuffled gets a random first track (keepCurrent:false).
@@ -192,12 +158,13 @@ public sealed class LocalFileSource(Playlist playlist) : IAudioSource, ITranspor
             _trackCts = trackCts;
             _stepBackwards = false;
 
-            Log($"opening {Path.GetFileName(path)}");
+            var item = new LocalPlayableItem(path);
+            _activeItem = item;
+
+            Log($"opening {System.IO.Path.GetFileName(path)}");
             try
             {
-                PublishTrackInfo(path);
-                await PumpFileAsync(path, sink, chunkFrames, chunkPeriod, trackCts.Token)
-                    .ConfigureAwait(false);
+                await item.PlayAsync(pumpCtx, trackCts.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -213,9 +180,9 @@ public sealed class LocalFileSource(Playlist playlist) : IAudioSource, ITranspor
 
             if (ReferenceEquals(_trackCts, trackCts)) _trackCts = null;
 
-            // Apply a mid-playback shuffle toggle here, while playlist.Current
-            // is still the track that just played, so "keep current, shuffle
-            // rest" pins the right track before we advance.
+            // Apply a mid-playback shuffle toggle here, while playlist.Current is
+            // still the track that just played, so "keep current, shuffle rest"
+            // pins the right track before we advance.
             ApplyShuffleRequest(keepCurrent: true);
 
             if (_restartCurrent) _restartCurrent = false; // replay same entry
@@ -230,132 +197,5 @@ public sealed class LocalFileSource(Playlist playlist) : IAudioSource, ITranspor
         if (req < 0) return;
         _shuffleReq = -1;
         playlist.SetShuffle(req == 1, keepCurrent);
-    }
-
-    private void PublishTrackInfo(string path)
-    {
-        string title = Path.GetFileNameWithoutExtension(path);
-        string artist = "";
-        string? album = null;
-        byte[]? art = null;
-
-        try
-        {
-            using var tag = TagLib.File.Create(path);
-            if (!string.IsNullOrWhiteSpace(tag.Tag.Title)) title = tag.Tag.Title!;
-            if (tag.Tag.Performers is { Length: > 0 } artists) artist = string.Join(", ", artists);
-            if (!string.IsNullOrWhiteSpace(tag.Tag.Album)) album = tag.Tag.Album;
-            if (tag.Tag.Pictures is { Length: > 0 } pics) art = pics[0].Data.Data;
-        }
-        catch (Exception ex)
-        {
-            Log($"tag read failed for {path}: {ex.Message}");
-        }
-
-        TrackChanged?.Invoke(new Track(
-            Title: title,
-            Artist: artist,
-            Album: album,
-            AlbumArt: art,
-            SourceId: Id,
-            SourceDisplay: DisplayName,
-            ExternalId: null));
-    }
-
-    private async Task PumpFileAsync(string path, IPcmSink sink,
-        int chunkFrames,
-        TimeSpan chunkPeriod,
-        CancellationToken ct)
-    {
-        await using var reader = OpenReader(path);
-        ISampleProvider samples = reader;
-
-        if (samples.WaveFormat.Channels == 1)
-        {
-            samples = new NAudio.Wave.SampleProviders.MonoToStereoSampleProvider(samples);
-        }
-
-        if (samples.WaveFormat.SampleRate != AudioFormat.SampleRate)
-        {
-            samples = new NAudio.Wave.SampleProviders.WdlResamplingSampleProvider(
-                samples, AudioFormat.SampleRate);
-        }
-
-        // Publish this track's length + reset position for the progress bar.
-        // Bump the track generation so a seek issued against the previous track
-        // (and not yet consumed) is rejected below rather than mis-applied here.
-        var gen = Interlocked.Increment(ref _trackGen);
-        Interlocked.Exchange(ref _durationTicks, reader.TotalTime.Ticks);
-        Interlocked.Exchange(ref _positionTicks, 0);
-        Interlocked.Exchange(ref _pendingSeekTicks, -1);
-
-        var floatBuf = new float[chunkFrames * AudioFormat.Channels];
-        var shortBuf = new short[chunkFrames * AudioFormat.Channels];
-
-        var stopwatch = Stopwatch.StartNew();
-        var nextChunk = TimeSpan.Zero;
-
-        while (!ct.IsCancellationRequested)
-        {
-            if (_paused)
-            {
-                _resumeGate.Wait(ct);
-                stopwatch.Restart();
-                nextChunk = TimeSpan.Zero;
-                if (ct.IsCancellationRequested) return;
-            }
-
-            // Apply a pending seek before reading the next chunk — only the
-            // pump thread touches the reader, so this never races the decode.
-            // Ignore a seek stamped for a previous track (released at EOF).
-            var seek = Interlocked.Exchange(ref _pendingSeekTicks, -1);
-            if (seek >= 0 && Interlocked.Read(ref _pendingSeekGen) == gen)
-            {
-                try { reader.CurrentTime = new TimeSpan(seek); }
-                catch (Exception ex) { Log($"seek failed: {ex.Message}"); }
-                stopwatch.Restart();
-                nextChunk = TimeSpan.Zero;
-            }
-
-            int read = samples.Read(floatBuf, 0, floatBuf.Length);
-            if (read == 0) return;
-
-            Interlocked.Exchange(ref _positionTicks, reader.CurrentTime.Ticks);
-
-            for (int i = 0; i < read; ++i) shortBuf[i] = ToInt16(floatBuf[i]);
-            for (int i = read; i < shortBuf.Length; ++i) shortBuf[i] = 0;
-
-            sink.Send(shortBuf);
-
-            nextChunk += chunkPeriod;
-            var now = stopwatch.Elapsed;
-            if (nextChunk > now)
-            {
-                try
-                {
-                    await Task.Delay(nextChunk - now, ct).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                    return;
-                }
-            }
-            else
-            {
-                nextChunk = now;
-            }
-        }
-    }
-
-    private static AudioFileReader OpenReader(string path)
-    {
-        return new AudioFileReader(path);
-    }
-
-    private static short ToInt16(float f)
-    {
-        if (f > 1f) f = 1f;
-        if (f < -1f) f = -1f;
-        return (short)(f * short.MaxValue);
     }
 }

@@ -73,33 +73,46 @@ public sealed class Playlist
     public static Playlist FromPath(string path)
     {
         var p = new Playlist();
+        foreach (var track in ResolvePaths(path)) p.Add(track);
+        return p;
+    }
+
+    /// <summary>Resolve a path into the ordered list of audio file paths it
+    /// stands for — a directory (recursive), an M3U's entries, or a single
+    /// file — without the iteration cursor. The mix engine uses this to expand
+    /// a local <c>ContentRef</c> into items while owning ordering itself;
+    /// <see cref="FromPath"/> is just this plus a cursor. Empty if nothing
+    /// resolves.</summary>
+    public static IReadOnlyList<string> ResolvePaths(string path)
+    {
+        var list = new List<string>();
         if (File.Exists(path))
         {
             var ext = Path.GetExtension(path).ToLowerInvariant();
-            if (ext is ".m3u" or ".m3u8") LoadM3uInto(path, p);
-            else p.Add(path);
+            if (ext is ".m3u" or ".m3u8") LoadM3u(path, list);
+            else list.Add(path);
         }
         else if (Directory.Exists(path))
         {
-            LoadDirectoryInto(path, p, recursive: true);
+            LoadDirectory(path, list, recursive: true);
         }
-        return p;
+        return list;
     }
 
     private static readonly string[] _audioExt = { ".mp3", ".wav", ".flac", ".ogg" };
 
-    private static void LoadDirectoryInto(string dir, Playlist p, bool recursive)
+    private static void LoadDirectory(string dir, List<string> into, bool recursive)
     {
         var opt = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
         foreach (var f in Directory.EnumerateFiles(dir, "*", opt)
                                    .Where(f => _audioExt.Contains(Path.GetExtension(f).ToLowerInvariant()))
                                    .OrderBy(f => f, StringComparer.OrdinalIgnoreCase))
         {
-            p.Add(f);
+            into.Add(f);
         }
     }
 
-    private static void LoadM3uInto(string m3u, Playlist p)
+    private static void LoadM3u(string m3u, List<string> into)
     {
         var baseDir = Path.GetDirectoryName(Path.GetFullPath(m3u)) ?? ".";
         foreach (var raw in File.ReadAllLines(m3u))
@@ -115,7 +128,7 @@ public sealed class Playlist
             }
 
             var resolved = Path.IsPathRooted(line) ? line : Path.Combine(baseDir, line);
-            if (File.Exists(resolved)) p.Add(resolved);
+            if (File.Exists(resolved)) into.Add(resolved);
         }
     }
 }

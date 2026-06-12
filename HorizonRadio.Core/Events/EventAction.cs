@@ -10,10 +10,10 @@ public enum EventActionType
     Pause,
     Resume,
     TogglePause,  // play/pause on one binding — the natural hotkey shape
-    SwitchSource, // Param = source id (e.g. "local")
-    SwitchProfile,   // Param = profile id — switch to a specific saved profile
-    NextProfile,     // cycle to the next saved profile
-    PreviousProfile, // cycle to the previous saved profile
+    SwitchSource, // Param = source id (e.g. "spotify") — a self-driven source/mode
+    SwitchMix,    // Param = mix id — switch to a specific saved mix
+    NextMix,      // cycle to the next saved mix
+    PreviousMix,  // cycle to the previous saved mix
     SetVolume,    // Param = level 0..1 as invariant string (e.g. "0.3" to duck)
 }
 

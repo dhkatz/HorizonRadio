@@ -65,6 +65,11 @@ jobs:
       - name: Build C# UI
         run: dotnet build HorizonRadio.UI.slnx -c Debug --nologo
 
+      # C# unit tests (HorizonRadio.Core.Tests). --no-build reuses the build
+      # above so this is just the test run, not a second compile.
+      - name: Run C# tests
+        run: dotnet test HorizonRadio.UI.slnx -c Debug --no-build --nologo
+
       # Guard the bundling itself: a regression in the csproj's path or
       # Exists() gate would otherwise silently ship a UI with no DLL.
       - name: Verify version.dll was bundled into the UI output

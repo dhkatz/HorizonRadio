@@ -26,18 +26,28 @@ public sealed partial class SourcesViewModel : ViewModelBase
     public ObservableCollection<IAudioSourceFactory> AvailableSources { get; } = new();
     public ObservableCollection<ConfigFieldViewModel> CurrentSchema { get; } = new();
 
-    /// <summary>In-game radio stations Horizon Radio can replace ("Any
-    /// station" + the fixed FH6 list).</summary>
-    public ObservableCollection<string> Stations { get; } = new(StationCatalog.All);
-
-    /// <summary>Raised when the user picks a different station to replace.
-    /// App wires this to push the choice to the DLL over IPC.</summary>
-    public event Action<string>? TargetStationChanged;
-
-    [ObservableProperty] private string selectedStation;
-
     [ObservableProperty] private IAudioSourceFactory? selectedFactory;
     [ObservableProperty] private bool isRunning;
+
+    /// <summary>True when the selected source is content-addressable. Its engine
+    /// (tool paths, behavior) is configured here; "what to play" is a transient
+    /// quick-play locator (below) or — for saved collections — a mix.</summary>
+    public bool IsContentSource => SelectedFactory is IContentSourceFactory;
+
+    /// <summary>Whether the selected source can be started/played from here.</summary>
+    public bool CanStartSelected => SelectedFactory is not null;
+
+    /// <summary>Ad-hoc "play this now" target for a content source — a URL, folder,
+    /// M3U, or file. Transient: it's passed to the source for this play but not
+    /// saved as config (saved collections are mixes).</summary>
+    [ObservableProperty] private string quickPlayLocator = "";
+
+    /// <summary>Placeholder for the quick-play box, following the selected source.</summary>
+    public string QuickPlayHint => (SelectedFactory as IContentSourceFactory)?.LocatorHint ?? "URL, folder, or file";
+
+    /// <summary>Start/Play button label — content sources "Play" the quick-play
+    /// locator; self-driven sources just "Start".</summary>
+    public string StartLabel => IsContentSource ? "Play" : "Start";
     [ObservableProperty] private string statusMessage = "";
     [ObservableProperty] private bool hasError;
     [ObservableProperty] private bool hasNoSchema;
@@ -56,14 +66,6 @@ public sealed partial class SourcesViewModel : ViewModelBase
         var initial = SourceCatalog.Find(store.LastSelectedId ?? "")
                    ?? AvailableSources.FirstOrDefault();
         SelectedFactory = initial;
-
-        // Assign the backing field directly so loading the saved choice
-        // doesn't fire OnSelectedStationChanged (which would re-persist and
-        // push before App has wired TargetStationChanged).
-        var savedStation = store.TargetStation;
-        selectedStation = !string.IsNullOrEmpty(savedStation) && StationCatalog.All.Contains(savedStation)
-            ? savedStation!
-            : StationCatalog.AnyLabel;
     }
 
     /// <summary>Designer-only ctor (so Avalonia previewer can construct
@@ -81,15 +83,12 @@ public sealed partial class SourcesViewModel : ViewModelBase
     partial void OnSelectedFactoryChanged(IAudioSourceFactory? value)
     {
         RebuildSchema(value);
+        OnPropertyChanged(nameof(IsContentSource));
+        OnPropertyChanged(nameof(CanStartSelected));
+        OnPropertyChanged(nameof(QuickPlayHint));
+        OnPropertyChanged(nameof(StartLabel));
         _store.LastSelectedId = value?.Id;
         _store.SaveToDisk();
-    }
-
-    partial void OnSelectedStationChanged(string value)
-    {
-        _store.TargetStation = value;
-        _store.SaveToDisk();
-        TargetStationChanged?.Invoke(value);
     }
 
     private void RebuildSchema(IAudioSourceFactory? factory)
@@ -100,8 +99,13 @@ public sealed partial class SourcesViewModel : ViewModelBase
         var values = _store.Load(factory.Id, factory.Schema);
         var stored = values.AsReadOnly();
 
+        // The content locator (URL/folder) is no longer a per-source setting — it
+        // lives in mixes. Show only the engine fields (tool paths, behavior).
+        var contentKey = (factory as IContentSourceFactory)?.ContentKey;
+
         foreach (var field in factory.Schema)
         {
+            if (field.Key == contentKey) continue;
             var fvm = ConfigFieldViewModel.For(field, _registry);
             if (stored.TryGetValue(field.Key, out var v)) fvm.SetValue(v);
             CurrentSchema.Add(fvm);
@@ -130,7 +134,12 @@ public sealed partial class SourcesViewModel : ViewModelBase
         HasError = false;
         StatusMessage = "Starting...";
 
+        // Engine config is snapshotted/persisted; the quick-play locator is layered
+        // on transiently (content sources only) so it plays now without being saved.
         var values = SnapshotAndPersist();
+        if (SelectedFactory is IContentSourceFactory csf && !string.IsNullOrWhiteSpace(QuickPlayLocator))
+            values.WithLocator(csf, QuickPlayLocator);
+
         try
         {
             await _runner.StartAsync(SelectedFactory, values);

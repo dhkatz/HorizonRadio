@@ -7,7 +7,7 @@ namespace HorizonRadio.Core.Sources.YouTube;
 /// Factory for <see cref="YouTubeSource"/>. Exposes yt-dlp + ffmpeg
 /// paths (auto-detected if bundled or on PATH) and the URL to play.
 /// </summary>
-public sealed class YouTubeSourceFactory : IAudioSourceFactory
+public sealed class YouTubeSourceFactory : IContentSourceFactory
 {
     public const string KeyYtDlp = "ytDlp";
     public const string KeyFfmpeg = "ffmpeg";
@@ -50,12 +50,14 @@ public sealed class YouTubeSourceFactory : IAudioSourceFactory
         ];
     }
 
-    public IAudioSource Create(ConfigValues values)
-    {
-        var url = values.GetString(KeyUrl);
-        if (string.IsNullOrWhiteSpace(url))
-            throw new InvalidOperationException("YouTube: enter a video or playlist URL.");
+    /// <summary>The URL field is the content locator; everything else
+    /// (tool paths, normalization) is environment/behavior the player holds.</summary>
+    public string ContentKey => KeyUrl;
 
+    public string LocatorHint => "https://youtube.com/watch?v=… or /playlist?list=…";
+
+    public IContentPlayer CreatePlayer(ConfigValues values)
+    {
         var ytDlp = values.GetString(KeyYtDlp);
         if (string.IsNullOrWhiteSpace(ytDlp) || !File.Exists(ytDlp))
             throw new InvalidOperationException("YouTube: pick a yt-dlp.exe path.");
@@ -64,15 +66,12 @@ public sealed class YouTubeSourceFactory : IAudioSourceFactory
         if (string.IsNullOrWhiteSpace(ffmpeg) || !File.Exists(ffmpeg))
             throw new InvalidOperationException("YouTube: pick an ffmpeg.exe path.");
 
-        var norm = values.GetBool(KeyNormalise, false);
-
-        return new YouTubeSource(new YouTubeOptions
-        {
-            YtDlpPath = ytDlp!,
-            FfmpegPath = ffmpeg!,
-            Url = url!,
-            EnableVolumeNormalisation = norm,
-        });
+        return new YouTubeContentPlayer(ytDlp!, ffmpeg!, values.GetBool(KeyNormalise, false));
     }
 
+    // Single-start path: build the engine, then open the one URL the form holds.
+    // The content (URL) validation lives in the player's Open; the mix engine
+    // reuses CreatePlayer directly and opens many refs against it.
+    public IAudioSource Create(ConfigValues values)
+        => CreatePlayer(values).Open(new ContentRef(Id, values.GetString(ContentKey) ?? ""));
 }

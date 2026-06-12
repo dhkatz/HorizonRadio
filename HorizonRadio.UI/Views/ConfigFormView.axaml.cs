@@ -12,8 +12,8 @@ namespace HorizonRadio.UI.Views;
 /// <summary>
 /// Renders a source's config form from a collection of
 /// <see cref="ConfigFieldViewModel"/> (one widget per field type) and owns the
-/// native file/folder pickers. Shared by the Sources tab and the Profiles
-/// editor so the field widgets + Browse logic live in one place.
+/// native file/folder pickers, used by the Sources tab to configure a source's
+/// engine fields.
 /// </summary>
 public partial class ConfigFormView : UserControl
 {

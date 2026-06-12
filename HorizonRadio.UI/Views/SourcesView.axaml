@@ -38,15 +38,6 @@
                                FontSize="11" Opacity="0.6"
                                TextWrapping="Wrap"
                                IsVisible="{Binding SelectedFactory.Description, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-
-                    <Separator Margin="0,6"/>
-
-                    <TextBlock Text="Replace station" FontSize="12" FontWeight="Medium" Opacity="0.7"/>
-                    <ComboBox ItemsSource="{Binding Stations}"
-                              SelectedItem="{Binding SelectedStation, Mode=TwoWay}"
-                              HorizontalAlignment="Stretch"/>
-                    <TextBlock Text="Which in-game station Horizon Radio takes over. “Any station” replaces whichever one you tune to; pick a specific station to leave the rest as the game's own music."
-                               FontSize="11" Opacity="0.55" TextWrapping="Wrap"/>
                 </StackPanel>
             </Border>
 
@@ -57,6 +48,15 @@
                     <TextBlock Text="(This source has no settings.)"
                                FontSize="11" Opacity="0.5" FontStyle="Italic"
                                IsVisible="{Binding HasNoSchema}"/>
+
+                    <StackPanel Spacing="4" IsVisible="{Binding IsContentSource}">
+                        <Separator Margin="0,6"/>
+                        <TextBlock Text="Quick Play" FontSize="12" FontWeight="Medium" Opacity="0.7"/>
+                        <TextBox Text="{Binding QuickPlayLocator, Mode=TwoWay}"
+                                 PlaceholderText="{Binding QuickPlayHint}"/>
+                        <TextBlock Text="Play a one-off URL, folder, or file. For a saved cross-source playlist, build a Mix in the Mixes tab."
+                                   FontSize="11" Opacity="0.55" TextWrapping="Wrap"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
 
@@ -78,8 +78,9 @@
                         Command="{Binding StopCommand}"
                         IsVisible="{Binding IsRunning}"/>
                 <Button Classes="Primary"
-                        Content="Start"
-                        Command="{Binding StartCommand}"/>
+                        Content="{Binding StartLabel}"
+                        Command="{Binding StartCommand}"
+                        IsVisible="{Binding CanStartSelected}"/>
             </StackPanel>
 
         </Grid>

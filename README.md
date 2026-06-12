@@ -10,13 +10,23 @@
 
 <p align="center">Play your own music through Forza Horizon 6's in-game radio.</p>
 
+<p align="center">
+  <img src="docs/horizon-radio-app.png" alt="Horizon Radio app" width="49%" />
+  <img src="docs/horizon-radio-controls.png" alt="Horizon Radio controls" width="49%" />
+</p>
+
 ## Features
 
 - Radio Replacement
   - Streams through the actual in-game radio so station switching, volume, and HUD all keep working
 - Sources
   - Local (folders, M3U playlists, single files)
+  - YouTube (videos and playlists)
   - Spotify Connect
+- Mixes
+  - Cross-source playlists: combine tracks and playlists from different sources
+    into one continuous stream, with two-level shuffle. Build them in the Mixes
+    tab and tune to one from the player bar.
 - Shuffle
   - Toggle on the Now Playing page for local-file and YouTube playback (remembered across runs)
 - Track Metadata Sources
@@ -42,6 +52,8 @@ In FH6's audio settings:
 
 ## Building
 
+<details>
+
 | Build                  | Produces                 | Requires                                                |
 |------------------------|--------------------------|---------------------------------------------------------|
 | `CMakeLists.txt`       | `version.dll` + test exe | Windows: VS 2022 Build Tools. Linux/macOS: clang + mingw-w64. CMake ≥ 3.25, Ninja. |
@@ -65,13 +77,11 @@ dotnet publish HorizonRadio.UI/HorizonRadio.UI.csproj -c Release -r win-x64 --se
 For architecture, internals, code-quality tooling, and maintenance runbooks
 (including how to re-derive the FMOD offsets after a game update), see
 [AGENTS.md](AGENTS.md).
-
-## License
-
-GPLv3 — see [LICENSE](LICENSE).
+</details>
 
 ## Credits
 
+<details>
 _Libraries_
 
 - [librespot](https://github.com/librespot-org/librespot) - Spotify Connect client (Rust)
@@ -87,3 +97,9 @@ _References_
 
 - [Spotify Radio](https://www.nexusmods.com/forzahorizon6/mods/95?tab=description) - Original inspiration (closed source)
 - [fh6-universal-radio](https://github.com/g0ldyy/fh6-universal-radio) - Cross-referenced for FH6's FMOD function signatures and RadioStreamFmod chain offsets, and adapted its lazy-resolve createDSP technique.
+
+</details>
+
+## License
+
+GPLv3 — see [LICENSE](LICENSE).

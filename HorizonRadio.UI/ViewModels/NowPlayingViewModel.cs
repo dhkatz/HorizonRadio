@@ -12,7 +12,7 @@ using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
-using HorizonRadio.Core.Sources.Profiles;
+using HorizonRadio.Core.Sources.Mixes;
 using ShadUI;
 
 namespace HorizonRadio.UI.ViewModels;
@@ -49,11 +49,11 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     [ObservableProperty] private IAudioSourceFactory? selectedFactory;
     [ObservableProperty] private string? switchStatus;
 
-    /// <summary>Saved profiles for the quick-switch dropdown, kept in sync with
-    /// the Profiles tab via the shared store's Changed event.</summary>
-    public ObservableCollection<SourceProfile> Profiles { get; } = new();
-    [ObservableProperty] private SourceProfile? selectedProfile;
-    public bool HasProfiles => Profiles.Count > 0;
+    /// <summary>Saved mixes for the quick-switch dropdown, kept in sync with the
+    /// Mixes tab via the shared store's Changed event.</summary>
+    public ObservableCollection<Mix> Mixes { get; } = new();
+    [ObservableProperty] private Mix? selectedMix;
+    public bool HasMixes => Mixes.Count > 0;
 
     [ObservableProperty] private bool canPause;
     [ObservableProperty] private bool canSkipNext;
@@ -81,6 +81,11 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     public ObservableCollection<OutputTarget> OutputTargets { get; } = new();
     [ObservableProperty] private OutputTarget? selectedOutput;
 
+    /// <summary>Global target-station picker, surfaced in the player bar
+    /// alongside the source/output pickers. App-level state (not per-source);
+    /// owned here only so the player bar — bound to this VM — can reach it.</summary>
+    public StationTargetViewModel Station { get; }
+
     /// <summary>Local monitor volume (0..1). Only applies when a local output
     /// device is selected; the in-game bridge ignores it.</summary>
     [ObservableProperty] private double previewVolume = 1.0;
@@ -96,12 +101,13 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
 
     private readonly SourceRunner? _runner;
     private readonly SourceConfigStore? _store;
-    private readonly SourceProfileStore? _profiles;
-    private readonly ProfileSwitcher? _switcher;
+    private readonly MixStore? _mixes;
+    private readonly MixSwitcher? _switcher;
     private readonly PreviewController? _preview;
     private readonly ToastManager? _toasts;
+    private readonly DialogManager? _dialogs;
     private bool _suppressSwitch;
-    private bool _suppressProfile;
+    private bool _suppressMix;
     // Guards IsShuffleEnabled while RebindTransport seeds it from the persisted
     // preference, so syncing the toggle doesn't re-fire a write/apply.
     private bool _suppressShuffle;
@@ -124,19 +130,26 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     public IReadOnlyList<IAudioSourceFactory> AvailableSources { get; }
 
     public NowPlayingViewModel(SourceRunner runner, SourceConfigStore store,
-        SourceProfileStore profiles, ProfileSwitcher switcher,
-        PreviewController? preview = null, ToastManager? toasts = null)
+        MixStore mixes, MixSwitcher switcher,
+        StationTargetViewModel station,
+        PreviewController? preview = null, ToastManager? toasts = null,
+        DialogManager? dialogs = null)
     {
         _runner = runner;
         _store = store;
-        _profiles = profiles;
+        _mixes = mixes;
         _switcher = switcher;
         _preview = preview;
         _toasts = toasts;
+        _dialogs = dialogs;
+        Station = station;
+        // Self-driven sources (Spotify Connect, the test tone) start directly;
+        // content sources open a quick-play dialog when picked (see
+        // OnSelectedFactoryChanged) — both live in this one picker.
         AvailableSources = SourceCatalog.All;
 
-        _profiles.Changed += () => Dispatcher.UIThread.Post(RefreshProfiles);
-        RefreshProfiles();
+        _mixes.Changed += () => Dispatcher.UIThread.Post(RefreshMixes);
+        RefreshMixes();
 
         // Drives the seek/progress bar; started only while a progress-capable
         // source is active (see RebindTransport).
@@ -171,14 +184,21 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         _runner.ActiveSourceChanged += factory =>
             Dispatcher.UIThread.Post(() =>
             {
+                // Content sources aren't a persistent picker selection — they're
+                // launched via the quick-play dialog — so don't pin the picker to
+                // them, or re-picking the same one is a no-op and won't reopen the
+                // dialog. Self-driven sources still mirror into the picker.
                 _suppressSwitch = true;
-                SelectedFactory = factory;
+                SelectedFactory = factory is IContentSourceFactory ? null : factory;
                 _suppressSwitch = false;
                 RebindTransport();
 
-                if (factory == null)
+                // Key output handling off whether a source is actually playing,
+                // not off a null factory — a mix plays factory-less but is live, so
+                // it must still get output-reachability evaluation/pause.
+                if (_runner?.ActiveSource is null)
                 {
-                    // Source stopped: clear the output-pause state so the next
+                    // Nothing playing: clear the output-pause state so the next
                     // start re-evaluates reachability from a clean slate.
                     _outputAvailable = true;
                     _needsOutputPause = false;
@@ -469,16 +489,74 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     public NowPlayingViewModel()
     {
         AvailableSources = SourceCatalog.All;
+        Station = new StationTargetViewModel();
     }
 
     partial void OnSelectedFactoryChanged(IAudioSourceFactory? value)
     {
         if (_suppressSwitch || _runner == null || _store == null || value == null) return;
 
+        // Content sources need a locator: don't leave the picker showing it as
+        // selected (it isn't playing yet) — revert to the active source — and pop
+        // a quick-play dialog for it. Self-driven sources start directly.
+        if (value is IContentSourceFactory)
+        {
+            var picked = value;
+            _suppressSwitch = true;
+            SelectedFactory = _runner.ActiveFactory;
+            _suppressSwitch = false;
+            OpenQuickPlay(picked);
+            return;
+        }
+
         // Fire-and-forget: setter must stay synchronous, and the runner
         // handles its own serialization. Errors are captured into
         // SwitchStatus so the UI can show them.
         _ = SwitchAsync(value);
+    }
+
+    private void OpenQuickPlay(IAudioSourceFactory source)
+    {
+        if (_dialogs == null) return;
+        var dialog = new QuickPlayDialogViewModel(_dialogs, source);
+        _dialogs.CreateDialog(dialog)
+            .Dismissible()
+            .WithSuccessCallback(vm => _ = QuickPlayAsync(source, vm.Locator))
+            .Show();
+    }
+
+    private async Task QuickPlayAsync(IAudioSourceFactory source, string locator)
+    {
+        if (_runner == null || _store == null || source is not IContentSourceFactory csf) return;
+        if (string.IsNullOrWhiteSpace(locator)) return;
+
+        SwitchStatus = $"Starting {source.DisplayName}...";
+        var values = _store.Load(source.Id, source.Schema).WithLocator(csf, locator);
+        try
+        {
+            await _runner.StartAsync(source, values);
+            SwitchStatus = null;
+        }
+        catch (MissingToolException ex)
+        {
+            Debug.WriteLine($"[hzn-now-vm] quick play blocked: {ex.Message}");
+            SwitchStatus = ex.Message;
+            _toasts?.CreateToast("Tool required")
+                .WithContent(ex.Message)
+                .WithDelay(8)
+                .DismissOnClick()
+                .ShowWarning();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[hzn-now-vm] quick play failed: {ex.Message}");
+            SwitchStatus = ex.Message;
+            _toasts?.CreateToast($"Couldn't start {source.DisplayName}")
+                .WithContent(ex.Message)
+                .WithDelay(6)
+                .DismissOnClick()
+                .ShowError();
+        }
     }
 
     private async Task SwitchAsync(IAudioSourceFactory factory)
@@ -518,54 +596,54 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     }
 
     // In-place sync (add/remove by id) rather than Clear()+Add, so editing one
-    // profile elsewhere doesn't tear down and rebuild the whole bound dropdown.
-    private void RefreshProfiles()
+    // mix elsewhere doesn't tear down and rebuild the whole bound dropdown.
+    private void RefreshMixes()
     {
-        if (_profiles == null) return;
-        var desired = _profiles.All;
+        if (_mixes == null) return;
+        var desired = _mixes.All;
 
-        for (int i = Profiles.Count - 1; i >= 0; i--)
-            if (!desired.Any(p => p.Id == Profiles[i].Id)) Profiles.RemoveAt(i);
+        for (int i = Mixes.Count - 1; i >= 0; i--)
+            if (!desired.Any(m => m.Id == Mixes[i].Id)) Mixes.RemoveAt(i);
 
-        foreach (var p in desired)
+        foreach (var m in desired)
         {
             var idx = -1;
-            for (int i = 0; i < Profiles.Count; i++)
-                if (Profiles[i].Id == p.Id) { idx = i; break; }
-            if (idx < 0) Profiles.Add(p);
-            else if (!Equals(Profiles[idx], p)) Profiles[idx] = p; // name/content changed
+            for (int i = 0; i < Mixes.Count; i++)
+                if (Mixes[i].Id == m.Id) { idx = i; break; }
+            if (idx < 0) Mixes.Add(m);
+            else if (!Equals(Mixes[idx], m)) Mixes[idx] = m; // name/entries changed
         }
-        OnPropertyChanged(nameof(HasProfiles));
+        OnPropertyChanged(nameof(HasMixes));
     }
 
-    // The dropdown is a "jump to profile" launcher, not a mirror of what's
-    // playing: on pick we reset the selection to null (so re-picking the same
-    // profile re-fires) and launch the captured choice. This avoids the
-    // dropdown going stale when the source is switched elsewhere.
-    partial void OnSelectedProfileChanged(SourceProfile? value)
+    // The dropdown is a "jump to mix" launcher, not a mirror of what's playing:
+    // on pick we reset the selection to null (so re-picking the same mix
+    // re-fires) and launch the captured choice. This avoids the dropdown going
+    // stale when the source is switched elsewhere.
+    partial void OnSelectedMixChanged(Mix? value)
     {
-        if (_suppressProfile || _switcher == null || value == null) return;
+        if (_suppressMix || _switcher == null || value == null) return;
 
-        var profile = value;
-        _suppressProfile = true;
-        SelectedProfile = null;
-        _suppressProfile = false;
-        _ = SwitchProfileAsync(profile);
+        var mix = value;
+        _suppressMix = true;
+        SelectedMix = null;
+        _suppressMix = false;
+        _ = SwitchMixAsync(mix);
     }
 
-    private async Task SwitchProfileAsync(SourceProfile profile)
+    private async Task SwitchMixAsync(Mix mix)
     {
         if (_switcher == null) return;
 
-        SwitchStatus = $"Starting {profile.Name}...";
+        SwitchStatus = $"Starting {mix.Name}...";
         try
         {
-            await _switcher.SwitchToAsync(profile.Id);
+            await _switcher.SwitchToAsync(mix.Id);
             SwitchStatus = null;
         }
         catch (MissingToolException ex)
         {
-            Debug.WriteLine($"[hzn-now-vm] profile switch blocked: {ex.Message}");
+            Debug.WriteLine($"[hzn-now-vm] mix switch blocked: {ex.Message}");
             SwitchStatus = ex.Message;
             _toasts?.CreateToast("Tool required")
                 .WithContent(ex.Message)
@@ -575,9 +653,9 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[hzn-now-vm] profile switch failed: {ex.Message}");
-            SwitchStatus = ex.Message; // already includes the profile name
-            _toasts?.CreateToast($"Couldn't start “{profile.Name}”")
+            Debug.WriteLine($"[hzn-now-vm] mix switch failed: {ex.Message}");
+            SwitchStatus = ex.Message; // already includes the mix name
+            _toasts?.CreateToast($"Couldn't start “{mix.Name}”")
                 .WithContent(ex.Message)
                 .WithDelay(6)
                 .DismissOnClick()
