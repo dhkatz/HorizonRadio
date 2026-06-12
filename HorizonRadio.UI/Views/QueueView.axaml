@@ -15,15 +15,17 @@
 
     <UserControl.Styles>
         <!-- On row hover: reveal up/down/remove and fade the title's right edge out
-             from under them (an opacity gradient, theme-independent). -->
+             from under them (an opacity gradient, theme-independent). The reveal is
+             instant (no opacity transition) — an animated fade reads as flicker when
+             the pointer crosses row boundaries. IsHitTestVisible follows visibility
+             so the hidden actions can't intercept the pointer and toggle hover. -->
         <Style Selector="StackPanel.rowActions">
             <Setter Property="Opacity" Value="0"/>
-            <Setter Property="Transitions">
-                <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.10"/></Transitions>
-            </Setter>
+            <Setter Property="IsHitTestVisible" Value="False"/>
         </Style>
         <Style Selector="Border.queueRow:pointerover StackPanel.rowActions">
             <Setter Property="Opacity" Value="1"/>
+            <Setter Property="IsHitTestVisible" Value="True"/>
         </Style>
         <Style Selector="Border.queueRow:pointerover StackPanel.rowTitle">
             <Setter Property="OpacityMask">
@@ -39,9 +41,6 @@
              transparent so the art shows through, revealed on thumbnail hover. -->
         <Style Selector="Border.playOverlay">
             <Setter Property="Opacity" Value="0"/>
-            <Setter Property="Transitions">
-                <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.10"/></Transitions>
-            </Setter>
         </Style>
         <Style Selector="Border.thumb:pointerover Border.playOverlay">
             <Setter Property="Opacity" Value="1"/>
@@ -146,7 +145,7 @@
                                                            IsVisible="{Binding HasThumbnail}"/>
                                                     <!-- Same rounded-square shape as the thumbnail, translucent. -->
                                                     <Border Classes="playOverlay" Background="#73000000" CornerRadius="4"
-                                                            PointerPressed="OnPlayOverlayPressed" ToolTip.Tip="Play Now">
+                                                            PointerPressed="OnPlayOverlayPressed">
                                                         <material:MaterialIcon Kind="Play" Width="24" Height="24"
                                                                                Foreground="White"
                                                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -165,17 +164,15 @@
                                                                TextTrimming="CharacterEllipsis"/>
                                                 </StackPanel>
                                                 <StackPanel Classes="rowActions" Orientation="Horizontal" Spacing="1"
-                                                            HorizontalAlignment="Right" VerticalAlignment="Center">
-                                                    <Button Classes="Ghost" Padding="5" Command="{Binding MoveUpCommand}"
-                                                            ToolTip.Tip="Move Up">
+                                                            HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                            Background="Transparent">
+                                                    <Button Classes="Ghost" Padding="5" Command="{Binding MoveUpCommand}">
                                                         <material:MaterialIcon Kind="ChevronUp" Width="16" Height="16"/>
                                                     </Button>
-                                                    <Button Classes="Ghost" Padding="5" Command="{Binding MoveDownCommand}"
-                                                            ToolTip.Tip="Move Down">
+                                                    <Button Classes="Ghost" Padding="5" Command="{Binding MoveDownCommand}">
                                                         <material:MaterialIcon Kind="ChevronDown" Width="16" Height="16"/>
                                                     </Button>
-                                                    <Button Classes="Ghost" Padding="5" Command="{Binding RemoveCommand}"
-                                                            ToolTip.Tip="Remove">
+                                                    <Button Classes="Ghost" Padding="5" Command="{Binding RemoveCommand}">
                                                         <material:MaterialIcon Kind="Close" Width="16" Height="16"/>
                                                     </Button>
                                                 </StackPanel>
