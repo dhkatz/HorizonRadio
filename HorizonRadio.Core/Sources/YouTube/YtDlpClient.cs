@@ -85,6 +85,42 @@ public static class YtDlpClient
         return list;
     }
 
+    /// <summary>Metadata-only fields for a video (no stream URL). Used to enrich
+    /// upcoming queue rows ahead of play without warming a short-lived stream URL.</summary>
+    public sealed record Meta(
+        string Title,
+        string Uploader,
+        string? ThumbnailUrl,
+        string? Album,
+        string? Track,
+        string? Artist,
+        int? ReleaseYear);
+
+    /// <summary>
+    /// Fetch a video's metadata only — <c>--skip-download</c>, no format selection,
+    /// no stream URL. Cheap-ish (one extractor call) and safe to run ahead of play
+    /// for upcoming queue items, since nothing here expires.
+    /// </summary>
+    public static async Task<Meta?> ResolveMetadataAsync(
+        string ytDlpPath, string videoUrl, CancellationToken ct)
+    {
+        var stdout = await RunCapture(ytDlpPath,
+            new[] { "-j", "--no-playlist", "--skip-download", "--no-warnings", videoUrl },
+            ct).ConfigureAwait(false);
+
+        using var doc = JsonDocument.Parse(stdout);
+        var root = doc.RootElement;
+
+        return new Meta(
+            Title: ReadString(root, "title") ?? "(unknown)",
+            Uploader: ReadString(root, "uploader") ?? ReadString(root, "channel") ?? "",
+            ThumbnailUrl: ReadString(root, "thumbnail"),
+            Album: ReadString(root, "album"),
+            Track: ReadString(root, "track"),
+            Artist: FirstArtist(ReadString(root, "artist") ?? ReadString(root, "creator")),
+            ReleaseYear: ReadInt(root, "release_year") ?? YearFromDate(ReadString(root, "release_date")));
+    }
+
     /// <summary>
     /// Resolves one entry into a fresh direct-stream URL. Always called
     /// immediately before playback, never cached, because the returned

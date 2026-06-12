@@ -31,13 +31,18 @@ public sealed partial class QueueViewModel : ViewModelBase
     private readonly DialogManager? _dialogs;
     private readonly MetadataResolver? _resolver;
 
-    // Each distinct queued item is enriched at most once (lazy, cached, background);
-    // the resolver's per-provider cache makes a repeat cheap, this avoids re-kicking.
+    // Each distinct item is enriched at most once (lazy, cached, background); the
+    // resolver's per-provider cache makes a repeat cheap, this avoids re-kicking.
     private readonly HashSet<string> _enriched = new();
 
-    // How many of the next-up rows get a cheap source-native thumbnail fetched ahead
-    // of play (YouTube CDN / local tag) when nothing else supplied art.
-    private const int ThumbnailLookahead = 4;
+    // Rolling window of upcoming rows we resolve full metadata + art for, ahead of
+    // play. Re-evaluated on every rebuild, so as the queue advances later items enter
+    // the window. (A song lasts minutes, so there's ample time to fetch ahead.)
+    private const int EnrichLookahead = 12;
+
+    // Cap concurrent metadata-only yt-dlp resolves so the window trickles in rather
+    // than spawning a dozen processes at once. Static = an app-wide cap.
+    private static readonly SemaphoreSlim MetaGate = new(3, 3);
 
     /// <summary>Now-playing line at the top of the sidebar.</summary>
     [ObservableProperty] private string nowPlayingTitle = "";
@@ -114,6 +119,47 @@ public sealed partial class QueueViewModel : ViewModelBase
         ContextHeader = snap.ContextName is { Length: > 0 } name ? $"Next From: {name}" : "Up Next";
 
         OnPropertyChanged(nameof(IsEmpty));
+
+        if (snap.Current != null) EnrichCurrent(snap.Current);
+        EnrichWindow(snap.Explicit);
+    }
+
+    // Resolve the rolling next-up window: full metadata (canonical title/artist via a
+    // metadata-only resolve) + provider art, written back into the row. Once per item.
+    private void EnrichWindow(IReadOnlyList<QueueItem> items)
+    {
+        var n = Math.Min(EnrichLookahead, items.Count);
+        for (var i = 0; i < n; i++)
+        {
+            var item = items[i];
+            if (!_enriched.Add(item.Id)) continue;
+            var row = Upcoming.FirstOrDefault(r => r.Id == item.Id);
+            if (row != null) _ = EnrichRowAsync(row, item);
+        }
+    }
+
+    // The now-playing item is already resolved/canonical; just run the provider pass
+    // for square art and update the sidebar's now-playing tile.
+    private void EnrichCurrent(QueueItem current)
+    {
+        if (_resolver is not { HasContributors: true }) return;
+        if (!_enriched.Add("now:" + current.Id)) return;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var enriched = await _resolver.ResolveAsync(current.Metadata, CancellationToken.None).ConfigureAwait(false);
+                var art = enriched.AlbumArt is { Length: > 0 } ? DecodeArt(enriched.AlbumArt) : null;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!ReferenceEquals(_queue?.Model.Snapshot().Current, current)) return; // still playing this?
+                    if (!string.IsNullOrWhiteSpace(enriched.Title)) NowPlayingTitle = enriched.Title;
+                    NowPlayingSubtitle = enriched.Artist;
+                    if (art != null) NowPlayingArt = art;
+                });
+            }
+            catch (Exception ex) { Debug.WriteLine($"[hzn-queue-vm] enrich current: {ex.Message}"); }
+        });
     }
 
     // In-place sync by id so a track change (which doesn't touch the explicit zone)
@@ -128,7 +174,7 @@ public sealed partial class QueueViewModel : ViewModelBase
             if (i < Upcoming.Count && Upcoming[i].Id == items[i].Id) continue;
             var existing = Upcoming.FirstOrDefault(r => r.Id == items[i].Id);
             if (existing != null) Upcoming.Move(Upcoming.IndexOf(existing), i);
-            else Upcoming.Insert(i, CreateRow(items[i], i));
+            else Upcoming.Insert(i, CreateRow(items[i]));
         }
     }
 
@@ -143,56 +189,46 @@ public sealed partial class QueueViewModel : ViewModelBase
         foreach (var p in peek) ContextUpcoming.Add(p);
     }
 
-    private QueueRowViewModel CreateRow(QueueItem item, int index)
-    {
-        var row = new QueueRowViewModel(
-            item.Id,
-            string.IsNullOrWhiteSpace(item.Metadata.Title) ? "Unknown track" : item.Metadata.Title,
-            item.Metadata.Artist,
-            DecodeArt(item.Metadata.AlbumArt),
-            playNow: id => _queue?.Model.JumpToExplicit(id),
-            remove: id => _queue?.Model.RemoveExplicit(id),
-            moveUp: id => _queue?.Model.MoveExplicit(id, -1),
-            moveDown: id => _queue?.Model.MoveExplicit(id, +1));
+    private QueueRowViewModel CreateRow(QueueItem item) => new(
+        item.Id,
+        string.IsNullOrWhiteSpace(item.Metadata.Title) ? "Unknown track" : item.Metadata.Title,
+        item.Metadata.Artist,
+        DecodeArt(item.Metadata.AlbumArt),
+        playNow: id => _queue?.Model.JumpToExplicit(id),
+        remove: id => _queue?.Model.RemoveExplicit(id),
+        moveUp: id => _queue?.Model.MoveExplicit(id, -1),
+        moveDown: id => _queue?.Model.MoveExplicit(id, +1));
 
-        if (_enriched.Add(item.Id))
-            _ = EnrichRowAsync(row, item, fetchSourceArt: index < ThumbnailLookahead);
-        return row;
-    }
-
-    // Resolve the row's metadata through the pipeline (artist/album/square art) and
-    // write it back in place; then, for the next-up rows, fall back to a cheap
-    // source-native thumbnail when nothing else supplied art. Runs off the UI thread
-    // and is cached, so it's a one-time background cost per item.
-    private async Task EnrichRowAsync(QueueRowViewModel row, QueueItem item, bool fetchSourceArt)
+    // Upgrade an upcoming row: a metadata-only resolve gives canonical title/artist
+    // (so providers can match → square art) plus a fallback thumbnail; the provider
+    // pass then merges per the user's policy. Throttled and off the UI thread.
+    private async Task EnrichRowAsync(QueueRowViewModel row, QueueItem item)
     {
-        var seed = item.Metadata;
-        var haveArt = seed.AlbumArt is { Length: > 0 };
+        await MetaGate.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (_resolver is { HasContributors: true })
+            var seed = item.Metadata;
+            try
             {
-                var enriched = await _resolver.ResolveAsync(seed, CancellationToken.None).ConfigureAwait(false);
-                var art = enriched.AlbumArt is { Length: > 0 } ? DecodeArt(enriched.AlbumArt) : null;
-                if (art != null) haveArt = true;
-                Dispatcher.UIThread.Post(() =>
-                {
-                    if (!string.IsNullOrWhiteSpace(enriched.Title)) row.Title = enriched.Title;
-                    row.Subtitle = enriched.Artist;
-                    if (art != null) row.Thumbnail = art;
-                });
+                if (await item.Item.TryGetMetadataAsync(CancellationToken.None).ConfigureAwait(false) is { } better)
+                    seed = better;
             }
+            catch (Exception ex) { Debug.WriteLine($"[hzn-queue-vm] meta-ahead: {ex.Message}"); }
 
-            // Cheap source-native art for the next-up rows (YouTube CDN / local tag,
-            // no yt-dlp) when neither the source metadata nor a provider had art.
-            if (fetchSourceArt && !haveArt)
+            var final = _resolver is { HasContributors: true }
+                ? await _resolver.ResolveAsync(seed, CancellationToken.None).ConfigureAwait(false)
+                : seed;
+
+            var art = final.AlbumArt is { Length: > 0 } ? DecodeArt(final.AlbumArt) : null;
+            Dispatcher.UIThread.Post(() =>
             {
-                var bytes = await item.Item.TryGetThumbnailAsync(CancellationToken.None).ConfigureAwait(false);
-                if (bytes is { Length: > 0 } && DecodeArt(bytes) is { } bmp)
-                    Dispatcher.UIThread.Post(() => row.Thumbnail ??= bmp);
-            }
+                if (!string.IsNullOrWhiteSpace(final.Title)) row.Title = final.Title;
+                if (!string.IsNullOrWhiteSpace(final.Artist)) row.Subtitle = final.Artist;
+                if (art != null) row.Thumbnail = art;
+            });
         }
         catch (Exception ex) { Debug.WriteLine($"[hzn-queue-vm] enrich row: {ex.Message}"); }
+        finally { MetaGate.Release(); }
     }
 
     private Bitmap? DecodeArtCached(string id, byte[]? bytes)

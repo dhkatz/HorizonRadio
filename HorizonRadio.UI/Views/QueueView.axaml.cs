@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Input;
+using HorizonRadio.UI.ViewModels;
 
 namespace HorizonRadio.UI.Views;
 
@@ -19,4 +20,12 @@ public partial class QueueView : UserControl
     // so opening the flyout — which sets the bound selection — doesn't dismiss it).
     private void OnAddTapped(object? sender, TappedEventArgs e) =>
         this.FindControl<Button>("AddButton")?.Flyout?.Hide();
+
+    // Double-click a queue row to play it now (Spotify-style).
+    private void OnRowDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is Control { DataContext: QueueRowViewModel row } &&
+            row.PlayNowCommand.CanExecute(null))
+            row.PlayNowCommand.Execute(null);
+    }
 }

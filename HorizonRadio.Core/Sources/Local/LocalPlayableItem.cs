@@ -91,20 +91,11 @@ public sealed class LocalPlayableItem : PlayableItem
         return Task.CompletedTask;
     }
 
-    public override Task<byte[]?> TryGetThumbnailAsync(CancellationToken ct)
+    public override async Task<Track?> TryGetMetadataAsync(CancellationToken ct)
     {
-        // Cheap: read the embedded tag picture, no audio decode.
-        try
-        {
-            using var tag = TagLib.File.Create(_path);
-            var art = tag.Tag.Pictures is { Length: > 0 } pics ? pics[0].Data.Data : null;
-            return Task.FromResult(art);
-        }
-        catch (Exception ex)
-        {
-            Log($"thumbnail tag read failed for {_path}: {ex.Message}");
-            return Task.FromResult<byte[]?>(null);
-        }
+        // Cheap: a tag read is the same work PrepareAsync does, with no audio decode.
+        await PrepareAsync(ct).ConfigureAwait(false);
+        return Metadata;
     }
 
     public override async Task PlayAsync(PumpContext ctx, CancellationToken ct)

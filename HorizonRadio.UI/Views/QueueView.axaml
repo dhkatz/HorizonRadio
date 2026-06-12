@@ -13,6 +13,29 @@
         <vm:QueueViewModel />
     </Design.DataContext>
 
+    <UserControl.Styles>
+        <!-- Row actions (up/down/remove) and the thumbnail play button stay hidden
+             until the row / thumbnail is hovered, so the title gets the full width. -->
+        <Style Selector="StackPanel.rowActions">
+            <Setter Property="Opacity" Value="0"/>
+            <Setter Property="Transitions">
+                <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.10"/></Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.queueRow:pointerover StackPanel.rowActions">
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+        <Style Selector="Button.playOverlay">
+            <Setter Property="Opacity" Value="0"/>
+            <Setter Property="Transitions">
+                <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.10"/></Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.thumb:pointerover Button.playOverlay">
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+    </UserControl.Styles>
+
     <Border Background="{DynamicResource SidebarBackgroundColor}"
             BorderBrush="{DynamicResource BorderColor}"
             BorderThickness="1,0,0,0">
@@ -96,45 +119,56 @@
                         <ItemsControl ItemsSource="{Binding Upcoming}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="{x:Type vm:QueueRowViewModel}">
-                                    <Border Classes="Card" Padding="8,6" Margin="0,0,0,6">
-                                        <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
-                                            <Border Grid.Column="0" Width="34" Height="34" CornerRadius="4"
-                                                    ClipToBounds="True" Margin="0,0,10,0"
+                                    <!-- Double-click anywhere on the row plays it now. -->
+                                    <Border Classes="Card queueRow" Padding="8" Margin="0,0,0,6"
+                                            DoubleTapped="OnRowDoubleTapped">
+                                        <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                                            <!-- Thumbnail with a play overlay on hover. -->
+                                            <Border Grid.Column="0" Classes="thumb" Width="48" Height="48"
+                                                    CornerRadius="4" ClipToBounds="True" Margin="0,0,12,0"
                                                     Background="{DynamicResource SecondaryColor}">
                                                 <Panel>
-                                                    <material:MaterialIcon Kind="MusicNote" Width="15" Height="15" Opacity="0.5"
+                                                    <material:MaterialIcon Kind="MusicNote" Width="20" Height="20" Opacity="0.5"
                                                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                     <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"
                                                            IsVisible="{Binding HasThumbnail}"/>
+                                                    <Button Classes="playOverlay" Command="{Binding PlayNowCommand}"
+                                                            Background="#99000000" BorderThickness="0" Padding="0"
+                                                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                                            ToolTip.Tip="Play Now">
+                                                        <material:MaterialIcon Kind="Play" Width="22" Height="22" Foreground="White"/>
+                                                    </Button>
                                                 </Panel>
                                             </Border>
-                                            <StackPanel Grid.Column="1" Spacing="1" Margin="0,0,8,0"
-                                                        VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="Medium"
-                                                           TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Text="{Binding Subtitle}" FontSize="11" Opacity="0.6"
-                                                           IsVisible="{Binding HasSubtitle}"
-                                                           TextTrimming="CharacterEllipsis"/>
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="1"
-                                                        VerticalAlignment="Center">
-                                                <Button Classes="Ghost" Padding="5" Command="{Binding PlayNowCommand}"
-                                                        ToolTip.Tip="Play Now">
-                                                    <material:MaterialIcon Kind="Play" Width="15" Height="15"/>
-                                                </Button>
-                                                <Button Classes="Ghost" Padding="5" Command="{Binding MoveUpCommand}"
-                                                        ToolTip.Tip="Move Up">
-                                                    <material:MaterialIcon Kind="ChevronUp" Width="15" Height="15"/>
-                                                </Button>
-                                                <Button Classes="Ghost" Padding="5" Command="{Binding MoveDownCommand}"
-                                                        ToolTip.Tip="Move Down">
-                                                    <material:MaterialIcon Kind="ChevronDown" Width="15" Height="15"/>
-                                                </Button>
-                                                <Button Classes="Ghost" Padding="5" Command="{Binding RemoveCommand}"
-                                                        ToolTip.Tip="Remove">
-                                                    <material:MaterialIcon Kind="Close" Width="15" Height="15"/>
-                                                </Button>
-                                            </StackPanel>
+
+                                            <!-- Title fills the row; the actions overlay the right edge on hover
+                                                 (covering the title a little is fine). -->
+                                            <Panel Grid.Column="1">
+                                                <StackPanel Spacing="2" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="Medium"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding Subtitle}" FontSize="12" Opacity="0.6"
+                                                               IsVisible="{Binding HasSubtitle}"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                                <StackPanel Classes="rowActions" Orientation="Horizontal" Spacing="1"
+                                                            HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                            Background="{DynamicResource CardBackgroundColor}">
+                                                    <Button Classes="Ghost" Padding="5" Command="{Binding MoveUpCommand}"
+                                                            ToolTip.Tip="Move Up">
+                                                        <material:MaterialIcon Kind="ChevronUp" Width="16" Height="16"/>
+                                                    </Button>
+                                                    <Button Classes="Ghost" Padding="5" Command="{Binding MoveDownCommand}"
+                                                            ToolTip.Tip="Move Down">
+                                                        <material:MaterialIcon Kind="ChevronDown" Width="16" Height="16"/>
+                                                    </Button>
+                                                    <Button Classes="Ghost" Padding="5" Command="{Binding RemoveCommand}"
+                                                            ToolTip.Tip="Remove">
+                                                        <material:MaterialIcon Kind="Close" Width="16" Height="16"/>
+                                                    </Button>
+                                                </StackPanel>
+                                            </Panel>
                                         </Grid>
                                     </Border>
                                 </DataTemplate>
