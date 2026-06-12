@@ -58,12 +58,15 @@ public static class AppUpdateChecker
                 _ => new AppUpdateResult(UpdateStatus.UpToDate), // dev: nothing to update to
             };
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            throw;
+            throw; // genuine external cancellation — propagate
         }
         catch
         {
+            // Anything else — including an HttpClient *timeout*, which also
+            // surfaces as OperationCanceledException but with ct unsignalled
+            // — means "couldn't determine", not an error to bubble up.
             return new AppUpdateResult(UpdateStatus.Unknown);
         }
     }

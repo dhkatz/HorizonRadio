@@ -78,6 +78,14 @@ public sealed partial class AboutViewModel : ViewModelBase
             };
             return UpdateAvailable;
         }
+        catch
+        {
+            // Never let a check fault (e.g. a timeout) escape to the
+            // RelayCommand unobserved on the manual path.
+            UpdateAvailable = false;
+            StatusText = "Couldn't check for updates (offline?).";
+            return false;
+        }
         finally
         {
             IsChecking = false;
