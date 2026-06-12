@@ -175,6 +175,15 @@ public sealed class YouTubePlayableItem : PlayableItem
         return list.ToArray();
     }
 
+    public override Task<byte[]?> TryGetThumbnailAsync(CancellationToken ct)
+    {
+        // Cheap: YouTube's thumbnail CDN by video id — no yt-dlp resolve. Not square
+        // (it's a video frame), so it's a fallback the metadata pipeline can replace
+        // with square cover art.
+        var url = $"https://i.ytimg.com/vi/{_entry.Id}/hqdefault.jpg";
+        return TryDownloadThumbnailAsync(url, ct);
+    }
+
     private static async Task<byte[]?> TryDownloadThumbnailAsync(string url, CancellationToken ct)
     {
         try

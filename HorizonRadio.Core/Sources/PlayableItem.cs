@@ -47,6 +47,16 @@ public abstract class PlayableItem
     public virtual Task PrepareAsync(CancellationToken ct) => Task.CompletedTask;
 
     /// <summary>
+    /// A cheap, best-effort thumbnail for list/queue display — distinct from the
+    /// (potentially expensive) full <see cref="PrepareAsync"/>. Implementations must
+    /// avoid heavy work: a local file reads its embedded tag picture, a YouTube item
+    /// fetches its CDN thumbnail by id (no yt-dlp resolve). Returns null when none is
+    /// cheaply available. Default: nothing.
+    /// </summary>
+    public virtual Task<byte[]?> TryGetThumbnailAsync(CancellationToken ct) =>
+        Task.FromResult<byte[]?>(null);
+
+    /// <summary>
     /// Pump this item's PCM into <paramref name="ctx"/>'s sink until it ends
     /// naturally (returns) or the token fires (throws
     /// <see cref="OperationCanceledException"/> — the engine's "skip"/"stop").

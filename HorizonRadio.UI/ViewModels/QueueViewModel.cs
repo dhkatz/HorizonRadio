@@ -35,6 +35,10 @@ public sealed partial class QueueViewModel : ViewModelBase
     // the resolver's per-provider cache makes a repeat cheap, this avoids re-kicking.
     private readonly HashSet<string> _enriched = new();
 
+    // How many of the next-up rows get a cheap source-native thumbnail fetched ahead
+    // of play (YouTube CDN / local tag) when nothing else supplied art.
+    private const int ThumbnailLookahead = 4;
+
     /// <summary>Now-playing line at the top of the sidebar.</summary>
     [ObservableProperty] private string nowPlayingTitle = "";
     [ObservableProperty] private string nowPlayingSubtitle = "";
@@ -124,7 +128,7 @@ public sealed partial class QueueViewModel : ViewModelBase
             if (i < Upcoming.Count && Upcoming[i].Id == items[i].Id) continue;
             var existing = Upcoming.FirstOrDefault(r => r.Id == items[i].Id);
             if (existing != null) Upcoming.Move(Upcoming.IndexOf(existing), i);
-            else Upcoming.Insert(i, CreateRow(items[i]));
+            else Upcoming.Insert(i, CreateRow(items[i], i));
         }
     }
 
@@ -139,7 +143,7 @@ public sealed partial class QueueViewModel : ViewModelBase
         foreach (var p in peek) ContextUpcoming.Add(p);
     }
 
-    private QueueRowViewModel CreateRow(QueueItem item)
+    private QueueRowViewModel CreateRow(QueueItem item, int index)
     {
         var row = new QueueRowViewModel(
             item.Id,
@@ -151,26 +155,42 @@ public sealed partial class QueueViewModel : ViewModelBase
             moveUp: id => _queue?.Model.MoveExplicit(id, -1),
             moveDown: id => _queue?.Model.MoveExplicit(id, +1));
 
-        if (_enriched.Add(item.Id)) _ = EnrichRowAsync(row, item.Metadata);
+        if (_enriched.Add(item.Id))
+            _ = EnrichRowAsync(row, item, fetchSourceArt: index < ThumbnailLookahead);
         return row;
     }
 
     // Resolve the row's metadata through the pipeline (artist/album/square art) and
-    // write it back in place. No-op until a provider is configured; runs off the UI
-    // thread and is cached by the resolver, so it's a one-time background cost.
-    private async Task EnrichRowAsync(QueueRowViewModel row, Core.Models.Track seed)
+    // write it back in place; then, for the next-up rows, fall back to a cheap
+    // source-native thumbnail when nothing else supplied art. Runs off the UI thread
+    // and is cached, so it's a one-time background cost per item.
+    private async Task EnrichRowAsync(QueueRowViewModel row, QueueItem item, bool fetchSourceArt)
     {
-        if (_resolver is not { HasContributors: true }) return;
+        var seed = item.Metadata;
+        var haveArt = seed.AlbumArt is { Length: > 0 };
         try
         {
-            var enriched = await _resolver.ResolveAsync(seed, CancellationToken.None).ConfigureAwait(false);
-            var art = enriched.AlbumArt is { Length: > 0 } ? DecodeArt(enriched.AlbumArt) : null;
-            Dispatcher.UIThread.Post(() =>
+            if (_resolver is { HasContributors: true })
             {
-                if (!string.IsNullOrWhiteSpace(enriched.Title)) row.Title = enriched.Title;
-                row.Subtitle = enriched.Artist;
-                if (art != null) row.Thumbnail = art;
-            });
+                var enriched = await _resolver.ResolveAsync(seed, CancellationToken.None).ConfigureAwait(false);
+                var art = enriched.AlbumArt is { Length: > 0 } ? DecodeArt(enriched.AlbumArt) : null;
+                if (art != null) haveArt = true;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!string.IsNullOrWhiteSpace(enriched.Title)) row.Title = enriched.Title;
+                    row.Subtitle = enriched.Artist;
+                    if (art != null) row.Thumbnail = art;
+                });
+            }
+
+            // Cheap source-native art for the next-up rows (YouTube CDN / local tag,
+            // no yt-dlp) when neither the source metadata nor a provider had art.
+            if (fetchSourceArt && !haveArt)
+            {
+                var bytes = await item.Item.TryGetThumbnailAsync(CancellationToken.None).ConfigureAwait(false);
+                if (bytes is { Length: > 0 } && DecodeArt(bytes) is { } bmp)
+                    Dispatcher.UIThread.Post(() => row.Thumbnail ??= bmp);
+            }
         }
         catch (Exception ex) { Debug.WriteLine($"[hzn-queue-vm] enrich row: {ex.Message}"); }
     }
