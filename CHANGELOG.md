@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Mixes** — cross-source playlists. Build an ordered list of entries from
+  different sources (a YouTube video or playlist, a local folder / M3U / file)
+  and play them back-to-back as one continuous radio stream, with two-level
+  shuffle (the entries, and the items within each collection). Create and manage
+  them in the new **Mixes** tab and tune to one from the player bar. Mixes
+  replace the old single-source profiles, which migrate automatically to
+  one-entry mixes on first launch.
+- The in-game station Horizon Radio replaces is now a global control in the
+  player bar (moved out of the Sources tab), and a mix can optionally override
+  it for the station it plays on.
+
+### Changed
+
+- The Sources tab now configures a source's engine (tool paths, behavior) only —
+  what to play moved to mixes. Content sources (Local, YouTube) play through
+  mixes rather than being started directly; self-driven sources (Spotify
+  Connect, the test tone) still start from the Sources tab.
+- Profiles are replaced by mixes throughout: the Profiles tab is now the Mixes
+  tab, and the profile-switch actions/hotkeys became mix-switch.
+
 ## [0.3.1] - 2026-06-11
 
 ### Changed

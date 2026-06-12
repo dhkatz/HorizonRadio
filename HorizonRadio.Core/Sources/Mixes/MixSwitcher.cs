@@ -30,6 +30,11 @@ public sealed class MixSwitcher : IDisposable
     /// source wasn't started from a mix.</summary>
     public string? CurrentMixId { get; private set; }
 
+    /// <summary>Raised after a successful switch, carrying the mix now playing.
+    /// The app uses it to push the mix's effective target station to the DLL
+    /// (the mix's override, else the global default).</summary>
+    public event Action<Mix>? Switched;
+
     public MixSwitcher(MixStore mixes, SourceConfigStore config, SourceRunner runner)
     {
         _mixes = mixes;
@@ -102,6 +107,8 @@ public sealed class MixSwitcher : IDisposable
         {
             _switching = false;
         }
+
+        Switched?.Invoke(mix);
     }
 
     private void EnsureMixToolsAvailable(Mix mix)

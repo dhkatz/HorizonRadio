@@ -16,7 +16,12 @@
   - Streams through the actual in-game radio so station switching, volume, and HUD all keep working
 - Sources
   - Local (folders, M3U playlists, single files)
+  - YouTube (videos and playlists)
   - Spotify Connect
+- Mixes
+  - Cross-source playlists: combine tracks and playlists from different sources
+    into one continuous stream, with two-level shuffle. Build them in the Mixes
+    tab and tune to one from the player bar.
 - Shuffle
   - Toggle on the Now Playing page for local-file and YouTube playback (remembered across runs)
 - Track Metadata Sources

@@ -102,6 +102,18 @@ public partial class App : Application
             // station to replace.
             vm.NowPlaying.Station.TargetStationChanged += s => _ipc?.SendTargetStation(StationCatalog.ToWire(s));
 
+            // A mix can override the target station: push its effective station on
+            // switch (its own, else the global default), and revert to the global
+            // default when a non-mix (self-driven) source starts directly.
+            mixSwitcher.Switched += mix =>
+                _ipc?.SendTargetStation(
+                    StationCatalog.ToWire(mix.EffectiveStation(vm.NowPlaying.Station.SelectedStation)));
+            _runner.ActiveSourceChanged += factory =>
+            {
+                if (factory != null)
+                    _ipc?.SendTargetStation(StationCatalog.ToWire(vm.NowPlaying.Station.SelectedStation));
+            };
+
             _ipc.Connected += () =>
             {
                 Dispatcher.UIThread.Post(() => vm.SetConnection(ConnectionState.Connected));
