@@ -1,3 +1,11 @@
+<p align="center">
+  <img src="docs/horizon-radio.png" alt="Horizon Radio" width="720" />
+</p>
+
+<p align="center">
+  <a href="https://discord.gg/dzVJJdrv8F"><img src="https://img.shields.io/badge/Discord-Join%20Us-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Join our Discord" /></a>
+</p>
+
 # Horizon Radio
 
 Play your own music through Forza Horizon 6's in-game radio.
