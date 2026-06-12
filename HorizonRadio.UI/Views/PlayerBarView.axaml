@@ -133,6 +133,32 @@
                         Spacing="6"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Center">
+                <!-- Mixes: tune to a saved cross-source playlist. Hidden until at
+                     least one mix exists. -->
+                <Button x:Name="MixButton"
+                        Background="Transparent" BorderThickness="0"
+                        Width="36" Height="36" Padding="0"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center"
+                        IsVisible="{Binding HasMixes}"
+                        ToolTip.Tip="Mixes">
+                    <material:MaterialIcon Kind="PlaylistMusic" Width="18" Height="18"/>
+                    <Button.Flyout>
+                        <Flyout Placement="Top">
+                            <ListBox ItemsSource="{Binding Mixes}"
+                                     SelectedItem="{Binding SelectedMix, Mode=TwoWay}"
+                                     MinWidth="180"
+                                     Tapped="OnMixTapped">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Name}" />
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+
                 <Button x:Name="SourceButton"
                         Background="Transparent" BorderThickness="0"
                         Width="36" Height="36" Padding="0"

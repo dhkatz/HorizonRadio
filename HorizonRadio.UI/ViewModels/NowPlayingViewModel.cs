@@ -140,7 +140,9 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         _preview = preview;
         _toasts = toasts;
         Station = station;
-        AvailableSources = SourceCatalog.All;
+        // Only self-driven sources are directly tunable from the player bar
+        // (Spotify Connect, the test tone); content sources play via mixes.
+        AvailableSources = SourceCatalog.All.Where(f => f is not IContentSourceFactory).ToList();
 
         _mixes.Changed += () => Dispatcher.UIThread.Post(RefreshMixes);
         RefreshMixes();
@@ -475,7 +477,9 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     /// <summary>Designer ctor — no runner, dropdown is inert.</summary>
     public NowPlayingViewModel()
     {
-        AvailableSources = SourceCatalog.All;
+        // Only self-driven sources are directly tunable from the player bar
+        // (Spotify Connect, the test tone); content sources play via mixes.
+        AvailableSources = SourceCatalog.All.Where(f => f is not IContentSourceFactory).ToList();
         Station = new StationTargetViewModel();
     }
 
