@@ -36,6 +36,11 @@ public sealed partial class MixesViewModel : ViewModelBase
     // a real title instead of a raw URL. Cached so editing a mix doesn't re-resolve.
     private readonly Dictionary<string, string> _entryTitles = new();
 
+    // Cap concurrent entry resolves so opening the tab with many YouTube-first mixes
+    // doesn't spawn one yt-dlp process per mix all at once. Static: the cap is an
+    // app-wide limit on enumerate concurrency, and it lives for the process.
+    private static readonly System.Threading.SemaphoreSlim ResolveGate = new(3, 3);
+
     public ObservableCollection<MixRow> Mixes { get; } = new();
 
     /// <summary>Sources an entry can use — content-addressable only (a mix can't
@@ -133,8 +138,10 @@ public sealed partial class MixesViewModel : ViewModelBase
         var first = m.Entries[0];
         var key = EntryKey(first);
         if (_entryTitles.ContainsKey(key)) return;
+        await ResolveGate.WaitAsync().ConfigureAwait(false);
         try
         {
+            if (_entryTitles.ContainsKey(key)) return; // may have resolved while we waited
             var items = await _content.EnumerateAsync(first, System.Threading.CancellationToken.None)
                 .ConfigureAwait(false);
             if (items.Count == 0 || string.IsNullOrWhiteSpace(items[0].Metadata.Title)) return;
@@ -143,6 +150,7 @@ public sealed partial class MixesViewModel : ViewModelBase
             Dispatcher.UIThread.Post(() => row.Summary = BuildSummary(m));
         }
         catch (Exception ex) { Debug.WriteLine($"[hzn-mixes-vm] resolve summary: {ex.Message}"); }
+        finally { ResolveGate.Release(); }
     }
 
     private static string EntryKey(ContentRef e) => $"{e.SourceId}|{e.Locator}";

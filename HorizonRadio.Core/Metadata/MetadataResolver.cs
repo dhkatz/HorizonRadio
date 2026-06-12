@@ -28,21 +28,25 @@ public sealed class MetadataResolver : IAsyncDisposable
     private IReadOnlyList<IMetadataProvider> _contributors = [];
     private MetadataPolicy _policy = MetadataPolicy.Empty;
 
+    // Every contributor we've ever been handed, disposed only on our own dispose.
+    // We deliberately do NOT dispose on reconfigure: the resolver is shared and a
+    // background ResolveAsync awaits a contributor outside the lock, so disposing a
+    // swapped-out provider mid-resolve would tear its HttpClient/semaphore out from
+    // under it. The count is bounded by how often the user clicks Apply.
+    private readonly List<IMetadataProvider> _owned = new();
+
     private static void Log(string msg) => Debug.WriteLine($"[hzn-resolve] {msg}");
 
-    /// <summary>Swap the live contributor set + policy (from the Metadata tab).
-    /// Disposes contributors that are no longer present.</summary>
+    /// <summary>Swap the live contributor set + policy (from the Metadata tab).</summary>
     public void Configure(IReadOnlyList<IMetadataProvider> contributors, MetadataPolicy policy)
     {
-        IReadOnlyList<IMetadataProvider> old;
         lock (_lock)
         {
-            old = _contributors;
             _contributors = contributors;
             _policy = policy;
+            foreach (var c in contributors)
+                if (!_owned.Contains(c)) _owned.Add(c);
         }
-        foreach (var c in old)
-            if (!contributors.Contains(c)) _ = DisposeQuietlyAsync(c);
     }
 
     /// <summary>True when at least one network contributor is configured (the source
@@ -133,8 +137,8 @@ public sealed class MetadataResolver : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        IReadOnlyList<IMetadataProvider> contributors;
-        lock (_lock) { contributors = _contributors; _contributors = []; }
-        foreach (var c in contributors) await DisposeQuietlyAsync(c).ConfigureAwait(false);
+        List<IMetadataProvider> owned;
+        lock (_lock) { owned = new List<IMetadataProvider>(_owned); _owned.Clear(); _contributors = []; }
+        foreach (var c in owned) await DisposeQuietlyAsync(c).ConfigureAwait(false);
     }
 }

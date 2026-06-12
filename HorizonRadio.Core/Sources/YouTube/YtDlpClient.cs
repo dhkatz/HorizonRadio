@@ -159,12 +159,16 @@ public static class YtDlpClient
         => e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var i)
             ? i : null;
 
-    // yt-dlp's "artist" is sometimes "A, B, C" — keep the primary credit.
+    // yt-dlp's "artist" is sometimes "A, B, C" — keep the first non-empty credit.
     private static string? FirstArtist(string? artist)
     {
         if (string.IsNullOrWhiteSpace(artist)) return null;
-        var idx = artist.IndexOf(',');
-        return (idx > 0 ? artist[..idx] : artist).Trim();
+        foreach (var part in artist.Split(','))
+        {
+            var trimmed = part.Trim();
+            if (trimmed.Length > 0) return trimmed;
+        }
+        return null;
     }
 
     // "release_date" is YYYYMMDD; pull the year.

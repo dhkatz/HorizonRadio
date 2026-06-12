@@ -51,16 +51,14 @@ public static partial class TitleArtistParser
 
         var clean = StripNoise(raw);
 
-        // YouTube auto-generated "… - Topic" channels are reliable artist names,
-        // and their video titles are usually the bare song title.
+        // YouTube auto-generated "… - Topic" channels are reliable artist names; the
+        // artist comes from the channel and the video title IS the song title (which
+        // can legitimately contain its own dashes), so we don't re-split it.
         if (!string.IsNullOrEmpty(uploader) &&
             uploader.EndsWith(TopicSuffix, StringComparison.OrdinalIgnoreCase))
         {
             var topicArtist = uploader[..^TopicSuffix.Length].Trim();
-            // The title itself may still be "Artist - Title"; prefer its right side.
-            var inner = SplitOnSeparator(clean);
-            var title = inner is { } s ? s.right : clean;
-            return new ParsedTitle(title, NullIfEmpty(topicArtist), ParseConfidence.High);
+            return new ParsedTitle(UnwrapBrackets(clean), NullIfEmpty(topicArtist), ParseConfidence.High);
         }
 
         // "Artist - Title" (the YouTube convention: artist on the left).
@@ -70,7 +68,7 @@ public static partial class TitleArtistParser
             // Another separator on the right (e.g. "A - B - C") makes the split
             // ambiguous → lower confidence.
             var ambiguous = SplitOnSeparator(right) is not null;
-            return new ParsedTitle(right, NullIfEmpty(left),
+            return new ParsedTitle(UnwrapBrackets(right), NullIfEmpty(left),
                 ambiguous ? ParseConfidence.Medium : ParseConfidence.High);
         }
 
@@ -130,6 +128,17 @@ public static partial class TitleArtistParser
             u = u[..^4];
         u = u.Trim();
         return NullIfEmpty(u);
+    }
+
+    // Strip a wholly-wrapping CJK quote pair, so a title split off a separator
+    // ("Artist - 「Song」") doesn't keep its brackets.
+    private static string UnwrapBrackets(string s)
+    {
+        s = s.Trim();
+        if (s.Length >= 2 &&
+            ((s[0] == '「' && s[^1] == '」') || (s[0] == '『' && s[^1] == '』')))
+            return s[1..^1].Trim();
+        return s;
     }
 
     private static string? NullIfEmpty(string? s) => string.IsNullOrWhiteSpace(s) ? null : s;

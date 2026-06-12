@@ -39,6 +39,25 @@ public class TitleArtistParserTests
     }
 
     [Fact]
+    public void Dash_then_bracket_title_unwraps_brackets()
+    {
+        // The dash split wins, but the bracketed title shouldn't keep its brackets.
+        var p = TitleArtistParser.Parse("YOASOBI - 「アイドル」");
+        Assert.Equal("YOASOBI", p.Artist);
+        Assert.Equal("アイドル", p.Title);
+    }
+
+    [Fact]
+    public void Topic_channel_keeps_full_title_with_internal_dash()
+    {
+        // Artist comes from the channel; the title is the whole video title, even if
+        // it contains its own dash (don't truncate it by re-splitting).
+        var p = TitleArtistParser.Parse("Some Track - Live Edit", uploader: "deadmau5 - Topic");
+        Assert.Equal("deadmau5", p.Artist);
+        Assert.Equal("Some Track - Live Edit", p.Title);
+    }
+
+    [Fact]
     public void No_separator_uses_channel_as_low_confidence_artist()
     {
         var p = TitleArtistParser.Parse("Some Cool Track", uploader: "CoolChannel");
