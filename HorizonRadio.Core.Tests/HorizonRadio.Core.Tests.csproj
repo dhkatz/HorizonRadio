@@ -5,9 +5,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
-    <!-- Underscored test names (Method_does_thing) are the xUnit idiom; opt out
-         of the general naming rule for this project rather than fight it. -->
-    <NoWarn>$(NoWarn);CA1707</NoWarn>
+    <!-- Underscored test names (Method_does_thing) are the xUnit idiom, and
+         inline expected-value arrays in asserts are normal test style; opt out
+         of those rules for this project rather than fight them. -->
+    <NoWarn>$(NoWarn);CA1707;CA1861</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
