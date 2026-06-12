@@ -13,6 +13,7 @@ using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
+using HorizonRadio.Core.Sources.Queue;
 using ShadUI;
 
 namespace HorizonRadio.UI.ViewModels;
@@ -103,6 +104,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     private readonly SourceConfigStore? _store;
     private readonly MixStore? _mixes;
     private readonly MixSwitcher? _switcher;
+    private readonly QueuePlayback? _queue;
     private readonly PreviewController? _preview;
     private readonly ToastManager? _toasts;
     private readonly DialogManager? _dialogs;
@@ -130,7 +132,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     public IReadOnlyList<IAudioSourceFactory> AvailableSources { get; }
 
     public NowPlayingViewModel(SourceRunner runner, SourceConfigStore store,
-        MixStore mixes, MixSwitcher switcher,
+        MixStore mixes, MixSwitcher switcher, QueuePlayback queue,
         StationTargetViewModel station,
         PreviewController? preview = null, ToastManager? toasts = null,
         DialogManager? dialogs = null)
@@ -139,6 +141,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         _store = store;
         _mixes = mixes;
         _switcher = switcher;
+        _queue = queue;
         _preview = preview;
         _toasts = toasts;
         _dialogs = dialogs;
@@ -527,14 +530,15 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
 
     private async Task QuickPlayAsync(IAudioSourceFactory source, string locator)
     {
-        if (_runner == null || _store == null || source is not IContentSourceFactory csf) return;
+        if (_queue == null || source is not IContentSourceFactory) return;
         if (string.IsNullOrWhiteSpace(locator)) return;
 
-        SwitchStatus = $"Starting {source.DisplayName}...";
-        var values = _store.Load(source.Id, source.Schema).WithLocator(csf, locator);
+        // Quick play now appends a one-off to the global queue (playing it before
+        // the active mix context) rather than replacing the active source.
+        SwitchStatus = $"Adding {source.DisplayName} to the queue...";
         try
         {
-            await _runner.StartAsync(source, values);
+            await _queue.EnqueueLocatorAsync(source, locator);
             SwitchStatus = null;
         }
         catch (MissingToolException ex)
@@ -628,17 +632,40 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         _suppressMix = true;
         SelectedMix = null;
         _suppressMix = false;
-        _ = SwitchMixAsync(mix);
+        PromptAndStartMix(mix);
     }
 
-    private async Task SwitchMixAsync(Mix mix)
+    // Starting a mix while the queue already has content asks whether to replace the
+    // context or add this mix's tracks to the queue; otherwise it just starts it.
+    private void PromptAndStartMix(Mix mix)
     {
         if (_switcher == null) return;
 
-        SwitchStatus = $"Starting {mix.Name}...";
+        if (_switcher.QueueHasContent && _dialogs != null)
+        {
+            var dialog = new QueueAddModeDialogViewModel(_dialogs, mix.Name);
+            _dialogs.CreateDialog(dialog)
+                .Dismissible()
+                .WithSuccessCallback(vm => _ = SwitchMixAsync(mix, vm.Mode))
+                .Show();
+        }
+        else
+        {
+            _ = SwitchMixAsync(mix, QueueAddMode.Replace);
+        }
+    }
+
+    private async Task SwitchMixAsync(Mix mix, QueueAddMode mode)
+    {
+        if (_switcher == null) return;
+
+        SwitchStatus = mode == QueueAddMode.Add
+            ? $"Adding {mix.Name} to the queue..."
+            : $"Starting {mix.Name}...";
         try
         {
-            await _switcher.SwitchToAsync(mix.Id);
+            if (mode == QueueAddMode.Add) await _switcher.AddToQueueAsync(mix.Id);
+            else await _switcher.SwitchToAsync(mix.Id);
             SwitchStatus = null;
         }
         catch (MissingToolException ex)

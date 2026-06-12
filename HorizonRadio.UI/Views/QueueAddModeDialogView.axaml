@@ -1,0 +1,27 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="400"
+             x:Class="HorizonRadio.UI.Views.QueueAddModeDialogView"
+             x:DataType="vm:QueueAddModeDialogViewModel">
+
+    <Design.DataContext>
+        <vm:QueueAddModeDialogViewModel />
+    </Design.DataContext>
+
+    <StackPanel Margin="24" Spacing="16" Width="400">
+        <StackPanel Spacing="4">
+            <TextBlock Classes="h4" Text="Add To Queue" />
+            <TextBlock Text="{Binding MixName, StringFormat='Something is already queued. Replace the current mix with “{0}”, or add its tracks to the end of the queue?'}"
+                       FontSize="12" Opacity="0.6" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button Classes="Outline" Content="Cancel" Command="{Binding CancelCommand}" HotKey="Escape" />
+            <Button Classes="Secondary" Content="Add To Queue" Command="{Binding AddToQueueCommand}" />
+            <Button Classes="Primary" Content="Replace" Command="{Binding ReplaceCommand}" HotKey="Enter" />
+        </StackPanel>
+    </StackPanel>
+</UserControl>

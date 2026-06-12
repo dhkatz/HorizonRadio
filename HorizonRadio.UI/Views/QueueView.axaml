@@ -1,0 +1,179 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             xmlns:queue="using:HorizonRadio.Core.Sources.Queue"
+             xmlns:material="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="640"
+             x:Class="HorizonRadio.UI.Views.QueueView"
+             x:DataType="vm:QueueViewModel">
+
+    <Design.DataContext>
+        <vm:QueueViewModel />
+    </Design.DataContext>
+
+    <Border Background="{DynamicResource SidebarBackgroundColor}"
+            BorderBrush="{DynamicResource BorderColor}"
+            BorderThickness="1,0,0,0">
+        <DockPanel LastChildFill="True">
+
+            <!-- Header: title + clear + add -->
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto"
+                  Margin="16,14,12,8" VerticalAlignment="Center">
+                <TextBlock Grid.Column="0" Text="Queue" FontSize="16" FontWeight="SemiBold"
+                           VerticalAlignment="Center"/>
+
+                <Button Grid.Column="1" Classes="Ghost" Padding="6"
+                        Command="{Binding ClearQueueCommand}"
+                        IsVisible="{Binding HasUpcoming}"
+                        VerticalAlignment="Center"
+                        ToolTip.Tip="Clear Queue">
+                    <material:MaterialIcon Kind="PlaylistRemove" Width="18" Height="18"/>
+                </Button>
+
+                <Button Grid.Column="2" x:Name="AddButton" Classes="Ghost" Padding="6"
+                        VerticalAlignment="Center"
+                        ToolTip.Tip="Add To Queue">
+                    <material:MaterialIcon Kind="Plus" Width="18" Height="18"/>
+                    <Button.Flyout>
+                        <Flyout Placement="Bottom">
+                            <ListBox ItemsSource="{Binding ContentSources}"
+                                     SelectedItem="{Binding SelectedAddSource, Mode=TwoWay}"
+                                     MinWidth="160"
+                                     Tapped="OnAddTapped">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding DisplayName}"/>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+            </Grid>
+
+            <ScrollViewer>
+                <StackPanel Margin="12,4,12,16" Spacing="14">
+
+                    <!-- Empty state -->
+                    <TextBlock IsVisible="{Binding IsEmpty}"
+                               Text="Your queue is empty. Play a mix or add a track with the + button."
+                               FontSize="12" Opacity="0.55" TextWrapping="Wrap" Margin="4,8"/>
+
+                    <!-- Now playing -->
+                    <StackPanel Spacing="4" IsVisible="{Binding HasNowPlaying}">
+                        <TextBlock Text="Now Playing" FontSize="11" FontWeight="SemiBold" Opacity="0.6"/>
+                        <Border Classes="Card" Padding="10,8">
+                            <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+                                <!-- Album art (when resolved) over a placeholder tile. -->
+                                <Border Grid.Column="0" Width="42" Height="42" CornerRadius="4"
+                                        ClipToBounds="True" Margin="0,0,10,0"
+                                        Background="{DynamicResource SecondaryColor}">
+                                    <Panel>
+                                        <material:MaterialIcon Kind="MusicNote" Width="18" Height="18" Opacity="0.5"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <Image Source="{Binding NowPlayingArt}" Stretch="UniformToFill"
+                                               IsVisible="{Binding NowPlayingArt, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                    </Panel>
+                                </Border>
+                                <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding NowPlayingTitle}" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="#4A90F8" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding NowPlayingSubtitle}" FontSize="11" Opacity="0.6"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                                <material:MaterialIcon Grid.Column="2" Kind="VolumeHigh" Width="15" Height="15"
+                                                       Margin="8,0,0,0" VerticalAlignment="Center"
+                                                       Foreground="#4A90F8"/>
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Next in queue (explicit one-offs) -->
+                    <StackPanel Spacing="6" IsVisible="{Binding HasUpcoming}">
+                        <TextBlock Text="Next In Queue" FontSize="11" FontWeight="SemiBold" Opacity="0.6"/>
+                        <ItemsControl ItemsSource="{Binding Upcoming}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:QueueRowViewModel}">
+                                    <Border Classes="Card" Padding="8,6" Margin="0,0,0,6">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+                                            <Border Grid.Column="0" Width="34" Height="34" CornerRadius="4"
+                                                    ClipToBounds="True" Margin="0,0,10,0"
+                                                    Background="{DynamicResource SecondaryColor}">
+                                                <Panel>
+                                                    <material:MaterialIcon Kind="MusicNote" Width="15" Height="15" Opacity="0.5"
+                                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"
+                                                           IsVisible="{Binding HasThumbnail}"/>
+                                                </Panel>
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Spacing="1" Margin="0,0,8,0"
+                                                        VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="Medium"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Subtitle}" FontSize="11" Opacity="0.6"
+                                                           IsVisible="{Binding HasSubtitle}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="1"
+                                                        VerticalAlignment="Center">
+                                                <Button Classes="Ghost" Padding="5" Command="{Binding PlayNowCommand}"
+                                                        ToolTip.Tip="Play Now">
+                                                    <material:MaterialIcon Kind="Play" Width="15" Height="15"/>
+                                                </Button>
+                                                <Button Classes="Ghost" Padding="5" Command="{Binding MoveUpCommand}"
+                                                        ToolTip.Tip="Move Up">
+                                                    <material:MaterialIcon Kind="ChevronUp" Width="15" Height="15"/>
+                                                </Button>
+                                                <Button Classes="Ghost" Padding="5" Command="{Binding MoveDownCommand}"
+                                                        ToolTip.Tip="Move Down">
+                                                    <material:MaterialIcon Kind="ChevronDown" Width="15" Height="15"/>
+                                                </Button>
+                                                <Button Classes="Ghost" Padding="5" Command="{Binding RemoveCommand}"
+                                                        ToolTip.Tip="Remove">
+                                                    <material:MaterialIcon Kind="Close" Width="15" Height="15"/>
+                                                </Button>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <!-- Next from: <context> (rolling peek of the active mix) -->
+                    <StackPanel Spacing="6" IsVisible="{Binding HasContext}">
+                        <TextBlock Text="{Binding ContextHeader}" FontSize="11" FontWeight="SemiBold" Opacity="0.6"
+                                   TextTrimming="CharacterEllipsis"/>
+                        <ItemsControl ItemsSource="{Binding ContextUpcoming}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type queue:QueuePreview}">
+                                    <Grid ColumnDefinitions="Auto,*" Margin="2,0,2,8" VerticalAlignment="Center">
+                                        <!-- A resolved track shows a note; an as-yet-unresolved
+                                             entry (a whole folder/playlist) shows a list glyph. -->
+                                        <Panel Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center">
+                                            <material:MaterialIcon Kind="MusicNote" Width="14" Height="14"
+                                                                   Opacity="0.5"
+                                                                   IsVisible="{Binding !IsPlaceholder}"/>
+                                            <material:MaterialIcon Kind="PlaylistMusic" Width="14" Height="14"
+                                                                   Opacity="0.5"
+                                                                   IsVisible="{Binding IsPlaceholder}"/>
+                                        </Panel>
+                                        <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Title}" FontSize="12"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding Subtitle}" FontSize="10" Opacity="0.55"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                </StackPanel>
+            </ScrollViewer>
+        </DockPanel>
+    </Border>
+</UserControl>

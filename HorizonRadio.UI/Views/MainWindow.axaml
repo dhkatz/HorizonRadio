@@ -70,7 +70,7 @@
     <Panel>
     <!-- Row 0: sidebar + workspace content. Row 1: persistent player bar. -->
     <Grid RowDefinitions="*,Auto">
-    <Grid Grid.Row="0" ColumnDefinitions="Auto,*">
+    <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto">
 
         <!-- Expanded sidebar -->
         <shadui:Sidebar Grid.Column="0"
@@ -506,6 +506,13 @@
             </Grid>
             </Panel>
         </Grid>
+
+        <!-- Toggleable right-hand queue sidebar (Spotify-style). The wrapper keeps
+             the shell DataContext so IsVisible binds to IsQueueVisible; the inner
+             view switches to the Queue VM. Collapses to zero width when hidden. -->
+        <Border Grid.Column="2" IsVisible="{Binding IsQueueVisible}">
+            <views:QueueView Width="320" DataContext="{Binding Queue}"/>
+        </Border>
     </Grid>
 
         <!-- Persistent player bar, shown across every tab. -->

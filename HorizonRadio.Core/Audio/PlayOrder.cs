@@ -58,6 +58,18 @@ internal sealed class PlayOrder
         if (_pos < 0) _pos = 0;
     }
 
+    /// <summary>The item indices from the cursor to the end of the current
+    /// order, in play order (the current item first). Empty when the cursor has
+    /// walked off the end or the order is empty. A read-only peek — it does not
+    /// move the cursor. Used to surface "what's coming up" without consuming it.</summary>
+    public IReadOnlyList<int> RemainingIndices()
+    {
+        if (_pos < 0 || _pos >= _order.Count) return [];
+        var list = new List<int>(_order.Count - _pos);
+        for (int i = _pos; i < _order.Count; i++) list.Add(_order[i]);
+        return list;
+    }
+
     /// <summary>Advance one step. With <paramref name="wrap"/> the cursor loops
     /// at the end (and, when shuffled, reshuffles for a fresh pass); without it
     /// the cursor walks off the end and <see cref="CurrentIndex"/> goes -1.

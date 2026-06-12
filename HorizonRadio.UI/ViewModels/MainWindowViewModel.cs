@@ -6,6 +6,7 @@ using HorizonRadio.Core.ModInstall;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
+using HorizonRadio.Core.Sources.Queue;
 using HorizonRadio.UI.Tools;
 using ShadUI;
 
@@ -34,6 +35,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public ConsoleViewModel Console { get; } = new();
     public AboutViewModel About { get; } = new();
 
+    /// <summary>The toggleable right-hand queue sidebar (Spotify-style). Shown when
+    /// <see cref="IsQueueVisible"/> is set.</summary>
+    public QueueViewModel Queue { get; }
+
     /// <summary>Toast host bound in <c>MainWindow.axaml</c>; view models raise
     /// transient notifications through it (e.g. output-unavailable errors).</summary>
     public ToastManager ToastManager { get; }
@@ -56,6 +61,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Events = new EventsViewModel();
         Controls = new ControlsViewModel();
         Mixes = new MixesViewModel();
+        Queue = new QueueViewModel();
         HookModBanner();
     }
 
@@ -63,6 +69,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                                SourceConfigStore store,
                                MixStore mixStore,
                                MixSwitcher mixSwitcher,
+                               QueuePlayback queue,
                                MetadataViewModel metadata,
                                ToolRegistry registry,
                                System.Collections.Generic.IEnumerable<IToolInstaller> installers,
@@ -76,13 +83,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         DialogManager = dialogManager;
         Sources = new SourcesViewModel(runner, store, registry);
         var station = new StationTargetViewModel(store);
-        NowPlaying = new NowPlayingViewModel(runner, store, mixStore, mixSwitcher, station, preview, toasts, DialogManager);
+        NowPlaying = new NowPlayingViewModel(runner, store, mixStore, mixSwitcher, queue, station, preview, toasts, DialogManager);
         Stats = new StatsViewModel(runner);
         Metadata = metadata;
         ToolsTab = new ToolsViewModel(registry, installers);
         Events = events;
         Controls = controls;
-        Mixes = new MixesViewModel(mixStore, mixSwitcher);
+        Mixes = new MixesViewModel(mixStore, mixSwitcher, DialogManager);
+        Queue = new QueueViewModel(queue, DialogManager);
         HookModBanner();
     }
 
@@ -148,6 +156,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty] private bool isSidebarExpanded = true;
     public bool IsSidebarCollapsed => !IsSidebarExpanded;
+
+    /// <summary>Whether the right-hand queue sidebar is shown. Toggled from the
+    /// player bar; off by default so the workspace gets the full width until asked.</summary>
+    [ObservableProperty] private bool isQueueVisible;
 
     [ObservableProperty] private ConnectionState connection = ConnectionState.Disconnected;
     [ObservableProperty] private string connectionLabel = "Not connected to Forza Horizon 6";
