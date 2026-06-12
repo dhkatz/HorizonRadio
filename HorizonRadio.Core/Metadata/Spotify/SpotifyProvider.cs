@@ -4,7 +4,6 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Models;
 using SpotifyAPI.Web;
 
 namespace HorizonRadio.Core.Metadata.Spotify;
@@ -29,41 +28,35 @@ public sealed class SpotifyProvider : IMetadataProvider
 
     private static void Log(string msg) => Debug.WriteLine($"[hzn-spotify-mb] {msg}");
 
-    public async Task<Track?> EnrichAsync(Track track, CancellationToken ct)
+    public async Task<MetadataContribution?> ContributeAsync(MetadataQuery query, CancellationToken ct)
     {
         string? queryKey =
-            !string.IsNullOrEmpty(track.ExternalId) &&
-            track.ExternalId.StartsWith("spotify:track:", StringComparison.Ordinal)
-                ? "uri=" + track.ExternalId
-                : !string.IsNullOrEmpty(track.Title) && !string.IsNullOrEmpty(track.Artist)
-                    ? $"text={track.Artist.ToLowerInvariant()}|{track.Title.ToLowerInvariant()}"
+            !string.IsNullOrEmpty(query.ExternalId) &&
+            query.ExternalId.StartsWith("spotify:track:", StringComparison.Ordinal)
+                ? "uri=" + query.ExternalId
+                : !string.IsNullOrEmpty(query.Title) && !string.IsNullOrEmpty(query.Artist)
+                    ? $"text={query.Artist.ToLowerInvariant()}|{query.Title.ToLowerInvariant()}"
                     : null;
         if (queryKey == null) return null;
 
         var cacheKey = MetadataCache.Key(Id, queryKey);
         var hit = _cache.TryGet(cacheKey);
-        if (hit != null) return ApplyEntry(track, hit);
+        if (hit != null) return ToContribution(hit);
 
         var entry = queryKey.StartsWith("uri=", StringComparison.Ordinal)
-            ? await EnrichByUriAsync(track.ExternalId!, ct).ConfigureAwait(false)
-            : await EnrichByTextAsync(track.Artist, track.Title, ct).ConfigureAwait(false);
+            ? await EnrichByUriAsync(query.ExternalId!, ct).ConfigureAwait(false)
+            : await EnrichByTextAsync(query.Artist, query.Title, ct).ConfigureAwait(false);
 
         if (entry == null) { _cache.PutMiss(cacheKey); return null; }
         _cache.Put(cacheKey, entry);
-        return ApplyEntry(track, entry);
+        return ToContribution(entry);
     }
 
-    private static Track? ApplyEntry(Track t, MetadataCache.Entry e)
+    // Raw findings as a contribution — the resolver decides which fields win.
+    private static MetadataContribution? ToContribution(MetadataCache.Entry e)
     {
-        if (e.Title == null && e.Artist == null && e.Album == null &&
-            e.AlbumArt == null && e.Mbid == null) return null;
-        return t with
-        {
-            Album = !string.IsNullOrEmpty(t.Album) ? t.Album : e.Album,
-            Artist = !string.IsNullOrEmpty(t.Artist) ? t.Artist : e.Artist ?? "",
-            AlbumArt = t.AlbumArt ?? e.AlbumArt,
-            ExternalId = string.IsNullOrEmpty(t.ExternalId) ? e.Mbid : t.ExternalId,
-        };
+        var c = new MetadataContribution(e.Title, e.Artist, e.Album, e.AlbumArt, e.Year);
+        return c.IsEmpty ? null : c;
     }
 
     private async Task<SpotifyClient> GetClientAsync(CancellationToken ct)
@@ -164,7 +157,15 @@ public sealed class SpotifyProvider : IMetadataProvider
             Artist: artistName,
             Album: albumName,
             AlbumArt: art,
-            Mbid: t.Uri);
+            Mbid: t.Uri,
+            Year: ParseYear(t.Album?.ReleaseDate));
+    }
+
+    // Spotify release dates are "YYYY", "YYYY-MM", or "YYYY-MM-DD".
+    private static int? ParseYear(string? releaseDate)
+    {
+        if (string.IsNullOrEmpty(releaseDate) || releaseDate.Length < 4) return null;
+        return int.TryParse(releaseDate.AsSpan(0, 4), out var y) ? y : null;
     }
 
     private static string Escape(string s)

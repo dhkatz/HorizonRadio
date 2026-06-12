@@ -13,7 +13,16 @@ namespace HorizonRadio.Core.Metadata;
 /// </summary>
 public sealed class MetadataConfigStore
 {
+    /// <summary>Legacy single-provider selection; still read for migration into
+    /// <see cref="Order"/> on first load of an old config.</summary>
     public string? SelectedProviderId { get; set; }
+
+    /// <summary>Enabled provider ids in user priority order (the source is implicit
+    /// and always highest unless a field is forced to a provider).</summary>
+    public List<string> Order { get; } = new();
+
+    /// <summary>Per-field forced provider overrides ("always Spotify for Art").</summary>
+    public Dictionary<MetadataField, string> Forced { get; } = new();
 
     private readonly Dictionary<string, Dictionary<string, object?>> _perProvider = new();
 
@@ -55,6 +64,24 @@ public sealed class MetadataConfigStore
             if (root.TryGetProperty("selected", out var sel) && sel.ValueKind == JsonValueKind.String)
                 store.SelectedProviderId = sel.GetString();
 
+            if (root.TryGetProperty("order", out var ord) && ord.ValueKind == JsonValueKind.Array)
+                foreach (var el in ord.EnumerateArray())
+                    if (el.ValueKind == JsonValueKind.String && el.GetString() is { Length: > 0 } id)
+                        store.Order.Add(id);
+
+            if (root.TryGetProperty("forced", out var forced) && forced.ValueKind == JsonValueKind.Object)
+                foreach (var prop in forced.EnumerateObject())
+                    if (prop.Value.ValueKind == JsonValueKind.String &&
+                        Enum.TryParse<MetadataField>(prop.Name, out var field) &&
+                        prop.Value.GetString() is { Length: > 0 } pid)
+                        store.Forced[field] = pid;
+
+            // Migrate a legacy single-provider selection into the ordered list.
+            if (store.Order.Count == 0 &&
+                store.SelectedProviderId is { Length: > 0 } legacy &&
+                legacy != "none")
+                store.Order.Add(legacy);
+
             if (root.TryGetProperty("perProvider", out var per) && per.ValueKind == JsonValueKind.Object)
             {
                 foreach (var prov in per.EnumerateObject())
@@ -81,6 +108,15 @@ public sealed class MetadataConfigStore
             using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
             writer.WriteStartObject();
             if (SelectedProviderId != null) writer.WriteString("selected", SelectedProviderId);
+
+            writer.WriteStartArray("order");
+            foreach (var id in Order) writer.WriteStringValue(id);
+            writer.WriteEndArray();
+
+            writer.WriteStartObject("forced");
+            foreach (var (field, pid) in Forced) writer.WriteString(field.ToString(), pid);
+            writer.WriteEndObject();
+
             writer.WriteStartObject("perProvider");
             foreach (var (provId, bag) in _perProvider)
             {

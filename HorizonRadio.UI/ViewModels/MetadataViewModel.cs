@@ -30,7 +30,7 @@ public sealed partial class MetadataViewModel : ViewModelBase
 
     private readonly MetadataConfigStore _store;
     private readonly MetadataCache _cache;
-    private readonly EnrichmentService _service;
+    private readonly MetadataResolver _resolver;
 
     public ObservableCollection<IMetadataProviderFactory> AvailableProviders { get; } = new();
     public ObservableCollection<ConfigFieldViewModel> CurrentSchema { get; } = new();
@@ -42,11 +42,11 @@ public sealed partial class MetadataViewModel : ViewModelBase
 
     public MetadataViewModel(MetadataConfigStore store,
                              MetadataCache cache,
-                             EnrichmentService service)
+                             MetadataResolver resolver)
     {
         _store = store;
         _cache = cache;
-        _service = service;
+        _resolver = resolver;
 
         AvailableProviders.Add(new NoneProvider());
         foreach (var f in MetadataCatalog.All) AvailableProviders.Add(f);
@@ -65,7 +65,7 @@ public sealed partial class MetadataViewModel : ViewModelBase
         AvailableProviders.Add(new NoneProvider());
         _store = new MetadataConfigStore();
         _cache = new MetadataCache();
-        _service = null!;
+        _resolver = null!;
     }
 
     partial void OnSelectedProviderChanged(IMetadataProviderFactory? value)
@@ -96,7 +96,7 @@ public sealed partial class MetadataViewModel : ViewModelBase
     [RelayCommand]
     private void Apply()
     {
-        if (SelectedProvider == null || _service == null) return;
+        if (SelectedProvider == null || _resolver == null) return;
         HasError = false;
         StatusMessage = "Applying...";
 
@@ -104,9 +104,10 @@ public sealed partial class MetadataViewModel : ViewModelBase
         {
             if (SelectedProvider.Id == MetadataCatalog.NoneId)
             {
-                _service.SetProvider(null);
+                _store.Order.Clear();
                 _store.SelectedProviderId = MetadataCatalog.NoneId;
                 _store.SaveToDisk();
+                _resolver.Configure([], MetadataPolicy.Empty);
                 StatusMessage = "Enrichment disabled.";
                 return;
             }
@@ -114,11 +115,13 @@ public sealed partial class MetadataViewModel : ViewModelBase
             var values = new ConfigValues();
             foreach (var f in CurrentSchema) values.Set(f.Key, f.GetValue());
             _store.Save(SelectedProvider.Id, values);
+            _store.Order.Clear();
+            _store.Order.Add(SelectedProvider.Id);
             _store.SelectedProviderId = SelectedProvider.Id;
             _store.SaveToDisk();
 
-            var provider = SelectedProvider.Create(values, _cache);
-            _service.SetProvider(provider);
+            var (contributors, policy) = MetadataCatalog.BuildPipeline(_store, _cache);
+            _resolver.Configure(contributors, policy);
             StatusMessage = $"{SelectedProvider.DisplayName} active.";
         }
         catch (Exception ex)

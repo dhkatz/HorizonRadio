@@ -31,6 +31,7 @@ public partial class App : Application
     private SourceRunner? _runner;
     private SourceConfigStore? _store;
     private EnrichmentService? _enricher;
+    private MetadataResolver? _metaResolver;
     private MetadataConfigStore? _metaStore;
     private EventActionExecutor? _eventExecutor;
     private ForzaTelemetryListener? _telemetry;
@@ -58,8 +59,13 @@ public partial class App : Application
 
             _metaStore = MetadataConfigStore.LoadFromDisk();
             var cache = new MetadataCache();
-            _enricher = new EnrichmentService(_runner, provider: null);
-            var metaVm = new MetadataViewModel(_metaStore, cache, _enricher);
+            // The metadata pipeline: a shared resolver (source + ordered providers,
+            // per-field policy) drives both play-time enrichment and list enrichment.
+            _metaResolver = new MetadataResolver();
+            var (metaContributors, metaPolicy) = MetadataCatalog.BuildPipeline(_metaStore, cache);
+            _metaResolver.Configure(metaContributors, metaPolicy);
+            _enricher = new EnrichmentService(_runner, _metaResolver);
+            var metaVm = new MetadataViewModel(_metaStore, cache, _metaResolver);
 
             var toolRegistry = new ToolRegistry();
             var installers = ToolInstallers.CreateAll();
@@ -161,6 +167,7 @@ public partial class App : Application
                 _preview?.Dispose();
                 _telemetry?.Dispose();
                 if (_enricher != null) await _enricher.DisposeAsync();
+                if (_metaResolver != null) await _metaResolver.DisposeAsync();
                 if (_runner != null) await _runner.DisposeAsync();
                 if (_ipc != null) await _ipc.DisposeAsync();
                 if (_pcm != null) await _pcm.DisposeAsync();
