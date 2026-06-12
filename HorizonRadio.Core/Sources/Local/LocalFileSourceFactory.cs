@@ -1,4 +1,3 @@
-using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Sources.Config;
 
 namespace HorizonRadio.Core.Sources.Local;
@@ -9,7 +8,7 @@ namespace HorizonRadio.Core.Sources.Local;
 /// picker. Future fields (shuffle, recursive, extension filter) just
 /// extend the schema; the form picks them up automatically.
 /// </summary>
-public sealed class LocalFileSourceFactory : IAudioSourceFactory
+public sealed class LocalFileSourceFactory : IContentSourceFactory
 {
     public const string KeyPath = "path";
 
@@ -25,22 +24,15 @@ public sealed class LocalFileSourceFactory : IAudioSourceFactory
             Description: "Folder to scan recursively for audio files. An M3U file is also accepted.")
     ];
 
+    /// <summary>The folder/file path is the content locator; the local engine
+    /// has no environment or behavior config of its own.</summary>
+    public string ContentKey => KeyPath;
+
+    public IContentPlayer CreatePlayer(ConfigValues values) => new LocalContentPlayer();
+
+    // Single-start path: the local engine carries no config, so this just opens
+    // the one path the form holds. Path validation (exists, non-empty, has audio)
+    // lives in LocalContentPlayer.Open so the mix engine gets it per entry too.
     public IAudioSource Create(ConfigValues values)
-    {
-        var path = values.GetString(KeyPath);
-        if (string.IsNullOrWhiteSpace(path))
-            throw new InvalidOperationException("Local Files: pick a music folder first.");
-
-        // Playlist.FromPath handles directory (recursive walk), M3U,
-        // and single file. Returns an empty playlist for unknown paths;
-        // we treat that as user error rather than silently starting.
-        if (!Directory.Exists(path) && !File.Exists(path))
-            throw new InvalidOperationException($"Local Files: path doesn't exist: {path}");
-
-        var playlist = Playlist.FromPath(path);
-        if (playlist.Count == 0)
-            throw new InvalidOperationException($"Local Files: no audio files found under {path}");
-
-        return new LocalFileSource(playlist);
-    }
+        => CreatePlayer(values).Open(new ContentRef(Id, values.GetString(ContentKey) ?? ""));
 }
