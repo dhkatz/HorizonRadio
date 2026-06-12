@@ -491,6 +491,18 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
             await _runner.StartAsync(factory, values);
             SwitchStatus = null;
         }
+        catch (MissingToolException ex)
+        {
+            // Not a failure so much as a setup prompt — surface it as a
+            // warning that points the user at the Tools tab.
+            Debug.WriteLine($"[hzn-now-vm] switch blocked: {ex.Message}");
+            SwitchStatus = ex.Message;
+            _toasts?.CreateToast("Tool required")
+                .WithContent(ex.Message)
+                .WithDelay(8)
+                .DismissOnClick()
+                .ShowWarning();
+        }
         catch (Exception ex)
         {
             Debug.WriteLine($"[hzn-now-vm] switch failed: {ex.Message}");
@@ -550,6 +562,16 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         {
             await _switcher.SwitchToAsync(profile.Id);
             SwitchStatus = null;
+        }
+        catch (MissingToolException ex)
+        {
+            Debug.WriteLine($"[hzn-now-vm] profile switch blocked: {ex.Message}");
+            SwitchStatus = ex.Message;
+            _toasts?.CreateToast("Tool required")
+                .WithContent(ex.Message)
+                .WithDelay(8)
+                .DismissOnClick()
+                .ShowWarning();
         }
         catch (Exception ex)
         {

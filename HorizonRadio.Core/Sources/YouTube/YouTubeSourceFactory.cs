@@ -1,4 +1,5 @@
 using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Core.Tools;
 
 namespace HorizonRadio.Core.Sources.YouTube;
 
@@ -32,13 +33,13 @@ public sealed class YouTubeSourceFactory : IAudioSourceFactory
             new ToolField(
                 Key:         KeyYtDlp,
                 Label:       "yt-dlp.exe",
-                ToolKind:    "yt-dlp",
+                ToolKind:    Tools.ToolKind.YtDlp,
                 Description: "Install via the Tools tab, or point at an existing yt-dlp.exe."),
 
             new ToolField(
                 Key:         KeyFfmpeg,
                 Label:       "ffmpeg.exe",
-                ToolKind:    "ffmpeg",
+                ToolKind:    Tools.ToolKind.Ffmpeg,
                 Description: "Install via the Tools tab, or point at an existing ffmpeg.exe."),
 
             new BoolField(

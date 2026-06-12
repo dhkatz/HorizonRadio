@@ -18,6 +18,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prerelease of `main`. External tools resolve from the durable
   blobstore, so an installed nightly keeps working even after newer
   nightlies replace it. See `docs/tool-provisioning.md`.
+- The Tools tab now checks installed tools for updates in the background
+  on launch and flags stale ones. A sidebar badge and a one-time toast
+  surface when an update is available; a "Check for updates" button
+  re-runs the check on demand. yt-dlp and ffmpeg compare against their
+  upstream's current build; librespot compares against the app's pinned
+  build — never against upstream (that drift is the maintainer's job).
+  The check is hash-based and failure-silent: offline or otherwise
+  indeterminate tools are left unflagged rather than shown as stale.
+- Starting a source whose required tools (yt-dlp, ffmpeg, librespot)
+  aren't installed now shows a clear "Tool required" prompt naming the
+  missing tool(s) and pointing to the Tools tab, instead of a generic
+  failure. The check runs before the current source is stopped, so a
+  misconfigured switch no longer interrupts what's already playing.
 
 ### Changed
 
@@ -39,9 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   clang+MinGW accept.
 - librespot is no longer compiled in-tree on every C++ build. A
   dedicated GitHub Actions composite action
-  (`.github/actions/build-librespot`) builds it once per pinned rev
-  and caches the result, and every GitHub release now carries a
-  standalone `librespot.exe` asset.
+  (`.github/actions/build-librespot`) builds it once per pinned rev,
+  caches the result, and publishes it to the permanent, version-
+  addressed `tools` blobstore. It is no longer bundled in the app zip
+  or attached per-release — the app fetches it on demand from the
+  Tools tab, the same as yt-dlp and ffmpeg.
 
 ## [0.2.0] - 2026-06-01
 

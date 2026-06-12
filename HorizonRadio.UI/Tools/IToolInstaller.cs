@@ -1,6 +1,8 @@
 using System;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using HorizonRadio.Core.Tools;
 
 namespace HorizonRadio.UI.Tools;
 
@@ -27,6 +29,31 @@ public interface IToolInstaller
     /// and surfaces the message; that way installers can let HttpClient
     /// and ZipArchive exceptions propagate without translation.</summary>
     Task InstallAsync(IProgress<ToolInstallProgress>? progress, CancellationToken ct);
+
+    /// <summary>
+    /// The SHA-256 this installer expects the installed artifact's
+    /// <c>.sha256</c> sidecar to match — the baseline for the
+    /// provisioning-freshness check. Latest-policy tools fetch their
+    /// upstream sums file (network); the pinned tool returns its
+    /// embedded-manifest hash (offline). Returns null when it can't be
+    /// determined — offline, a missing sums file, or an empty manifest
+    /// pin — in which case freshness is reported as <c>Unknown</c>,
+    /// never <c>UpdateAvailable</c>. The install path verifies the
+    /// downloaded bytes against this same value, so sidecar and baseline
+    /// are always the same kind of hash.
+    /// </summary>
+    Task<string?> GetExpectedHashAsync(HttpClient http, CancellationToken ct);
+
+    /// <summary>
+    /// The hash of the CURRENTLY-INSTALLED artifact, in the same space as
+    /// <see cref="GetExpectedHashAsync"/> so the two compare directly. For
+    /// single-file tools this is the live hash of the installed exe — so
+    /// freshness is correct even when the <c>.sha256</c> sidecar is missing
+    /// or stale (e.g. a hand-dropped binary). ffmpeg overrides it to return
+    /// the recorded archive hash, since the extracted exe can't reproduce
+    /// the upstream zip hash. Null when it can't be determined → Unknown.
+    /// </summary>
+    Task<string?> GetInstalledHashAsync(InstalledTool installed, CancellationToken ct);
 }
 
 /// <summary>

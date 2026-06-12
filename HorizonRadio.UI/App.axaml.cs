@@ -14,6 +14,7 @@ using HorizonRadio.Core.Sources.Profiles;
 using HorizonRadio.UI.Tools;
 using HorizonRadio.UI.ViewModels;
 using HorizonRadio.UI.Views;
+using ShadUI;
 
 namespace HorizonRadio.UI;
 
@@ -60,12 +61,7 @@ public partial class App : Application
             var metaVm = new MetadataViewModel(_metaStore, cache, _enricher);
 
             var toolRegistry = new ToolRegistry();
-            var installers = new IToolInstaller[]
-            {
-                new YtDlpInstaller(),
-                new FfmpegInstaller(),
-                new LibrespotInstaller(),
-            };
+            var installers = ToolInstallers.CreateAll();
 
             // IPC client doubles as a game-event source (the DLL's memory
             // poller); the telemetry listener is a second source. The
@@ -141,8 +137,35 @@ public partial class App : Application
             };
 
             vm.SetConnection(ConnectionState.Connecting);
+
+            // Background provisioning-freshness check: surface stale tools
+            // on the sidebar badge and via a one-time launch toast. Runs on
+            // the UI thread (CheckFreshnessAsync awaits the network off it)
+            // and is failure-silent — offline resolves to Unknown, no toast.
+            CheckToolFreshnessAsync(vm);
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static async void CheckToolFreshnessAsync(MainWindowViewModel vm)
+    {
+        try
+        {
+            var n = await vm.ToolsTab.CheckFreshnessAsync();
+            if (n <= 0) return;
+
+            vm.ToastManager.CreateToast("Tool updates available")
+                .WithContent($"{n} installed tool{(n == 1 ? "" : "s")} " +
+                             $"{(n == 1 ? "has" : "have")} a newer build. " +
+                             "Open the Tools tab to update.")
+                .WithDelay(8)
+                .DismissOnClick()
+                .ShowInfo();
+        }
+        catch
+        {
+            // Freshness is best-effort; never let it disrupt startup.
+        }
     }
 }
