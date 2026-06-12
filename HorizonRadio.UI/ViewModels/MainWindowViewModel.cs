@@ -66,7 +66,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         ToastManager = toasts;
         Sources = new SourcesViewModel(runner, store, registry);
-        NowPlaying = new NowPlayingViewModel(runner, store, profileStore, profileSwitcher, preview, toasts);
+        var station = new StationTargetViewModel(store);
+        NowPlaying = new NowPlayingViewModel(runner, store, profileStore, profileSwitcher, station, preview, toasts);
         Stats = new StatsViewModel(runner);
         Metadata = metadata;
         ToolsTab = new ToolsViewModel(registry, installers);

@@ -156,6 +156,32 @@
                     </Button.Flyout>
                 </Button>
 
+                <!-- Which in-game station the radio replaces. App-level setting
+                     (see StationTargetViewModel), surfaced here next to the
+                     source/output pickers. -->
+                <Button x:Name="StationButton"
+                        Background="Transparent" BorderThickness="0"
+                        Width="36" Height="36" Padding="0"
+                        HorizontalContentAlignment="Center"
+                        VerticalContentAlignment="Center"
+                        ToolTip.Tip="{Binding Station.SelectedStation, FallbackValue='Station'}">
+                    <material:MaterialIcon Kind="RadioTower" Width="18" Height="18"/>
+                    <Button.Flyout>
+                        <Flyout Placement="Top">
+                            <ListBox ItemsSource="{Binding Station.Stations}"
+                                     SelectedItem="{Binding Station.SelectedStation, Mode=TwoWay}"
+                                     MinWidth="180"
+                                     Tapped="OnStationTapped">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" />
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+
                 <Button x:Name="OutputButton"
                         Background="Transparent" BorderThickness="0"
                         Width="36" Height="36" Padding="0"

@@ -81,6 +81,11 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     public ObservableCollection<OutputTarget> OutputTargets { get; } = new();
     [ObservableProperty] private OutputTarget? selectedOutput;
 
+    /// <summary>Global target-station picker, surfaced in the player bar
+    /// alongside the source/output pickers. App-level state (not per-source);
+    /// owned here only so the player bar — bound to this VM — can reach it.</summary>
+    public StationTargetViewModel Station { get; }
+
     /// <summary>Local monitor volume (0..1). Only applies when a local output
     /// device is selected; the in-game bridge ignores it.</summary>
     [ObservableProperty] private double previewVolume = 1.0;
@@ -125,6 +130,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
 
     public NowPlayingViewModel(SourceRunner runner, SourceConfigStore store,
         SourceProfileStore profiles, ProfileSwitcher switcher,
+        StationTargetViewModel station,
         PreviewController? preview = null, ToastManager? toasts = null)
     {
         _runner = runner;
@@ -133,6 +139,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         _switcher = switcher;
         _preview = preview;
         _toasts = toasts;
+        Station = station;
         AvailableSources = SourceCatalog.All;
 
         _profiles.Changed += () => Dispatcher.UIThread.Post(RefreshProfiles);
@@ -469,6 +476,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     public NowPlayingViewModel()
     {
         AvailableSources = SourceCatalog.All;
+        Station = new StationTargetViewModel();
     }
 
     partial void OnSelectedFactoryChanged(IAudioSourceFactory? value)

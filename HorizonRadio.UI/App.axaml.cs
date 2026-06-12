@@ -98,12 +98,12 @@ public partial class App : Application
             // Station targeting: push the chosen station to the DLL on change
             // and re-send it whenever the DLL (re)connects, so it knows which
             // station to replace.
-            vm.Sources.TargetStationChanged += s => _ipc?.SendTargetStation(StationCatalog.ToWire(s));
+            vm.NowPlaying.Station.TargetStationChanged += s => _ipc?.SendTargetStation(StationCatalog.ToWire(s));
 
             _ipc.Connected += () =>
             {
                 Dispatcher.UIThread.Post(() => vm.SetConnection(ConnectionState.Connected));
-                _ipc?.SendTargetStation(StationCatalog.ToWire(vm.Sources.SelectedStation));
+                _ipc?.SendTargetStation(StationCatalog.ToWire(vm.NowPlaying.Station.SelectedStation));
             };
             _ipc.Disconnected += () => Dispatcher.UIThread.Post(() => vm.SetConnection(ConnectionState.Disconnected));
             _ipc.StatsUpdated += s => Dispatcher.UIThread.Post(() => vm.Stats.Apply(s));
