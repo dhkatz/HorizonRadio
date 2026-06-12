@@ -133,7 +133,11 @@
                                     <!-- Double-click plays now. (Drag-to-reorder: follow-up.) -->
                                     <Border Classes="Card queueRow" Padding="8" Margin="0,0,0,6"
                                             DoubleTapped="OnRowDoubleTapped">
-                                        <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                                        <!-- Transparent background makes the WHOLE row a single hit surface, so
+                                             hover (and the action reveal) fires anywhere on the row, not just over
+                                             the title text. -->
+                                        <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center"
+                                              Background="Transparent">
                                             <!-- Thumbnail with a play overlay on hover. -->
                                             <Border Grid.Column="0" Classes="thumb" Width="48" Height="48"
                                                     CornerRadius="4" ClipToBounds="True" Margin="0,0,12,0"
