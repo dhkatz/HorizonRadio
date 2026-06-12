@@ -28,6 +28,8 @@ public sealed class LocalFileSourceFactory : IContentSourceFactory
     /// has no environment or behavior config of its own.</summary>
     public string ContentKey => KeyPath;
 
+    public string LocatorHint => @"Folder, M3U, or file (e.g. C:\Music)";
+
     public IContentPlayer CreatePlayer(ConfigValues values) => new LocalContentPlayer();
 
     // Single-start path: the local engine carries no config, so this just opens

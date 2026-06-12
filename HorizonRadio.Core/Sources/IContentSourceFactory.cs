@@ -28,6 +28,11 @@ public interface IContentSourceFactory : IAudioSourceFactory
     /// </summary>
     string ContentKey { get; }
 
+    /// <summary>Placeholder/example for a content locator (a URL, folder, …),
+    /// shown in quick-play and mix-entry inputs. Lives here so the hint has one
+    /// home rather than being duplicated per input surface.</summary>
+    string LocatorHint { get; }
+
     /// <summary>
     /// Build the content-free engine from environment + behavior values (tool
     /// paths, normalization). Ignores the <see cref="ContentKey"/> field. Throws

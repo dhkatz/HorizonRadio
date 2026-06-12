@@ -28,12 +28,7 @@ public sealed partial class QuickPlayDialogViewModel : ViewModelBase
     {
         _dialogs = dialogs;
         SourceName = source.DisplayName;
-        Hint = source.Id switch
-        {
-            "youtube" => "https://youtube.com/watch?v=… or /playlist?list=…",
-            "local" => @"Folder, M3U, or file (e.g. C:\Music)",
-            _ => "URL, folder, or file",
-        };
+        Hint = (source as IContentSourceFactory)?.LocatorHint ?? "URL, folder, or file";
     }
 
     /// <summary>Designer-only ctor.</summary>

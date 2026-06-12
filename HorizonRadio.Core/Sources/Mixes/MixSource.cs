@@ -50,6 +50,11 @@ public sealed class MixSource : IAudioSource, ITransportControls, IPlaybackProgr
     // The item currently playing — read by the UI progress poll.
     private volatile PlayableItem? _activeItem;
 
+    // Set when an item actually enters playback (its OnStarted fired), so the run
+    // loop can tell a productive pass from one where every entry was empty or
+    // every item failed to resolve. Touched only on the run-loop thread.
+    private bool _itemStarted;
+
     private volatile bool _paused;
     private readonly ManualResetEventSlim _resumeGate = new(initialState: true);
 
@@ -174,6 +179,7 @@ public sealed class MixSource : IAudioSource, ITransportControls, IPlaybackProgr
             ResumeGate = _resumeGate,
             OnStarted = item =>
             {
+                _itemStarted = true;
                 _activeItem = item;
                 TrackChanged?.Invoke(item.Metadata);
             },
@@ -183,9 +189,16 @@ public sealed class MixSource : IAudioSource, ITransportControls, IPlaybackProgr
         if (_shuffle) _entryOrder.SetShuffle(true, keepCurrent: false);
         _shufflePending = false;
 
+        // Entries traversed since anything last played. When it reaches a full
+        // lap of the mix with nothing played (all entries empty / every item
+        // failed to resolve), back off instead of spinning the CPU and
+        // re-spawning yt-dlp in a tight loop.
+        var idleEntries = 0;
+
         while (!ct.IsCancellationRequested && _entryOrder.CurrentIndex >= 0)
         {
             var entry = entries[_entryOrder.CurrentIndex];
+            var entryPlayed = false;
 
             try
             {
@@ -209,6 +222,7 @@ public sealed class MixSource : IAudioSource, ITransportControls, IPlaybackProgr
                     using var trackCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     _trackCts = trackCts;
                     _stepBackwards = false;
+                    _itemStarted = false;
 
                     var item = _items[_itemOrder.CurrentIndex];
                     _activeItem = item;
@@ -230,6 +244,7 @@ public sealed class MixSource : IAudioSource, ITransportControls, IPlaybackProgr
                         Log($"item failed: {ex.GetType().Name}: {ex.Message}");
                     }
 
+                    if (_itemStarted) entryPlayed = true;
                     if (ReferenceEquals(_trackCts, trackCts)) _trackCts = null;
 
                     ApplyShufflePending(keepCurrent: true);
@@ -241,11 +256,24 @@ public sealed class MixSource : IAudioSource, ITransportControls, IPlaybackProgr
             }
 
             ApplyShufflePending(keepCurrent: true);
+
+            idleEntries = entryPlayed ? 0 : idleEntries + 1;
+            if (idleEntries >= entries.Count)
+            {
+                idleEntries = 0;
+                try { await Task.Delay(IdleBackoff, ct).ConfigureAwait(false); }
+                catch (OperationCanceledException) { return; }
+            }
+
             // Wrap at the entry level so the mix loops continuously (and a
             // shuffled entry order reshuffles for a fresh pass).
             _entryOrder.Advance(wrap: true);
         }
     }
+
+    /// <summary>How long to pause after a full lap of the mix produced no audio,
+    /// to avoid a tight retry loop when everything is unplayable.</summary>
+    private static readonly TimeSpan IdleBackoff = TimeSpan.FromSeconds(3);
 
     // Apply a pending shuffle toggle to both order levels on the run-loop thread.
     // keepCurrent pins what's playing and shuffles the rest around it.

@@ -34,7 +34,9 @@ public sealed partial class MixesViewModel : ViewModelBase
     /// hold a self-driven source like Spotify Connect).</summary>
     public IReadOnlyList<IAudioSourceFactory> EntrySources { get; }
 
-    /// <summary>Station-override choices: "use global default" + the FH6 list.</summary>
+    /// <summary>Station-override choices: "use global default" (inherit) + the
+    /// specific FH6 stations. "Any station" is deliberately omitted — it's the
+    /// global default's job; a per-mix override pins the mix to one station.</summary>
     public ObservableCollection<string> StationOptions { get; }
 
     public ObservableCollection<MixEntryEditRow> EditEntries { get; } = new();
@@ -54,7 +56,7 @@ public sealed partial class MixesViewModel : ViewModelBase
         _store = store;
         _switcher = switcher;
         EntrySources = SourceCatalog.All.Where(f => f is IContentSourceFactory).ToList();
-        StationOptions = new ObservableCollection<string>(new[] { UseGlobalDefault }.Concat(StationCatalog.All));
+        StationOptions = new ObservableCollection<string>(new[] { UseGlobalDefault }.Concat(StationCatalog.Names));
 
         _store.Changed += OnStoreChanged;
         RefreshList();
@@ -269,12 +271,7 @@ public sealed partial class MixEntryEditRow : ViewModelBase
     }
 
     /// <summary>Placeholder hint for the locator box, following the selected source.</summary>
-    public string LocatorHint => SelectedSource?.Id switch
-    {
-        "youtube" => "https://youtube.com/watch?v=… or /playlist?list=…",
-        "local" => @"Folder, M3U, or file (e.g. C:\Music)",
-        _ => "URL, folder, or file",
-    };
+    public string LocatorHint => (SelectedSource as IContentSourceFactory)?.LocatorHint ?? "URL, folder, or file";
 
     partial void OnSelectedSourceChanged(IAudioSourceFactory? value) => OnPropertyChanged(nameof(LocatorHint));
 }

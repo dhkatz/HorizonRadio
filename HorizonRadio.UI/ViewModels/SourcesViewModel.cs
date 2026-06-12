@@ -43,12 +43,7 @@ public sealed partial class SourcesViewModel : ViewModelBase
     [ObservableProperty] private string quickPlayLocator = "";
 
     /// <summary>Placeholder for the quick-play box, following the selected source.</summary>
-    public string QuickPlayHint => SelectedFactory?.Id switch
-    {
-        "youtube" => "https://youtube.com/watch?v=… or /playlist?list=…",
-        "local" => @"Folder, M3U, or file (e.g. C:\Music)",
-        _ => "URL, folder, or file",
-    };
+    public string QuickPlayHint => (SelectedFactory as IContentSourceFactory)?.LocatorHint ?? "URL, folder, or file";
 
     /// <summary>Start/Play button label — content sources "Play" the quick-play
     /// locator; self-driven sources just "Start".</summary>
@@ -143,7 +138,7 @@ public sealed partial class SourcesViewModel : ViewModelBase
         // on transiently (content sources only) so it plays now without being saved.
         var values = SnapshotAndPersist();
         if (SelectedFactory is IContentSourceFactory csf && !string.IsNullOrWhiteSpace(QuickPlayLocator))
-            values.Set(csf.ContentKey, QuickPlayLocator.Trim());
+            values.WithLocator(csf, QuickPlayLocator);
 
         try
         {

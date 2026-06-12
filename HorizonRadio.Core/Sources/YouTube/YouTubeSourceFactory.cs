@@ -54,6 +54,8 @@ public sealed class YouTubeSourceFactory : IContentSourceFactory
     /// (tool paths, normalization) is environment/behavior the player holds.</summary>
     public string ContentKey => KeyUrl;
 
+    public string LocatorHint => "https://youtube.com/watch?v=… or /playlist?list=…";
+
     public IContentPlayer CreatePlayer(ConfigValues values)
     {
         var ytDlp = values.GetString(KeyYtDlp);

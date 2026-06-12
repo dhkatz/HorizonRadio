@@ -90,7 +90,11 @@ public sealed class YouTubePlayableItem : PlayableItem
         await PrepareAsync(ct).ConfigureAwait(false);
         if (_resolved is null)
         {
+            // Couldn't resolve (dead/region-blocked/transient). Throttle before
+            // returning so a playlist of failing entries advances at a sane pace
+            // instead of hammering yt-dlp back-to-back.
             Log($"skipping unresolved entry {_entry.Id}");
+            await Task.Delay(TimeSpan.FromMilliseconds(500), ct).ConfigureAwait(false);
             return; // treated as a (very short) natural end; engine advances
         }
 

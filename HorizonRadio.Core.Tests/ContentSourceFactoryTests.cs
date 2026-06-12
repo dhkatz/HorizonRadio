@@ -56,6 +56,21 @@ public class ContentSourceFactoryTests
     }
 
     [Fact]
+    public void Content_factories_expose_a_locator_hint()
+    {
+        Assert.False(string.IsNullOrWhiteSpace(new LocalFileSourceFactory().LocatorHint));
+        Assert.False(string.IsNullOrWhiteSpace(new YouTubeSourceFactory().LocatorHint));
+    }
+
+    [Fact]
+    public void WithLocator_sets_trimmed_value_under_content_key()
+    {
+        var f = new LocalFileSourceFactory();
+        var values = new ConfigValues().WithLocator(f, @"  C:\Music  ");
+        Assert.Equal(@"C:\Music", values.GetString(f.ContentKey));
+    }
+
+    [Fact]
     public void YouTube_create_player_missing_tools_throws()
     {
         var f = new YouTubeSourceFactory();

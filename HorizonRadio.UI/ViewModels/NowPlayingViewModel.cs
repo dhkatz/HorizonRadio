@@ -184,14 +184,21 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         _runner.ActiveSourceChanged += factory =>
             Dispatcher.UIThread.Post(() =>
             {
+                // Content sources aren't a persistent picker selection — they're
+                // launched via the quick-play dialog — so don't pin the picker to
+                // them, or re-picking the same one is a no-op and won't reopen the
+                // dialog. Self-driven sources still mirror into the picker.
                 _suppressSwitch = true;
-                SelectedFactory = factory;
+                SelectedFactory = factory is IContentSourceFactory ? null : factory;
                 _suppressSwitch = false;
                 RebindTransport();
 
-                if (factory == null)
+                // Key output handling off whether a source is actually playing,
+                // not off a null factory — a mix plays factory-less but is live, so
+                // it must still get output-reachability evaluation/pause.
+                if (_runner?.ActiveSource is null)
                 {
-                    // Source stopped: clear the output-pause state so the next
+                    // Nothing playing: clear the output-pause state so the next
                     // start re-evaluates reachability from a clean slate.
                     _outputAvailable = true;
                     _needsOutputPause = false;
@@ -524,8 +531,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(locator)) return;
 
         SwitchStatus = $"Starting {source.DisplayName}...";
-        var values = _store.Load(source.Id, source.Schema);
-        values.Set(csf.ContentKey, locator.Trim());
+        var values = _store.Load(source.Id, source.Schema).WithLocator(csf, locator);
         try
         {
             await _runner.StartAsync(source, values);

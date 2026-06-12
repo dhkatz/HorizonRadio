@@ -103,27 +103,29 @@ public partial class App : Application
             var vm = new MainWindowViewModel(_runner, _store, mixStore, mixSwitcher, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, toasts, dialogManager);
             desktop.MainWindow = new MainWindow { DataContext = vm };
 
-            // Station targeting: push the chosen station to the DLL on change
-            // and re-send it whenever the DLL (re)connects, so it knows which
-            // station to replace.
-            vm.NowPlaying.Station.TargetStationChanged += s => _ipc?.SendTargetStation(StationCatalog.ToWire(s));
-
-            // A mix can override the target station: push its effective station on
-            // switch (its own, else the global default), and revert to the global
-            // default when a non-mix (self-driven) source starts directly.
-            mixSwitcher.Switched += mix =>
-                _ipc?.SendTargetStation(
-                    StationCatalog.ToWire(mix.EffectiveStation(vm.NowPlaying.Station.SelectedStation)));
-            _runner.ActiveSourceChanged += factory =>
+            // Station targeting. "Which in-game station do we replace right now?"
+            // is computed in ONE place: the active mix's override if a mix is
+            // driving playback, else the global default. Every trigger — the
+            // global picker changing, a mix switch, a self-driven source start,
+            // and DLL (re)connect — pushes that same effective value, so none of
+            // them can clobber an active mix's override or go stale on reconnect.
+            string EffectiveStation()
             {
-                if (factory != null)
-                    _ipc?.SendTargetStation(StationCatalog.ToWire(vm.NowPlaying.Station.SelectedStation));
-            };
+                var global = vm.NowPlaying.Station.SelectedStation;
+                var mix = mixSwitcher.CurrentMixId is { } id ? mixStore.Get(id) : null;
+                return mix?.EffectiveStation(global) ?? global;
+            }
+
+            void PushStation() => _ipc?.SendTargetStation(StationCatalog.ToWire(EffectiveStation()));
+
+            vm.NowPlaying.Station.TargetStationChanged += _ => PushStation();
+            mixSwitcher.Switched += _ => PushStation();
+            _runner.ActiveSourceChanged += _ => PushStation();
 
             _ipc.Connected += () =>
             {
                 Dispatcher.UIThread.Post(() => vm.SetConnection(ConnectionState.Connected));
-                _ipc?.SendTargetStation(StationCatalog.ToWire(vm.NowPlaying.Station.SelectedStation));
+                PushStation();
             };
             _ipc.Disconnected += () => Dispatcher.UIThread.Post(() => vm.SetConnection(ConnectionState.Disconnected));
             _ipc.StatsUpdated += s => Dispatcher.UIThread.Post(() => vm.Stats.Apply(s));
