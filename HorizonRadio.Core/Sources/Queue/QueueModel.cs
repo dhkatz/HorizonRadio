@@ -101,6 +101,26 @@ public sealed class QueueModel
         if (removed) Changed?.Invoke();
     }
 
+    /// <summary>Move an explicit item to the current position of <paramref name="targetId"/>
+    /// (drag-and-drop reorder). No-op if either id is gone or it's a self-drop.</summary>
+    public void MoveExplicitTo(string id, string targetId)
+    {
+        if (id == targetId) return;
+        var moved = false;
+        lock (_lock)
+        {
+            var src = _explicit.FindIndex(q => q.Id == id);
+            if (src < 0) return;
+            var item = _explicit[src];
+            _explicit.RemoveAt(src);
+            var tgt = _explicit.FindIndex(q => q.Id == targetId);
+            if (tgt < 0) tgt = _explicit.Count; // target gone → drop at the end
+            _explicit.Insert(tgt, item);
+            moved = tgt != src;
+        }
+        if (moved) Changed?.Invoke();
+    }
+
     /// <summary>Nudge an explicit item up (delta &lt; 0) or down (delta &gt; 0),
     /// clamped to the list bounds.</summary>
     public void MoveExplicit(string id, int delta)

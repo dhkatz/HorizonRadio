@@ -5,9 +5,11 @@ using HorizonRadio.UI.ViewModels;
 namespace HorizonRadio.UI.Views;
 
 /// <summary>
-/// The toggleable right-hand queue sidebar. Bound to <see cref="ViewModels.QueueViewModel"/>;
-/// the + button's source flyout is closed on tap (the same pattern as the player
-/// bar's pickers) once a source is chosen to add a one-off.
+/// The toggleable right-hand queue sidebar. Bound to <see cref="QueueViewModel"/>.
+/// Handles the row interactions that don't belong in the VM: the + source flyout,
+/// and double-click / thumbnail-click to play. (Drag-to-reorder is a follow-up; the
+/// model side, <c>QueueModel.MoveExplicitTo</c> / <see cref="QueueViewModel.ReorderTo"/>,
+/// is already in place for it.)
 /// </summary>
 public partial class QueueView : UserControl
 {
@@ -24,8 +26,15 @@ public partial class QueueView : UserControl
     // Double-click a queue row to play it now (Spotify-style).
     private void OnRowDoubleTapped(object? sender, TappedEventArgs e)
     {
-        if (sender is Control { DataContext: QueueRowViewModel row } &&
-            row.PlayNowCommand.CanExecute(null))
+        if (sender is Control { DataContext: QueueRowViewModel row } && row.PlayNowCommand.CanExecute(null))
             row.PlayNowCommand.Execute(null);
+    }
+
+    // Click the thumbnail's play overlay to play now.
+    private void OnPlayOverlayPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is Control { DataContext: QueueRowViewModel row } && row.PlayNowCommand.CanExecute(null))
+            row.PlayNowCommand.Execute(null);
+        e.Handled = true;
     }
 }

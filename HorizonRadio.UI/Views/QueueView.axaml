@@ -14,8 +14,8 @@
     </Design.DataContext>
 
     <UserControl.Styles>
-        <!-- Row actions (up/down/remove) and the thumbnail play button stay hidden
-             until the row / thumbnail is hovered, so the title gets the full width. -->
+        <!-- On row hover: reveal up/down/remove and fade the title's right edge out
+             from under them (an opacity gradient, theme-independent). -->
         <Style Selector="StackPanel.rowActions">
             <Setter Property="Opacity" Value="0"/>
             <Setter Property="Transitions">
@@ -25,13 +25,25 @@
         <Style Selector="Border.queueRow:pointerover StackPanel.rowActions">
             <Setter Property="Opacity" Value="1"/>
         </Style>
-        <Style Selector="Button.playOverlay">
+        <Style Selector="Border.queueRow:pointerover StackPanel.rowTitle">
+            <Setter Property="OpacityMask">
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                    <GradientStop Offset="0" Color="White"/>
+                    <GradientStop Offset="0.55" Color="White"/>
+                    <GradientStop Offset="1" Color="Transparent"/>
+                </LinearGradientBrush>
+            </Setter>
+        </Style>
+
+        <!-- Play overlay fills the thumbnail (same rounded-square shape), semi-
+             transparent so the art shows through, revealed on thumbnail hover. -->
+        <Style Selector="Border.playOverlay">
             <Setter Property="Opacity" Value="0"/>
             <Setter Property="Transitions">
                 <Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.10"/></Transitions>
             </Setter>
         </Style>
-        <Style Selector="Border.thumb:pointerover Button.playOverlay">
+        <Style Selector="Border.thumb:pointerover Border.playOverlay">
             <Setter Property="Opacity" Value="1"/>
         </Style>
     </UserControl.Styles>
@@ -119,7 +131,7 @@
                         <ItemsControl ItemsSource="{Binding Upcoming}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="{x:Type vm:QueueRowViewModel}">
-                                    <!-- Double-click anywhere on the row plays it now. -->
+                                    <!-- Double-click plays now. (Drag-to-reorder: follow-up.) -->
                                     <Border Classes="Card queueRow" Padding="8" Margin="0,0,0,6"
                                             DoubleTapped="OnRowDoubleTapped">
                                         <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
@@ -132,20 +144,20 @@
                                                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                     <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"
                                                            IsVisible="{Binding HasThumbnail}"/>
-                                                    <Button Classes="playOverlay" Command="{Binding PlayNowCommand}"
-                                                            Background="#99000000" BorderThickness="0" Padding="0"
-                                                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                                                            HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                                            ToolTip.Tip="Play Now">
-                                                        <material:MaterialIcon Kind="Play" Width="22" Height="22" Foreground="White"/>
-                                                    </Button>
+                                                    <!-- Same rounded-square shape as the thumbnail, translucent. -->
+                                                    <Border Classes="playOverlay" Background="#73000000" CornerRadius="4"
+                                                            PointerPressed="OnPlayOverlayPressed" ToolTip.Tip="Play Now">
+                                                        <material:MaterialIcon Kind="Play" Width="24" Height="24"
+                                                                               Foreground="White"
+                                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
                                                 </Panel>
                                             </Border>
 
-                                            <!-- Title fills the row; the actions overlay the right edge on hover
-                                                 (covering the title a little is fine). -->
+                                            <!-- Title fills the row; on hover its right edge fades (OpacityMask)
+                                                 and the actions appear over it. -->
                                             <Panel Grid.Column="1">
-                                                <StackPanel Spacing="2" VerticalAlignment="Center">
+                                                <StackPanel Classes="rowTitle" Spacing="2" VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="Medium"
                                                                TextTrimming="CharacterEllipsis"/>
                                                     <TextBlock Text="{Binding Subtitle}" FontSize="12" Opacity="0.6"
@@ -153,8 +165,7 @@
                                                                TextTrimming="CharacterEllipsis"/>
                                                 </StackPanel>
                                                 <StackPanel Classes="rowActions" Orientation="Horizontal" Spacing="1"
-                                                            HorizontalAlignment="Right" VerticalAlignment="Center"
-                                                            Background="{DynamicResource CardBackgroundColor}">
+                                                            HorizontalAlignment="Right" VerticalAlignment="Center">
                                                     <Button Classes="Ghost" Padding="5" Command="{Binding MoveUpCommand}"
                                                             ToolTip.Tip="Move Up">
                                                         <material:MaterialIcon Kind="ChevronUp" Width="16" Height="16"/>

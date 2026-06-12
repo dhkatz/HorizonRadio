@@ -37,8 +37,9 @@ public sealed partial class QueueViewModel : ViewModelBase
 
     // Rolling window of upcoming rows we resolve full metadata + art for, ahead of
     // play. Re-evaluated on every rebuild, so as the queue advances later items enter
-    // the window. (A song lasts minutes, so there's ample time to fetch ahead.)
-    private const int EnrichLookahead = 12;
+    // the window. Sized a little past a full-screen page of rows so a song moving
+    // into now-playing doesn't reveal an un-enriched row popping in at the bottom.
+    private const int EnrichLookahead = 18;
 
     // Cap concurrent metadata-only yt-dlp resolves so the window trickles in rather
     // than spawning a dozen processes at once. Static = an app-wide cap.
@@ -256,6 +257,11 @@ public sealed partial class QueueViewModel : ViewModelBase
     partial void OnHasNowPlayingChanged(bool value) => OnPropertyChanged(nameof(IsEmpty));
     partial void OnHasUpcomingChanged(bool value) => OnPropertyChanged(nameof(IsEmpty));
     partial void OnHasContextChanged(bool value) => OnPropertyChanged(nameof(IsEmpty));
+
+    /// <summary>Drag-and-drop reorder: move the dragged row to the dropped-on row's
+    /// position. Called from the view's drop handler.</summary>
+    public void ReorderTo(string sourceId, string targetId) =>
+        _queue?.Model.MoveExplicitTo(sourceId, targetId);
 
     [RelayCommand]
     private void ClearQueue() => _queue?.Model.ClearExplicit();
