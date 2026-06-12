@@ -21,4 +21,14 @@ public interface IContentPlayer
     /// surfaces is unchanged.
     /// </summary>
     IAudioSource Open(ContentRef content);
+
+    /// <summary>
+    /// Expand <paramref name="content"/> into its ordered <see cref="PlayableItem"/>s
+    /// — a folder/M3U into its files, a YouTube playlist URL into its videos, a
+    /// single file/video into one item. This is the unit the mix engine sequences;
+    /// each item resolves and pumps itself independently. Throws
+    /// <see cref="System.InvalidOperationException"/> on an empty/unresolvable
+    /// locator, matching <see cref="Open"/>.
+    /// </summary>
+    Task<IReadOnlyList<PlayableItem>> EnumerateAsync(ContentRef content, CancellationToken ct);
 }

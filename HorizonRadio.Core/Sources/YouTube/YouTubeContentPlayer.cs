@@ -22,4 +22,15 @@ public sealed class YouTubeContentPlayer(string ytDlpPath, string ffmpegPath, bo
             EnableVolumeNormalisation = normalise,
         });
     }
+
+    public async Task<IReadOnlyList<PlayableItem>> EnumerateAsync(ContentRef content, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(content.Locator))
+            throw new InvalidOperationException("YouTube: enter a video or playlist URL.");
+
+        // --flat-playlist enumerate: cheap id/title list now; each item does its
+        // own (short-lived, signed-URL) resolve lazily in PrepareAsync/PlayAsync.
+        var entries = await YtDlpClient.EnumerateAsync(ytDlpPath, content.Locator, ct).ConfigureAwait(false);
+        return [.. entries.Select(e => (PlayableItem)new YouTubePlayableItem(e, ytDlpPath, ffmpegPath, normalise))];
+    }
 }

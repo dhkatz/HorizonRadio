@@ -29,6 +29,20 @@ internal sealed class TempDir : IDisposable
         return p;
     }
 
+    /// <summary>Write a short silent 44.1 kHz/16-bit stereo WAV and return its
+    /// path — a real, decodable file for exercising the local pump.</summary>
+    public string WriteSilentWav(string name, double seconds)
+    {
+        var p = System.IO.Path.Combine(Path, name);
+        var fmt = new NAudio.Wave.WaveFormat(44100, 16, 2);
+        using (var w = new NAudio.Wave.WaveFileWriter(p, fmt))
+        {
+            var silence = new byte[(int)(seconds * fmt.AverageBytesPerSecond)];
+            w.Write(silence, 0, silence.Length);
+        }
+        return p;
+    }
+
     public void Dispose()
     {
         try { Directory.Delete(Path, recursive: true); } catch { /* best effort */ }

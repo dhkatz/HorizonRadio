@@ -19,4 +19,9 @@ public sealed record Track(
     byte[]? AlbumArt,
     string SourceId,
     string SourceDisplay,
-    string? ExternalId = null);
+    string? ExternalId = null)
+{
+    /// <summary>Placeholder track with no fields set — a non-null default for
+    /// holders that haven't learned their real metadata yet.</summary>
+    public static readonly Track Empty = new("", "", null, null, "", "");
+}
