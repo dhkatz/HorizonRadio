@@ -11,6 +11,8 @@ using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
+using HorizonRadio.Core.Sources.Queue;
+using ShadUI;
 
 namespace HorizonRadio.UI.ViewModels;
 
@@ -27,6 +29,7 @@ public sealed partial class MixesViewModel : ViewModelBase
 
     private readonly MixStore _store;
     private readonly MixSwitcher _switcher;
+    private readonly DialogManager? _dialogs;
 
     public ObservableCollection<MixRow> Mixes { get; } = new();
 
@@ -51,10 +54,11 @@ public sealed partial class MixesViewModel : ViewModelBase
     // null = creating; otherwise the id being edited.
     private string? _editingId;
 
-    public MixesViewModel(MixStore store, MixSwitcher switcher)
+    public MixesViewModel(MixStore store, MixSwitcher switcher, DialogManager? dialogs = null)
     {
         _store = store;
         _switcher = switcher;
+        _dialogs = dialogs;
         EntrySources = SourceCatalog.All.Where(f => f is IContentSourceFactory).ToList();
         StationOptions = new ObservableCollection<string>(new[] { UseGlobalDefault }.Concat(StationCatalog.Names));
 
@@ -65,8 +69,16 @@ public sealed partial class MixesViewModel : ViewModelBase
     /// <summary>Designer-only ctor.</summary>
     public MixesViewModel() : this(
         new MixStore(),
-        new MixSwitcher(new MixStore(), new SourceConfigStore(), new SourceRunner(new NullSink())))
+        DesignerSwitcher())
     { }
+
+    private static MixSwitcher DesignerSwitcher()
+    {
+        var runner = new SourceRunner(new NullSink());
+        var config = new SourceConfigStore();
+        var queue = new QueuePlayback(runner, config, new MixContentResolver(config));
+        return new MixSwitcher(new MixStore(), queue, runner);
+    }
 
     private sealed class NullSink : IPcmSink
     {
@@ -92,7 +104,7 @@ public sealed partial class MixesViewModel : ViewModelBase
         var station = m.Station == null ? "" : $"Station: {m.Station}";
         return new MixRow(id, m.Name, summary, station)
         {
-            PlayCommand = new AsyncRelayCommand(() => PlayAsync(id)),
+            PlayCommand = new RelayCommand(() => PlayMix(id)),
             EditCommand = new RelayCommand(() => EditMix(id)),
             DeleteCommand = new RelayCommand(() => DeleteMix(id)),
         };
@@ -201,17 +213,36 @@ public sealed partial class MixesViewModel : ViewModelBase
         _store.SaveToDisk();
     }
 
-    private async Task PlayAsync(string id)
+    // Starting a mix while the queue already has content asks whether to replace the
+    // queue's context or add this mix's tracks to it; otherwise it just plays.
+    private void PlayMix(string id)
     {
         var mix = _store.Get(id);
         if (mix is null) return;
 
+        if (_switcher.QueueHasContent && _dialogs != null)
+        {
+            var dialog = new QueueAddModeDialogViewModel(_dialogs, mix.Name);
+            _dialogs.CreateDialog(dialog)
+                .Dismissible()
+                .WithSuccessCallback(vm => _ = PlayAsync(id, mix.Name, vm.Mode))
+                .Show();
+        }
+        else
+        {
+            _ = PlayAsync(id, mix.Name, QueueAddMode.Replace);
+        }
+    }
+
+    private async Task PlayAsync(string id, string name, QueueAddMode mode)
+    {
         HasError = false;
-        StatusMessage = $"Starting {mix.Name}…";
+        StatusMessage = mode == QueueAddMode.Add ? $"Adding {name} to the queue…" : $"Starting {name}…";
         try
         {
-            await _switcher.SwitchToAsync(id);
-            StatusMessage = $"Playing: {mix.Name}";
+            if (mode == QueueAddMode.Add) await _switcher.AddToQueueAsync(id);
+            else await _switcher.SwitchToAsync(id);
+            StatusMessage = mode == QueueAddMode.Add ? $"Added to queue: {name}" : $"Playing: {name}";
         }
         catch (Exception ex)
         {

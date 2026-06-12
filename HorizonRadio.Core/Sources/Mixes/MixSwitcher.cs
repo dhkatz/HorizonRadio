@@ -1,62 +1,79 @@
-using System.Linq;
-using HorizonRadio.Core.Sources.Config;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using HorizonRadio.Core.Sources.Queue;
 
 namespace HorizonRadio.Core.Sources.Mixes;
 
 /// <summary>
 /// The single place mixes are launched from — the mix-era successor to the old
-/// profile switcher. Owns the "current mix" notion (so Next/Previous cycle the
-/// library correctly however the last switch happened) and centralizes the
-/// resolve → pre-flight → start sequence the Mixes tab, the player-bar quick-
-/// switch, and bound controls/game-events all go through.
+/// profile switcher, now a thin façade over <see cref="QueuePlayback"/>. Owns the
+/// "current mix" notion (so Next/Previous cycle the library correctly however the
+/// last switch happened) and centralizes the resolve → start sequence the Mixes
+/// tab, the player-bar quick-switch, and bound controls/game-events all go through.
 ///
-/// Switches are serialized so concurrent triggers (a hotkey on a backend thread
-/// plus a UI click, or rapid Next presses) can't overlap on the runner or on
-/// <see cref="CurrentMixId"/>. A source started outside this switcher (a direct
-/// self-driven source, a SwitchSource action) clears <see cref="CurrentMixId"/>
-/// via the runner's change event, so cycling stays relative to what's playing.
+/// Starting a mix sets it as the queue's context (the infinite tail). "Current mix"
+/// is derived from the queue model and gated on the queue engine actually being the
+/// active source, so a self-driven source (Spotify Connect) taking over reports no
+/// current mix — keeping station targeting relative to what's really playing.
+///
+/// Switches are serialized so concurrent triggers (a hotkey on a backend thread plus
+/// a UI click, or rapid Next presses) can't overlap on <see cref="CurrentMixId"/>.
 /// </summary>
 public sealed class MixSwitcher : IDisposable
 {
     private readonly MixStore _mixes;
-    private readonly SourceConfigStore _config;
+    private readonly QueuePlayback _queue;
     private readonly SourceRunner _runner;
-    private readonly MixContentResolver _resolver;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
-    private volatile bool _switching;
+    /// <summary>Id of the mix currently driving the queue's tail, or null when the
+    /// active source isn't the queue (e.g. Spotify Connect took over) or no mix is
+    /// set. Derived, so it can't drift from what's actually playing.</summary>
+    public string? CurrentMixId => _queue.IsActive ? _queue.Model.ContextMixId : null;
 
-    /// <summary>Id of the mix currently driving the runner, or null if the active
-    /// source wasn't started from a mix.</summary>
-    public string? CurrentMixId { get; private set; }
-
-    /// <summary>Raised after a successful switch, carrying the mix now playing.
-    /// The app uses it to push the mix's effective target station to the DLL
-    /// (the mix's override, else the global default).</summary>
+    /// <summary>Raised after a successful switch, carrying the mix now playing. The
+    /// app uses it to push the mix's effective target station to the DLL (the mix's
+    /// override, else the global default).</summary>
     public event Action<Mix>? Switched;
 
-    public MixSwitcher(MixStore mixes, SourceConfigStore config, SourceRunner runner)
+    public MixSwitcher(MixStore mixes, QueuePlayback queue, SourceRunner runner)
     {
         _mixes = mixes;
-        _config = config;
+        _queue = queue;
         _runner = runner;
-        _resolver = new MixContentResolver(config);
-        _runner.ActiveSourceChanged += OnActiveSourceChanged;
     }
 
-    private void OnActiveSourceChanged(IAudioSourceFactory? factory)
-    {
-        if (!_switching) CurrentMixId = null;
-    }
-
-    /// <summary>Switch to a specific mix. Throws <see cref="InvalidOperationException"/>
-    /// with a user-facing message on a known failure (unknown mix, empty mix), and
-    /// propagates a <see cref="MissingToolException"/> when an entry's source needs
-    /// a tool that isn't installed.</summary>
+    /// <summary>Switch to a specific mix (replacing the queue's context). Throws
+    /// <see cref="InvalidOperationException"/> with a user-facing message on a known
+    /// failure (unknown mix, empty mix), and propagates a
+    /// <see cref="MissingToolException"/> when an entry's source needs a tool that
+    /// isn't installed.</summary>
     public async Task SwitchToAsync(string mixId)
     {
         await _gate.WaitAsync().ConfigureAwait(false);
         try { await SwitchToCoreAsync(mixId).ConfigureAwait(false); }
+        finally { _gate.Release(); }
+    }
+
+    /// <summary>True when the queue already has content (explicit items or a
+    /// context) — the UI uses it to decide whether to prompt "replace or add" when
+    /// the user starts another mix.</summary>
+    public bool QueueHasContent => _queue.Model.HasWork;
+
+    /// <summary>Add a mix to the queue as one-time content (one lap of its tracks)
+    /// without changing the context the queue's tail draws from. Unlike
+    /// <see cref="SwitchToAsync"/> this leaves the "current mix" unchanged, so it
+    /// raises no <see cref="Switched"/> (station targeting stays put).</summary>
+    public async Task AddToQueueAsync(string mixId)
+    {
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var mix = _mixes.Get(mixId)
+                ?? throw new InvalidOperationException("That mix no longer exists.");
+            await _queue.PlayMixAsync(mix, QueueAddMode.Add).ConfigureAwait(false);
+        }
         finally { _gate.Release(); }
     }
 
@@ -87,41 +104,12 @@ public sealed class MixSwitcher : IDisposable
     {
         var mix = _mixes.Get(mixId)
             ?? throw new InvalidOperationException("That mix no longer exists.");
-        if (mix.Entries.Count == 0)
-            throw new InvalidOperationException($"'{mix.Name}' has no entries to play.");
 
-        // Pre-flight every distinct source the mix uses before tearing down what's
-        // playing, so a mix that needs a missing tool reports it up front (and the
-        // current source keeps playing) instead of silently skipping mid-mix.
-        EnsureMixToolsAvailable(mix);
-
-        var source = new MixSource(mix, _resolver);
-
-        _switching = true;
-        try
-        {
-            await _runner.StartSourceAsync(source).ConfigureAwait(false);
-            CurrentMixId = mixId;
-        }
-        finally
-        {
-            _switching = false;
-        }
-
+        await _queue.PlayMixAsync(mix, QueueAddMode.Replace).ConfigureAwait(false);
         Switched?.Invoke(mix);
     }
 
-    private void EnsureMixToolsAvailable(Mix mix)
-    {
-        foreach (var sourceId in mix.Entries.Select(e => e.SourceId).Distinct())
-        {
-            if (SourceCatalog.Find(sourceId) is not IContentSourceFactory factory) continue;
-            var values = _config.Load(factory.Id, factory.Schema);
-            SourceRequirements.EnsureToolsAvailable(factory, values);
-        }
-    }
-
-    private static int IndexOf(System.Collections.Generic.IReadOnlyList<Mix> all, string? id)
+    private static int IndexOf(IReadOnlyList<Mix> all, string? id)
     {
         if (id == null) return -1;
         for (var i = 0; i < all.Count; i++)
@@ -129,9 +117,5 @@ public sealed class MixSwitcher : IDisposable
         return -1;
     }
 
-    public void Dispose()
-    {
-        _runner.ActiveSourceChanged -= OnActiveSourceChanged;
-        _gate.Dispose();
-    }
+    public void Dispose() => _gate.Dispose();
 }

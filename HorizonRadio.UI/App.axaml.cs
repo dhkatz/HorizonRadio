@@ -11,6 +11,7 @@ using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
+using HorizonRadio.Core.Sources.Queue;
 using HorizonRadio.UI.Tools;
 using HorizonRadio.UI.ViewModels;
 using HorizonRadio.UI.Views;
@@ -75,7 +76,12 @@ public partial class App : Application
             // legacy profiles.json into one-entry mixes on first run.
             var mixStore = MixStore.LoadFromDisk();
             MixMigration.MaybeMigrate(mixStore);
-            var mixSwitcher = new MixSwitcher(mixStore, _store, _runner);
+
+            // The global queue owns playback now: one engine plays straight down the
+            // queue (explicit one-offs first, then the active mix as an infinite
+            // tail). The switcher sets a mix as that tail; quick-play appends one-offs.
+            var queuePlayback = new QueuePlayback(_runner, _store, new MixContentResolver(_store));
+            var mixSwitcher = new MixSwitcher(mixStore, queuePlayback, _runner);
 
             // One dispatcher turns an EventAction into a transport/source/mix/
             // volume call; both the Events tab (game events) and the Controls tab
@@ -99,8 +105,9 @@ public partial class App : Application
             // the app ViewLocator), so custom dialog content must be registered.
             var dialogManager = new ShadUI.DialogManager();
             dialogManager.Register<QuickPlayDialogView, QuickPlayDialogViewModel>();
+            dialogManager.Register<QueueAddModeDialogView, QueueAddModeDialogViewModel>();
 
-            var vm = new MainWindowViewModel(_runner, _store, mixStore, mixSwitcher, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, toasts, dialogManager);
+            var vm = new MainWindowViewModel(_runner, _store, mixStore, mixSwitcher, queuePlayback, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, toasts, dialogManager);
             desktop.MainWindow = new MainWindow { DataContext = vm };
 
             // Station targeting. "Which in-game station do we replace right now?"
@@ -150,6 +157,7 @@ public partial class App : Application
                 _eventExecutor?.Dispose();
                 _inputService?.Dispose();
                 mixSwitcher.Dispose();
+                queuePlayback.Dispose();
                 _preview?.Dispose();
                 _telemetry?.Dispose();
                 if (_enricher != null) await _enricher.DisposeAsync();

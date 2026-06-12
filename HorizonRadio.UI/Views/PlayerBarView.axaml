@@ -5,6 +5,7 @@
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
              xmlns:views="using:HorizonRadio.UI.Views"
              xmlns:material="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:shadui="clr-namespace:ShadUI;assembly=ShadUI"
              mc:Ignorable="d" d:DesignWidth="1024" d:DesignHeight="84"
              x:Class="HorizonRadio.UI.Views.PlayerBarView"
              x:DataType="vm:NowPlayingViewModel">
@@ -231,6 +232,17 @@
                         </Flyout>
                     </Button.Flyout>
                 </Button>
+
+                <!-- Show/hide the right-hand queue sidebar. Toggle state lives on
+                     the shell VM, so reach up to the window's DataContext. -->
+                <ToggleButton IsChecked="{ReflectionBinding DataContext.IsQueueVisible, RelativeSource={RelativeSource AncestorType={x:Type shadui:Window}}, Mode=TwoWay}"
+                              Background="Transparent" BorderThickness="0"
+                              Width="36" Height="36" Padding="0"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              ToolTip.Tip="Queue">
+                    <material:MaterialIcon Kind="PlaylistPlay" Width="18" Height="18"/>
+                </ToggleButton>
 
                 <Button Command="{Binding ToggleMuteCommand}"
                         IsEnabled="{Binding IsLocalOutput}"
