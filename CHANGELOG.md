@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The in-game station Horizon Radio replaces is now a global control in the
   player bar (moved out of the Sources tab), and a mix can optionally override
   it for the station it plays on.
+- **Quick Play** on the Sources tab: play a one-off URL, folder, M3U, or file
+  from a content source without building a saved mix.
 
 ### Changed
 

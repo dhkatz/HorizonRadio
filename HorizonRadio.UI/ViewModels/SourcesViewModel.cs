@@ -29,14 +29,30 @@ public sealed partial class SourcesViewModel : ViewModelBase
     [ObservableProperty] private IAudioSourceFactory? selectedFactory;
     [ObservableProperty] private bool isRunning;
 
-    /// <summary>True when the selected source plays via mixes (content-addressable)
-    /// rather than being started directly. The Sources tab configures its engine
-    /// (tool paths, behavior); what to play is chosen in the Mixes tab.</summary>
+    /// <summary>True when the selected source is content-addressable. Its engine
+    /// (tool paths, behavior) is configured here; "what to play" is a transient
+    /// quick-play locator (below) or — for saved collections — a mix.</summary>
     public bool IsContentSource => SelectedFactory is IContentSourceFactory;
 
-    /// <summary>Only self-driven sources (Spotify Connect, the test tone) start
-    /// from here — content sources need a mix to supply what to play.</summary>
-    public bool CanStartSelected => SelectedFactory is not null and not IContentSourceFactory;
+    /// <summary>Whether the selected source can be started/played from here.</summary>
+    public bool CanStartSelected => SelectedFactory is not null;
+
+    /// <summary>Ad-hoc "play this now" target for a content source — a URL, folder,
+    /// M3U, or file. Transient: it's passed to the source for this play but not
+    /// saved as config (saved collections are mixes).</summary>
+    [ObservableProperty] private string quickPlayLocator = "";
+
+    /// <summary>Placeholder for the quick-play box, following the selected source.</summary>
+    public string QuickPlayHint => SelectedFactory?.Id switch
+    {
+        "youtube" => "https://youtube.com/watch?v=… or /playlist?list=…",
+        "local" => @"Folder, M3U, or file (e.g. C:\Music)",
+        _ => "URL, folder, or file",
+    };
+
+    /// <summary>Start/Play button label — content sources "Play" the quick-play
+    /// locator; self-driven sources just "Start".</summary>
+    public string StartLabel => IsContentSource ? "Play" : "Start";
     [ObservableProperty] private string statusMessage = "";
     [ObservableProperty] private bool hasError;
     [ObservableProperty] private bool hasNoSchema;
@@ -74,6 +90,8 @@ public sealed partial class SourcesViewModel : ViewModelBase
         RebuildSchema(value);
         OnPropertyChanged(nameof(IsContentSource));
         OnPropertyChanged(nameof(CanStartSelected));
+        OnPropertyChanged(nameof(QuickPlayHint));
+        OnPropertyChanged(nameof(StartLabel));
         _store.LastSelectedId = value?.Id;
         _store.SaveToDisk();
     }
@@ -121,7 +139,12 @@ public sealed partial class SourcesViewModel : ViewModelBase
         HasError = false;
         StatusMessage = "Starting...";
 
+        // Engine config is snapshotted/persisted; the quick-play locator is layered
+        // on transiently (content sources only) so it plays now without being saved.
         var values = SnapshotAndPersist();
+        if (SelectedFactory is IContentSourceFactory csf && !string.IsNullOrWhiteSpace(QuickPlayLocator))
+            values.Set(csf.ContentKey, QuickPlayLocator.Trim());
+
         try
         {
             await _runner.StartAsync(SelectedFactory, values);
