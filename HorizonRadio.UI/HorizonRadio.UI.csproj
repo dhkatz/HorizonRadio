@@ -106,15 +106,23 @@
     <!--
       Build-time copy: drop version.dll into bin/{Configuration}/ so the
       dev iteration loop (run from VS / Rider / `dotnet build`) lets the
-      Mods tab find it. No CopyToPublishDirectory here — that path
-      apparently conflicts with CopyToOutputDirectory for self-contained
-      single-file publishes (the build copy lands, the publish copy
-      silently doesn't). CopyBundledBinariesToPublish handles publish below.
+      Mods tab find it.
+
+      ExcludeFromSingleFile keeps version.dll OUT of the single-file
+      bundle. Without it the publish bundles our PROXY version.dll into
+      HorizonRadio.UI.exe, the host extracts it to %TEMP%\.net\... on
+      launch, and the loader pulls it into our OWN process — where its
+      DllMain would start the IPC server and the UI "connects" to itself.
+      The Mods tab only ever reads the loose copy from
+      AppContext.BaseDirectory (placed by CopyBundledBinariesToPublish),
+      never the bundle, so excluding it loses nothing. No
+      CopyToPublishDirectory here — it silently no-ops for single-file.
     -->
     <ItemGroup Condition="Exists('$(_VersionDllPath)')">
       <None Include="$(_VersionDllPath)"
             Link="version.dll"
             CopyToOutputDirectory="PreserveNewest"
+            ExcludeFromSingleFile="true"
             Visible="false" />
     </ItemGroup>
 

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `version.dll` is no longer bundled inside the single-file exe; it ships
+  only as the loose copy the Mods tab deploys. The single-file host no
+  longer extracts a redundant proxy copy into its temp dir on launch.
+  (The loose copy can still be pulled into the process by the DLL search
+  order, but the `DllMain` guard keeps it inert there.)
+
 ### Fixed
 
 - The companion app no longer shows "Connected" when Forza isn't running.
