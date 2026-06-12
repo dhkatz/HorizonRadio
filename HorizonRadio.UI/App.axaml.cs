@@ -94,7 +94,13 @@ public partial class App : Application
             var controlsVm = new ControlsViewModel(controlsStore, _inputService, mixStore);
 
             var toasts = new ShadUI.ToastManager();
-            var vm = new MainWindowViewModel(_runner, _store, mixStore, mixSwitcher, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, toasts);
+
+            // ShadUI maps dialog view models to views via its own registry (not
+            // the app ViewLocator), so custom dialog content must be registered.
+            var dialogManager = new ShadUI.DialogManager();
+            dialogManager.Register<QuickPlayDialogView, QuickPlayDialogViewModel>();
+
+            var vm = new MainWindowViewModel(_runner, _store, mixStore, mixSwitcher, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, toasts, dialogManager);
             desktop.MainWindow = new MainWindow { DataContext = vm };
 
             // Station targeting: push the chosen station to the DLL on change

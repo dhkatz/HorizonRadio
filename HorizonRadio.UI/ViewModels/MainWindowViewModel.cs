@@ -39,12 +39,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public ToastManager ToastManager { get; }
 
     /// <summary>Dialog host bound in <c>MainWindow.axaml</c>; drives modal dialogs
-    /// (e.g. the player-bar quick-play prompt).</summary>
-    public DialogManager DialogManager { get; } = new();
+    /// (e.g. the player-bar quick-play prompt). Custom dialog content must be
+    /// registered with it (see App) — ShadUI maps dialog VMs to views via its own
+    /// registry, not the app ViewLocator.</summary>
+    public DialogManager DialogManager { get; }
 
     public MainWindowViewModel()
     {
         ToastManager = new ToastManager();
+        DialogManager = new DialogManager();
         Sources = new SourcesViewModel();
         NowPlaying = new NowPlayingViewModel();
         Stats = new StatsViewModel();
@@ -66,9 +69,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                                EventsViewModel events,
                                ControlsViewModel controls,
                                Core.Audio.PreviewController preview,
-                               ToastManager toasts)
+                               ToastManager toasts,
+                               DialogManager dialogManager)
     {
         ToastManager = toasts;
+        DialogManager = dialogManager;
         Sources = new SourcesViewModel(runner, store, registry);
         var station = new StationTargetViewModel(store);
         NowPlaying = new NowPlayingViewModel(runner, store, mixStore, mixSwitcher, station, preview, toasts, DialogManager);
