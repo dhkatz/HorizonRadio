@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cwchar>
 #include <filesystem>
 #include <horizon/fmod/bridge.hpp>
 #include <horizon/fmod/resolver.hpp>
@@ -1064,6 +1065,31 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
     return 0;
 }
 
+// A proxy version.dll sitting next to our companion UI is pulled into the
+// UI's own process by the normal DLL search order (version.dll isn't a
+// KnownDLL). We must stay inert there — otherwise the IPC server starts
+// in-process and the UI "connects" to itself, faking a Forza link.
+//
+// We can't tell "is this FH6?" by signature this early: the game image is
+// packed and only unpacks later, so its code/signatures aren't present at
+// DLL_PROCESS_ATTACH. The host exe NAME is known at load time regardless,
+// so we gate on that — and only refuse our own UI rather than allow-listing
+// a game exe name we can't verify. "HorizonRadio*" can never match the
+// game (ForzaHorizon6.exe), so this is zero-risk to the real injection.
+bool host_is_companion_ui() {
+    wchar_t path[MAX_PATH];
+    const DWORD n = GetModuleFileNameW(nullptr, path, MAX_PATH);
+    if (n == 0 || n >= MAX_PATH)
+        return false;
+    const wchar_t* base = wcsrchr(path, L'\\');
+    base = base ? base + 1 : path;
+    if (wcslen(base) < 12)
+        return false;
+    // Case-insensitive "starts with HorizonRadio" via the Win32 API so we
+    // don't depend on _wcsnicmp differing across MSVC vs clang+MinGW.
+    return CompareStringOrdinal(base, 12, L"HorizonRadio", 12, TRUE) == CSTR_EQUAL;
+}
+
 } // namespace
 
 BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID /*reserved*/) {
@@ -1071,6 +1097,10 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID /*reserved*/) {
     case DLL_PROCESS_ATTACH:
         g_module = module;
         DisableThreadLibraryCalls(module);
+        // Stay completely inert when our own UI loads the proxy (see
+        // host_is_companion_ui) so the IPC server never self-"connects".
+        if (host_is_companion_ui())
+            break;
         CreateThread(nullptr, 0, bridge_init_thread, nullptr, 0, nullptr);
         break;
     case DLL_PROCESS_DETACH:

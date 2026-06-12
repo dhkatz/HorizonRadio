@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The companion app no longer shows "Connected" when Forza isn't running.
+  The bundled `version.dll` (a proxy DLL) was getting loaded into the app's
+  own process by the normal DLL search order, where its `DllMain` started
+  the IPC server — so the UI connected to itself. `version.dll` now stays
+  inert unless it's loaded by the game, never inside our own UI.
+
 ## [0.3.0] - 2026-06-11
 
 ### Added
