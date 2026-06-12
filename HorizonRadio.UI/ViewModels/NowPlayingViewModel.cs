@@ -105,6 +105,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     private readonly MixSwitcher? _switcher;
     private readonly PreviewController? _preview;
     private readonly ToastManager? _toasts;
+    private readonly DialogManager? _dialogs;
     private bool _suppressSwitch;
     private bool _suppressMix;
     // Guards IsShuffleEnabled while RebindTransport seeds it from the persisted
@@ -131,7 +132,8 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     public NowPlayingViewModel(SourceRunner runner, SourceConfigStore store,
         MixStore mixes, MixSwitcher switcher,
         StationTargetViewModel station,
-        PreviewController? preview = null, ToastManager? toasts = null)
+        PreviewController? preview = null, ToastManager? toasts = null,
+        DialogManager? dialogs = null)
     {
         _runner = runner;
         _store = store;
@@ -139,10 +141,12 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         _switcher = switcher;
         _preview = preview;
         _toasts = toasts;
+        _dialogs = dialogs;
         Station = station;
-        // Only self-driven sources are directly tunable from the player bar
-        // (Spotify Connect, the test tone); content sources play via mixes.
-        AvailableSources = SourceCatalog.All.Where(f => f is not IContentSourceFactory).ToList();
+        // Self-driven sources (Spotify Connect, the test tone) start directly;
+        // content sources open a quick-play dialog when picked (see
+        // OnSelectedFactoryChanged) — both live in this one picker.
+        AvailableSources = SourceCatalog.All;
 
         _mixes.Changed += () => Dispatcher.UIThread.Post(RefreshMixes);
         RefreshMixes();
@@ -477,9 +481,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     /// <summary>Designer ctor — no runner, dropdown is inert.</summary>
     public NowPlayingViewModel()
     {
-        // Only self-driven sources are directly tunable from the player bar
-        // (Spotify Connect, the test tone); content sources play via mixes.
-        AvailableSources = SourceCatalog.All.Where(f => f is not IContentSourceFactory).ToList();
+        AvailableSources = SourceCatalog.All;
         Station = new StationTargetViewModel();
     }
 
@@ -487,10 +489,68 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     {
         if (_suppressSwitch || _runner == null || _store == null || value == null) return;
 
+        // Content sources need a locator: don't leave the picker showing it as
+        // selected (it isn't playing yet) — revert to the active source — and pop
+        // a quick-play dialog for it. Self-driven sources start directly.
+        if (value is IContentSourceFactory)
+        {
+            var picked = value;
+            _suppressSwitch = true;
+            SelectedFactory = _runner.ActiveFactory;
+            _suppressSwitch = false;
+            OpenQuickPlay(picked);
+            return;
+        }
+
         // Fire-and-forget: setter must stay synchronous, and the runner
         // handles its own serialization. Errors are captured into
         // SwitchStatus so the UI can show them.
         _ = SwitchAsync(value);
+    }
+
+    private void OpenQuickPlay(IAudioSourceFactory source)
+    {
+        if (_dialogs == null) return;
+        var dialog = new QuickPlayDialogViewModel(_dialogs, source);
+        _dialogs.CreateDialog(dialog)
+            .Dismissible()
+            .WithSuccessCallback(vm => _ = QuickPlayAsync(source, vm.Locator))
+            .Show();
+    }
+
+    private async Task QuickPlayAsync(IAudioSourceFactory source, string locator)
+    {
+        if (_runner == null || _store == null || source is not IContentSourceFactory csf) return;
+        if (string.IsNullOrWhiteSpace(locator)) return;
+
+        SwitchStatus = $"Starting {source.DisplayName}...";
+        var values = _store.Load(source.Id, source.Schema);
+        values.Set(csf.ContentKey, locator.Trim());
+        try
+        {
+            await _runner.StartAsync(source, values);
+            SwitchStatus = null;
+        }
+        catch (MissingToolException ex)
+        {
+            Debug.WriteLine($"[hzn-now-vm] quick play blocked: {ex.Message}");
+            SwitchStatus = ex.Message;
+            _toasts?.CreateToast("Tool required")
+                .WithContent(ex.Message)
+                .WithDelay(8)
+                .DismissOnClick()
+                .ShowWarning();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[hzn-now-vm] quick play failed: {ex.Message}");
+            SwitchStatus = ex.Message;
+            _toasts?.CreateToast($"Couldn't start {source.DisplayName}")
+                .WithContent(ex.Message)
+                .WithDelay(6)
+                .DismissOnClick()
+                .ShowError();
+        }
     }
 
     private async Task SwitchAsync(IAudioSourceFactory factory)

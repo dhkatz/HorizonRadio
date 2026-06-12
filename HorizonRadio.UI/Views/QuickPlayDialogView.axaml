@@ -1,0 +1,26 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="380"
+             x:Class="HorizonRadio.UI.Views.QuickPlayDialogView"
+             x:DataType="vm:QuickPlayDialogViewModel">
+
+    <Design.DataContext>
+        <vm:QuickPlayDialogViewModel />
+    </Design.DataContext>
+
+    <StackPanel Spacing="10" MinWidth="380">
+        <TextBlock Text="{Binding SourceName, StringFormat='Quick play — {0}'}"
+                   FontSize="16" FontWeight="SemiBold"/>
+        <TextBlock Text="Play a one-off URL, folder, or file. For a saved cross-source playlist, build a Mix."
+                   FontSize="11" Opacity="0.6" TextWrapping="Wrap"/>
+        <TextBox Text="{Binding Locator, Mode=TwoWay}"
+                 PlaceholderText="{Binding Hint}"/>
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" Margin="0,4,0,0">
+            <Button Classes="Secondary" Content="Cancel" Command="{Binding CancelCommand}"/>
+            <Button Classes="Primary" Content="Play" Command="{Binding PlayCommand}"/>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

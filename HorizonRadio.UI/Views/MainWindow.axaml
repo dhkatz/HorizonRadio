@@ -506,6 +506,9 @@
         <views:PlayerBarView Grid.Row="1" DataContext="{Binding NowPlaying}"/>
     </Grid>
 
+        <!-- Modal dialogs (e.g. the player-bar quick-play prompt). -->
+        <shadui:DialogHost Manager="{Binding DialogManager}"/>
+
         <!-- Toast overlay: transient notifications (e.g. output-unavailable
              errors) float above all workspace content. -->
         <shadui:ToastHost Manager="{Binding ToastManager}"/>

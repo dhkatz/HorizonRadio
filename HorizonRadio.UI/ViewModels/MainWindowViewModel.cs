@@ -38,6 +38,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// transient notifications through it (e.g. output-unavailable errors).</summary>
     public ToastManager ToastManager { get; }
 
+    /// <summary>Dialog host bound in <c>MainWindow.axaml</c>; drives modal dialogs
+    /// (e.g. the player-bar quick-play prompt).</summary>
+    public DialogManager DialogManager { get; } = new();
+
     public MainWindowViewModel()
     {
         ToastManager = new ToastManager();
@@ -67,7 +71,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ToastManager = toasts;
         Sources = new SourcesViewModel(runner, store, registry);
         var station = new StationTargetViewModel(store);
-        NowPlaying = new NowPlayingViewModel(runner, store, mixStore, mixSwitcher, station, preview, toasts);
+        NowPlaying = new NowPlayingViewModel(runner, store, mixStore, mixSwitcher, station, preview, toasts, DialogManager);
         Stats = new StatsViewModel(runner);
         Metadata = metadata;
         ToolsTab = new ToolsViewModel(registry, installers);
