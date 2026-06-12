@@ -28,6 +28,12 @@
          window edge — looks cramped next to the traffic lights /
          window-control area. The left margin pushes it inboard to
          match the typical chrome inset. -->
+    <!-- Modal dialogs (e.g. the player-bar quick-play prompt). The Window
+         template renders this host by its PART name. -->
+    <shadui:Window.Hosts>
+        <shadui:DialogHost Manager="{Binding DialogManager}" x:Name="PART_DialogHost"/>
+    </shadui:Window.Hosts>
+
     <shadui:Window.LogoContent>
         <Image Source="avares://HorizonRadio.UI/Assets/logo.png"
                Width="22" Height="22"
@@ -505,9 +511,6 @@
         <!-- Persistent player bar, shown across every tab. -->
         <views:PlayerBarView Grid.Row="1" DataContext="{Binding NowPlaying}"/>
     </Grid>
-
-        <!-- Modal dialogs (e.g. the player-bar quick-play prompt). -->
-        <shadui:DialogHost Manager="{Binding DialogManager}"/>
 
         <!-- Toast overlay: transient notifications (e.g. output-unavailable
              errors) float above all workspace content. -->
