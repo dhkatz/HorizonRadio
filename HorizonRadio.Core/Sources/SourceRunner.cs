@@ -23,6 +23,11 @@ public sealed class SourceRunner(IPcmSink sink) : IAsyncDisposable
 
     public async Task StartAsync(IAudioSourceFactory factory, ConfigValues values)
     {
+        // Pre-flight before we stop what's already playing — a switch to a
+        // source whose tools are missing shouldn't tear down the current
+        // source first. Throws MissingToolException with a Tools-tab hint.
+        SourceRequirements.EnsureToolsAvailable(factory, values);
+
         await StopAsync().ConfigureAwait(false);
 
         var source = factory.Create(values);

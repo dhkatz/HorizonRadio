@@ -174,13 +174,33 @@
                     </shadui:SidebarItem.Icon>
                 </shadui:SidebarItem>
 
-                <shadui:SidebarItem Content="Tools"
-                                    Command="{Binding ShowToolsCommand}"
+                <shadui:SidebarItem Command="{Binding ShowToolsCommand}"
                                     IsChecked="{Binding IsToolsWorkspace}"
                                     Route="tools">
                     <shadui:SidebarItem.Icon>
                         <material:MaterialIcon Kind="Toolbox" Width="18" Height="18"/>
                     </shadui:SidebarItem.Icon>
+                    <!-- Inline content so we can hang an update-count badge
+                         off the label. Reused for the Mods item in the
+                         app-update PR. -->
+                    <DockPanel LastChildFill="True">
+                        <Border DockPanel.Dock="Right"
+                                IsVisible="{Binding ToolsTab.HasUpdates}"
+                                Background="#f59e0b"
+                                CornerRadius="9"
+                                Width="18" Height="18"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center"
+                                ToolTip.Tip="Tool updates available">
+                            <TextBlock Text="{Binding ToolsTab.UpdatesAvailable}"
+                                       FontSize="10" FontWeight="SemiBold"
+                                       Foreground="White"
+                                       TextAlignment="Center"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="Tools" VerticalAlignment="Center"/>
+                    </DockPanel>
                 </shadui:SidebarItem>
 
                 <shadui:SidebarItem Content="Console"
@@ -342,7 +362,17 @@
                               VerticalContentAlignment="Center"
                               Padding="0"
                               ToolTip.Tip="Tools">
-                    <material:MaterialIcon Kind="Toolbox" Width="18" Height="18"/>
+                    <Panel>
+                        <material:MaterialIcon Kind="Toolbox" Width="18" Height="18"/>
+                        <!-- Corner dot mirrors the expanded badge when the
+                             rail is collapsed. -->
+                        <Border IsVisible="{Binding ToolsTab.HasUpdates}"
+                                Background="#f59e0b"
+                                Width="9" Height="9" CornerRadius="4.5"
+                                HorizontalAlignment="Right" VerticalAlignment="Top"
+                                Margin="0,-2,-2,0"
+                                ToolTip.Tip="Tool updates available"/>
+                    </Panel>
                 </ToggleButton>
                 <ToggleButton Command="{Binding ShowConsoleCommand}"
                               IsChecked="{Binding IsConsoleWorkspace}"

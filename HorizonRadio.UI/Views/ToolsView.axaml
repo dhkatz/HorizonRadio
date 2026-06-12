@@ -16,11 +16,19 @@
     <ScrollViewer>
         <StackPanel Margin="24" Spacing="16">
 
-            <StackPanel Spacing="4" Margin="0,0,0,4">
-                <TextBlock Text="Tools" FontSize="20" FontWeight="SemiBold"/>
-                <TextBlock Text="Install the external binaries some sources depend on."
-                           FontSize="12" Opacity="0.6"/>
-            </StackPanel>
+            <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+                <StackPanel Grid.Column="0" Spacing="4">
+                    <TextBlock Text="Tools" FontSize="20" FontWeight="SemiBold"/>
+                    <TextBlock Text="Install the external binaries some sources depend on."
+                               FontSize="12" Opacity="0.6"/>
+                </StackPanel>
+                <Button Grid.Column="1"
+                        Classes="Ghost"
+                        Content="{Binding CheckLabel}"
+                        Command="{Binding CheckCommand}"
+                        IsEnabled="{Binding !IsChecking}"
+                        VerticalAlignment="Center"/>
+            </Grid>
 
             <ItemsControl ItemsSource="{Binding Items}">
                 <ItemsControl.ItemsPanel>
@@ -30,16 +38,13 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="{x:Type vm:ToolItemViewModel}">
-                        <!-- Everything in the body so layout sits inside
-                             the card's content padding consistently.
-                             The Header/Footer slots were giving the
-                             header content (icon + title) different
-                             left padding than the body, making the icon
-                             look flush against the card border. -->
-                        <shadui:Card Width="340"
-                                     Margin="0,0,16,16"
+                        <!-- Width on the inner content, not the Card — like
+                             the demo, which sizes the Card to its content. A
+                             fixed Width on the Card itself clipped the left of
+                             the rounded chrome. -->
+                        <shadui:Card Margin="0,0,16,16"
                                      HasShadow="True">
-                            <StackPanel Spacing="14">
+                            <StackPanel Spacing="14" Width="316">
 
                                 <!-- Title row: icon + title block + status pill -->
                                 <Grid ColumnDefinitions="Auto,*,Auto"

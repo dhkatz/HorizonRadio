@@ -5,126 +5,96 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using HorizonRadio.Core.Tools;
 
 namespace HorizonRadio.UI.Tools;
 
 /// <summary>
-/// Downloads the gyan.dev "release-essentials" ffmpeg build and
-/// extracts the contents of its <c>bin/</c> folder (ffmpeg.exe,
-/// ffprobe.exe, ffplay.exe) into <see cref="ToolsPaths.DirectoryFor"/>.
+/// Downloads the gyan.dev "release-essentials" ffmpeg build and extracts
+/// the contents of its <c>bin/</c> folder (ffmpeg.exe, ffprobe.exe,
+/// ffplay.exe) into <see cref="ToolsPaths.DirectoryFor"/>.
 ///
-/// gyan.dev ships static MSVC builds at a stable URL that always
-/// points to the current release. The archive's top-level folder
-/// name embeds the release date, so we walk entries rather than
-/// hard-code a path.
+/// gyan.dev ships static MSVC builds at a stable URL that always points
+/// to the current release. The archive's top-level folder name embeds the
+/// release date, so we walk entries rather than hard-code a path.
 ///
-/// Roughly ~80 MB compressed, ~180 MB extracted; the bin folder we
-/// actually keep is closer to 130 MB. The bulk is ffmpeg.exe itself
-/// (~70 MB) because gyan's builds statically link everything.
+/// Roughly ~80 MB compressed, ~180 MB extracted; the bin folder we keep is
+/// closer to 130 MB. The bulk is ffmpeg.exe itself (~70 MB) because gyan's
+/// builds statically link everything.
+///
+/// Unlike the single-file tools this overrides <see cref="InstallAsync"/>
+/// rather than using the base's single-file path — it still reuses the
+/// shared download loop, HttpClient factory, and verify decision, and
+/// hashes/compares the ARCHIVE (one check covers every extracted file).
 /// </summary>
-public sealed class FfmpegInstaller : IToolInstaller
+public sealed class FfmpegInstaller : ToolInstallerBase
 {
-    public string Kind => ToolKind.Ffmpeg;
-    public string DisplayName => "ffmpeg";
-    public string Description => "Decodes the resolved audio stream to s16/44.1k stereo PCM for the in-game radio.";
+    public override string Kind => ToolKind.Ffmpeg;
+    public override string DisplayName => "ffmpeg";
+    public override string Description => "Decodes the resolved audio stream to s16/44.1k stereo PCM for the in-game radio.";
 
     private const string LatestUrl =
         "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
 
     // gyan.dev publishes a sidecar SHA-256 next to each release zip.
-    // Format is bare "<hex>  <filename>" or just "<hex>", we handle both.
+    // Format is bare "<hex>  <filename>" or just "<hex>"; we handle both.
     private const string SumsUrl =
         "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip.sha256";
 
-    public async Task InstallAsync(IProgress<ToolInstallProgress>? progress, CancellationToken ct)
+    public override async Task InstallAsync(IProgress<ToolInstallProgress>? progress, CancellationToken ct)
     {
         ToolsPaths.EnsureDir(Kind);
         var targetDir = ToolsPaths.DirectoryFor(Kind);
         var tmpZip = Path.Combine(targetDir, "ffmpeg.zip.tmp");
 
-        progress?.Report(new ToolInstallProgress("Connecting to gyan.dev…"));
-
-        using var http = new HttpClient
-        {
-            Timeout = TimeSpan.FromMinutes(15),
-            DefaultRequestHeaders = { { "User-Agent", "HorizonRadio-Tools/1.0" } },
-        };
-
+        using var http = CreateHttpClient(TimeSpan.FromMinutes(15));
         try
         {
-            using (var response = await http.GetAsync(
-                LatestUrl, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false))
-            {
-                response.EnsureSuccessStatusCode();
-                var total = response.Content.Headers.ContentLength;
-                await using var src = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-                await using var dst = File.Create(tmpZip);
+            progress?.Report(new ToolInstallProgress("Connecting to gyan.dev…"));
+            await DownloadToFileAsync(http, LatestUrl, tmpZip, "ffmpeg", progress, ct).ConfigureAwait(false);
 
-                var buf = new byte[81920];
-                long got = 0;
-                while (true)
-                {
-                    int n;
-                    try { n = await src.ReadAsync(buf.AsMemory(), ct).ConfigureAwait(false); }
-                    catch when (ct.IsCancellationRequested) { throw; }
-                    if (n <= 0) break;
-                    await dst.WriteAsync(buf.AsMemory(0, n), ct).ConfigureAwait(false);
-                    got += n;
-                    if (total is long t && t > 0)
-                    {
-                        progress?.Report(new ToolInstallProgress(
-                            $"Downloading ffmpeg ({got / (1024 * 1024)} / {t / (1024 * 1024)} MB)",
-                            Fraction: (double)got / t));
-                    }
-                    else
-                    {
-                        progress?.Report(new ToolInstallProgress(
-                            $"Downloading ffmpeg ({got / (1024 * 1024)} MB)"));
-                    }
-                }
-            }
-
-            // Verify the zip before we extract. Hashing the archive
-            // (rather than the extracted exe) is what the upstream
-            // publishes, and one check covers every file we'll pull
-            // out of bin/.
+            // Verify the zip before we extract. Hashing the archive (rather
+            // than the extracted exe) is what the upstream publishes, and
+            // one check covers every file we pull out of bin/.
             progress?.Report(new ToolInstallProgress("Verifying download…"));
-            var expected = await HashVerification
-                .FetchExpectedSha256Async(http, SumsUrl, matchFilename: "ffmpeg-release-essentials.zip", ct)
-                .ConfigureAwait(false);
-            var actual = await HashVerification
-                .ComputeFileSha256Async(tmpZip, ct).ConfigureAwait(false);
-
-            if (expected != null && !string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new InvalidOperationException(
-                    $"ffmpeg zip SHA-256 mismatch.\nExpected: {expected}\nGot:      {actual}");
-            }
+            var expected = await GetExpectedHashAsync(http, ct).ConfigureAwait(false);
+            var actual = await HashVerification.ComputeFileSha256Async(tmpZip, ct).ConfigureAwait(false);
+            VerifyOrThrow("ffmpeg zip", expected, actual, progress);
 
             progress?.Report(new ToolInstallProgress("Extracting…"));
             ExtractBinFolder(tmpZip, targetDir, progress, ct);
 
-            // Write sidecar for ffmpeg.exe specifically — that's the
-            // file the registry surfaces, and it's the same hash chain
-            // (zip integrity ⇒ contents integrity) as long as our
-            // ExtractBinFolder doesn't transform bytes.
-            HashVerification.WriteSidecar(
-                ToolsPaths.ExeFor(Kind), expected ?? actual);
+            // Write the sidecar for ffmpeg.exe with the ZIP hash — that's
+            // the file the registry surfaces, and it's the same hash chain
+            // (zip integrity ⇒ contents integrity) the freshness check
+            // re-compares against the current upstream zip hash.
+            HashVerification.WriteSidecar(ToolsPaths.ExeFor(Kind), expected ?? actual);
+
+            progress?.Report(new ToolInstallProgress("Done", Fraction: 1.0));
         }
         finally
         {
-            try { if (File.Exists(tmpZip)) File.Delete(tmpZip); } catch { }
+            TryDelete(tmpZip);
         }
-
-        progress?.Report(new ToolInstallProgress("Done", Fraction: 1.0));
     }
 
+    public override Task<string?> GetExpectedHashAsync(HttpClient http, CancellationToken ct) =>
+        HashVerification.FetchExpectedSha256Async(
+            http, SumsUrl, matchFilename: "ffmpeg-release-essentials.zip", ct);
+
+    // The sidecar records the ARCHIVE hash (what gyan.dev publishes); the
+    // extracted ffmpeg.exe can't reproduce it, so freshness compares the
+    // recorded zip hash. No sidecar ⇒ null ⇒ Unknown (we'd have to
+    // re-download the zip to know, which is the whole install).
+    public override Task<string?> GetInstalledHashAsync(InstalledTool installed, CancellationToken ct)
+        => Task.FromResult(string.IsNullOrWhiteSpace(installed.Sha256) ? null : installed.Sha256);
+
     /// <summary>
-    /// Walk the archive and copy every <c>*/bin/*.exe|*.dll</c> entry
-    /// into <paramref name="targetDir"/> flat (no subfolder). Skips the
-    /// dated top-level wrapper folder and the doc / presets we don't
-    /// need. Streams from the zip directly so we never materialise the
-    /// extracted tree twice on disk.
+    /// Walk the archive and copy every <c>*/bin/*.exe|*.dll</c> entry into
+    /// <paramref name="targetDir"/> flat (no subfolder). Skips the dated
+    /// top-level wrapper folder and the doc / presets we don't need.
+    /// Streams from the zip directly so we never materialise the extracted
+    /// tree twice on disk.
     /// </summary>
     private static void ExtractBinFolder(
         string zipPath, string targetDir,
@@ -154,14 +124,22 @@ public sealed class FfmpegInstaller : IToolInstaller
             var dst = Path.Combine(targetDir, name);
             // Stage to a temp file then move into place so an interrupted
             // extract can't leave a half-written exe sitting at the path
-            // the registry would find via Exists().
+            // the registry would find via Exists(). try/finally so a mid-
+            // extract fault (e.g. disk full) doesn't leave a stray .new.
             var tmp = dst + ".new";
-            using (var src = entry.Open())
-            using (var fs = File.Create(tmp))
+            try
             {
-                src.CopyTo(fs);
+                using (var src = entry.Open())
+                using (var fs = File.Create(tmp))
+                {
+                    src.CopyTo(fs);
+                }
+                File.Move(tmp, dst, overwrite: true);
             }
-            File.Move(tmp, dst, overwrite: true);
+            finally
+            {
+                TryDelete(tmp);
+            }
 
             done++;
             progress?.Report(new ToolInstallProgress(

@@ -97,10 +97,6 @@ jobs:
           "date=$date"       >> $env:GITHUB_OUTPUT
           Write-Host "nightly version: $version"
 
-      - name: Build librespot
-        if: steps.guard.outputs.skip != 'true'
-        uses: ./.github/actions/build-librespot
-
       - name: Configure CMake
         if: steps.guard.outputs.skip != 'true'
         run: cmake --preset windows-x64
@@ -109,8 +105,9 @@ jobs:
         if: steps.guard.outputs.skip != 'true'
         run: cmake --build --preset windows-x64-release
 
-      # Self-contained publish; version.dll + librespot.exe are bundled by
-      # the csproj. ZipPublishOutput drops build/release/HorizonRadio.zip.
+      # Self-contained publish; version.dll is bundled by the csproj.
+      # Tools (incl. librespot) are not bundled — they install on demand
+      # from the Tools tab. ZipPublishOutput drops build/release/HorizonRadio.zip.
       - name: Publish UI + create zip
         if: steps.guard.outputs.skip != 'true'
         run: >

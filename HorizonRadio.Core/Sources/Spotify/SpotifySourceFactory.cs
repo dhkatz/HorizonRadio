@@ -1,4 +1,5 @@
 using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Core.Tools;
 
 namespace HorizonRadio.Core.Sources.Spotify;
 
@@ -15,7 +16,6 @@ public sealed class SpotifySourceFactory : IAudioSourceFactory
     public const string KeyBitrate = "bitrate";
     public const string KeyNormalise = "normalise";
 
-    private static readonly string[] ExeExtensions = ["exe"];
     private static readonly string[] BitrateOptions = ["auto", "96", "160", "320"];
 
     public string Id => "spotify";
@@ -36,13 +36,16 @@ public sealed class SpotifySourceFactory : IAudioSourceFactory
             // librespot.exe and the cache dir are machine/environment config —
             // flagged so source profiles don't freeze them; they come from the
             // global per-source config at launch.
-            new FileField(
-                Key:             KeyExecutable,
-                Label:           "librespot.exe path",
-                ExtensionFilter: ExeExtensions,
-                Default:         defaultExe,
-                Description:     "Full path to librespot.exe. Bundled copy auto-detected if it lives next to the UI.")
-                { IsEnvironment = true },
+            // ToolField (not a plain FileField) so librespot is a
+            // first-class managed tool: the Tools tab can offer installed
+            // copies in a dropdown, and the missing-tool launch guard
+            // (SourceRequirements) treats it the same as yt-dlp/ffmpeg.
+            new ToolField(
+                Key:         KeyExecutable,
+                Label:       "librespot.exe path",
+                ToolKind:    Tools.ToolKind.Librespot,
+                Default:     defaultExe,
+                Description: "Install via the Tools tab, or point at an existing librespot.exe."),
 
             new TextField(
                 Key:         KeyDeviceName,
@@ -104,17 +107,13 @@ public sealed class SpotifySourceFactory : IAudioSourceFactory
     private static string? DiscoverLibrespotExe()
     {
         var here = AppContext.BaseDirectory;
-        // %LOCALAPPDATA%\HorizonRadio\tools\librespot\librespot.exe — where
-        // the UI's LibrespotInstaller drops the pinned blobstore build.
-        // Mirrors HorizonRadio.UI.Tools.ToolsPaths without taking a UI
-        // dependency from Core (it's just a well-known path string).
-        var toolsLibrespot = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "HorizonRadio", "tools", "librespot", "librespot.exe");
         var candidates = new[]
         {
             Path.Combine(here, "librespot.exe"),
-            toolsLibrespot,
+            // Where the UI's LibrespotInstaller drops the pinned blobstore
+            // build. ToolsPaths lives in Core so both sides share one
+            // definition instead of mirroring the path string.
+            ToolsPaths.ExeFor(ToolKind.Librespot),
             Path.Combine(here, "..", "..", "..", "..", "build", "Librespot", "bin", "librespot.exe"),
             Path.Combine(here, "..", "..", "..", "..", "..", "build", "Librespot", "bin", "librespot.exe"),
         };

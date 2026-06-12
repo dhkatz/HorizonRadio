@@ -41,10 +41,6 @@ jobs:
       - name: Verify C# formatting
         run: dotnet format HorizonRadio.UI.slnx --verify-no-changes --verbosity minimal
 
-      - name: Build librespot
-        id: librespot
-        uses: ./.github/actions/build-librespot
-
       - name: Configure CMake
         run: cmake --preset windows-x64
 
@@ -64,8 +60,8 @@ jobs:
       - name: Build C++ side (Release, x64)
         run: cmake --build --preset windows-x64-release
 
-      # C# side runs after the C++ outputs (version.dll + librespot.exe)
-      # are on disk so the UI's <None Include> items pick them up.
+      # C# side runs after the Release C++ output (version.dll) is on disk
+      # so the UI's <None Include> item picks it up.
       - name: Build C# UI
         run: dotnet build HorizonRadio.UI.slnx -c Debug --nologo
 
@@ -86,13 +82,6 @@ jobs:
         with:
           name: version-dll
           path: build/Release/version.dll
-          if-no-files-found: error
-
-      - name: Upload librespot.exe artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: librespot-exe
-          path: build/librespot/librespot.exe
           if-no-files-found: error
 
   # Exercises the clang + mingw-w64 cross-compile path (the migration's
