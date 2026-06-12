@@ -31,6 +31,7 @@ public partial class App : Application
     private SourceRunner? _runner;
     private SourceConfigStore? _store;
     private EnrichmentService? _enricher;
+    private MetadataResolver? _metaResolver;
     private MetadataConfigStore? _metaStore;
     private EventActionExecutor? _eventExecutor;
     private ForzaTelemetryListener? _telemetry;
@@ -58,8 +59,13 @@ public partial class App : Application
 
             _metaStore = MetadataConfigStore.LoadFromDisk();
             var cache = new MetadataCache();
-            _enricher = new EnrichmentService(_runner, provider: null);
-            var metaVm = new MetadataViewModel(_metaStore, cache, _enricher);
+            // The metadata pipeline: a shared resolver (source + ordered providers,
+            // per-field policy) drives both play-time enrichment and list enrichment.
+            _metaResolver = new MetadataResolver();
+            var (metaContributors, metaPolicy) = MetadataCatalog.BuildPipeline(_metaStore, cache);
+            _metaResolver.Configure(metaContributors, metaPolicy);
+            _enricher = new EnrichmentService(_runner, _metaResolver);
+            var metaVm = new MetadataViewModel(_metaStore, cache, _metaResolver);
 
             var toolRegistry = new ToolRegistry();
             var installers = ToolInstallers.CreateAll();
@@ -80,7 +86,8 @@ public partial class App : Application
             // The global queue owns playback now: one engine plays straight down the
             // queue (explicit one-offs first, then the active mix as an infinite
             // tail). The switcher sets a mix as that tail; quick-play appends one-offs.
-            var queuePlayback = new QueuePlayback(_runner, _store, new MixContentResolver(_store));
+            var contentResolver = new MixContentResolver(_store);
+            var queuePlayback = new QueuePlayback(_runner, _store, contentResolver);
             var mixSwitcher = new MixSwitcher(mixStore, queuePlayback, _runner);
 
             // One dispatcher turns an EventAction into a transport/source/mix/
@@ -107,7 +114,7 @@ public partial class App : Application
             dialogManager.Register<QuickPlayDialogView, QuickPlayDialogViewModel>();
             dialogManager.Register<QueueAddModeDialogView, QueueAddModeDialogViewModel>();
 
-            var vm = new MainWindowViewModel(_runner, _store, mixStore, mixSwitcher, queuePlayback, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, toasts, dialogManager);
+            var vm = new MainWindowViewModel(_runner, _store, mixStore, mixSwitcher, queuePlayback, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, toasts, dialogManager);
             desktop.MainWindow = new MainWindow { DataContext = vm };
 
             // Station targeting. "Which in-game station do we replace right now?"
@@ -161,6 +168,7 @@ public partial class App : Application
                 _preview?.Dispose();
                 _telemetry?.Dispose();
                 if (_enricher != null) await _enricher.DisposeAsync();
+                if (_metaResolver != null) await _metaResolver.DisposeAsync();
                 if (_runner != null) await _runner.DisposeAsync();
                 if (_ipc != null) await _ipc.DisposeAsync();
                 if (_pcm != null) await _pcm.DisposeAsync();

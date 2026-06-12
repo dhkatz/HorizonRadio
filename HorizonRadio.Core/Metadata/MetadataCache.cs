@@ -28,7 +28,8 @@ public sealed class MetadataCache
         string? Artist,
         string? Album,
         byte[]? AlbumArt,
-        string? Mbid);
+        string? Mbid,
+        int? Year = null);
 
     public MetadataCache(string? root = null)
     {
@@ -72,7 +73,8 @@ public sealed class MetadataCache
                 Artist: GetString(r, "artist"),
                 Album: GetString(r, "album"),
                 AlbumArt: GetBase64(r, "art_b64"),
-                Mbid: GetString(r, "mbid"));
+                Mbid: GetString(r, "mbid"),
+                Year: GetInt(r, "year"));
             _memoryCache[key] = entry;
             return entry;
         }
@@ -96,6 +98,7 @@ public sealed class MetadataCache
             if (entry.Artist != null) writer.WriteString("artist", entry.Artist);
             if (entry.Album != null) writer.WriteString("album", entry.Album);
             if (entry.Mbid != null) writer.WriteString("mbid", entry.Mbid);
+            if (entry.Year is { } year) writer.WriteNumber("year", year);
             if (entry.AlbumArt is { Length: > 0 })
                 writer.WriteString("art_b64", Convert.ToBase64String(entry.AlbumArt));
             writer.WriteEndObject();
@@ -113,6 +116,10 @@ public sealed class MetadataCache
     private static string? GetString(JsonElement r, string name) =>
         r.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.String
             ? p.GetString() : null;
+
+    private static int? GetInt(JsonElement r, string name) =>
+        r.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out var i)
+            ? i : null;
 
     private static byte[]? GetBase64(JsonElement r, string name)
     {

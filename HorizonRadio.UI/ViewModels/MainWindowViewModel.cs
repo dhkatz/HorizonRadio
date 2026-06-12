@@ -70,6 +70,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                                MixStore mixStore,
                                MixSwitcher mixSwitcher,
                                QueuePlayback queue,
+                               MetadataResolver metaResolver,
+                               Core.Sources.Mixes.MixContentResolver contentResolver,
                                MetadataViewModel metadata,
                                ToolRegistry registry,
                                System.Collections.Generic.IEnumerable<IToolInstaller> installers,
@@ -89,8 +91,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ToolsTab = new ToolsViewModel(registry, installers);
         Events = events;
         Controls = controls;
-        Mixes = new MixesViewModel(mixStore, mixSwitcher, DialogManager);
-        Queue = new QueueViewModel(queue, DialogManager);
+        Mixes = new MixesViewModel(mixStore, mixSwitcher, DialogManager, contentResolver);
+        Queue = new QueueViewModel(queue, DialogManager, metaResolver);
         HookModBanner();
     }
 

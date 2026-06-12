@@ -33,7 +33,13 @@ public static class YtDlpClient
         string Uploader,
         string? ThumbnailUrl,
         string? Album,
-        TimeSpan? Duration);
+        TimeSpan? Duration,
+        // Populated when YouTube recognizes the video as music ("Music in this
+        // video" / YouTube Music): the canonical song title + artist, distinct
+        // from the video Title and the channel Uploader.
+        string? Track = null,
+        string? Artist = null,
+        int? ReleaseYear = null);
 
     /// <summary>
     /// Resolves <paramref name="url"/> into a flat list of entries.
@@ -116,7 +122,13 @@ public static class YtDlpClient
             ? TimeSpan.FromSeconds(secs)
             : null;
 
-        return new Resolved(streamUrl, title, uploader, thumb, album, duration);
+        // Canonical song metadata, present only when YouTube tagged the video as
+        // music. "artist" can be a comma-joined list; take the first credited name.
+        string? track = ReadString(root, "track");
+        string? artist = FirstArtist(ReadString(root, "artist") ?? ReadString(root, "creator"));
+        int? releaseYear = ReadInt(root, "release_year") ?? YearFromDate(ReadString(root, "release_date"));
+
+        return new Resolved(streamUrl, title, uploader, thumb, album, duration, track, artist, releaseYear);
     }
 
     private static Entry? TryReadEntry(JsonElement e)
@@ -142,6 +154,26 @@ public static class YtDlpClient
         => e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.Number
             ? v.GetDouble()
             : null;
+
+    private static int? ReadInt(JsonElement e, string key)
+        => e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var i)
+            ? i : null;
+
+    // yt-dlp's "artist" is sometimes "A, B, C" — keep the first non-empty credit.
+    private static string? FirstArtist(string? artist)
+    {
+        if (string.IsNullOrWhiteSpace(artist)) return null;
+        foreach (var part in artist.Split(','))
+        {
+            var trimmed = part.Trim();
+            if (trimmed.Length > 0) return trimmed;
+        }
+        return null;
+    }
+
+    // "release_date" is YYYYMMDD; pull the year.
+    private static int? YearFromDate(string? date)
+        => date is { Length: >= 4 } && int.TryParse(date.AsSpan(0, 4), out var y) ? y : null;
 
     private static async Task<string> RunCapture(
         string exe, string[] args, CancellationToken ct)

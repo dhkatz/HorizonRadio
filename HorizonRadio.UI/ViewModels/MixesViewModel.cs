@@ -30,6 +30,16 @@ public sealed partial class MixesViewModel : ViewModelBase
     private readonly MixStore _store;
     private readonly MixSwitcher _switcher;
     private readonly DialogManager? _dialogs;
+    private readonly MixContentResolver? _content;
+
+    // Resolved "source: title" per entry (keyed sourceId|locator), so the list shows
+    // a real title instead of a raw URL. Cached so editing a mix doesn't re-resolve.
+    private readonly Dictionary<string, string> _entryTitles = new();
+
+    // Cap concurrent entry resolves so opening the tab with many YouTube-first mixes
+    // doesn't spawn one yt-dlp process per mix all at once. Static: the cap is an
+    // app-wide limit on enumerate concurrency, and it lives for the process.
+    private static readonly System.Threading.SemaphoreSlim ResolveGate = new(3, 3);
 
     public ObservableCollection<MixRow> Mixes { get; } = new();
 
@@ -54,11 +64,13 @@ public sealed partial class MixesViewModel : ViewModelBase
     // null = creating; otherwise the id being edited.
     private string? _editingId;
 
-    public MixesViewModel(MixStore store, MixSwitcher switcher, DialogManager? dialogs = null)
+    public MixesViewModel(MixStore store, MixSwitcher switcher,
+                          DialogManager? dialogs = null, MixContentResolver? content = null)
     {
         _store = store;
         _switcher = switcher;
         _dialogs = dialogs;
+        _content = content;
         EntrySources = SourceCatalog.All.Where(f => f is IContentSourceFactory).ToList();
         StationOptions = new ObservableCollection<string>(new[] { UseGlobalDefault }.Concat(StationCatalog.Names));
 
@@ -97,18 +109,51 @@ public sealed partial class MixesViewModel : ViewModelBase
     private MixRow ToRow(Mix m)
     {
         var id = m.Id;
-        var n = m.Entries.Count;
-        var summary = n == 0
-            ? "No entries"
-            : $"{n} entr{(n == 1 ? "y" : "ies")} · {SummariseEntry(m.Entries[0])}{(n > 1 ? " …" : "")}";
         var station = m.Station == null ? "" : $"Station: {m.Station}";
-        return new MixRow(id, m.Name, summary, station)
+        var row = new MixRow(id, m.Name, BuildSummary(m), station)
         {
             PlayCommand = new RelayCommand(() => PlayMix(id)),
             EditCommand = new RelayCommand(() => EditMix(id)),
             DeleteCommand = new RelayCommand(() => DeleteMix(id)),
         };
+        if (m.Entries.Count > 0) _ = ResolveSummaryAsync(row, m);
+        return row;
     }
+
+    private string BuildSummary(Mix m)
+    {
+        var n = m.Entries.Count;
+        if (n == 0) return "No entries";
+        var first = m.Entries[0];
+        var label = _entryTitles.TryGetValue(EntryKey(first), out var t) ? t : SummariseEntry(first);
+        return $"{n} entr{(n == 1 ? "y" : "ies")} · {label}{(n > 1 ? " …" : "")}";
+    }
+
+    // Resolve the first entry to a real title (a flat-playlist title for YouTube, a
+    // file/tag title for local) so the row shows that instead of the raw URL. Cheap,
+    // cached, and lazy — failures keep the locator-based summary.
+    private async Task ResolveSummaryAsync(MixRow row, Mix m)
+    {
+        if (_content == null) return;
+        var first = m.Entries[0];
+        var key = EntryKey(first);
+        if (_entryTitles.ContainsKey(key)) return;
+        await ResolveGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (_entryTitles.ContainsKey(key)) return; // may have resolved while we waited
+            var items = await _content.EnumerateAsync(first, System.Threading.CancellationToken.None)
+                .ConfigureAwait(false);
+            if (items.Count == 0 || string.IsNullOrWhiteSpace(items[0].Metadata.Title)) return;
+            var src = SourceCatalog.Find(first.SourceId)?.DisplayName ?? first.SourceId;
+            _entryTitles[key] = $"{src}: {items[0].Metadata.Title}";
+            Dispatcher.UIThread.Post(() => row.Summary = BuildSummary(m));
+        }
+        catch (Exception ex) { Debug.WriteLine($"[hzn-mixes-vm] resolve summary: {ex.Message}"); }
+        finally { ResolveGate.Release(); }
+    }
+
+    private static string EntryKey(ContentRef e) => $"{e.SourceId}|{e.Locator}";
 
     private static string SummariseEntry(ContentRef e)
     {
@@ -258,18 +303,28 @@ public sealed partial class MixesViewModel : ViewModelBase
     }
 }
 
-/// <summary>A row in the Mixes list. Carries its own action commands.</summary>
-public sealed class MixRow(string id, string name, string summary, string station)
+/// <summary>A row in the Mixes list. Carries its own action commands; Summary is
+/// observable so resolved entry titles can replace the raw locator in place.</summary>
+public sealed partial class MixRow : ViewModelBase
 {
-    public string Id { get; } = id;
-    public string Name { get; } = name;
-    public string Summary { get; } = summary;
-    public string Station { get; } = station;
+    public string Id { get; }
+    public string Name { get; }
+    public string Station { get; }
     public bool HasStation => !string.IsNullOrEmpty(Station);
+
+    [ObservableProperty] private string summary;
 
     public required ICommand PlayCommand { get; init; }
     public required ICommand EditCommand { get; init; }
     public required ICommand DeleteCommand { get; init; }
+
+    public MixRow(string id, string name, string summary, string station)
+    {
+        Id = id;
+        Name = name;
+        this.summary = summary;
+        Station = station;
+    }
 }
 
 /// <summary>An editable entry row in the mix builder: a source + a locator,

@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Queue;
 using ShadUI;
@@ -27,6 +29,11 @@ public sealed partial class QueueViewModel : ViewModelBase
 {
     private readonly QueuePlayback? _queue;
     private readonly DialogManager? _dialogs;
+    private readonly MetadataResolver? _resolver;
+
+    // Each distinct queued item is enriched at most once (lazy, cached, background);
+    // the resolver's per-provider cache makes a repeat cheap, this avoids re-kicking.
+    private readonly HashSet<string> _enriched = new();
 
     /// <summary>Now-playing line at the top of the sidebar.</summary>
     [ObservableProperty] private string nowPlayingTitle = "";
@@ -64,10 +71,11 @@ public sealed partial class QueueViewModel : ViewModelBase
     [ObservableProperty] private IAudioSourceFactory? selectedAddSource;
     private bool _suppressAdd;
 
-    public QueueViewModel(QueuePlayback queue, DialogManager? dialogs = null)
+    public QueueViewModel(QueuePlayback queue, DialogManager? dialogs = null, MetadataResolver? resolver = null)
     {
         _queue = queue;
         _dialogs = dialogs;
+        _resolver = resolver;
         ContentSources = SourceCatalog.All.Where(f => f is IContentSourceFactory).ToList();
 
         _queue.Model.Changed += OnModelChanged;
@@ -131,15 +139,41 @@ public sealed partial class QueueViewModel : ViewModelBase
         foreach (var p in peek) ContextUpcoming.Add(p);
     }
 
-    private QueueRowViewModel CreateRow(QueueItem item) => new(
-        item.Id,
-        string.IsNullOrWhiteSpace(item.Metadata.Title) ? "Unknown track" : item.Metadata.Title,
-        item.Metadata.Artist,
-        DecodeArt(item.Metadata.AlbumArt),
-        playNow: id => _queue?.Model.JumpToExplicit(id),
-        remove: id => _queue?.Model.RemoveExplicit(id),
-        moveUp: id => _queue?.Model.MoveExplicit(id, -1),
-        moveDown: id => _queue?.Model.MoveExplicit(id, +1));
+    private QueueRowViewModel CreateRow(QueueItem item)
+    {
+        var row = new QueueRowViewModel(
+            item.Id,
+            string.IsNullOrWhiteSpace(item.Metadata.Title) ? "Unknown track" : item.Metadata.Title,
+            item.Metadata.Artist,
+            DecodeArt(item.Metadata.AlbumArt),
+            playNow: id => _queue?.Model.JumpToExplicit(id),
+            remove: id => _queue?.Model.RemoveExplicit(id),
+            moveUp: id => _queue?.Model.MoveExplicit(id, -1),
+            moveDown: id => _queue?.Model.MoveExplicit(id, +1));
+
+        if (_enriched.Add(item.Id)) _ = EnrichRowAsync(row, item.Metadata);
+        return row;
+    }
+
+    // Resolve the row's metadata through the pipeline (artist/album/square art) and
+    // write it back in place. No-op until a provider is configured; runs off the UI
+    // thread and is cached by the resolver, so it's a one-time background cost.
+    private async Task EnrichRowAsync(QueueRowViewModel row, Core.Models.Track seed)
+    {
+        if (_resolver is not { HasContributors: true }) return;
+        try
+        {
+            var enriched = await _resolver.ResolveAsync(seed, CancellationToken.None).ConfigureAwait(false);
+            var art = enriched.AlbumArt is { Length: > 0 } ? DecodeArt(enriched.AlbumArt) : null;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!string.IsNullOrWhiteSpace(enriched.Title)) row.Title = enriched.Title;
+                row.Subtitle = enriched.Artist;
+                if (art != null) row.Thumbnail = art;
+            });
+        }
+        catch (Exception ex) { Debug.WriteLine($"[hzn-queue-vm] enrich row: {ex.Message}"); }
+    }
 
     private Bitmap? DecodeArtCached(string id, byte[]? bytes)
     {
@@ -209,29 +243,39 @@ public sealed partial class QueueViewModel : ViewModelBase
 }
 
 /// <summary>A row in the explicit "next in queue" zone, carrying its own
-/// play-now / remove / reorder commands (closing over the queue model).</summary>
-public sealed class QueueRowViewModel(
-    string id,
-    string title,
-    string subtitle,
-    Bitmap? thumbnail,
-    Action<string> playNow,
-    Action<string> remove,
-    Action<string> moveUp,
-    Action<string> moveDown)
+/// play-now / remove / reorder commands. Title/Subtitle/Thumbnail are observable so
+/// background metadata enrichment can write them back in place.</summary>
+public sealed partial class QueueRowViewModel : ViewModelBase
 {
-    public string Id { get; } = id;
-    public string Title { get; } = title;
-    public string Subtitle { get; } = subtitle;
-    public bool HasSubtitle => !string.IsNullOrWhiteSpace(Subtitle);
+    public string Id { get; }
 
-    /// <summary>Album art if it's already resolved (usually only after the item has
-    /// played); otherwise null and the view shows a music-note placeholder tile.</summary>
-    public Bitmap? Thumbnail { get; } = thumbnail;
+    [ObservableProperty] private string title;
+    [ObservableProperty] private string subtitle;
+    [ObservableProperty] private Bitmap? thumbnail;
+
+    public bool HasSubtitle => !string.IsNullOrWhiteSpace(Subtitle);
     public bool HasThumbnail => Thumbnail != null;
 
-    public ICommand PlayNowCommand { get; } = new RelayCommand(() => playNow(id));
-    public ICommand RemoveCommand { get; } = new RelayCommand(() => remove(id));
-    public ICommand MoveUpCommand { get; } = new RelayCommand(() => moveUp(id));
-    public ICommand MoveDownCommand { get; } = new RelayCommand(() => moveDown(id));
+    public ICommand PlayNowCommand { get; }
+    public ICommand RemoveCommand { get; }
+    public ICommand MoveUpCommand { get; }
+    public ICommand MoveDownCommand { get; }
+
+    public QueueRowViewModel(
+        string id, string title, string subtitle, Bitmap? thumbnail,
+        Action<string> playNow, Action<string> remove,
+        Action<string> moveUp, Action<string> moveDown)
+    {
+        Id = id;
+        this.title = title;
+        this.subtitle = subtitle;
+        this.thumbnail = thumbnail;
+        PlayNowCommand = new RelayCommand(() => playNow(id));
+        RemoveCommand = new RelayCommand(() => remove(id));
+        MoveUpCommand = new RelayCommand(() => moveUp(id));
+        MoveDownCommand = new RelayCommand(() => moveDown(id));
+    }
+
+    partial void OnSubtitleChanged(string value) => OnPropertyChanged(nameof(HasSubtitle));
+    partial void OnThumbnailChanged(Bitmap? value) => OnPropertyChanged(nameof(HasThumbnail));
 }

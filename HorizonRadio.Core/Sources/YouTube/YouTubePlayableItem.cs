@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using HorizonRadio.Core.Audio;
+using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Models;
 
 namespace HorizonRadio.Core.Sources.YouTube;
@@ -31,16 +32,43 @@ public sealed class YouTubePlayableItem : PlayableItem
         _ffmpegPath = ffmpegPath;
         _normalise = normalise;
 
-        // Preliminary metadata from the flat-playlist entry; PrepareAsync
-        // upgrades it to the resolved canonical title/uploader/art.
-        Metadata = new Track(
-            Title: entry.Title,
-            Artist: entry.Uploader,
-            Album: null,
-            AlbumArt: null,
+        // Preliminary metadata from the flat-playlist entry — already parsed
+        // ("Artist - Title" → split, channel as weak artist) so the queue/mix
+        // lists show something sensible before the per-track resolve runs.
+        Metadata = BuildTrack(entry.Id, entry.Title, entry.Uploader,
+            track: null, artist: null, album: null, art: null, year: null);
+    }
+
+    // Prefer YouTube's canonical song fields (present for music videos); otherwise
+    // fall back to the heuristic title parser. The downstream metadata pipeline can
+    // still override any field per the user's policy (e.g. square art from Spotify).
+    private static Track BuildTrack(
+        string id, string rawTitle, string? uploader,
+        string? track, string? artist, string? album, byte[]? art, int? year)
+    {
+        string title;
+        string outArtist;
+        if (!string.IsNullOrWhiteSpace(track) && !string.IsNullOrWhiteSpace(artist))
+        {
+            title = track!;
+            outArtist = artist!;
+        }
+        else
+        {
+            var parsed = TitleArtistParser.Parse(rawTitle, uploader);
+            title = parsed.Title;
+            outArtist = parsed.Artist ?? uploader ?? "";
+        }
+
+        return new Track(
+            Title: title,
+            Artist: outArtist,
+            Album: album,
+            AlbumArt: art,
             SourceId: "youtube",
             SourceDisplay: "YouTube",
-            ExternalId: $"youtube:{entry.Id}");
+            ExternalId: $"youtube:{id}",
+            Year: year);
     }
 
     public override TimeSpan Position => _subproc?.Elapsed ?? TimeSpan.Zero;
@@ -63,14 +91,8 @@ public sealed class YouTubePlayableItem : PlayableItem
 
             _resolved = resolved;
             Duration = resolved.Duration;
-            Metadata = new Track(
-                Title: resolved.Title,
-                Artist: resolved.Uploader,
-                Album: resolved.Album,
-                AlbumArt: art,
-                SourceId: "youtube",
-                SourceDisplay: "YouTube",
-                ExternalId: $"youtube:{_entry.Id}");
+            Metadata = BuildTrack(_entry.Id, resolved.Title, resolved.Uploader,
+                resolved.Track, resolved.Artist, resolved.Album, art, resolved.ReleaseYear);
         }
         catch (OperationCanceledException)
         {
