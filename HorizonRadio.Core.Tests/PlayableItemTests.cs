@@ -65,6 +65,18 @@ public class PlayableItemTests
     }
 
     [Fact]
+    public void Local_item_is_seekable_and_reflects_position_immediately()
+    {
+        using var dir = TempDir.Create();
+        var wav = dir.WriteSilentWav("tone.wav", seconds: 1.0);
+        var item = new LocalPlayableItem(wav);
+
+        Assert.True(item.CanSeek);
+        item.Seek(TimeSpan.FromSeconds(0.5));
+        Assert.Equal(0.5, item.Position.TotalSeconds, precision: 2); // reflected before the pump runs
+    }
+
+    [Fact]
     public async Task Local_item_cancelled_token_throws()
     {
         using var dir = TempDir.Create();

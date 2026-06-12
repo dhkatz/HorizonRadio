@@ -17,6 +17,7 @@ public sealed class LocalPlayableItem : PlayableItem
     private readonly string _path;
     private bool _prepared;
     private long _positionTicks;
+    private long _pendingSeekTicks = -1; // -1 = none; the pump applies it next chunk
 
     public LocalPlayableItem(string path)
     {
@@ -33,6 +34,17 @@ public sealed class LocalPlayableItem : PlayableItem
     }
 
     public override TimeSpan Position => new(Interlocked.Read(ref _positionTicks));
+
+    public override bool CanSeek => true;
+
+    public override void Seek(TimeSpan position)
+    {
+        var ticks = position.Ticks < 0 ? 0 : position.Ticks;
+        // The pump thread owns the reader; hand it the target and reflect it in
+        // Position immediately so the bar tracks the drag without lag.
+        Interlocked.Exchange(ref _pendingSeekTicks, ticks);
+        Interlocked.Exchange(ref _positionTicks, ticks);
+    }
 
     private static void Log(string msg) => Debug.WriteLine($"[hzn-local-item] {msg}");
 
@@ -86,6 +98,7 @@ public sealed class LocalPlayableItem : PlayableItem
 
         if (Duration is null && reader.TotalTime.Ticks > 0) Duration = reader.TotalTime;
         Interlocked.Exchange(ref _positionTicks, 0);
+        Interlocked.Exchange(ref _pendingSeekTicks, -1);
 
         var floatBuf = new float[chunkFrames * AudioFormat.Channels];
         var shortBuf = new short[chunkFrames * AudioFormat.Channels];
@@ -101,6 +114,17 @@ public sealed class LocalPlayableItem : PlayableItem
                 stopwatch.Restart();
                 nextChunk = TimeSpan.Zero;
                 if (ct.IsCancellationRequested) break;
+            }
+
+            // Apply a pending seek before reading the next chunk — only the pump
+            // thread touches the reader, so this never races the decode.
+            var seek = Interlocked.Exchange(ref _pendingSeekTicks, -1);
+            if (seek >= 0)
+            {
+                try { reader.CurrentTime = new TimeSpan(seek); }
+                catch (Exception ex) { Log($"seek failed: {ex.Message}"); }
+                stopwatch.Restart();
+                nextChunk = TimeSpan.Zero;
             }
 
             int read = samples.Read(floatBuf, 0, floatBuf.Length);

@@ -1,22 +1,15 @@
 using System.Diagnostics;
-using System.Globalization;
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Models;
 
 namespace HorizonRadio.Core.Sources.YouTube;
 
 /// <summary>
-/// YouTube audio source. Resolves a single-video or playlist URL via
-/// yt-dlp, then per-track spawns ffmpeg to decode the direct audio
-/// stream into our canonical s16/44.1k/stereo PCM. Transport controls
-/// (next/prev/pause) are supported when the URL expanded to a
-/// multi-entry playlist.
-///
-/// Why two processes per track rather than one piped chain: yt-dlp's
-/// direct-URL flow (`-f bestaudio -g`) returns a signed URL with a
-/// few-hour expiry, so we always re-resolve immediately before
-/// playback. ffmpeg then fetches that URL itself — letting us swap in
-/// HLS / DASH formats later without changing the pump.
+/// YouTube audio source. Resolves a single-video or playlist URL via yt-dlp into
+/// a flat entry list, then plays each entry through a <see cref="YouTubePlayableItem"/>
+/// — which does the per-track resolve + ffmpeg decode, shared with the mix engine.
+/// This source owns iteration order (shuffle) and transport
+/// (next/prev/restart/pause); the decode lives in exactly one place.
 /// </summary>
 public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITransportControls, IPlaybackProgress
 {
@@ -26,38 +19,23 @@ public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITrans
     public event Action<Track>? TrackChanged;
     public event Action<bool>? PausedChanged;
 
-    // Progress: position comes from the active ffmpeg subprocess's elapsed
-    // (we pace its reads to real time and own transport, so there's no
-    // external seek to drift against); duration comes from yt-dlp metadata.
-    private volatile SubprocessPcmSource? _activeSubproc;
-    private long _durationTicks;
+    // The entry currently playing — owns this track's progress/duration.
+    private volatile PlayableItem? _activeItem;
 
     private CancellationTokenSource? _stopCts;
     private Task? _runLoop;
     private List<YtDlpClient.Entry> _entries = new();
-    // Iteration order over _entries (identity until shuffled). Holds the cursor.
     private readonly PlayOrder _order = new();
 
-    // Per-track cancellation: separates "skip current track" from "stop
-    // the source". NextAsync / PreviousAsync cancel just this; StopAsync
-    // cancels _stopCts which is its parent.
     private CancellationTokenSource? _trackCts;
     private volatile bool _stepBackwards;
-    // Set by RestartAsync: cancels the current entry but replays it instead
-    // of advancing the cursor.
     private volatile bool _restartCurrent;
-
-    // Pending shuffle request: -1 none, 0 off, 1 on. Applied on the run-loop
-    // thread (sole owner of _order) so the toggle never races playback. Does
-    // not cancel the current track — the new order takes effect on advance.
     private volatile int _shuffleReq = -1;
 
     private volatile bool _paused;
     private readonly ManualResetEventSlim _resumeGate = new(initialState: true);
 
     private static void Log(string msg) => Debug.WriteLine($"[hzn-yt] {msg}");
-
-    // -- IAudioSource --
 
     public Task StartAsync(IPcmSink sink, CancellationToken ct)
     {
@@ -74,14 +52,8 @@ public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITrans
         _resumeGate.Set();
         if (_runLoop != null)
         {
-            try
-            {
-                await _runLoop.ConfigureAwait(false);
-            }
-            catch
-            {
-            }
-
+            try { await _runLoop.ConfigureAwait(false); }
+            catch { }
             _runLoop = null;
         }
 
@@ -89,6 +61,7 @@ public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITrans
         _stopCts = null;
         _trackCts?.Dispose();
         _trackCts = null;
+        _activeItem = null;
     }
 
     public async ValueTask DisposeAsync()
@@ -97,26 +70,16 @@ public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITrans
         _resumeGate.Dispose();
     }
 
-    // -- ITransportControls --
-
     public bool CanPause => true;
     public bool CanSkipNext => _entries.Count > 1;
     public bool CanSkipPrevious => _entries.Count > 1;
     public bool IsPaused => _paused;
-
     public bool CanShuffle => _entries.Count > 1;
     public bool IsShuffled => _order.Shuffled;
 
-    // -- IPlaybackProgress (read-only; seeking ffmpeg mid-stream is deferred) --
-
-    public TimeSpan? Duration
-    {
-        get { var d = Interlocked.Read(ref _durationTicks); return d > 0 ? new TimeSpan(d) : null; }
-    }
-
-    public TimeSpan Position => _activeSubproc?.Elapsed ?? TimeSpan.Zero;
-
-    public bool CanSeek => false;
+    public TimeSpan? Duration => _activeItem?.Duration;
+    public TimeSpan Position => _activeItem?.Position ?? TimeSpan.Zero;
+    public bool CanSeek => _activeItem?.CanSeek ?? false;
 
     public Task SetShuffleAsync(bool enabled)
     {
@@ -154,27 +117,16 @@ public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITrans
         return Task.CompletedTask;
     }
 
-    // -- Run loop --
-
     private async Task RunAsync(IPcmSink sink, CancellationToken ct)
     {
-        // 1) Resolve the playlist/video URL up front. A single Loading
-        //    placeholder shows in the HUD until ffmpeg starts emitting
-        //    PCM, mirroring SpotifyLibrespotSource's UX.
+        // Placeholder until the first entry resolves, mirroring the old UX.
         TrackChanged?.Invoke(new Track(
-            Title: "Resolving…",
-            Artist: options.Url,
-            Album: null,
-            AlbumArt: null,
-            SourceId: Id,
-            SourceDisplay: DisplayName,
-            ExternalId: null));
+            Title: "Resolving…", Artist: options.Url, Album: null, AlbumArt: null,
+            SourceId: Id, SourceDisplay: DisplayName, ExternalId: null));
 
         try
         {
-            _entries = (await YtDlpClient.EnumerateAsync(
-                    options.YtDlpPath, options.Url, ct).ConfigureAwait(false))
-                .AsList();
+            _entries = [.. await YtDlpClient.EnumerateAsync(options.YtDlpPath, options.Url, ct).ConfigureAwait(false)];
         }
         catch (OperationCanceledException)
         {
@@ -184,13 +136,8 @@ public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITrans
         {
             Log($"enumerate failed: {ex.Message}");
             TrackChanged?.Invoke(new Track(
-                Title: "yt-dlp failed",
-                Artist: ex.Message,
-                Album: null,
-                AlbumArt: null,
-                SourceId: Id,
-                SourceDisplay: DisplayName,
-                ExternalId: null));
+                Title: "yt-dlp failed", Artist: ex.Message, Album: null, AlbumArt: null,
+                SourceId: Id, SourceDisplay: DisplayName, ExternalId: null));
             return;
         }
 
@@ -200,10 +147,19 @@ public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITrans
             return;
         }
 
-        _order.Reset(_entries.Count);
+        var pumpCtx = new PumpContext
+        {
+            Sink = sink,
+            IsPaused = () => _paused,
+            ResumeGate = _resumeGate,
+            OnStarted = item =>
+            {
+                _activeItem = item;
+                TrackChanged?.Invoke(item.Metadata);
+            },
+        };
 
-        // Apply an initial shuffle request before the first entry so a source
-        // that starts shuffled gets a random first track (keepCurrent:false).
+        _order.Reset(_entries.Count);
         ApplyShuffleRequest(keepCurrent: false);
 
         while (!ct.IsCancellationRequested && _order.CurrentIndex >= 0)
@@ -212,13 +168,14 @@ public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITrans
             _trackCts = trackCts;
             _stepBackwards = false;
 
-            int idx = _order.CurrentIndex;
-            var entry = _entries[idx];
-            Log($"track {idx + 1}/{_entries.Count}: {entry.Title}");
+            var entry = _entries[_order.CurrentIndex];
+            var item = new YouTubePlayableItem(entry, options.YtDlpPath, options.FfmpegPath, options.EnableVolumeNormalisation);
+            _activeItem = item;
+            Log($"track {_order.CurrentIndex + 1}/{_entries.Count}: {entry.Title}");
 
             try
             {
-                await PlayEntryAsync(entry, sink, trackCts.Token).ConfigureAwait(false);
+                await item.PlayAsync(pumpCtx, trackCts.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -226,7 +183,7 @@ public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITrans
             }
             catch (OperationCanceledException)
             {
-                // Per-track skip; outer loop advances.
+                // Per-track skip; the order advances below.
             }
             catch (Exception ex)
             {
@@ -235,13 +192,11 @@ public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITrans
 
             if (ReferenceEquals(_trackCts, trackCts)) _trackCts = null;
 
-            // Apply a mid-playback shuffle toggle while the current entry is
-            // still current, so "keep current, shuffle rest" pins it correctly.
             ApplyShuffleRequest(keepCurrent: true);
 
-            if (_restartCurrent) _restartCurrent = false; // replay same entry
-            else if (_stepBackwards) _order.Retreat(wrap: false); // clamp at start
-            else _order.Advance(wrap: false); // walks off the end -> loop ends
+            if (_restartCurrent) _restartCurrent = false;          // replay same entry
+            else if (_stepBackwards) _order.Retreat(wrap: false);  // clamp at start
+            else _order.Advance(wrap: false);                      // off end -> loop ends
         }
     }
 
@@ -252,176 +207,6 @@ public sealed class YouTubeSource(YouTubeOptions options) : IAudioSource, ITrans
         _shuffleReq = -1;
         _order.SetShuffle(req == 1, keepCurrent);
     }
-
-    private async Task PlayEntryAsync(
-        YtDlpClient.Entry entry, IPcmSink sink, CancellationToken ct)
-    {
-        // Resolve fresh URL + canonical metadata right before playback.
-        YtDlpClient.Resolved resolved;
-        try
-        {
-            resolved = await YtDlpClient.ResolveAsync(
-                options.YtDlpPath, entry.WebpageUrl, ct).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            Log($"resolve {entry.Id} failed: {ex.Message}");
-            // Fall back to the flat-playlist metadata so the HUD still
-            // shows *something*, then bail to advance to the next entry.
-            TrackChanged?.Invoke(EntryToTrack(entry, art: null));
-            await Task.Delay(500, ct).ConfigureAwait(false);
-            return;
-        }
-
-        var albumArt = resolved.ThumbnailUrl != null
-            ? await TryDownloadThumbnailAsync(resolved.ThumbnailUrl, ct).ConfigureAwait(false)
-            : null;
-
-        // Publish this track's length for the progress bar (null = hide it).
-        Interlocked.Exchange(ref _durationTicks, resolved.Duration?.Ticks ?? 0);
-
-        TrackChanged?.Invoke(new Track(
-            Title: resolved.Title,
-            Artist: resolved.Uploader,
-            Album: resolved.Album,
-            AlbumArt: albumArt,
-            SourceId: Id,
-            SourceDisplay: DisplayName,
-            ExternalId: $"youtube:{entry.Id}"));
-
-        // ffmpeg -i <streamUrl> -f s16le -ac 2 -ar 44100 -vn -loglevel error pipe:1
-        // -vn drops any video stream (some YouTube formats are muxed); we
-        // only want audio. -f s16le on stdout matches the bridge format.
-        var ffmpegArgs = BuildFfmpegArgs(resolved.StreamUrl);
-
-        var pumpCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var pausingSink = new PausingSink(sink, _resumeGate, () => _paused, pumpCts.Token);
-
-        await using var subproc = new SubprocessPcmSource(new SubprocessPcmSource.Config
-        {
-            ExecutablePath = options.FfmpegPath,
-            Args = ffmpegArgs,
-            ToolName = "ffmpeg",
-            OnStderrLine = line => Log($"ffmpeg: {line}"),
-        });
-
-        await subproc.StartAsync(pausingSink, pumpCts.Token).ConfigureAwait(false);
-        _activeSubproc = subproc; // expose elapsed for the progress bar
-
-        // Wait for ffmpeg to finish (EOF on stdout = full track played)
-        // or for the per-track CTS to fire (Skip / Stop).
-        try
-        {
-            if (subproc.Completion is { } completion)
-            {
-                try
-                {
-                    await completion.ConfigureAwait(false);
-                }
-                catch
-                {
-                    /* StopAsync below handles cleanup */
-                }
-            }
-        }
-        finally
-        {
-            if (ReferenceEquals(_activeSubproc, subproc)) _activeSubproc = null;
-        }
-    }
-
-    private string[] BuildFfmpegArgs(string streamUrl)
-    {
-        // -reconnect 1 + -reconnect_streamed 1: ffmpeg will retry a
-        // dropped HTTP read instead of EOF-ing the stream. YouTube's
-        // googlevideo CDN occasionally tears down idle connections.
-        var list = new List<string>
-        {
-            "-hide_banner",
-            "-loglevel", "error",
-            "-reconnect", "1",
-            "-reconnect_streamed", "1",
-            "-reconnect_delay_max", "5",
-            "-i", streamUrl,
-            "-vn",
-            "-f", "s16le",
-            "-ac", AudioFormat.Channels.ToString(CultureInfo.InvariantCulture),
-            "-ar", AudioFormat.SampleRate.ToString(CultureInfo.InvariantCulture),
-        };
-        if (options.EnableVolumeNormalisation)
-        {
-            // loudnorm is the most permissive option for live decode:
-            // single-pass, EBU R128-aligned, no two-pass measurement.
-            list.Add("-af");
-            list.Add("loudnorm=I=-16:TP=-1.5:LRA=11");
-        }
-
-        list.Add("pipe:1");
-        return list.ToArray();
-    }
-
-    private static async Task<byte[]?> TryDownloadThumbnailAsync(string url, CancellationToken ct)
-    {
-        try
-        {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-            return await http.GetByteArrayAsync(url, ct).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[hzn-yt] thumbnail fetch failed: {ex.Message}");
-            return null;
-        }
-    }
-
-    private Track EntryToTrack(YtDlpClient.Entry e, byte[]? art) => new(
-        Title: e.Title,
-        Artist: e.Uploader,
-        Album: null,
-        AlbumArt: art,
-        SourceId: Id,
-        SourceDisplay: DisplayName,
-        ExternalId: $"youtube:{e.Id}");
-
-    /// <summary>
-    /// Wraps an IPcmSink with the pause gate. While paused, swallows
-    /// the chunk and blocks the writer (ffmpeg) by NOT calling Send,
-    /// instead waiting on the gate. Matches LocalFileSource semantics:
-    /// pause holds the producer in place. ffmpeg's stdout pipe will
-    /// back-pressure once its kernel buffer fills, so the upstream
-    /// HTTP read also stalls — fine for short pauses, may cause a
-    /// segmented stream to fall behind on very long pauses.
-    /// </summary>
-    private sealed class PausingSink(
-        IPcmSink inner,
-        ManualResetEventSlim gate,
-        Func<bool> isPaused,
-        CancellationToken ct)
-        : IPcmSink
-    {
-        public bool Send(ReadOnlySpan<short> samples)
-        {
-            if (isPaused())
-            {
-                try
-                {
-                    gate.Wait(ct);
-                }
-                catch (OperationCanceledException)
-                {
-                    return false;
-                }
-            }
-
-            return inner.Send(samples);
-        }
-    }
-}
-
-internal static class EnumerableExtensions
-{
-    public static List<T> AsList<T>(this IReadOnlyList<T> src)
-        => src as List<T> ?? [.. src];
 }
 
 public sealed class YouTubeOptions

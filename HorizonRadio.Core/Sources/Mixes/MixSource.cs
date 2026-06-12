@@ -142,11 +142,17 @@ public sealed class MixSource : IAudioSource, ITransportControls, IPlaybackProgr
         return Task.CompletedTask;
     }
 
-    // -- IPlaybackProgress (read-only; per-item seeking deferred) --
+    // -- IPlaybackProgress (delegated to the active item) --
 
     public TimeSpan? Duration => _activeItem?.Duration;
     public TimeSpan Position => _activeItem?.Position ?? TimeSpan.Zero;
-    public bool CanSeek => false;
+    public bool CanSeek => _activeItem?.CanSeek ?? false;
+
+    public Task SeekAsync(TimeSpan position)
+    {
+        _activeItem?.Seek(position);
+        return Task.CompletedTask;
+    }
 
     // -- Run loop --
 

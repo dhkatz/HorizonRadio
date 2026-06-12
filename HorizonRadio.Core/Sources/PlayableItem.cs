@@ -30,6 +30,14 @@ public abstract class PlayableItem
     /// before playback starts.</summary>
     public virtual TimeSpan Position => TimeSpan.Zero;
 
+    /// <summary>Whether <see cref="SeekAsync"/> does anything. Defaults false so
+    /// stream items (which can report position but not seek) need not override it.</summary>
+    public virtual bool CanSeek => false;
+
+    /// <summary>Seek to <paramref name="position"/> within this item. The pump
+    /// applies it on its next chunk; default is a no-op.</summary>
+    public virtual void Seek(TimeSpan position) { }
+
     /// <summary>
     /// Expensive, idempotent preparation — resolve a stream URL, open a reader,
     /// fetch art. Safe to call ahead of <see cref="PlayAsync"/> to warm the next
