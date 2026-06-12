@@ -46,6 +46,9 @@ public sealed class QueueModel
 
     public bool HasContext { get { lock (_lock) return _context != null; } }
 
+    /// <summary>The item playing now, or null — a cheap read (no snapshot/peek).</summary>
+    public QueueItem? Current { get { lock (_lock) return _current; } }
+
     /// <summary>The active context generator, or null. The engine pulls from it
     /// and the sidebar peeks it; both guard their own access.</summary>
     public MixContextProvider? Context { get { lock (_lock) return _context; } }

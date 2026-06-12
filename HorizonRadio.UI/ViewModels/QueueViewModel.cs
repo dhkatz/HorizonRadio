@@ -42,7 +42,8 @@ public sealed partial class QueueViewModel : ViewModelBase
     private const int EnrichLookahead = 18;
 
     // Cap concurrent metadata-only yt-dlp resolves so the window trickles in rather
-    // than spawning a dozen processes at once. Static = an app-wide cap.
+    // than spawning a dozen processes at once. Caps the queue's enrichment to ≤3 at
+    // a time (the Mixes tab has its own separate ≤3 enumerate cap).
     private static readonly SemaphoreSlim MetaGate = new(3, 3);
 
     /// <summary>Now-playing line at the top of the sidebar.</summary>
@@ -153,7 +154,7 @@ public sealed partial class QueueViewModel : ViewModelBase
                 var art = enriched.AlbumArt is { Length: > 0 } ? DecodeArt(enriched.AlbumArt) : null;
                 Dispatcher.UIThread.Post(() =>
                 {
-                    if (!ReferenceEquals(_queue?.Model.Snapshot().Current, current)) return; // still playing this?
+                    if (!ReferenceEquals(_queue?.Model.Current, current)) return; // still playing this?
                     if (!string.IsNullOrWhiteSpace(enriched.Title)) NowPlayingTitle = enriched.Title;
                     NowPlayingSubtitle = enriched.Artist;
                     if (art != null) NowPlayingArt = art;

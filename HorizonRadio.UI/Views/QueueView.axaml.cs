@@ -1,3 +1,4 @@
+using System;
 using Avalonia.Controls;
 using Avalonia.Input;
 using HorizonRadio.UI.ViewModels;
@@ -13,6 +14,12 @@ namespace HorizonRadio.UI.Views;
 /// </summary>
 public partial class QueueView : UserControl
 {
+    // The thumbnail play-overlay press and the row double-tap can both fire for one
+    // gesture (e.g. double-clicking the thumbnail); debounce per-row so "play now"
+    // (which interrupts playback) runs once, not twice.
+    private string? _lastPlayId;
+    private DateTime _lastPlayAt;
+
     public QueueView()
     {
         InitializeComponent();
@@ -26,15 +33,22 @@ public partial class QueueView : UserControl
     // Double-click a queue row to play it now (Spotify-style).
     private void OnRowDoubleTapped(object? sender, TappedEventArgs e)
     {
-        if (sender is Control { DataContext: QueueRowViewModel row } && row.PlayNowCommand.CanExecute(null))
-            row.PlayNowCommand.Execute(null);
+        if (sender is Control { DataContext: QueueRowViewModel row }) TryPlay(row);
     }
 
     // Click the thumbnail's play overlay to play now.
     private void OnPlayOverlayPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (sender is Control { DataContext: QueueRowViewModel row } && row.PlayNowCommand.CanExecute(null))
-            row.PlayNowCommand.Execute(null);
+        if (sender is Control { DataContext: QueueRowViewModel row }) TryPlay(row);
         e.Handled = true;
+    }
+
+    private void TryPlay(QueueRowViewModel row)
+    {
+        var now = DateTime.UtcNow;
+        if (_lastPlayId == row.Id && (now - _lastPlayAt) < TimeSpan.FromMilliseconds(500)) return;
+        _lastPlayId = row.Id;
+        _lastPlayAt = now;
+        if (row.PlayNowCommand.CanExecute(null)) row.PlayNowCommand.Execute(null);
     }
 }

@@ -108,18 +108,23 @@ public static class YtDlpClient
             new[] { "-j", "--no-playlist", "--skip-download", "--no-warnings", videoUrl },
             ct).ConfigureAwait(false);
 
-        using var doc = JsonDocument.Parse(stdout);
-        var root = doc.RootElement;
+        // Honor the Meta? contract: a run that prints no JSON (warnings-only) → null.
+        if (string.IsNullOrWhiteSpace(stdout)) return null;
 
-        return new Meta(
-            Title: ReadString(root, "title") ?? "(unknown)",
-            Uploader: ReadString(root, "uploader") ?? ReadString(root, "channel") ?? "",
-            ThumbnailUrl: ReadString(root, "thumbnail"),
-            Album: ReadString(root, "album"),
-            Track: ReadString(root, "track"),
-            Artist: FirstArtist(ReadString(root, "artist") ?? ReadString(root, "creator")),
-            ReleaseYear: ReadInt(root, "release_year") ?? YearFromDate(ReadString(root, "release_date")));
+        using var doc = JsonDocument.Parse(stdout);
+        return ParseMeta(doc.RootElement);
     }
+
+    // The metadata field mapping, shared by the metadata-only and full resolves so
+    // they can't drift (artist/creator fallback, release_year vs release_date, etc.).
+    private static Meta ParseMeta(JsonElement root) => new(
+        Title: ReadString(root, "title") ?? "(unknown)",
+        Uploader: ReadString(root, "uploader") ?? ReadString(root, "channel") ?? "",
+        ThumbnailUrl: ReadString(root, "thumbnail"),
+        Album: ReadString(root, "album"),
+        Track: ReadString(root, "track"),
+        Artist: FirstArtist(ReadString(root, "artist") ?? ReadString(root, "creator")),
+        ReleaseYear: ReadInt(root, "release_year") ?? YearFromDate(ReadString(root, "release_date")));
 
     /// <summary>
     /// Resolves one entry into a fresh direct-stream URL. Always called
@@ -148,23 +153,15 @@ public static class YtDlpClient
                         ?? throw new InvalidOperationException(
                             "yt-dlp returned no `url` field for " + videoUrl);
 
-        string title = ReadString(root, "title") ?? "(unknown)";
-        string uploader = ReadString(root, "uploader") ?? ReadString(root, "channel") ?? "";
-        string? thumb = ReadString(root, "thumbnail");
-        string? album = ReadString(root, "album"); // populated for Music-style entries
         // "duration" is the video length in (possibly fractional) seconds;
         // absent on some live/streamed entries → null (progress bar hides).
         TimeSpan? duration = ReadDouble(root, "duration") is { } secs && secs > 0
             ? TimeSpan.FromSeconds(secs)
             : null;
 
-        // Canonical song metadata, present only when YouTube tagged the video as
-        // music. "artist" can be a comma-joined list; take the first credited name.
-        string? track = ReadString(root, "track");
-        string? artist = FirstArtist(ReadString(root, "artist") ?? ReadString(root, "creator"));
-        int? releaseYear = ReadInt(root, "release_year") ?? YearFromDate(ReadString(root, "release_date"));
-
-        return new Resolved(streamUrl, title, uploader, thumb, album, duration, track, artist, releaseYear);
+        var m = ParseMeta(root);
+        return new Resolved(streamUrl, m.Title, m.Uploader, m.ThumbnailUrl, m.Album,
+            duration, m.Track, m.Artist, m.ReleaseYear);
     }
 
     private static Entry? TryReadEntry(JsonElement e)
