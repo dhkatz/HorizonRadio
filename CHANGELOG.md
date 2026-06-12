@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-12
+
+### Added
+
+- **Queue** — a global play queue, shown as a toggleable right-hand sidebar
+  (Spotify-style). Add one-off tracks with the **+** button or Quick Play; they
+  play before the active mix, while the mix keeps refilling the queue's tail so
+  the in-game radio never goes silent. Each row has play-now, reorder, and
+  remove; double-click a row (or its thumbnail's play button) to jump to it.
+- **Metadata pipeline** — track metadata is resolved through an ordered,
+  multi-provider pipeline that fills in canonical titles, artists, and square
+  album art. MusicBrainz is enabled by default (no credentials needed); Spotify
+  is optional. Set the provider order and per-field overrides (e.g. always take
+  album art from Spotify) in the redesigned **Metadata** tab.
+- The queue and **Mixes** lists now show real titles and album art instead of
+  raw URLs / filenames — resolved lazily ahead of play, in the background, and
+  cached.
+
+### Changed
+
+- Metadata is normalized at the source: YouTube uses its canonical track/artist
+  (with a heuristic "Artist – Title" parser as a fallback) rather than the
+  channel name, and tagless local files parse their filename.
+- Metadata enrichment is now on by default (previously an opt-in single
+  provider) and combines the source with the configured providers per field.
+
 ## [0.4.0] - 2026-06-12
 
 ### Added
@@ -155,7 +181,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release of Horizon Radio.
 
-[Unreleased]: https://github.com/dhkatz/HorizonRadio/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/dhkatz/HorizonRadio/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/dhkatz/HorizonRadio/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/dhkatz/HorizonRadio/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/dhkatz/HorizonRadio/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/dhkatz/HorizonRadio/compare/v0.2.0...v0.3.0
