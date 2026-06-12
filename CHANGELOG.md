@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- About tab (entry point in the sidebar footer) showing the app version,
+  channel, and commit, with links to the repo / releases / issues /
+  license. Builds are now stamped with a `Channel` (stable / nightly /
+  dev) the app reads at runtime.
+- App update check: on launch the app checks GitHub for a newer build on
+  its channel (stable → latest release; nightly → the rolling `nightly`
+  prerelease) and surfaces it via a footer badge + a one-time toast.
+  Currently "Update" opens the release page; an in-place updater follows.
+  Dev builds never check. Offline/indeterminate stays silent.
 - librespot is now installable on demand from the Tools tab, downloaded
   from a permanent, version-addressed tool blobstore (the `tools` GitHub
   release) and verified against a SHA-256 the app ships in an embedded

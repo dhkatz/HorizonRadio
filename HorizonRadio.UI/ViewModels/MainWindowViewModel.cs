@@ -32,6 +32,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public ControlsViewModel Controls { get; }
     public ProfilesViewModel Profiles { get; }
     public ConsoleViewModel Console { get; } = new();
+    public AboutViewModel About { get; } = new();
 
     /// <summary>Toast host bound in <c>MainWindow.axaml</c>; view models raise
     /// transient notifications through it (e.g. output-unavailable errors).</summary>
@@ -105,7 +106,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _ => "",
     };
 
-    // 0 = Now Playing, 1 = Sources, 2 = Metadata, 3 = Stats, 4 = Mod Manager, 5 = Tools, 6 = Events, 7 = Console, 8 = Controls, 9 = Profiles
+    // 0 = Now Playing, 1 = Sources, 2 = Metadata, 3 = Stats, 4 = Mod Manager, 5 = Tools, 6 = Events, 7 = Console, 8 = Controls, 9 = Profiles, 10 = About
     [ObservableProperty] private int selectedWorkspaceIndex;
 
     public bool IsNowPlayingWorkspace => SelectedWorkspaceIndex == 0;
@@ -118,6 +119,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public bool IsConsoleWorkspace => SelectedWorkspaceIndex == 7;
     public bool IsControlsWorkspace => SelectedWorkspaceIndex == 8;
     public bool IsProfilesWorkspace => SelectedWorkspaceIndex == 9;
+    public bool IsAboutWorkspace => SelectedWorkspaceIndex == 10;
 
     public string CurrentRoute => SelectedWorkspaceIndex switch
     {
@@ -130,6 +132,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         7 => "console",
         8 => "controls",
         9 => "profiles",
+        10 => "about",
         _ => "now-playing",
     };
 
@@ -151,6 +154,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsConsoleWorkspace));
         OnPropertyChanged(nameof(IsControlsWorkspace));
         OnPropertyChanged(nameof(IsProfilesWorkspace));
+        OnPropertyChanged(nameof(IsAboutWorkspace));
         OnPropertyChanged(nameof(CurrentRoute));
     }
 
@@ -170,6 +174,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand] private void ShowConsole() => SelectedWorkspaceIndex = 7;
     [RelayCommand] private void ShowControls() => SelectedWorkspaceIndex = 8;
     [RelayCommand] private void ShowProfiles() => SelectedWorkspaceIndex = 9;
+    [RelayCommand] private void ShowAbout() => SelectedWorkspaceIndex = 10;
 
     public void SetConnection(ConnectionState state)
     {

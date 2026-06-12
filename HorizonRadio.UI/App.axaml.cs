@@ -143,9 +143,31 @@ public partial class App : Application
             // the UI thread (CheckFreshnessAsync awaits the network off it)
             // and is failure-silent — offline resolves to Unknown, no toast.
             CheckToolFreshnessAsync(vm);
+
+            // App self-update check: surface a newer build via the About
+            // footer badge + a one-time launch toast. Dev builds no-op.
+            CheckAppUpdateAsync(vm);
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static async void CheckAppUpdateAsync(MainWindowViewModel vm)
+    {
+        try
+        {
+            if (!await vm.About.CheckForUpdatesAsync()) return;
+
+            vm.ToastManager.CreateToast("Update available")
+                .WithContent("A newer build of Horizon Radio is available. Open About to update.")
+                .WithDelay(8)
+                .DismissOnClick()
+                .ShowInfo();
+        }
+        catch
+        {
+            // Update checking is best-effort; never disrupt startup.
+        }
     }
 
     private static async void CheckToolFreshnessAsync(MainWindowViewModel vm)
