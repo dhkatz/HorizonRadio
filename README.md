@@ -52,6 +52,8 @@ In FH6's audio settings:
 
 ## Building
 
+<details>
+
 | Build                  | Produces                 | Requires                                                |
 |------------------------|--------------------------|---------------------------------------------------------|
 | `CMakeLists.txt`       | `version.dll` + test exe | Windows: VS 2022 Build Tools. Linux/macOS: clang + mingw-w64. CMake ≥ 3.25, Ninja. |
@@ -75,13 +77,11 @@ dotnet publish HorizonRadio.UI/HorizonRadio.UI.csproj -c Release -r win-x64 --se
 For architecture, internals, code-quality tooling, and maintenance runbooks
 (including how to re-derive the FMOD offsets after a game update), see
 [AGENTS.md](AGENTS.md).
-
-## License
-
-GPLv3 — see [LICENSE](LICENSE).
+</details>
 
 ## Credits
 
+<details>
 _Libraries_
 
 - [librespot](https://github.com/librespot-org/librespot) - Spotify Connect client (Rust)
@@ -97,3 +97,9 @@ _References_
 
 - [Spotify Radio](https://www.nexusmods.com/forzahorizon6/mods/95?tab=description) - Original inspiration (closed source)
 - [fh6-universal-radio](https://github.com/g0ldyy/fh6-universal-radio) - Cross-referenced for FH6's FMOD function signatures and RadioStreamFmod chain offsets, and adapted its lazy-resolve createDSP technique.
+
+</details>
+
+## License
+
+GPLv3 — see [LICENSE](LICENSE).
