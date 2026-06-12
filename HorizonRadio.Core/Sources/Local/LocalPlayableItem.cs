@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using HorizonRadio.Core.Audio;
+using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Models;
 using NAudio.Wave;
 
@@ -22,10 +23,12 @@ public sealed class LocalPlayableItem : PlayableItem
     public LocalPlayableItem(string path)
     {
         _path = path;
-        // Preliminary metadata: the filename. PrepareAsync upgrades it to tags.
+        // Preliminary metadata: parse the filename ("Artist - Title") so lists show
+        // something sensible before tags are read in PrepareAsync.
+        var parsed = TitleArtistParser.Parse(Path.GetFileNameWithoutExtension(path));
         Metadata = new Track(
-            Title: Path.GetFileNameWithoutExtension(path),
-            Artist: "",
+            Title: parsed.Title,
+            Artist: parsed.Artist ?? "",
             Album: null,
             AlbumArt: null,
             SourceId: "local",
@@ -59,16 +62,25 @@ public sealed class LocalPlayableItem : PlayableItem
         {
             using var tag = TagLib.File.Create(_path);
 
-            var title = !string.IsNullOrWhiteSpace(tag.Tag.Title)
-                ? tag.Tag.Title!
-                : Path.GetFileNameWithoutExtension(_path);
-            var artist = tag.Tag.Performers is { Length: > 0 } performers
-                ? string.Join(", ", performers)
-                : "";
+            // Fall back to parsing the filename only where a tag is missing, so a
+            // tagless "Artist - Title.mp3" still splits sensibly.
+            var hasTagTitle = !string.IsNullOrWhiteSpace(tag.Tag.Title);
+            var hasTagArtist = tag.Tag.Performers is { Length: > 0 };
+            var parsed = hasTagTitle && hasTagArtist
+                ? null
+                : TitleArtistParser.Parse(Path.GetFileNameWithoutExtension(_path));
+
+            var title = hasTagTitle ? tag.Tag.Title! : parsed!.Title;
+            var artist = hasTagArtist
+                ? string.Join(", ", tag.Tag.Performers)
+                : parsed!.Artist ?? "";
             var album = !string.IsNullOrWhiteSpace(tag.Tag.Album) ? tag.Tag.Album : null;
             var art = tag.Tag.Pictures is { Length: > 0 } pics ? pics[0].Data.Data : null;
+            var year = tag.Tag.Year is > 0 and <= 9999 ? (int?)tag.Tag.Year : null;
+            var trackNo = tag.Tag.Track is > 0 ? (int?)tag.Tag.Track : null;
 
-            Metadata = new Track(title, artist, album, art, "local", "Local Files", null);
+            Metadata = new Track(title, artist, album, art, "local", "Local Files",
+                ExternalId: null, Year: year, TrackNumber: trackNo);
             if (tag.Properties?.Duration is { Ticks: > 0 } dur) Duration = dur;
         }
         catch (Exception ex)
