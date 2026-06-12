@@ -89,6 +89,7 @@ jobs:
           -r win-x64
           --self-contained true
           -p:Version=${{ steps.release.outputs.semver }}
+          -p:Channel=stable
 
       - name: Rename zip with release tag
         id: archive

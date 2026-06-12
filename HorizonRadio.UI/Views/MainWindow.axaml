@@ -223,19 +223,38 @@
                         BorderThickness="0,1,0,0"
                         Padding="12,8"
                         Margin="-12,0,-12,-12">
-                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                        <Ellipse Width="8" Height="8"
-                                 Fill="#22c55e"
-                                 IsVisible="{Binding NowPlaying.IsConnected}" />
-                        <Ellipse Width="8" Height="8"
-                                 Fill="#6b7280"
-                                 IsVisible="{Binding !NowPlaying.IsConnected}" />
-                        <TextBlock Text="{Binding ConnectionLabel}"
-                                   FontSize="11"
-                                   Opacity="0.75"
-                                   TextTrimming="CharacterEllipsis"
-                                   VerticalAlignment="Center"/>
-                    </StackPanel>
+                    <DockPanel LastChildFill="True">
+                        <!-- About / updates entry point; the dot is the
+                             app-update badge (same pattern as the Tools nav). -->
+                        <Button DockPanel.Dock="Right"
+                                Classes="Ghost"
+                                Padding="6,2"
+                                VerticalAlignment="Center"
+                                Command="{Binding ShowAboutCommand}"
+                                ToolTip.Tip="About &amp; updates">
+                            <Panel>
+                                <material:MaterialIcon Kind="InformationOutline" Width="16" Height="16"/>
+                                <Border IsVisible="{Binding About.UpdateAvailable}"
+                                        Background="#f59e0b"
+                                        Width="8" Height="8" CornerRadius="4"
+                                        HorizontalAlignment="Right" VerticalAlignment="Top"
+                                        Margin="0,-2,-2,0"/>
+                            </Panel>
+                        </Button>
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <Ellipse Width="8" Height="8"
+                                     Fill="#22c55e"
+                                     IsVisible="{Binding NowPlaying.IsConnected}" />
+                            <Ellipse Width="8" Height="8"
+                                     Fill="#6b7280"
+                                     IsVisible="{Binding !NowPlaying.IsConnected}" />
+                            <TextBlock Text="{Binding ConnectionLabel}"
+                                       FontSize="11"
+                                       Opacity="0.75"
+                                       TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </DockPanel>
                 </Border>
             </shadui:Sidebar.Footer>
         </shadui:Sidebar>
@@ -260,6 +279,26 @@
                 <Ellipse Width="10" Height="10" Fill="#6b7280"
                          IsVisible="{Binding !NowPlaying.IsConnected}"/>
             </Grid>
+            <!-- About / updates, just above the connection dot on the rail. -->
+            <Button DockPanel.Dock="Bottom"
+                    Classes="Ghost"
+                    Height="40" Width="40"
+                    Padding="0"
+                    Margin="0,0,0,12"
+                    HorizontalAlignment="Center"
+                    HorizontalContentAlignment="Center"
+                    VerticalContentAlignment="Center"
+                    Command="{Binding ShowAboutCommand}"
+                    ToolTip.Tip="About &amp; updates">
+                <Panel>
+                    <material:MaterialIcon Kind="InformationOutline" Width="18" Height="18"/>
+                    <Border IsVisible="{Binding About.UpdateAvailable}"
+                            Background="#f59e0b"
+                            Width="9" Height="9" CornerRadius="4.5"
+                            HorizontalAlignment="Right" VerticalAlignment="Top"
+                            Margin="0,-2,-2,0"/>
+                </Panel>
+            </Button>
             <StackPanel Margin="8,16" Spacing="10">
                 <Button Background="{DynamicResource SidebarBackgroundColor}"
                         CornerRadius="{DynamicResource MdCornerRadius}"
@@ -455,6 +494,9 @@
             </Grid>
             <Grid IsVisible="{Binding IsConsoleWorkspace}">
                 <views:ConsoleView DataContext="{Binding Console}"/>
+            </Grid>
+            <Grid IsVisible="{Binding IsAboutWorkspace}">
+                <views:AboutView DataContext="{Binding About}"/>
             </Grid>
             </Panel>
         </Grid>

@@ -32,7 +32,7 @@ public sealed partial class ToolsViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(CheckLabel))]
     private bool isChecking;
 
-    public string CheckLabel => IsChecking ? "Checking…" : "Check for updates";
+    public string CheckLabel => IsChecking ? "Checking…" : "Check for Updates";
 
     public ToolsViewModel(ToolRegistry registry, IEnumerable<IToolInstaller> installers)
     {

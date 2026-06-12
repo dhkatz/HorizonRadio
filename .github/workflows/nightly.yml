@@ -116,6 +116,7 @@ jobs:
           -r win-x64
           --self-contained true
           -p:Version=${{ steps.ver.outputs.version }}
+          -p:Channel=nightly
 
       - name: Name the nightly zip
         id: zip

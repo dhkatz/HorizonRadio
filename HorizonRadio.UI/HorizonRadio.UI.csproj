@@ -32,7 +32,21 @@
         <PublishSingleFile>true</PublishSingleFile>
         <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
         <DebugType>embedded</DebugType>
+
+        <!--
+          Release channel stamped into the assembly so BuildInfo can read it
+          at runtime for the self-updater. Workflows override it
+          (-p:Channel=stable on publish, -p:Channel=nightly on the nightly
+          build); a local `dotnet build`/`publish` stays 'dev'. Version
+          itself comes from -p:Version= (AssemblyInformationalVersion).
+        -->
+        <Channel Condition="'$(Channel)' == ''">dev</Channel>
     </PropertyGroup>
+
+    <!-- Emit [AssemblyMetadata("Channel", …)] for BuildInfo to read. -->
+    <ItemGroup>
+        <AssemblyMetadata Include="Channel" Value="$(Channel)" />
+    </ItemGroup>
 
     <ItemGroup>
         <Folder Include="Models\" />
