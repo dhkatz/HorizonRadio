@@ -22,6 +22,9 @@ namespace HorizonRadio.Core.Sources.Spotify;
 /// </summary>
 public sealed class SpotifyConnection : IAsyncDisposable
 {
+    // Bring-your-own Client ID only — Spotify's 2026 Development-Mode rules (≤5
+    // users per Client ID, no Extended Quota for individuals) make a bundled app
+    // unviable. Each user supplies their own app's Client ID; we never ship one.
     private static readonly string[] Scopes =
     [
         SpotifyAPI.Web.Scopes.UserReadPlaybackState,
