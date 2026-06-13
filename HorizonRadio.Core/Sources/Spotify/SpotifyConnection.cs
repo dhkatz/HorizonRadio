@@ -48,7 +48,11 @@ public sealed class SpotifyConnection : IAsyncDisposable
         _redirectPort = redirectPort;
     }
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-spotify-conn] {msg}");
+    private static void Log(string msg)
+    {
+        Debug.WriteLine($"[hzn-spotify-conn] {msg}");
+        Diagnostics.ProcessConsole.Append("spotify", msg);
+    }
 
     /// <summary>The loopback redirect URI; must be registered on the Spotify app.</summary>
     public string RedirectUri => $"http://127.0.0.1:{_redirectPort}/callback";
@@ -134,6 +138,10 @@ public sealed class SpotifyConnection : IAsyncDisposable
 
     private SpotifyClient BuildClient(PKCETokenResponse token)
     {
+        // Surface the scopes Spotify actually granted — a token from an older/cached
+        // consent can be missing playlist-read-private, which reads as a bare 403.
+        Log($"client ready; granted scopes: {token.Scope}");
+
         var authenticator = new PKCEAuthenticator(_clientId, token);
         // Spotify can rotate the refresh token on each refresh — persist the latest.
         authenticator.TokenRefreshed += (_, t) =>

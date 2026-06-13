@@ -12,6 +12,7 @@ using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Core.Sources.Queue;
+using HorizonRadio.Core.Sources.Spotify;
 using HorizonRadio.UI.Tools;
 using HorizonRadio.UI.ViewModels;
 using HorizonRadio.UI.Views;
@@ -36,6 +37,8 @@ public partial class App : Application
     private EventActionExecutor? _eventExecutor;
     private ForzaTelemetryListener? _telemetry;
     private InputBindingService? _inputService;
+    private SpotifyConnection? _spotifyConnection;
+    private SpotifyPlaybackService? _spotifyPlayback;
 
     public override void Initialize()
     {
@@ -56,6 +59,36 @@ public partial class App : Application
             _preview = new PreviewController(tee, _store);
 
             _runner = new SourceRunner(tee) { Shuffle = _store.Shuffle };
+
+            // Spotify: the account connection (PKCE, bring-your-own Client ID) and
+            // the shared librespot playback service that our engine drives via the
+            // Web API are app singletons, built once from the persisted "spotify"
+            // config and published for the (parameterless) content-source factory.
+            var spotifyFactory = (SpotifyContentSourceFactory)SourceCatalog.Find(SpotifyContentSourceFactory.SourceId)!;
+            var spotifyCfg = _store.Load(spotifyFactory.Id, spotifyFactory.Schema);
+            _spotifyConnection = new SpotifyConnection(
+                new SpotifyAuthStore(),
+                spotifyCfg.GetString(SpotifyContentSourceFactory.KeyClientId) ?? "");
+            _spotifyPlayback = new SpotifyPlaybackService(_spotifyConnection, new SpotifyPlaybackOptions
+            {
+                ExecutablePath = spotifyCfg.GetString(SpotifyContentSourceFactory.KeyExecutable) ?? "",
+                DeviceName = Or(spotifyCfg.GetString(SpotifyContentSourceFactory.KeyDeviceName),
+                                SpotifyContentSourceFactory.DefaultDeviceName),
+                CacheDirectory = Or(spotifyCfg.GetString(SpotifyContentSourceFactory.KeyCacheDir),
+                                    SpotifyContentSourceFactory.DefaultCacheDir),
+                Bitrate = spotifyCfg.GetString(SpotifyContentSourceFactory.KeyBitrate) ?? "auto",
+                EnableVolumeNormalisation = spotifyCfg.GetBool(SpotifyContentSourceFactory.KeyNormalise, true),
+            });
+            SpotifyRuntime.Initialize(_spotifyConnection, _spotifyPlayback);
+
+            // The driven service and the zero-config "Spotify Connect" receiver both
+            // drive the "Horizon Radio" librespot device; when the receiver (id
+            // "spotify") becomes the active source, release the driven service's
+            // librespot so the two don't fight over the device/cache.
+            _runner.ActiveSourceChanged += factory =>
+            {
+                if (factory?.Id == "spotify") _ = _spotifyPlayback.ReleaseAsync();
+            };
 
             _metaStore = MetadataConfigStore.LoadFromDisk();
             var cache = new MetadataCache();
@@ -170,6 +203,8 @@ public partial class App : Application
                 if (_enricher != null) await _enricher.DisposeAsync();
                 if (_metaResolver != null) await _metaResolver.DisposeAsync();
                 if (_runner != null) await _runner.DisposeAsync();
+                if (_spotifyPlayback != null) await _spotifyPlayback.DisposeAsync();
+                if (_spotifyConnection != null) await _spotifyConnection.DisposeAsync();
                 if (_ipc != null) await _ipc.DisposeAsync();
                 if (_pcm != null) await _pcm.DisposeAsync();
             };
@@ -189,6 +224,9 @@ public partial class App : Application
 
         base.OnFrameworkInitializationCompleted();
     }
+
+    private static string Or(string? value, string fallback) =>
+        string.IsNullOrWhiteSpace(value) ? fallback : value;
 
     private static async void CheckAppUpdateAsync(MainWindowViewModel vm)
     {
