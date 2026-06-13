@@ -198,17 +198,23 @@ public sealed partial class SourcesViewModel : ViewModelBase
 
         // Persist the form first so any just-typed config (e.g. a Client ID) is
         // captured before the connect flow reads it.
+        var factory = SelectedFactory;
         var values = SnapshotAndPersist();
         ConnectionStatus = "Opening browser…";
         try
         {
             await auth.ConnectAsync(values);
-            RefreshConnection();
+            // The browser handshake can take many seconds; only touch the panel if the
+            // user hasn't switched to a different source in the meantime.
+            if (ReferenceEquals(SelectedFactory, factory)) RefreshConnection();
         }
         catch (Exception ex)
         {
-            IsConnected = false;
-            ConnectionStatus = $"Connect failed: {ex.Message}";
+            if (ReferenceEquals(SelectedFactory, factory))
+            {
+                IsConnected = false;
+                ConnectionStatus = $"Connect failed: {ex.Message}";
+            }
             Debug.WriteLine($"[hzn-sources-vm] connect: {ex}");
         }
     }

@@ -30,7 +30,7 @@ namespace HorizonRadio.Core.Sources.Spotify;
 public sealed class SpotifyPlaybackService : IAsyncDisposable
 {
     private readonly SpotifyConnection _connection;
-    private readonly SpotifyPlaybackOptions _options;
+    private readonly Func<LibrespotOptions> _options;
     private readonly SemaphoreSlim _startGate = new(1, 1);
     private readonly RoutingSink _routing = new();
     private readonly object _sync = new();
@@ -38,6 +38,9 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
     private SubprocessPcmSource? _librespot;
     private CancellationTokenSource? _serviceCts;
     private string? _deviceId;
+    // The device name librespot was last launched with — what EnsureDeviceAsync looks
+    // up. Captured at launch (options are read fresh each launch, so this tracks them).
+    private string _deviceName = Librespot.DefaultDeviceName;
 
     // Per-track signalling, swapped under _sync at the start of each PlayTrackAsync
     // and read from the stderr-drain thread.
@@ -56,7 +59,10 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
     private long _durationMs;
     private long _baseMs;
 
-    public SpotifyPlaybackService(SpotifyConnection connection, SpotifyPlaybackOptions options)
+    /// <param name="options">Read fresh on each librespot launch, so installing
+    /// librespot or editing the Spotify config mid-session takes effect on the next
+    /// (re)launch instead of being frozen at app startup.</param>
+    public SpotifyPlaybackService(SpotifyConnection connection, Func<LibrespotOptions> options)
     {
         _connection = connection;
         _options = options;
@@ -118,6 +124,13 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
 
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // Reset position/duration BEFORE publishing the new _trackEnded, so a late
+        // end_of_track for the *previous* track (delivered on the stderr thread in the
+        // gap) evaluates ReachedEnd() against this track's fresh, zeroed position
+        // (pos 0 < newDur) and is ignored — rather than instantly completing the new
+        // track's `ended`.
+        ResetPosition(duration);
         lock (_sync)
         {
             _trackStarted = started;
@@ -125,7 +138,6 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
             _onPlaying = onPlaying;
             _playingFired = false;
         }
-        ResetPosition(duration);
 
         // CRUCIAL: do NOT gate-block the read loop on pause. Blocking it fills
         // librespot's stdout pipe, and after a long pause that stalled writer never
@@ -254,13 +266,15 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
                 _deviceId = null;
             }
 
-            Directory.CreateDirectory(_options.CacheDirectory);
+            var o = _options();
+            _deviceName = o.DeviceName;
+            Directory.CreateDirectory(o.CacheDirectory);
             _serviceCts = new CancellationTokenSource();
 
             var subproc = new SubprocessPcmSource(new SubprocessPcmSource.Config
             {
-                ExecutablePath = _options.ExecutablePath,
-                Args = BuildArgs(_options),
+                ExecutablePath = o.ExecutablePath,
+                Args = Librespot.BuildArgs(o, autoplay: false),
                 ToolName = "librespot",
                 OnStderrLine = OnStderr,
             });
@@ -283,7 +297,7 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
             {
                 var devices = await client.Player.GetAvailableDevices(ct).ConfigureAwait(false);
                 var match = devices.Devices.FirstOrDefault(d =>
-                    string.Equals(d.Name, _options.DeviceName, StringComparison.OrdinalIgnoreCase));
+                    string.Equals(d.Name, _deviceName, StringComparison.OrdinalIgnoreCase));
                 if (match?.Id is { } id)
                 {
                     _deviceId = id;
@@ -296,7 +310,7 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
         }
 
         throw new InvalidOperationException(
-            $"Spotify device \"{_options.DeviceName}\" never appeared. Make sure librespot is logged in " +
+            $"Spotify device \"{_deviceName}\" never appeared. Make sure librespot is logged in " +
             "(cast to it once from your Spotify app) and the account is Premium.");
     }
 
@@ -347,13 +361,17 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
     }
 
     // True when playback has advanced to within a small margin of the track length
-    // (or the length is unknown, so we trust the event).
+    // (or the length is unknown, so we trust the event). The margin is capped at a
+    // quarter of the track so SHORT tracks (interludes/skits/intros) don't treat a
+    // stray end/stop at position 0 as "reached the end" (a fixed 10s margin went
+    // negative for sub-10s tracks and ended them instantly).
     private bool ReachedEnd()
     {
         var dur = Interlocked.Read(ref _durationMs);
         if (dur <= 0) return true;
         var pos = Interlocked.Read(ref _baseMs) + _routing.Frames * 1000 / AudioFormat.SampleRate;
-        return pos >= dur - 10_000;
+        var margin = Math.Min(10_000, dur / 4);
+        return pos >= dur - margin;
     }
 
     private void ResetPosition(TimeSpan? duration)
@@ -456,30 +474,6 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
         }
     }
 
-    private static string[] BuildArgs(SpotifyPlaybackOptions o)
-    {
-        // Mirrors the legacy receiver's args with one decisive change: --autoplay off.
-        // We are the queue, so a single-URI play must STOP at end_of_track and hand
-        // control back, not roll into Spotify's own related-tracks radio.
-        var list = new List<string>
-        {
-            "--name",          o.DeviceName,
-            "--backend",       "pipe",
-            "--format",        "S16",
-            "--cache",         o.CacheDirectory,
-            "--volume-ctrl",   "fixed",
-            "--autoplay",      "off",
-            "--onevent",       "cmd /c echo HZNEV %PLAYER_EVENT% %TRACK_ID% %POSITION_MS% %DURATION_MS% 1>&2",
-        };
-        if (o.EnableVolumeNormalisation) list.Add("--enable-volume-normalisation");
-        if (!string.IsNullOrEmpty(o.Bitrate) && o.Bitrate != "auto")
-        {
-            list.Add("--bitrate");
-            list.Add(o.Bitrate);
-        }
-        return list.ToArray();
-    }
-
     public async ValueTask DisposeAsync()
     {
         try { _serviceCts?.Cancel(); } catch { }
@@ -489,16 +483,6 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
         _serviceCts = null;
         _startGate.Dispose();
     }
-}
-
-/// <summary>librespot playback knobs for <see cref="SpotifyPlaybackService"/>.</summary>
-public sealed class SpotifyPlaybackOptions
-{
-    public required string ExecutablePath { get; init; }
-    public required string DeviceName { get; init; }
-    public required string CacheDirectory { get; init; }
-    public string Bitrate { get; init; } = "auto"; // 96|160|320|auto
-    public bool EnableVolumeNormalisation { get; init; } = true;
 }
 
 /// <summary>

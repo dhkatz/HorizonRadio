@@ -60,25 +60,19 @@ public partial class App : Application
 
             _runner = new SourceRunner(tee) { Shuffle = _store.Shuffle };
 
-            // Spotify: the account connection (PKCE, bring-your-own Client ID) and
-            // the shared librespot playback service that our engine drives via the
-            // Web API are app singletons, built once from the persisted "spotify"
-            // config and published for the (parameterless) content-source factory.
+            // Spotify: the account connection (PKCE, bring-your-own Client ID) and the
+            // shared librespot playback service our engine drives via the Web API are
+            // app singletons published for the (parameterless) content-source factory.
+            // The service reads its librespot options fresh on each launch (via the
+            // closure below) so installing librespot or editing the config mid-session
+            // takes effect without an app restart.
             var spotifyFactory = (SpotifyContentSourceFactory)SourceCatalog.Find(SpotifyContentSourceFactory.SourceId)!;
-            var spotifyCfg = _store.Load(spotifyFactory.Id, spotifyFactory.Schema);
             _spotifyConnection = new SpotifyConnection(
                 new SpotifyAuthStore(),
-                spotifyCfg.GetString(SpotifyContentSourceFactory.KeyClientId) ?? "");
-            _spotifyPlayback = new SpotifyPlaybackService(_spotifyConnection, new SpotifyPlaybackOptions
-            {
-                ExecutablePath = spotifyCfg.GetString(SpotifyContentSourceFactory.KeyExecutable) ?? "",
-                DeviceName = Or(spotifyCfg.GetString(SpotifyContentSourceFactory.KeyDeviceName),
-                                SpotifyContentSourceFactory.DefaultDeviceName),
-                CacheDirectory = Or(spotifyCfg.GetString(SpotifyContentSourceFactory.KeyCacheDir),
-                                    SpotifyContentSourceFactory.DefaultCacheDir),
-                Bitrate = spotifyCfg.GetString(SpotifyContentSourceFactory.KeyBitrate) ?? "auto",
-                EnableVolumeNormalisation = spotifyCfg.GetBool(SpotifyContentSourceFactory.KeyNormalise, true),
-            });
+                _store.Load(spotifyFactory.Id, spotifyFactory.Schema)
+                    .GetString(SpotifyContentSourceFactory.KeyClientId) ?? "");
+            _spotifyPlayback = new SpotifyPlaybackService(
+                _spotifyConnection, () => LoadLibrespotOptions(_store!, spotifyFactory));
             SpotifyRuntime.Initialize(_spotifyConnection, _spotifyPlayback);
 
             // The driven service and the zero-config "Spotify Connect" receiver both
@@ -227,6 +221,23 @@ public partial class App : Application
 
     private static string Or(string? value, string fallback) =>
         string.IsNullOrWhiteSpace(value) ? fallback : value;
+
+    // Read the driven Spotify source's librespot options fresh from the persisted
+    // config (called on every librespot launch). Falls back to a live exe discovery
+    // when the stored path is empty — e.g. librespot was installed via the Tools tab
+    // after the schema default was first captured.
+    private static LibrespotOptions LoadLibrespotOptions(SourceConfigStore store, SpotifyContentSourceFactory factory)
+    {
+        var cfg = store.Load(factory.Id, factory.Schema);
+        return new LibrespotOptions
+        {
+            ExecutablePath = Or(cfg.GetString(SpotifyContentSourceFactory.KeyExecutable), Librespot.DiscoverExe() ?? ""),
+            DeviceName = Or(cfg.GetString(SpotifyContentSourceFactory.KeyDeviceName), Librespot.DefaultDeviceName),
+            CacheDirectory = Or(cfg.GetString(SpotifyContentSourceFactory.KeyCacheDir), Librespot.DefaultCacheDir),
+            Bitrate = cfg.GetString(SpotifyContentSourceFactory.KeyBitrate) ?? "auto",
+            EnableVolumeNormalisation = cfg.GetBool(SpotifyContentSourceFactory.KeyNormalise, true),
+        };
+    }
 
     private static async void CheckAppUpdateAsync(MainWindowViewModel vm)
     {

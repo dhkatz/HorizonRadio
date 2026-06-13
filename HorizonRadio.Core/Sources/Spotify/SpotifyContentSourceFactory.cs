@@ -31,8 +31,6 @@ public sealed class SpotifyContentSourceFactory : IContentSourceFactory, IAuthen
     public const string KeyBitrate = "bitrate";
     public const string KeyNormalise = "normalise";
 
-    public const string DefaultDeviceName = "Horizon Radio";
-
     private static readonly string[] BitrateOptions = ["auto", "96", "160", "320"];
 
     public string Id => SourceId;
@@ -49,8 +47,8 @@ public sealed class SpotifyContentSourceFactory : IContentSourceFactory, IAuthen
 
     public SpotifyContentSourceFactory()
     {
-        var defaultExe = DiscoverLibrespotExe() ?? "";
-        var defaultCache = DefaultCacheDir;
+        var defaultExe = Librespot.DiscoverExe() ?? "";
+        var defaultCache = Librespot.DefaultCacheDir;
 
         Schema =
         [
@@ -78,8 +76,8 @@ public sealed class SpotifyContentSourceFactory : IContentSourceFactory, IAuthen
             new TextField(
                 Key:         KeyDeviceName,
                 Label:       "Device name",
-                Default:     DefaultDeviceName,
-                Placeholder: DefaultDeviceName,
+                Default:     Librespot.DefaultDeviceName,
+                Placeholder: Librespot.DefaultDeviceName,
                 Description: "The Connect device librespot registers. The first time, cast to it " +
                              "once from your Spotify app to log it in."),
 
@@ -151,27 +149,4 @@ public sealed class SpotifyContentSourceFactory : IContentSourceFactory, IAuthen
     }
 
     public void Disconnect() => SpotifyRuntime.Connection?.Logout();
-
-    /// <summary>Default librespot cache dir, shared with the app's playback-service build.</summary>
-    public static string DefaultCacheDir => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "HorizonRadio", "librespot");
-
-    private static string? DiscoverLibrespotExe()
-    {
-        var here = AppContext.BaseDirectory;
-        var candidates = new[]
-        {
-            Path.Combine(here, "librespot.exe"),
-            ToolsPaths.ExeFor(ToolKind.Librespot),
-            Path.Combine(here, "..", "..", "..", "..", "build", "Librespot", "bin", "librespot.exe"),
-            Path.Combine(here, "..", "..", "..", "..", "..", "build", "Librespot", "bin", "librespot.exe"),
-        };
-        foreach (var c in candidates)
-        {
-            var resolved = Path.GetFullPath(c);
-            if (File.Exists(resolved)) return resolved;
-        }
-        return null;
-    }
 }

@@ -67,14 +67,14 @@ public sealed class SpotifyPlayableItem : PlayableItem
     private async Task EnsureArtAsync(CancellationToken ct)
     {
         if (_artFetched) return;
-        _artFetched = true;
-        if (string.IsNullOrEmpty(_info.ArtUrl)) return;
+        if (string.IsNullOrEmpty(_info.ArtUrl)) { _artFetched = true; return; }
         try
         {
             _art = await Http.GetByteArrayAsync(_info.ArtUrl, ct).ConfigureAwait(false);
             Metadata = BuildTrack(_art);
+            _artFetched = true; // mark fetched only on success, so a transient failure retries later
         }
-        catch (OperationCanceledException) { _artFetched = false; throw; }
+        catch (OperationCanceledException) { throw; }
         catch (Exception ex) { Log($"art fetch failed: {ex.Message}"); }
     }
 
