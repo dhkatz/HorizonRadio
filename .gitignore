@@ -49,3 +49,6 @@ desktop.ini
 
 # Stray tool config written to a literal ~ instead of $HOME
 /~/
+
+# Throwaway local probes/harnesses (not part of the build or CI)
+spikes/

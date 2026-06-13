@@ -49,6 +49,28 @@
                                FontSize="11" Opacity="0.5" FontStyle="Italic"
                                IsVisible="{Binding HasNoSchema}"/>
 
+                    <StackPanel Spacing="6" IsVisible="{Binding IsAuthenticatingSource}">
+                        <Separator Margin="0,6"/>
+                        <TextBlock Text="Account" FontSize="12" FontWeight="Medium" Opacity="0.7"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Classes="Primary"
+                                    Content="Connect"
+                                    Command="{Binding ConnectCommand}"
+                                    IsVisible="{Binding !IsConnected}"/>
+                            <Button Classes="Secondary"
+                                    Content="Reconnect"
+                                    Command="{Binding ConnectCommand}"
+                                    IsVisible="{Binding IsConnected}"/>
+                            <Button Classes="Secondary"
+                                    Content="Disconnect"
+                                    Command="{Binding DisconnectCommand}"
+                                    IsVisible="{Binding IsConnected}"/>
+                        </StackPanel>
+                        <TextBlock Text="{Binding ConnectionStatus}"
+                                   FontSize="11" Opacity="0.6" TextWrapping="Wrap"
+                                   IsVisible="{Binding ConnectionStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                    </StackPanel>
+
                     <StackPanel Spacing="4" IsVisible="{Binding IsContentSource}">
                         <Separator Margin="0,6"/>
                         <TextBlock Text="Quick Play" FontSize="12" FontWeight="Medium" Opacity="0.7"/>

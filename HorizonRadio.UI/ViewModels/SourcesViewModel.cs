@@ -37,6 +37,16 @@ public sealed partial class SourcesViewModel : ViewModelBase
     /// <summary>Whether the selected source can be started/played from here.</summary>
     public bool CanStartSelected => SelectedFactory is not null;
 
+    /// <summary>True when the selected source needs an account — surfaces the generic
+    /// Connect / Disconnect panel (any <see cref="IAuthenticatingSource"/>).</summary>
+    public bool IsAuthenticatingSource => SelectedFactory is IAuthenticatingSource;
+
+    /// <summary>Whether the selected authenticating source's account is connected.</summary>
+    [ObservableProperty] private bool isConnected;
+
+    /// <summary>Status line for the connect panel (redirect URI, errors, etc.).</summary>
+    [ObservableProperty] private string connectionStatus = "";
+
     /// <summary>Ad-hoc "play this now" target for a content source — a URL, folder,
     /// M3U, or file. Transient: it's passed to the source for this play but not
     /// saved as config (saved collections are mixes).</summary>
@@ -87,6 +97,8 @@ public sealed partial class SourcesViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanStartSelected));
         OnPropertyChanged(nameof(QuickPlayHint));
         OnPropertyChanged(nameof(StartLabel));
+        OnPropertyChanged(nameof(IsAuthenticatingSource));
+        RefreshConnection();
         _store.LastSelectedId = value?.Id;
         _store.SaveToDisk();
     }
@@ -161,5 +173,56 @@ public sealed partial class SourcesViewModel : ViewModelBase
         catch (Exception ex) { Debug.WriteLine($"[hzn-sources-vm] stop: {ex}"); }
         StatusMessage = "Stopped";
         HasError = false;
+    }
+
+    // -- Account connect (any IAuthenticatingSource — Spotify today, others later) --
+
+    private void RefreshConnection()
+    {
+        if (SelectedFactory is IAuthenticatingSource auth)
+        {
+            IsConnected = auth.IsConnected;
+            ConnectionStatus = auth.StatusText;
+        }
+        else
+        {
+            IsConnected = false;
+            ConnectionStatus = "";
+        }
+    }
+
+    [RelayCommand]
+    private async Task ConnectAsync()
+    {
+        if (SelectedFactory is not IAuthenticatingSource auth) return;
+
+        // Persist the form first so any just-typed config (e.g. a Client ID) is
+        // captured before the connect flow reads it.
+        var factory = SelectedFactory;
+        var values = SnapshotAndPersist();
+        ConnectionStatus = "Opening browser…";
+        try
+        {
+            await auth.ConnectAsync(values);
+            // The browser handshake can take many seconds; only touch the panel if the
+            // user hasn't switched to a different source in the meantime.
+            if (ReferenceEquals(SelectedFactory, factory)) RefreshConnection();
+        }
+        catch (Exception ex)
+        {
+            if (ReferenceEquals(SelectedFactory, factory))
+            {
+                IsConnected = false;
+                ConnectionStatus = $"Connect failed: {ex.Message}";
+            }
+            Debug.WriteLine($"[hzn-sources-vm] connect: {ex}");
+        }
+    }
+
+    [RelayCommand]
+    private void Disconnect()
+    {
+        (SelectedFactory as IAuthenticatingSource)?.Disconnect();
+        RefreshConnection();
     }
 }

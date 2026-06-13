@@ -30,7 +30,7 @@ namespace HorizonRadio.Core.Sources.Spotify;
 /// and we don't ship a Spotify Web API client. Users pause/skip from
 /// their Spotify app.
 /// </summary>
-public sealed class SpotifySource(SpotifyOptions options) : IAudioSource, IPlaybackProgress
+public sealed class SpotifySource(LibrespotOptions options) : IAudioSource, IPlaybackProgress
 {
     public string Id => "spotify";
     public string DisplayName => "Spotify Connect";
@@ -79,7 +79,7 @@ public sealed class SpotifySource(SpotifyOptions options) : IAudioSource, IPlayb
 
         Directory.CreateDirectory(options.CacheDirectory);
 
-        var args = BuildArgs(options);
+        var args = Librespot.BuildArgs(options, autoplay: true);
         _subprocess = new SubprocessPcmSource(new SubprocessPcmSource.Config
         {
             ExecutablePath = options.ExecutablePath,
@@ -297,62 +297,4 @@ public sealed class SpotifySource(SpotifyOptions options) : IAudioSource, IPlayb
         int colon = s.LastIndexOf(':');
         return colon >= 0 ? s[(colon + 1)..] : s;
     }
-
-    private static string[] BuildArgs(SpotifyOptions o)
-    {
-        // Pinned defaults mirror the C++ build:
-        //   --backend pipe         write s16 PCM to stdout
-        //   --format S16           explicit format (defensive)
-        //   --volume-ctrl fixed    we control volume via FMOD/game,
-        //                          not via Spotify Connect's slider
-        //   --enable-volume-norm.  even per-track loudness so the AGC
-        //                          doesn't pump between hot/quiet songs
-        //
-        // Bitrate is set only if the user picked a non-Auto value;
-        // omitting it lets librespot pick the highest the account is
-        // licensed for (96/160/320) without surprising free-tier users
-        // by forcing 320 and triggering skip-on-play.
-        var list = new List<string>
-        {
-            "--name",                          o.DeviceName,
-            "--backend",                       "pipe",
-            "--format",                        "S16",
-            "--cache",                         o.CacheDirectory,
-            "--volume-ctrl",                   "fixed",
-
-            // Force autoplay on. Without this librespot follows the Spotify
-            // account's autoplay toggle, so when the user's queue/playlist
-            // ends it stops and won't resume on its own — surprising for a
-            // background "radio". On = keep playing related tracks instead.
-            // (Note: this can't help the OTHER stop cause, a Connect session
-            // drop, which only the Spotify app/protocol can resume.)
-            "--autoplay",                      "on",
-
-            // Player-event hook used to time the in-game title to actual
-            // playback (see class docs). librespot splits this string on
-            // whitespace and spawns it per event with PLAYER_EVENT/TRACK_ID
-            // (etc.) in the environment, inheriting its own stdio — so the
-            // echo lands in librespot's stderr, which we already drain. The
-            // "1>&2" keeps it off stdout (that's the PCM pipe). We only key
-            // off PLAYER_EVENT + TRACK_ID, both cmd-safe, so there's no
-            // quoting hazard from track titles.
-            "--onevent",                       "cmd /c echo HZNEV %PLAYER_EVENT% %TRACK_ID% %POSITION_MS% %DURATION_MS% 1>&2",
-        };
-        if (o.EnableVolumeNormalisation) list.Add("--enable-volume-normalisation");
-        if (!string.IsNullOrEmpty(o.Bitrate) && o.Bitrate != "auto")
-        {
-            list.Add("--bitrate");
-            list.Add(o.Bitrate);
-        }
-        return list.ToArray();
-    }
-}
-
-public sealed class SpotifyOptions
-{
-    public required string ExecutablePath { get; init; }
-    public required string DeviceName { get; init; }
-    public required string CacheDirectory { get; init; }
-    public string Bitrate { get; init; } = "auto"; // 96|160|320|auto
-    public bool EnableVolumeNormalisation { get; init; } = true;
 }

@@ -12,8 +12,9 @@
     <PackageReference Include="SDL3-CS" Version="3.4.2" />
     <PackageReference Include="SDL3-CS.Native" Version="3.4.2" />
     <PackageReference Include="SharpHook" Version="7.1.2" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.9" />
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
-    <PackageReference Include="SpotifyAPI.Web" Version="7.2.1" />
+    <PackageReference Include="SpotifyAPI.Web" Version="7.4.2" />
   </ItemGroup>
 
 </Project>

@@ -21,7 +21,11 @@ public static class SourceCatalog
     public static IReadOnlyList<IAudioSourceFactory> All { get; } =
     [
         new LocalFileSourceFactory(),
+        // Two Spotify entries, by design: the zero-setup Connect receiver (cast from
+        // your phone, no developer app) and the driven, mixable source (links, queue,
+        // mixes; needs your own Client ID). See SpotifyContentSourceFactory.SourceId.
         new SpotifySourceFactory(),
+        new SpotifyContentSourceFactory(),
         new YouTubeSourceFactory(),
         new TestToneSourceFactory()
     ];

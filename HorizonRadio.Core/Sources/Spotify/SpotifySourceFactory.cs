@@ -26,10 +26,8 @@ public sealed class SpotifySourceFactory : IAudioSourceFactory
 
     public SpotifySourceFactory()
     {
-        var defaultExe = DiscoverLibrespotExe() ?? "";
-        var defaultCache = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "HorizonRadio", "librespot");
+        var defaultExe = Librespot.DiscoverExe() ?? "";
+        var defaultCache = Librespot.DefaultCacheDir;
 
         Schema = new ConfigField[]
         {
@@ -83,18 +81,15 @@ public sealed class SpotifySourceFactory : IAudioSourceFactory
             throw new InvalidOperationException("Spotify: pick a librespot.exe path.");
 
         var device = values.GetString(KeyDeviceName);
-        if (string.IsNullOrWhiteSpace(device)) device = "Horizon Radio";
+        if (string.IsNullOrWhiteSpace(device)) device = Librespot.DefaultDeviceName;
 
         var cache = values.GetString(KeyCacheDir);
-        if (string.IsNullOrWhiteSpace(cache))
-            cache = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "HorizonRadio", "librespot");
+        if (string.IsNullOrWhiteSpace(cache)) cache = Librespot.DefaultCacheDir;
 
         var bitrate = values.GetString(KeyBitrate) ?? "auto";
         var norm = values.GetBool(KeyNormalise, true);
 
-        return new SpotifySource(new SpotifyOptions
+        return new SpotifySource(new LibrespotOptions
         {
             ExecutablePath = exe,
             DeviceName = device!,
@@ -102,26 +97,5 @@ public sealed class SpotifySourceFactory : IAudioSourceFactory
             Bitrate = bitrate,
             EnableVolumeNormalisation = norm,
         });
-    }
-
-    private static string? DiscoverLibrespotExe()
-    {
-        var here = AppContext.BaseDirectory;
-        var candidates = new[]
-        {
-            Path.Combine(here, "librespot.exe"),
-            // Where the UI's LibrespotInstaller drops the pinned blobstore
-            // build. ToolsPaths lives in Core so both sides share one
-            // definition instead of mirroring the path string.
-            ToolsPaths.ExeFor(ToolKind.Librespot),
-            Path.Combine(here, "..", "..", "..", "..", "build", "Librespot", "bin", "librespot.exe"),
-            Path.Combine(here, "..", "..", "..", "..", "..", "build", "Librespot", "bin", "librespot.exe"),
-        };
-        foreach (var c in candidates)
-        {
-            var resolved = Path.GetFullPath(c);
-            if (File.Exists(resolved)) return resolved;
-        }
-        return null;
     }
 }
