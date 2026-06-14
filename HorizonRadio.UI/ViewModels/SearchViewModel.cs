@@ -17,9 +17,9 @@ namespace HorizonRadio.UI.ViewModels;
 /// </summary>
 public sealed partial class SearchViewModel : ViewModelBase
 {
-    // Fallback only (the page normally reuses the bar's results via Show). Kept under
-    // the Development-Mode search cap of 10 — see SpotifySearch's clamp.
-    private const int PageLimit = 10;
+    // Fallback only (the page normally reuses the bar's results via Show). The count
+    // we'd LIKE — each source clamps to its own ceiling (see SpotifySearch).
+    private const int PageLimit = 30;
 
     private readonly SearchEnqueuer? _enqueuer;
     private CancellationTokenSource? _searchCts;
@@ -39,6 +39,10 @@ public sealed partial class SearchViewModel : ViewModelBase
     /// from <see cref="HasNoResults"/> so a transient failure never reads as "no
     /// results" (which would falsely imply the query matched nothing).</summary>
     [ObservableProperty] private bool hasError;
+
+    /// <summary>True when the empty result is because no search source is connected,
+    /// not because the query matched nothing — drives a "connect a source" hint.</summary>
+    [ObservableProperty] private bool needsConnection;
 
     public bool HasResults => Results.Count > 0;
 
@@ -65,6 +69,7 @@ public sealed partial class SearchViewModel : ViewModelBase
         IsSearching = false;
         HasNoResults = false;
         HasError = false;
+        NeedsConnection = false;
         Results.Clear();
 
         foreach (var r in results)
@@ -92,6 +97,7 @@ public sealed partial class SearchViewModel : ViewModelBase
         IsSearching = true;
         HasNoResults = false;
         HasError = false;
+        NeedsConnection = false;
         Results.Clear();
         OnPropertyChanged(nameof(HasResults));
 
@@ -117,7 +123,9 @@ public sealed partial class SearchViewModel : ViewModelBase
         }
 
         IsSearching = false;
-        HasNoResults = results.Count == 0;
+        // Distinguish "nothing matched" from "no source connected" for the empty state.
+        NeedsConnection = results.Count == 0 && !UnifiedSearch.HasReadySource;
+        HasNoResults = results.Count == 0 && !NeedsConnection;
         OnPropertyChanged(nameof(HasResults));
     }
 
@@ -127,6 +135,7 @@ public sealed partial class SearchViewModel : ViewModelBase
         IsSearching = false;
         HasNoResults = false;
         HasError = false;
+        NeedsConnection = false;
         OnPropertyChanged(nameof(HasResults));
     }
 }

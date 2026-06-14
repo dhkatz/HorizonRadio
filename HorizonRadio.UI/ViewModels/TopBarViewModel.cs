@@ -22,8 +22,9 @@ public sealed partial class TopBarViewModel : ViewModelBase
 {
     // One search fetches a page's worth; the dropdown shows the first few as a peek and
     // the full page reuses the SAME results (so the two surfaces can never disagree).
-    // 10 is the Development-Mode search cap (see SpotifySearch).
-    private const int SearchLimit = 10;
+    // This is the count we'd LIKE — each source clamps to its own ceiling (e.g. Spotify
+    // Dev Mode caps at 10), so we don't bake a per-source limit into the UI here.
+    private const int SearchLimit = 30;
     private const int DropdownRows = 6;
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(250);
 
@@ -31,8 +32,10 @@ public sealed partial class TopBarViewModel : ViewModelBase
     private readonly Action<string, IReadOnlyList<SearchResult>>? _onSubmit;
     private CancellationTokenSource? _searchCts;
 
-    // The raw results of the last completed search, handed to the full page on submit.
+    // The raw results of the last completed search, plus the query they're for — so
+    // Submit only reuses them when they actually match the query being submitted.
     private IReadOnlyList<SearchResult> _lastResults = [];
+    private string _lastResultsQuery = "";
 
     /// <summary>The handful of live results under the box.</summary>
     public ObservableCollection<SearchResultRowViewModel> LiveResults { get; } = new();
@@ -48,6 +51,11 @@ public sealed partial class TopBarViewModel : ViewModelBase
     /// <summary>True once a search has run and returned nothing — drives the dropdown's
     /// "no results" line (distinct from the not-yet-searched empty state).</summary>
     [ObservableProperty] private bool hasNoResults;
+
+    /// <summary>True when an empty result is because no search source is connected, not
+    /// because the query matched nothing — drives a "connect a source" hint instead of
+    /// a misleading "no results".</summary>
+    [ObservableProperty] private bool needsConnection;
 
     public TopBarViewModel(SearchEnqueuer enqueuer, Action<string, IReadOnlyList<SearchResult>> onSubmit)
     {
@@ -89,6 +97,7 @@ public sealed partial class TopBarViewModel : ViewModelBase
         if (ct.IsCancellationRequested) return;
 
         _lastResults = results;
+        _lastResultsQuery = query;
 
         LiveResults.Clear();
         foreach (var r in results.Take(DropdownRows))
@@ -99,7 +108,10 @@ public sealed partial class TopBarViewModel : ViewModelBase
         }
 
         IsSearching = false;
-        HasNoResults = results.Count == 0;
+        // Empty because nothing matched vs. because no source is connected — show the
+        // right hint for each.
+        NeedsConnection = results.Count == 0 && !UnifiedSearch.HasReadySource;
+        HasNoResults = results.Count == 0 && !NeedsConnection;
     }
 
     /// <summary>Open the full search page for the current query (Enter / search button).
@@ -110,10 +122,13 @@ public sealed partial class TopBarViewModel : ViewModelBase
         var q = Query?.Trim();
         if (string.IsNullOrEmpty(q)) return;
         // Cancel any in-flight dropdown search and hand the page the results we already
-        // have — the page reuses them instead of issuing its own (duplicate, possibly
-        // failing) search, so the two surfaces always agree.
+        // have — but ONLY if they're for this exact query. If the user edited the query
+        // and hit Enter before the new search landed, our cached results are stale, so
+        // pass none and let the page run a fresh search for the submitted query.
         _searchCts?.Cancel();
-        var results = _lastResults;
+        var results = string.Equals(_lastResultsQuery.Trim(), q, StringComparison.Ordinal)
+            ? _lastResults
+            : [];
         CloseDropdown();
         _onSubmit?.Invoke(q, results);
     }
@@ -131,6 +146,7 @@ public sealed partial class TopBarViewModel : ViewModelBase
         IsDropdownOpen = false;
         IsSearching = false;
         HasNoResults = false;
+        NeedsConnection = false;
         LiveResults.Clear();
     }
 }

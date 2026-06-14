@@ -47,8 +47,10 @@ public sealed partial class SearchResultRowViewModel : ViewModelBase
     {
         if (_result.ArtUrl is null) return;
         var bmp = await RemoteArt.LoadAsync(_result.ArtUrl, ct).ConfigureAwait(false);
-        if (bmp != null)
-            await Dispatcher.UIThread.InvokeAsync(() => Art = bmp);
+        // Bail if a newer search superseded this one while we were fetching/decoding —
+        // otherwise we'd marshal a decode onto a row already cleared from the list.
+        if (bmp is null || ct.IsCancellationRequested) return;
+        await Dispatcher.UIThread.InvokeAsync(() => Art = bmp);
     }
 
     partial void OnArtChanged(Bitmap? value) => OnPropertyChanged(nameof(HasArt));

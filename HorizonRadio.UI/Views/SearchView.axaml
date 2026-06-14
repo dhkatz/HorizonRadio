@@ -47,6 +47,9 @@
         <TextBlock DockPanel.Dock="Top" Text="Search failed. Check your connection and try again."
                    FontSize="13" Opacity="0.7" Foreground="#f59e0b"
                    IsVisible="{Binding HasError}"/>
+        <TextBlock DockPanel.Dock="Top" Text="Connect a music source (e.g. Spotify) in Sources to search."
+                   FontSize="13" Opacity="0.55"
+                   IsVisible="{Binding NeedsConnection}"/>
 
         <ScrollViewer IsVisible="{Binding HasResults}">
             <ItemsControl ItemsSource="{Binding Results}">

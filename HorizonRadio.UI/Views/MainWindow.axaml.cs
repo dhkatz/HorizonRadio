@@ -27,7 +27,15 @@ public partial class MainWindow : ShadUI.Window
     {
         base.OnApplyTemplate(e);
 
-        if (e.NameScope.Find("AppTitlePanel") is not Control { Parent: Panel titleBar }) return;
+        if (e.NameScope.Find("AppTitlePanel") is not Control { Parent: Panel titleBar })
+        {
+            // The search box lives in this ShadUI title-bar part. If a ShadUI update
+            // renames/re-parents it, fail loudly here — search has no nav entry, so a
+            // silent miss would make it unreachable with no other signal.
+            Core.Diagnostics.ProcessConsole.Append("ui",
+                "Search not injected: ShadUI title-bar part 'AppTitlePanel' (Panel parent) not found.");
+            return;
+        }
         if (titleBar.Children.Any(c => c is TopBarView)) return; // already injected
 
         var search = new TopBarView

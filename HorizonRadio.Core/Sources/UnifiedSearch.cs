@@ -16,6 +16,15 @@ public static class UnifiedSearch
     /// search box inert (or hinting) when nothing is wired up yet.</summary>
     public static bool HasSearchableSource => SourceCatalog.All.OfType<ISearchSource>().Any();
 
+    /// <summary>True when at least one search source is actually usable right now: it
+    /// either needs no account, or its account is connected. Lets the UI tell "nothing
+    /// matched" apart from "you're not connected" — an unconnected source returns an
+    /// empty list (by the <see cref="ISearchSource"/> contract), which would otherwise
+    /// read as a false "no results".</summary>
+    public static bool HasReadySource =>
+        SourceCatalog.All.OfType<ISearchSource>()
+            .Any(s => s is not IAuthenticatingSource auth || auth.IsConnected);
+
     public static async Task<IReadOnlyList<SearchResult>> SearchAsync(
         string query, int limit, CancellationToken ct = default)
     {

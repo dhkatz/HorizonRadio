@@ -76,6 +76,9 @@
                                        IsVisible="{Binding IsSearching}"/>
                             <TextBlock Text="No results found." FontSize="12" Opacity="0.55" Margin="10,8"
                                        IsVisible="{Binding HasNoResults}"/>
+                            <TextBlock Text="Connect a music source in Sources to search." FontSize="12"
+                                       Opacity="0.55" Margin="10,8" TextWrapping="Wrap"
+                                       IsVisible="{Binding NeedsConnection}"/>
 
                             <ItemsControl ItemsSource="{Binding LiveResults}"
                                           IsVisible="{Binding !IsSearching}">
