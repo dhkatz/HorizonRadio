@@ -50,8 +50,11 @@ public sealed class QueuePlayback : IDisposable
 
     /// <summary>Resolve a one-off locator and append it to the explicit queue,
     /// starting the engine if it isn't already playing. Mirrors the old quick-play
-    /// pre-flight (tool check) so a missing tool still surfaces a friendly error.</summary>
-    public async Task EnqueueLocatorAsync(IAudioSourceFactory factory, string locator, CancellationToken ct = default)
+    /// pre-flight (tool check) so a missing tool still surfaces a friendly error.
+    /// When <paramref name="playNow"/> is set, jumps to the first resolved item so it
+    /// starts immediately (the search "Play" action), dropping anything queued ahead
+    /// of it exactly like the per-row play-now.</summary>
+    public async Task EnqueueLocatorAsync(IAudioSourceFactory factory, string locator, bool playNow = false, CancellationToken ct = default)
     {
         if (factory is not IContentSourceFactory)
             throw new InvalidOperationException($"{factory.DisplayName} can't be added to the queue.");
@@ -68,7 +71,9 @@ public sealed class QueuePlayback : IDisposable
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            Model.AppendExplicit(items);
+            var addedIds = Model.AppendExplicit(items);
+            if (playNow && addedIds.Count > 0)
+                Model.JumpToExplicit(addedIds[0]);
             await EnsureActiveAsync().ConfigureAwait(false);
         }
         finally { _gate.Release(); }

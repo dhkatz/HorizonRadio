@@ -68,7 +68,9 @@
     </shadui:Window.RightWindowTitleBarContent>
 
     <Panel>
-    <!-- Row 0: sidebar + workspace content. Row 1: persistent player bar. -->
+    <!-- Row 0: sidebar + workspace content. Row 1: persistent player bar.
+         The unified search box lives in the window title bar (injected into ShadUI's
+         title-bar centre slot — see MainWindow.OnApplyTemplate), Spotify-style. -->
     <Grid RowDefinitions="*,Auto">
     <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto">
 
@@ -503,6 +505,9 @@
             </Grid>
             <Grid IsVisible="{Binding IsAboutWorkspace}">
                 <views:AboutView DataContext="{Binding About}"/>
+            </Grid>
+            <Grid IsVisible="{Binding IsSearchWorkspace}">
+                <views:SearchView DataContext="{Binding Search}"/>
             </Grid>
             </Panel>
         </Grid>

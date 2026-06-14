@@ -7,6 +7,7 @@ using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Core.Sources.Queue;
+using HorizonRadio.UI.Services;
 using HorizonRadio.UI.Tools;
 using ShadUI;
 
@@ -39,6 +40,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// <see cref="IsQueueVisible"/> is set.</summary>
     public QueueViewModel Queue { get; }
 
+    /// <summary>The full-width top bar (unified search box, today). Persistent across
+    /// every workspace, like the player bar.</summary>
+    public TopBarViewModel TopBar { get; }
+
+    /// <summary>The full search page — a workspace with no nav item, reached by
+    /// submitting a query from <see cref="TopBar"/>.</summary>
+    public SearchViewModel Search { get; }
+
     /// <summary>Toast host bound in <c>MainWindow.axaml</c>; view models raise
     /// transient notifications through it (e.g. output-unavailable errors).</summary>
     public ToastManager ToastManager { get; }
@@ -62,6 +71,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Controls = new ControlsViewModel();
         Mixes = new MixesViewModel();
         Queue = new QueueViewModel();
+        TopBar = new TopBarViewModel();
+        Search = new SearchViewModel();
         HookModBanner();
     }
 
@@ -93,7 +104,23 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Controls = controls;
         Mixes = new MixesViewModel(mixStore, mixSwitcher, DialogManager, contentResolver);
         Queue = new QueueViewModel(queue, DialogManager, metaResolver);
+
+        // Unified search: both the top-bar dropdown and the search page enqueue through
+        // the shared SearchEnqueuer; submitting from the bar opens the page (index 11).
+        var searchEnqueuer = new SearchEnqueuer(queue, toasts);
+        Search = new SearchViewModel(searchEnqueuer);
+        TopBar = new TopBarViewModel(searchEnqueuer, ShowSearch);
+
         HookModBanner();
+    }
+
+    /// <summary>Open the full search page for a query (from the top bar's submit),
+    /// reusing the results the bar already fetched. The page has no nav item, so this is
+    /// the only way in.</summary>
+    public void ShowSearch(string query, System.Collections.Generic.IReadOnlyList<HorizonRadio.Core.Sources.SearchResult> results)
+    {
+        Search.Show(query, results);
+        SelectedWorkspaceIndex = 11;
     }
 
     private void HookModBanner()
@@ -126,7 +153,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _ => "",
     };
 
-    // 0 = Now Playing, 1 = Sources, 2 = Metadata, 3 = Stats, 4 = Mod Manager, 5 = Tools, 6 = Events, 7 = Console, 8 = Controls, 9 = Profiles, 10 = About
+    // 0 = Now Playing, 1 = Sources, 2 = Metadata, 3 = Stats, 4 = Mod Manager, 5 = Tools, 6 = Events, 7 = Console, 8 = Controls, 9 = Mixes, 10 = About, 11 = Search
     [ObservableProperty] private int selectedWorkspaceIndex;
 
     public bool IsNowPlayingWorkspace => SelectedWorkspaceIndex == 0;
@@ -140,6 +167,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public bool IsControlsWorkspace => SelectedWorkspaceIndex == 8;
     public bool IsMixesWorkspace => SelectedWorkspaceIndex == 9;
     public bool IsAboutWorkspace => SelectedWorkspaceIndex == 10;
+    public bool IsSearchWorkspace => SelectedWorkspaceIndex == 11;
 
     public string CurrentRoute => SelectedWorkspaceIndex switch
     {
@@ -153,6 +181,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         8 => "controls",
         9 => "mixes",
         10 => "about",
+        11 => "search", // no SidebarItem matches → nav shows nothing selected (intended)
         _ => "now-playing",
     };
 
@@ -179,6 +208,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsControlsWorkspace));
         OnPropertyChanged(nameof(IsMixesWorkspace));
         OnPropertyChanged(nameof(IsAboutWorkspace));
+        OnPropertyChanged(nameof(IsSearchWorkspace));
         OnPropertyChanged(nameof(CurrentRoute));
     }
 

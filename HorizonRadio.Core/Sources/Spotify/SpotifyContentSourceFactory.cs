@@ -16,7 +16,7 @@ namespace HorizonRadio.Core.Sources.Spotify;
 /// link. Bring-your-own Client ID only — there is no bundled default (Spotify's
 /// 2026 Development-Mode rules make a shared app unviable).
 /// </summary>
-public sealed class SpotifyContentSourceFactory : IContentSourceFactory, IAuthenticatingSource
+public sealed class SpotifyContentSourceFactory : IContentSourceFactory, IAuthenticatingSource, ISearchSource
 {
     /// <summary>Catalog id for the driven, mixable Spotify source — distinct from the
     /// zero-config <see cref="SpotifySourceFactory"/> receiver (id "spotify"), which
@@ -149,4 +149,17 @@ public sealed class SpotifyContentSourceFactory : IContentSourceFactory, IAuthen
     }
 
     public void Disconnect() => SpotifyRuntime.Connection?.Logout();
+
+    // -- ISearchSource (free-text Web API search → spotify:track:… locators) --
+
+    public Task<IReadOnlyList<SearchResult>> SearchAsync(string query, int limit, CancellationToken ct = default)
+    {
+        var conn = SpotifyRuntime.Connection;
+        // Not initialised / not connected / empty query → no results (never throw, so a
+        // disconnected Spotify can't break a search that spans other sources later).
+        if (conn is null || !conn.IsConnected || string.IsNullOrWhiteSpace(query))
+            return Task.FromResult<IReadOnlyList<SearchResult>>([]);
+
+        return SpotifySearch.SearchTracksAsync(conn, query.Trim(), limit, ct);
+    }
 }
