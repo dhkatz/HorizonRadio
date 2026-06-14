@@ -38,6 +38,44 @@
                        TextTrimming="CharacterEllipsis"/>
         </StackPanel>
 
+        <!-- Source filter chips (only when more than one source is searchable) -->
+        <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding Filters}"
+                      IsVisible="{Binding ShowFilters}" Margin="0,0,0,12">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="8"/>
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="{x:Type vm:SourceFilterChipViewModel}">
+                    <Button Command="{Binding ToggleCommand}" Classes="Outline"
+                            Padding="10,4" CornerRadius="14"
+                            Opacity="{Binding IsEnabled, Converter={x:Static vm:SearchConverters.EnabledOpacity}}"
+                            ToolTip.Tip="Toggle Source">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <material:MaterialIcon Kind="Check" Width="13" Height="13"
+                                                   IsVisible="{Binding IsEnabled}"/>
+                            <TextBlock Text="{Binding DisplayName}" FontSize="12"/>
+                        </StackPanel>
+                    </Button>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- Per-source problem notices (failed / not connected), beside any results -->
+        <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding SourceNotices}"
+                      IsVisible="{Binding HasSourceNotices}" Margin="0,0,0,12">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,2">
+                        <material:MaterialIcon Kind="AlertCircleOutline" Width="14" Height="14"
+                                               Foreground="#f59e0b" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding}" FontSize="12" Opacity="0.8" Foreground="#f59e0b"/>
+                    </StackPanel>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
         <!-- Searching / empty states -->
         <TextBlock DockPanel.Dock="Top" Text="Searching…" FontSize="13" Opacity="0.55"
                    IsVisible="{Binding IsSearching}"/>
@@ -50,13 +88,16 @@
         <TextBlock DockPanel.Dock="Top" Text="Connect a music source (e.g. Spotify) in Sources to search."
                    FontSize="13" Opacity="0.55"
                    IsVisible="{Binding NeedsConnection}"/>
+        <TextBlock DockPanel.Dock="Top" Text="No sources selected. Enable a source filter above to see results."
+                   FontSize="13" Opacity="0.55"
+                   IsVisible="{Binding NoSourcesSelected}"/>
 
         <ScrollViewer IsVisible="{Binding HasResults}">
             <ItemsControl ItemsSource="{Binding Results}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="{x:Type vm:SearchResultRowViewModel}">
                         <Border Classes="resultRow" Padding="8" CornerRadius="6" Margin="0,0,0,2">
-                            <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center"
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" VerticalAlignment="Center"
                                   Background="Transparent">
                                 <!-- Art over a placeholder tile -->
                                 <Border Grid.Column="0" Width="48" Height="48" CornerRadius="4"
@@ -76,7 +117,34 @@
                                                IsVisible="{Binding HasSubtitle}"
                                                TextTrimming="CharacterEllipsis"/>
                                 </StackPanel>
-                                <StackPanel Grid.Column="2" Classes="actions" Orientation="Horizontal" Spacing="2"
+
+                                <!-- Source area: a picker when the track came from >1 source,
+                                     else a single static label. Only shown once >1 source is
+                                     searchable (otherwise the row looks exactly as before). -->
+                                <Border Grid.Column="2" VerticalAlignment="Center" Margin="8,0,4,0"
+                                        IsVisible="{Binding ShowSourceLabels}">
+                                    <Panel>
+                                        <ComboBox ItemsSource="{Binding Sources}"
+                                                  SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
+                                                  IsVisible="{Binding HasMultipleSources}"
+                                                  FontSize="12" MinWidth="118"
+                                                  ToolTip.Tip="Choose Which Source Plays">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type vm:SourceOption}">
+                                                    <TextBlock Text="{Binding DisplayName}" FontSize="12"/>
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                        <Border IsVisible="{Binding !HasMultipleSources}"
+                                                Background="{DynamicResource SecondaryColor}"
+                                                CornerRadius="10" Padding="9,3" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding SelectedSourceName}"
+                                                       FontSize="11" Opacity="0.75"/>
+                                        </Border>
+                                    </Panel>
+                                </Border>
+
+                                <StackPanel Grid.Column="3" Classes="actions" Orientation="Horizontal" Spacing="2"
                                             VerticalAlignment="Center">
                                     <Button Classes="Ghost" Padding="6" Command="{Binding PlayCommand}"
                                             ToolTip.Tip="Play Now">

@@ -1,14 +1,37 @@
 namespace HorizonRadio.Core.Sources;
 
+/// <summary>One searchable source's identity, for filter chips and per-row labels.</summary>
+public sealed record SearchSourceInfo(string Id, string DisplayName);
+
+/// <summary>What one source returned for a query: its hits and, if it failed, the error.
+/// Lets the UI show "Spotify: error" beside another source's hits instead of a per-source
+/// failure masquerading as "no results" (or sinking results another source did return).
+/// <see cref="NotConnected"/> distinguishes a source that returned empty because its
+/// account isn't connected (the source swallows that to an empty list by contract) from
+/// one that genuinely matched nothing — so the UI can prompt to connect it.</summary>
+public sealed record SourceSearchOutcome(
+    string SourceId,
+    string DisplayName,
+    IReadOnlyList<SearchResult> Results,
+    Exception? Error,
+    bool NotConnected);
+
+/// <summary>Result of a unified search: the flattened hits in source order, plus the
+/// per-source breakdown so the UI can render partial failures and source labels.</summary>
+public sealed record UnifiedSearchResult(
+    IReadOnlyList<SearchResult> Results,
+    IReadOnlyList<SourceSearchOutcome> Outcomes);
+
 /// <summary>
 /// Fans a free-text query out across every catalog source that implements
-/// <see cref="ISearchSource"/> and merges the hits. One place so both search
-/// surfaces (the top-bar live dropdown and the full search page) query identically,
-/// differing only by the per-source <paramref name="limit"/> they ask for.
+/// <see cref="ISearchSource"/> and gathers the hits. One place so both search surfaces
+/// (the top-bar live dropdown and the full search page) query identically, differing only
+/// by the per-source limit they ask for.
 ///
-/// Per-source failures are swallowed to an empty list, so one unconfigured or flaky
-/// source can't sink a query that spans several. Today only Spotify implements the
-/// capability; YouTube/local generalize on the same seam with no change here.
+/// Per-source failures are captured (not thrown): a flaky or unconfigured source surfaces
+/// as a <see cref="SourceSearchOutcome"/> with an <see cref="SourceSearchOutcome.Error"/>,
+/// so it can't sink results another source returned, yet the failure is still visible.
+/// The aggregator itself only throws on cancellation.
 /// </summary>
 public static class UnifiedSearch
 {
@@ -18,43 +41,55 @@ public static class UnifiedSearch
 
     /// <summary>True when at least one search source is actually usable right now: it
     /// either needs no account, or its account is connected. Lets the UI tell "nothing
-    /// matched" apart from "you're not connected" — an unconnected source returns an
-    /// empty list (by the <see cref="ISearchSource"/> contract), which would otherwise
-    /// read as a false "no results".</summary>
+    /// matched" apart from "you're not connected".</summary>
     public static bool HasReadySource =>
         SourceCatalog.All.OfType<ISearchSource>()
             .Any(s => s is not IAuthenticatingSource auth || auth.IsConnected);
 
-    public static async Task<IReadOnlyList<SearchResult>> SearchAsync(
-        string query, int limit, CancellationToken ct = default)
+    // The factories that can be searched, in catalog order. One definition so the chips
+    // (built from SearchableSources) and the actual query (SearchAsync) can't disagree.
+    private static IEnumerable<IAudioSourceFactory> SearchableFactories =>
+        SourceCatalog.All.OfType<IAudioSourceFactory>().Where(f => f is ISearchSource);
+
+    /// <summary>The searchable sources, in catalog order — for filter chips and labels.</summary>
+    public static IReadOnlyList<SearchSourceInfo> SearchableSources =>
+        SearchableFactories.Select(f => new SearchSourceInfo(f.Id, f.DisplayName)).ToList();
+
+    /// <param name="includeSourceIds">When non-null, only these source ids are queried
+    /// (the filter chips). Null = all searchable sources.</param>
+    public static async Task<UnifiedSearchResult> SearchAsync(
+        string query, int limit, IReadOnlySet<string>? includeSourceIds = null, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(query)) return [];
+        if (string.IsNullOrWhiteSpace(query))
+            return new UnifiedSearchResult([], []);
 
-        var sources = SourceCatalog.All.OfType<ISearchSource>().ToList();
-        if (sources.Count == 0) return [];
+        var sources = SearchableFactories
+            .Where(f => includeSourceIds is null || includeSourceIds.Contains(f.Id))
+            .ToList();
+        if (sources.Count == 0) return new UnifiedSearchResult([], []);
 
-        var outcomes = await Task.WhenAll(sources.Select(async source =>
+        var outcomes = await Task.WhenAll(sources.Select(async factory =>
         {
-            try { return (results: await source.SearchAsync(query, limit, ct).ConfigureAwait(false), error: (Exception?)null); }
+            // An auth source that isn't connected returns [] by contract — flag it so the UI
+            // can say "connect Spotify" rather than reading the empty list as "no matches".
+            var notConnected = factory is IAuthenticatingSource auth && !auth.IsConnected;
+            try
+            {
+                var results = await ((ISearchSource)factory).SearchAsync(query, limit, ct).ConfigureAwait(false);
+                return new SourceSearchOutcome(factory.Id, factory.DisplayName, results, null, notConnected);
+            }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[hzn-search] {source.GetType().Name} failed: {ex.Message}");
-                Diagnostics.ProcessConsole.Append("search", $"{source.GetType().Name} error: {ex.Message}");
-                return (results: (IReadOnlyList<SearchResult>)[], error: ex);
+                System.Diagnostics.Debug.WriteLine($"[hzn-search] {factory.Id} failed: {ex.Message}");
+                Diagnostics.ProcessConsole.Append("search", $"{factory.DisplayName} error: {ex.Message}");
+                return new SourceSearchOutcome(factory.Id, factory.DisplayName, [], ex, notConnected);
             }
         })).ConfigureAwait(false);
 
-        // Flatten in source order. With one source today this is just its list; the
-        // merge/interleave policy across sources is a later concern.
-        var merged = outcomes.SelectMany(o => o.results).ToList();
-
-        // If we got nothing AND a source actually errored, surface the failure rather
-        // than letting it read as a (false) "no results" — the per-source swallow above
-        // exists only so one flaky source can't sink results another source did return.
-        if (merged.Count == 0 && outcomes.Select(o => o.error).FirstOrDefault(e => e is not null) is { } firstError)
-            throw firstError;
-
-        return merged;
+        // Flatten in source order; the merge/interleave policy lives in SearchMerge, applied
+        // by the UI so it can also label and pick per source.
+        var merged = outcomes.SelectMany(o => o.Results).ToList();
+        return new UnifiedSearchResult(merged, outcomes);
     }
 }

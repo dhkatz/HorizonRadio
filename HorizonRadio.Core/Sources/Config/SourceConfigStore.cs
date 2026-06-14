@@ -49,6 +49,12 @@ public sealed class SourceConfigStore
     /// <summary>Preview playback volume in [0, 1].</summary>
     public double PreviewVolume { get; set; } = 1.0;
 
+    /// <summary>Source ids in the user's preferred order for unified search — the default
+    /// "Play" on a merged result uses the highest-priority source it has (the per-result
+    /// picker overrides per row). Empty = fall back to catalog order. Persisted so the
+    /// choice survives restarts.</summary>
+    public List<string> SearchSourcePriority { get; set; } = new();
+
     private readonly Dictionary<string, Dictionary<string, object?>> _perSource = new();
 
     private static string DefaultPath =>
@@ -111,6 +117,13 @@ public sealed class SourceConfigStore
             if (root.TryGetProperty("previewVolume", out var pv) && pv.ValueKind == JsonValueKind.Number)
                 store.PreviewVolume = pv.GetDouble();
 
+            if (root.TryGetProperty("searchSourcePriority", out var sp) && sp.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var id in sp.EnumerateArray())
+                    if (id.ValueKind == JsonValueKind.String && id.GetString() is { } s)
+                        store.SearchSourcePriority.Add(s);
+            }
+
             if (root.TryGetProperty("perSource", out var per) && per.ValueKind == JsonValueKind.Object)
             {
                 foreach (var src in per.EnumerateObject())
@@ -147,6 +160,12 @@ public sealed class SourceConfigStore
             writer.WriteBoolean("previewEnabled", PreviewEnabled);
             if (PreviewDeviceId != null) writer.WriteString("previewDeviceId", PreviewDeviceId);
             writer.WriteNumber("previewVolume", PreviewVolume);
+            if (SearchSourcePriority.Count > 0)
+            {
+                writer.WriteStartArray("searchSourcePriority");
+                foreach (var id in SearchSourcePriority) writer.WriteStringValue(id);
+                writer.WriteEndArray();
+            }
             writer.WriteStartObject("perSource");
             foreach (var (sourceId, bag) in _perSource)
             {

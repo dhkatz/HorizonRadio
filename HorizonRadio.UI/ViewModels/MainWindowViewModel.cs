@@ -107,9 +107,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         // Unified search: both the top-bar dropdown and the search page enqueue through
         // the shared SearchEnqueuer; submitting from the bar opens the page (index 11).
+        // The shared context carries source names + the user's source priority so a merged
+        // result row can label its sources and default Play to the preferred one.
         var searchEnqueuer = new SearchEnqueuer(queue, toasts);
-        Search = new SearchViewModel(searchEnqueuer);
-        TopBar = new TopBarViewModel(searchEnqueuer, ShowSearch);
+        var searchContext = SearchSourceContext.Build(store);
+        Search = new SearchViewModel(searchEnqueuer, searchContext);
+        TopBar = new TopBarViewModel(searchEnqueuer, searchContext, ShowSearch);
 
         HookModBanner();
     }
@@ -117,9 +120,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// <summary>Open the full search page for a query (from the top bar's submit),
     /// reusing the results the bar already fetched. The page has no nav item, so this is
     /// the only way in.</summary>
-    public void ShowSearch(string query, System.Collections.Generic.IReadOnlyList<HorizonRadio.Core.Sources.SearchResult> results)
+    public void ShowSearch(string query, HorizonRadio.Core.Sources.UnifiedSearchResult result)
     {
-        Search.Show(query, results);
+        Search.Show(query, result);
         SelectedWorkspaceIndex = 11;
     }
 

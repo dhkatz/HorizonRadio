@@ -85,7 +85,7 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:SearchResultRowViewModel}">
                                         <Border Background="Transparent" Padding="6" CornerRadius="6">
-                                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" VerticalAlignment="Center">
+                                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" VerticalAlignment="Center">
                                                 <!-- Art over a placeholder tile -->
                                                 <Border Grid.Column="0" Width="40" Height="40" CornerRadius="4"
                                                         ClipToBounds="True" Margin="0,0,10,0"
@@ -104,12 +104,19 @@
                                                                IsVisible="{Binding HasSubtitle}"
                                                                TextTrimming="CharacterEllipsis"/>
                                                 </StackPanel>
-                                                <Button Grid.Column="2" Classes="Ghost" Padding="5"
+                                                <!-- Source label (which source plays); only when >1 source is searchable -->
+                                                <Border Grid.Column="2" IsVisible="{Binding ShowSourceLabels}"
+                                                        Background="{DynamicResource SecondaryColor}"
+                                                        CornerRadius="10" Padding="8,2" Margin="6,0"
+                                                        VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding SelectedSourceName}" FontSize="10" Opacity="0.75"/>
+                                                </Border>
+                                                <Button Grid.Column="3" Classes="Ghost" Padding="5"
                                                         Command="{Binding PlayCommand}"
                                                         VerticalAlignment="Center" ToolTip.Tip="Play Now">
                                                     <material:MaterialIcon Kind="Play" Width="16" Height="16"/>
                                                 </Button>
-                                                <Button Grid.Column="3" Classes="Ghost" Padding="5"
+                                                <Button Grid.Column="4" Classes="Ghost" Padding="5"
                                                         Command="{Binding AddCommand}"
                                                         VerticalAlignment="Center" ToolTip.Tip="Add To Queue">
                                                     <material:MaterialIcon Kind="Plus" Width="16" Height="16"/>

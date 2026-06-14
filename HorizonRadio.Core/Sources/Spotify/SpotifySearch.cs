@@ -61,7 +61,8 @@ internal static class SpotifySearch
                 Title: t.Name,
                 Subtitle: string.Join(", ", t.Artists.Select(a => a.Name)),
                 ArtUrl: SmallestImageUrl(t.Album?.Images),
-                Locator: t.Uri));
+                Locator: t.Uri,
+                Duration: t.DurationMs > 0 ? TimeSpan.FromMilliseconds(t.DurationMs) : null));
         }
         return results;
     }
