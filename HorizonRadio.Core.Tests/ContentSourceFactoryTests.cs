@@ -2,6 +2,7 @@ using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Local;
 using HorizonRadio.Core.Sources.YouTube;
+using HorizonRadio.Core.Tools;
 
 namespace HorizonRadio.Core.Tests;
 
@@ -12,6 +13,7 @@ namespace HorizonRadio.Core.Tests;
 /// environment fields and opens the content field — validating tools (engine)
 /// before content (locator).
 /// </summary>
+[Collection("tool-resolver")]
 public class ContentSourceFactoryTests
 {
     [Fact]
@@ -73,9 +75,15 @@ public class ContentSourceFactoryTests
     [Fact]
     public void YouTube_create_player_missing_tools_throws()
     {
-        var f = new YouTubeSourceFactory();
-        var ex = Assert.Throws<InvalidOperationException>(() => f.CreatePlayer(new ConfigValues()));
-        Assert.Contains("yt-dlp", ex.Message);
+        // Simulate a clean machine: nothing configured AND nothing discoverable.
+        ToolResolver.DiscoverOverride = _ => null;
+        try
+        {
+            var f = new YouTubeSourceFactory();
+            var ex = Assert.Throws<InvalidOperationException>(() => f.CreatePlayer(new ConfigValues()));
+            Assert.Contains("yt-dlp", ex.Message);
+        }
+        finally { ToolResolver.DiscoverOverride = null; }
     }
 
     [Fact]

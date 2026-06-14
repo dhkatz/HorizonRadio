@@ -87,4 +87,10 @@ public sealed class PumpContext
     /// <summary>Invoked once the item's final metadata/duration are known and it
     /// is actually entering playback — the driver publishes the HUD track here.</summary>
     public Action<PlayableItem>? OnStarted { get; init; }
+
+    /// <summary>Invoked when an already-playing item's <see cref="PlayableItem.Metadata"/>
+    /// changes mid-play — a live radio station whose song changed underneath a single
+    /// item. The driver republishes the HUD track (and re-runs enrichment) here. Most
+    /// items never call this; fixed-track items fire <see cref="OnStarted"/> once instead.</summary>
+    public Action<PlayableItem>? OnMetadataUpdated { get; init; }
 }

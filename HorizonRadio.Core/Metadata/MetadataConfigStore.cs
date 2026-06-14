@@ -21,6 +21,11 @@ public sealed class MetadataConfigStore
     /// and always highest unless a field is forced to a provider).</summary>
     public List<string> Order { get; } = new();
 
+    /// <summary>Provider ids this config has already been offered. A newly-shipped
+    /// default provider (e.g. iTunes) is auto-enabled once for existing users, then
+    /// recorded here so disabling it later sticks rather than being re-added each launch.</summary>
+    public List<string> Introduced { get; } = new();
+
     /// <summary>Per-field forced provider overrides ("always Spotify for Art").</summary>
     public Dictionary<MetadataField, string> Forced { get; } = new();
 
@@ -56,12 +61,13 @@ public sealed class MetadataConfigStore
         var store = new MetadataConfigStore();
         try
         {
-            // Fresh install: enable MusicBrainz by default (free, no credentials)
-            // so metadata enrichment works out of the box. An explicit "disable all"
-            // later persists an empty order to the now-existing file.
+            // Fresh install: enable the keyless providers by default (so enrichment
+            // works out of the box) and mark every known provider introduced. An
+            // explicit "disable all" later persists an empty order to the now-existing file.
             if (!File.Exists(path))
             {
-                store.Order.Add("musicbrainz");
+                store.Order.AddRange(MetadataCatalog.DefaultEnabledOrder);
+                foreach (var f in MetadataCatalog.All) store.Introduced.Add(f.Id);
                 return store;
             }
             using var stream = File.OpenRead(path);
@@ -75,6 +81,11 @@ public sealed class MetadataConfigStore
                 foreach (var el in ord.EnumerateArray())
                     if (el.ValueKind == JsonValueKind.String && el.GetString() is { Length: > 0 } id)
                         store.Order.Add(id);
+
+            if (root.TryGetProperty("introduced", out var intro) && intro.ValueKind == JsonValueKind.Array)
+                foreach (var el in intro.EnumerateArray())
+                    if (el.ValueKind == JsonValueKind.String && el.GetString() is { Length: > 0 } id)
+                        store.Introduced.Add(id);
 
             if (root.TryGetProperty("forced", out var forced) && forced.ValueKind == JsonValueKind.Object)
                 foreach (var prop in forced.EnumerateObject())
@@ -100,9 +111,26 @@ public sealed class MetadataConfigStore
                     store._perProvider[prov.Name] = bag;
                 }
             }
+
+            store.EnableNewDefaultProviders();
         }
         catch (Exception ex) { Log($"load failed: {ex.Message}"); }
         return store;
+    }
+
+    /// <summary>One-time-per-provider migration: enable a newly-shipped default provider
+    /// (e.g. iTunes) for an existing config that predates it. The new providers are
+    /// APPENDED (lowest priority) so the user's existing ordering is never disturbed — a
+    /// user who put Spotify first keeps Spotify first. Every known provider is then recorded
+    /// as introduced, so a later user-disable sticks rather than being re-applied each launch.</summary>
+    private void EnableNewDefaultProviders()
+    {
+        foreach (var id in MetadataCatalog.DefaultEnabledOrder)
+            if (!Introduced.Contains(id) && !Order.Contains(id))
+                Order.Add(id);
+
+        foreach (var f in MetadataCatalog.All)
+            if (!Introduced.Contains(f.Id)) Introduced.Add(f.Id);
     }
 
     public void SaveToDisk(string? path = null)
@@ -118,6 +146,10 @@ public sealed class MetadataConfigStore
 
             writer.WriteStartArray("order");
             foreach (var id in Order) writer.WriteStringValue(id);
+            writer.WriteEndArray();
+
+            writer.WriteStartArray("introduced");
+            foreach (var id in Introduced) writer.WriteStringValue(id);
             writer.WriteEndArray();
 
             writer.WriteStartObject("forced");

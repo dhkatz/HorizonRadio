@@ -58,8 +58,51 @@ public sealed class MetadataResolver : IAsyncDisposable
         IReadOnlyList<IMetadataProvider> contributors;
         MetadataPolicy policy;
         lock (_lock) { contributors = _contributors; policy = _policy; }
-        if (contributors.Count == 0) return seed;
+        if (contributors.Count == 0) return WithArtFallback(seed);
 
+        // Ambiguous source titles attach alternative (artist, title) interpretations; try the
+        // primary first, then candidates, keeping the one a catalog confirms.
+        if (seed.Candidates is { Count: > 0 })
+            return await ResolveBestAsync(seed, contributors, policy, ct).ConfigureAwait(false);
+
+        return (await ResolveOneAsync(seed, contributors, policy, ct).ConfigureAwait(false)).Track;
+    }
+
+    // Resolve the primary interpretation and the candidates, returning the first that a catalog
+    // confirms. Interpretations that carry an artist are tried first: a title-only match (empty
+    // artist) is unreliable — it can latch onto a cover/remix of the same title — so it must not
+    // win ahead of an artist-corroborated one. A clean "Artist - Title" still short-circuits on
+    // its first (primary) resolve. If nothing matches, the primary's resolution stands (display =
+    // primary parse + station-logo fallback).
+    private static async Task<Track> ResolveBestAsync(
+        Track seed, IReadOnlyList<IMetadataProvider> contributors, MetadataPolicy policy, CancellationToken ct)
+    {
+        var primary = seed with { Candidates = null };
+        var all = new List<Track> { primary };
+        foreach (var c in seed.Candidates!)
+            if (!string.IsNullOrWhiteSpace(c.Title))
+                all.Add(primary with { Title = c.Title, Artist = c.Artist ?? "", ExternalId = null });
+
+        var ordered = all.Where(t => !string.IsNullOrWhiteSpace(t.Artist))
+                         .Concat(all.Where(t => string.IsNullOrWhiteSpace(t.Artist)));
+
+        Track? primaryTrack = null;
+        foreach (var s in ordered)
+        {
+            var (track, matched) = await ResolveOneAsync(s, contributors, policy, ct).ConfigureAwait(false);
+            if (ReferenceEquals(s, primary)) primaryTrack = track;
+            if (matched) return track;
+        }
+
+        return primaryTrack ?? (await ResolveOneAsync(primary, contributors, policy, ct).ConfigureAwait(false)).Track;
+    }
+
+    // Run one seed through the contributor chain. Matched = a network contributor produced a
+    // non-empty contribution (they only do so when their own match guard passed) — i.e. a
+    // catalog confirmed this interpretation.
+    private static async Task<(Track Track, bool Matched)> ResolveOneAsync(
+        Track seed, IReadOnlyList<IMetadataProvider> contributors, MetadataPolicy policy, CancellationToken ct)
+    {
         var byId = new Dictionary<string, MetadataContribution>(StringComparer.Ordinal)
         {
             [MetadataPolicy.SourceId] = SourceContribution(seed),
@@ -94,7 +137,8 @@ public sealed class MetadataResolver : IAsyncDisposable
             if (string.IsNullOrEmpty(album) && !string.IsNullOrEmpty(contribution.Album)) album = contribution.Album;
         }
 
-        return Merge(seed, byId, policy);
+        // More than just the source contributed → a catalog matched this interpretation.
+        return (Merge(seed, byId, policy) with { Candidates = null }, byId.Count > 1);
     }
 
     private static MetadataContribution SourceContribution(Track t) => new(
@@ -109,9 +153,17 @@ public sealed class MetadataResolver : IAsyncDisposable
         Title = Pick(MetadataField.Title, byId, policy)?.Title ?? seed.Title,
         Artist = Pick(MetadataField.Artist, byId, policy)?.Artist ?? seed.Artist,
         Album = Pick(MetadataField.Album, byId, policy)?.Album ?? seed.Album,
-        AlbumArt = Pick(MetadataField.Art, byId, policy)?.Art ?? seed.AlbumArt,
+        // Real (source/provider) art wins; the source's fallback art (a radio station
+        // logo) only fills in when nothing better was found.
+        AlbumArt = Pick(MetadataField.Art, byId, policy)?.Art ?? seed.AlbumArt ?? seed.FallbackArt,
         Year = Pick(MetadataField.Year, byId, policy)?.Year ?? seed.Year,
     };
+
+    // Applied when there are no providers to merge: still honor the source's fallback art.
+    private static Track WithArtFallback(Track t) =>
+        t.AlbumArt is { Length: > 0 } || t.FallbackArt is not { Length: > 0 }
+            ? t
+            : t with { AlbumArt = t.FallbackArt };
 
     // Resolve one field: a forced contributor wins if it supplied the field,
     // otherwise the first contributor in priority order that supplied it.

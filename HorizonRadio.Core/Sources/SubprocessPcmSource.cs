@@ -44,6 +44,12 @@ public sealed class SubprocessPcmSource(SubprocessPcmSource.Config config) : IAs
         /// 2048 ≈ 46 ms at 44.1 kHz, matches LocalFileSource.</summary>
         public int ReadChunkFrames { get; init; } = 2048;
 
+        /// <summary>Redirect the child's stdin so the caller can feed it bytes via
+        /// <see cref="StandardInput"/> (e.g. the radio source pipes ICY-stripped
+        /// audio into ffmpeg's <c>pipe:0</c>). Default false — sources that hand the
+        /// child a URL/file argument leave stdin attached to the console.</summary>
+        public bool RedirectStdin { get; init; }
+
         /// <summary>Called for each non-empty stderr line. Used by
         /// wrappers to parse metadata events.</summary>
         public Action<string>? OnStderrLine { get; init; }
@@ -57,6 +63,12 @@ public sealed class SubprocessPcmSource(SubprocessPcmSource.Config config) : IAs
     private static void Log(string msg) => Debug.WriteLine($"[hzn-subproc] {msg}");
 
     public bool IsRunning => _process is { HasExited: false };
+
+    /// <summary>The child's stdin stream when <see cref="Config.RedirectStdin"/> is set,
+    /// else null. The caller writes the child's input here (e.g. ICY-stripped audio into
+    /// ffmpeg) and closes it to signal EOF, which lets the child flush and exit so
+    /// <see cref="Completion"/> fires.</summary>
+    public Stream? StandardInput => config.RedirectStdin ? _process?.StandardInput.BaseStream : null;
 
     /// <summary>Wall-clock audio emitted so far, derived from PCM bytes pushed
     /// at the canonical format. Stream wrappers (e.g. YouTube) use this as the
@@ -83,7 +95,7 @@ public sealed class SubprocessPcmSource(SubprocessPcmSource.Config config) : IAs
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            RedirectStandardInput = false,
+            RedirectStandardInput = config.RedirectStdin,
             // librespot (and most Rust programs) write UTF-8 to stderr,
             // but the default StreamReader uses the console code page,
             // which on US Windows is usually CP1252. That mangles any

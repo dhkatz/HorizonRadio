@@ -18,8 +18,20 @@ public class MetadataResolverTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
-    private static Track Seed(string title = "SrcTitle", string artist = "", byte[]? art = null) =>
-        new(title, artist, null, art, "local", "Local Files");
+    // Contributes only when the query's (artist, title) matches exactly — i.e. a catalog that
+    // only "has" one specific track, for exercising candidate validation.
+    private sealed class MatchingContributor(string id, string artist, string title, MetadataContribution contribution) : IMetadataProvider
+    {
+        public string Id => id;
+        public Task<MetadataContribution?> ContributeAsync(MetadataQuery q, CancellationToken ct)
+            => Task.FromResult<MetadataContribution?>(
+                string.Equals(q.Artist, artist, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(q.Title, title, StringComparison.OrdinalIgnoreCase) ? contribution : null);
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private static Track Seed(string title = "SrcTitle", string artist = "", byte[]? art = null, byte[]? fallbackArt = null) =>
+        new(title, artist, null, art, "local", "Local Files", FallbackArt: fallbackArt);
 
     private static MetadataPolicy Policy(IEnumerable<string> order, Dictionary<MetadataField, string>? forced = null)
         => new([MetadataPolicy.SourceId, .. order], forced ?? new());
@@ -64,6 +76,47 @@ public class MetadataResolverTests
     }
 
     [Fact]
+    public async Task Fallback_art_fills_in_when_no_provider_finds_a_cover()
+    {
+        var resolver = new MetadataResolver();
+        var logo = new byte[] { 4, 2 };
+        // A provider that matches text but supplies no art (the Niconico-only track case).
+        resolver.Configure(
+            [new FakeContributor("itunes", new MetadataContribution(Title: "Canonical"))],
+            Policy(["itunes"]));
+
+        var result = await resolver.ResolveAsync(Seed(art: null, fallbackArt: logo), CancellationToken.None);
+
+        Assert.Same(logo, result.AlbumArt); // last-resort station logo
+    }
+
+    [Fact]
+    public async Task Real_art_beats_fallback_art()
+    {
+        var resolver = new MetadataResolver();
+        var logo = new byte[] { 4, 2 };
+        var cover = new byte[] { 1, 1 };
+        resolver.Configure(
+            [new FakeContributor("itunes", new MetadataContribution(Art: cover))],
+            Policy(["itunes"]));
+
+        var result = await resolver.ResolveAsync(Seed(art: null, fallbackArt: logo), CancellationToken.None);
+
+        Assert.Same(cover, result.AlbumArt); // a found cover always wins
+    }
+
+    [Fact]
+    public async Task Fallback_art_applies_even_with_no_contributors()
+    {
+        var resolver = new MetadataResolver();
+        var logo = new byte[] { 4, 2 };
+
+        var result = await resolver.ResolveAsync(Seed(art: null, fallbackArt: logo), CancellationToken.None);
+
+        Assert.Same(logo, result.AlbumArt);
+    }
+
+    [Fact]
     public async Task Order_decides_precedence_between_providers()
     {
         var resolver = new MetadataResolver();
@@ -77,5 +130,67 @@ public class MetadataResolverTests
         resolver.Configure([a, b], Policy(["b", "a"]));
         var second = await resolver.ResolveAsync(Seed(), CancellationToken.None);
         Assert.Equal("AlbumB", second.Album);
+    }
+
+    // -- candidate validation --
+
+    private static Track RadioSeed(string title, string artist, IReadOnlyList<TitleCandidate>? candidates, byte[]? fallback = null) =>
+        new(title, artist, null, null, "radio", "Internet Radio", FallbackArt: fallback, Candidates: candidates);
+
+    [Fact]
+    public async Task Candidate_that_the_catalog_confirms_wins_over_a_wrong_primary()
+    {
+        var resolver = new MetadataResolver();
+        var art = new byte[] { 1, 2, 3 };
+        // Catalog only "has" Heavenz / テロメアの産声.
+        resolver.Configure(
+            [new MatchingContributor("itunes", "Heavenz", "テロメアの産声",
+                new MetadataContribution(Title: "テロメアの産声", Artist: "Heavenz", Art: art))],
+            Policy(["itunes"]));
+
+        // Primary mis-parse (channel as artist) + the correct candidate.
+        var seed = RadioSeed("Heavenz - テロメアの産声", "ExGrooveCh",
+            [new TitleCandidate("Heavenz", "テロメアの産声")]);
+        var r = await resolver.ResolveAsync(seed, CancellationToken.None);
+
+        Assert.Equal("テロメアの産声", r.Title);   // the confirmed candidate became the result
+        Assert.Equal("Heavenz", r.Artist);
+        Assert.Same(art, r.AlbumArt);
+    }
+
+    [Fact]
+    public async Task Primary_match_short_circuits_candidates()
+    {
+        var resolver = new MetadataResolver();
+        var art = new byte[] { 4 };
+        resolver.Configure(
+            [new MatchingContributor("itunes", "MuryokuP", "Sacred Secret", new MetadataContribution(Art: art))],
+            Policy(["itunes"]));
+
+        // Primary already correct; the reversed candidate would NOT match, but is never tried.
+        var seed = RadioSeed("Sacred Secret", "MuryokuP", [new TitleCandidate("Sacred Secret", "MuryokuP")]);
+        var r = await resolver.ResolveAsync(seed, CancellationToken.None);
+
+        Assert.Equal("Sacred Secret", r.Title);
+        Assert.Same(art, r.AlbumArt);
+    }
+
+    [Fact]
+    public async Task No_candidate_matches_keeps_the_primary_and_fallback_art()
+    {
+        var resolver = new MetadataResolver();
+        var logo = new byte[] { 9 };
+        // Catalog has neither the primary nor the candidate.
+        resolver.Configure(
+            [new MatchingContributor("itunes", "Someone Else", "Other Song", new MetadataContribution(Art: [7]))],
+            Policy(["itunes"]));
+
+        var seed = RadioSeed("Heavenz - テロメアの産声", "ExGrooveCh",
+            [new TitleCandidate("Heavenz", "テロメアの産声")], fallback: logo);
+        var r = await resolver.ResolveAsync(seed, CancellationToken.None);
+
+        Assert.Equal("Heavenz - テロメアの産声", r.Title); // primary display retained
+        Assert.Same(logo, r.AlbumArt);                      // station-logo fallback
+        Assert.Null(r.Candidates);                          // cleared on output
     }
 }

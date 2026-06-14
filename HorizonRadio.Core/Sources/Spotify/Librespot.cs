@@ -34,15 +34,17 @@ public static class Librespot
     /// a dev build output. Null if none found.</summary>
     public static string? DiscoverExe()
     {
+        // Standard locations (app dir + managed tools dir) are shared with every other tool.
+        if (ToolResolver.Discover(ToolKind.Librespot) is { } found) return found;
+
+        // Dev build output (not a normal install location), so it stays local to librespot.
         var here = AppContext.BaseDirectory;
-        var candidates = new[]
-        {
-            Path.Combine(here, "librespot.exe"),
-            ToolsPaths.ExeFor(ToolKind.Librespot),
+        string[] devCandidates =
+        [
             Path.Combine(here, "..", "..", "..", "..", "build", "Librespot", "bin", "librespot.exe"),
             Path.Combine(here, "..", "..", "..", "..", "..", "build", "Librespot", "bin", "librespot.exe"),
-        };
-        foreach (var c in candidates)
+        ];
+        foreach (var c in devCandidates)
         {
             var resolved = Path.GetFullPath(c);
             if (File.Exists(resolved)) return resolved;

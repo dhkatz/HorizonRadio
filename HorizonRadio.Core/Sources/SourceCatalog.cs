@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using HorizonRadio.Core.Sources.Local;
+using HorizonRadio.Core.Sources.Radio;
 using HorizonRadio.Core.Sources.Spotify;
 using HorizonRadio.Core.Sources.Test;
 using HorizonRadio.Core.Sources.YouTube;
@@ -27,6 +28,7 @@ public static class SourceCatalog
         new SpotifySourceFactory(),
         new SpotifyContentSourceFactory(),
         new YouTubeSourceFactory(),
+        new RadioSourceFactory(),
         new TestToneSourceFactory()
     ];
 

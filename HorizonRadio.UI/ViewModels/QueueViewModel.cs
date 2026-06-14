@@ -58,6 +58,16 @@ public sealed partial class QueueViewModel : ViewModelBase
     private string? _artCacheId;
     private Bitmap? _artCacheBmp;
 
+    // Now-playing enrichment state, keyed by a per-track signature rather than the
+    // queue-item id — a radio station is ONE queue item reused across every song, so
+    // its id never changes but its metadata does. `_nowSig` gates re-running the
+    // resolve; the sticky `_nowEnrichedArt` (for `_nowEnrichedArtSig`) survives the
+    // frequent rebuilds, which would otherwise reset the tile to the item's seed art
+    // (the station icon).
+    private string? _nowSig;
+    private string? _nowEnrichedArtSig;
+    private Bitmap? _nowEnrichedArt;
+
     /// <summary>The explicit "next in queue" zone (user one-offs).</summary>
     public ObservableCollection<QueueRowViewModel> Upcoming { get; } = new();
 
@@ -109,8 +119,11 @@ public sealed partial class QueueViewModel : ViewModelBase
         HasNowPlaying = snap.Current != null;
         NowPlayingTitle = snap.Current?.Metadata.Title is { Length: > 0 } t ? t : "";
         NowPlayingSubtitle = snap.Current?.Metadata.Artist ?? "";
-        NowPlayingArt = snap.Current != null
-            ? DecodeArtCached(snap.Current.Id, snap.Current.Metadata.AlbumArt)
+        // Prefer art enriched for this exact track; otherwise the item's own seed art
+        // (e.g. the station logo before a song is identified, or an iTunes miss).
+        NowPlayingArt = snap.Current is { } cur
+            ? (NowSig(cur) == _nowEnrichedArtSig ? _nowEnrichedArt : null)
+              ?? DecodeArtCached(cur.Id, cur.Metadata.AlbumArt)
             : null;
 
         SyncUpcoming(snap.Explicit);
@@ -140,12 +153,16 @@ public sealed partial class QueueViewModel : ViewModelBase
         }
     }
 
-    // The now-playing item is already resolved/canonical; just run the provider pass
-    // for square art and update the sidebar's now-playing tile.
+    // Run the provider pass for the now-playing tile (square art + canonical text). Keyed
+    // by a per-track signature so it re-runs when the song changes within a single, long-
+    // lived queue item (radio) — not just when the item id changes. The resolver's cache
+    // makes the repeat (already resolved at play time for the HUD) cheap.
     private void EnrichCurrent(QueueItem current)
     {
         if (_resolver is not { HasContributors: true }) return;
-        if (!_enriched.Add("now:" + current.Id)) return;
+        var sig = NowSig(current);
+        if (_nowSig == sig) return; // already enriched / in flight for this exact track
+        _nowSig = sig;
         _ = Task.Run(async () =>
         {
             try
@@ -154,15 +171,27 @@ public sealed partial class QueueViewModel : ViewModelBase
                 var art = enriched.AlbumArt is { Length: > 0 } ? DecodeArt(enriched.AlbumArt) : null;
                 Dispatcher.UIThread.Post(() =>
                 {
-                    if (!ReferenceEquals(_queue?.Model.Current, current)) return; // still playing this?
+                    // Still the same track playing? (compare the signature, not the item —
+                    // a radio item stays referentially equal across songs).
+                    if (_queue?.Model.Current is not { } c || NowSig(c) != sig) return;
                     if (!string.IsNullOrWhiteSpace(enriched.Title)) NowPlayingTitle = enriched.Title;
                     NowPlayingSubtitle = enriched.Artist;
-                    if (art != null) NowPlayingArt = art;
+                    if (art != null)
+                    {
+                        _nowEnrichedArt = art;
+                        _nowEnrichedArtSig = sig; // sticky, so the next rebuild keeps it
+                        NowPlayingArt = art;
+                    }
                 });
             }
             catch (Exception ex) { Debug.WriteLine($"[hzn-queue-vm] enrich current: {ex.Message}"); }
         });
     }
+
+    // Identifies a specific track within a queue item: id + the metadata that drives a
+    // lookup. A radio station keeps one id but changes title/artist as songs roll over.
+    private static string NowSig(QueueItem item) =>
+        $"{item.Id}|{item.Metadata.Title}|{item.Metadata.Artist}";
 
     // In-place sync by id so a track change (which doesn't touch the explicit zone)
     // doesn't tear down and rebuild every row.
