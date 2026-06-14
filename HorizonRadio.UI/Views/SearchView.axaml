@@ -88,6 +88,9 @@
         <TextBlock DockPanel.Dock="Top" Text="Connect a music source (e.g. Spotify) in Sources to search."
                    FontSize="13" Opacity="0.55"
                    IsVisible="{Binding NeedsConnection}"/>
+        <TextBlock DockPanel.Dock="Top" Text="No sources selected. Enable a source filter above to see results."
+                   FontSize="13" Opacity="0.55"
+                   IsVisible="{Binding NoSourcesSelected}"/>
 
         <ScrollViewer IsVisible="{Binding HasResults}">
             <ItemsControl ItemsSource="{Binding Results}">

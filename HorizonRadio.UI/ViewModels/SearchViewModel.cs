@@ -23,9 +23,14 @@ public sealed partial class SearchViewModel : ViewModelBase, IDisposable
     // we'd LIKE — each source clamps to its own ceiling (see SpotifySearch).
     private const int PageLimit = 30;
 
+    // A chip toggle re-runs the search; debounce it (like the top bar debounces typing) so
+    // a flurry of toggles spawns one query, not one per click.
+    private static readonly TimeSpan FilterDebounce = TimeSpan.FromMilliseconds(250);
+
     private readonly SearchEnqueuer? _enqueuer;
     private readonly SearchSourceContext? _context;
     private CancellationTokenSource? _searchCts;
+    private CancellationTokenSource? _filterDebounceCts;
 
     public ObservableCollection<SearchResultRowViewModel> Results { get; } = new();
 
@@ -52,8 +57,12 @@ public sealed partial class SearchViewModel : ViewModelBase, IDisposable
     /// <see cref="HasNoResults"/> so a transient failure never reads as "no results".</summary>
     [ObservableProperty] private bool hasError;
 
-    /// <summary>True when the empty result is because no search source is connected.</summary>
+    /// <summary>True when the empty result is because no queried source is connected.</summary>
     [ObservableProperty] private bool needsConnection;
+
+    /// <summary>True when the user has filtered out every source, so nothing was queried —
+    /// distinct from "nothing matched" (which would falsely blame the query).</summary>
+    [ObservableProperty] private bool noSourcesSelected;
 
     public bool HasResults => Results.Count > 0;
 
@@ -100,6 +109,20 @@ public sealed partial class SearchViewModel : ViewModelBase, IDisposable
             return;
         }
 
+        var include = IncludeSet();
+
+        // Every chip toggled off → nothing to query; say so rather than running an empty
+        // query that would read as "no results matched".
+        if (include is { Count: 0 })
+        {
+            Results.Clear();
+            IsSearching = false;
+            ClearStates();
+            NoSourcesSelected = true;
+            OnPropertyChanged(nameof(HasResults));
+            return;
+        }
+
         var cts = _searchCts = new CancellationTokenSource();
         IsSearching = true;
         ClearStates();
@@ -107,7 +130,7 @@ public sealed partial class SearchViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(HasResults));
 
         UnifiedSearchResult result;
-        try { result = await UnifiedSearch.SearchAsync(searchQuery, PageLimit, IncludeSet(), cts.Token); }
+        try { result = await UnifiedSearch.SearchAsync(searchQuery, PageLimit, include, cts.Token); }
         catch (System.OperationCanceledException) { return; }
         catch (System.Exception ex)
         {
@@ -141,17 +164,31 @@ public sealed partial class SearchViewModel : ViewModelBase, IDisposable
         }
         OnPropertyChanged(nameof(HasSourceNotices));
 
-        // Empty-state logic: all queried sources errored → error; no source ready at all →
-        // connect; otherwise nothing matched. A partial failure (some results, some errors)
-        // shows the results plus the per-source notice above.
-        var allErrored = result.Outcomes.Count > 0 && result.Outcomes.All(o => o.Error is not null);
-        NeedsConnection = result.Results.Count == 0 && !UnifiedSearch.HasReadySource;
-        HasError = result.Results.Count == 0 && allErrored;
-        HasNoResults = result.Results.Count == 0 && !NeedsConnection && !HasError;
+        // Empty-state logic, judged against the QUERIED sources (the outcomes) — not the
+        // whole catalog — so a filtered or failing source is diagnosed correctly:
+        //   • a usable source returned (connected, no error) but nothing matched → no results
+        //   • none usable, every one errored                                     → search failed
+        //   • none usable, at least one needs connecting                         → connect a source
+        var empty = result.Results.Count == 0;
+        var anyUsable = result.Outcomes.Any(o => o.Error is null && !o.NotConnected);
+        var anyError = result.Outcomes.Any(o => o.Error is not null);
+        var anyNotConnected = result.Outcomes.Any(o => o.NotConnected);
+
+        NeedsConnection = empty && !anyUsable && anyNotConnected;
+        HasError = empty && !anyUsable && anyError && !anyNotConnected;
+        HasNoResults = empty && !NeedsConnection && !HasError;
         OnPropertyChanged(nameof(HasResults));
     }
 
-    private void OnFilterChanged() => _ = RunAsync(Query);
+    private async void OnFilterChanged()
+    {
+        _filterDebounceCts?.Cancel();
+        _filterDebounceCts?.Dispose();
+        var cts = _filterDebounceCts = new CancellationTokenSource();
+        try { await Task.Delay(FilterDebounce, cts.Token); }
+        catch (OperationCanceledException) { return; }
+        await RunAsync(Query);
+    }
 
     // All chips enabled → null (query everything); otherwise only the enabled ids.
     private HashSet<string>? IncludeSet()
@@ -170,6 +207,7 @@ public sealed partial class SearchViewModel : ViewModelBase, IDisposable
         HasNoResults = false;
         HasError = false;
         NeedsConnection = false;
+        NoSourcesSelected = false;
         SourceNotices.Clear();
         OnPropertyChanged(nameof(HasSourceNotices));
     }
@@ -186,5 +224,7 @@ public sealed partial class SearchViewModel : ViewModelBase, IDisposable
     {
         _searchCts?.Cancel();
         _searchCts?.Dispose();
+        _filterDebounceCts?.Cancel();
+        _filterDebounceCts?.Dispose();
     }
 }

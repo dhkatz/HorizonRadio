@@ -46,13 +46,14 @@ public static class UnifiedSearch
         SourceCatalog.All.OfType<ISearchSource>()
             .Any(s => s is not IAuthenticatingSource auth || auth.IsConnected);
 
+    // The factories that can be searched, in catalog order. One definition so the chips
+    // (built from SearchableSources) and the actual query (SearchAsync) can't disagree.
+    private static IEnumerable<IAudioSourceFactory> SearchableFactories =>
+        SourceCatalog.All.OfType<IAudioSourceFactory>().Where(f => f is ISearchSource);
+
     /// <summary>The searchable sources, in catalog order — for filter chips and labels.</summary>
     public static IReadOnlyList<SearchSourceInfo> SearchableSources =>
-        SourceCatalog.All
-            .OfType<IAudioSourceFactory>()
-            .Where(f => f is ISearchSource)
-            .Select(f => new SearchSourceInfo(f.Id, f.DisplayName))
-            .ToList();
+        SearchableFactories.Select(f => new SearchSourceInfo(f.Id, f.DisplayName)).ToList();
 
     /// <param name="includeSourceIds">When non-null, only these source ids are queried
     /// (the filter chips). Null = all searchable sources.</param>
@@ -62,9 +63,7 @@ public static class UnifiedSearch
         if (string.IsNullOrWhiteSpace(query))
             return new UnifiedSearchResult([], []);
 
-        var sources = SourceCatalog.All
-            .OfType<IAudioSourceFactory>()
-            .Where(f => f is ISearchSource)
+        var sources = SearchableFactories
             .Where(f => includeSourceIds is null || includeSourceIds.Contains(f.Id))
             .ToList();
         if (sources.Count == 0) return new UnifiedSearchResult([], []);

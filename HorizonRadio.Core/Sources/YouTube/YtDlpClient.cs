@@ -111,6 +111,10 @@ public static class YtDlpClient
             new[] { "--flat-playlist", "--dump-single-json", "--no-warnings", $"ytsearch{n}:{query}" },
             ct).ConfigureAwait(false);
 
+        // yt-dlp can exit 0 having printed nothing (a search that resolved to no entries) —
+        // treat that as "no results", not a parse error (mirrors ResolveMetadataAsync).
+        if (string.IsNullOrWhiteSpace(stdout)) return [];
+
         using var doc = JsonDocument.Parse(stdout);
         if (!doc.RootElement.TryGetProperty("entries", out var entries) ||
             entries.ValueKind != JsonValueKind.Array)
@@ -263,16 +267,7 @@ public static class YtDlpClient
             ? i : null;
 
     // yt-dlp's "artist" is sometimes "A, B, C" — keep the first non-empty credit.
-    private static string? FirstArtist(string? artist)
-    {
-        if (string.IsNullOrWhiteSpace(artist)) return null;
-        foreach (var part in artist.Split(','))
-        {
-            var trimmed = part.Trim();
-            if (trimmed.Length > 0) return trimmed;
-        }
-        return null;
-    }
+    private static string? FirstArtist(string? artist) => ArtistCredits.FirstOrNull(artist);
 
     // "release_date" is YYYYMMDD; pull the year.
     private static int? YearFromDate(string? date)
@@ -297,6 +292,15 @@ public static class YtDlpClient
 
         using var proc = Process.Start(psi)
                          ?? throw new InvalidOperationException($"failed to spawn {exe}");
+
+        // Kill the child (and its tree) if the caller cancels — otherwise a cancelled
+        // search/resolve leaves yt-dlp running to completion (a process leak when, e.g.,
+        // the user keeps typing or toggles filters). The await below still throws OCE.
+        using var killOnCancel = ct.Register(() =>
+        {
+            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); }
+            catch { /* already exited / can't kill — nothing to do */ }
+        });
 
         // Drain stderr in parallel so a verbose run can't deadlock on a
         // full stderr pipe while we're reading stdout.

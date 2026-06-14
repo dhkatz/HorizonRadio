@@ -53,6 +53,20 @@ public class SearchMergeTests
     }
 
     [Fact]
+    public void Does_not_merge_when_only_one_side_has_a_duration()
+    {
+        // A hit reporting no duration (e.g. a YouTube livestream/premiere) must not fold
+        // into a studio track on a token match alone — stay conservative.
+        var results = new[]
+        {
+            Spotify("Get Lucky", "Daft Punk", TimeSpan.FromSeconds(248)),
+            YouTube("Daft Punk - Get Lucky", "Daft Punk", dur: null),
+        };
+
+        Assert.Equal(2, SearchMerge.Merge(results).Count);
+    }
+
+    [Fact]
     public void Does_not_merge_different_songs()
     {
         var results = new[]

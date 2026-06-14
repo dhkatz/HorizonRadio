@@ -87,16 +87,22 @@ public static class SearchMerge
         return DurationCompatible(da, db);
     }
 
-    // Unknown on either side → don't block the merge (the token match already passed);
-    // both known → require them close, so different-length versions stay apart.
+    // Both known → require them close, so different-length versions stay apart. One side
+    // unknown → DON'T merge: a hit that reports no duration (e.g. a YouTube livestream or
+    // premiere) is exactly the kind we don't want folding into a studio track on a token
+    // match alone. Both unknown → allow (no duration signal either way; rare, low risk).
     private static bool DurationCompatible(TimeSpan? a, TimeSpan? b)
-        => a is null || b is null || (a.Value - b.Value).Duration() <= DurationTolerance;
+    {
+        if (a is null && b is null) return true;
+        if (a is null || b is null) return false;
+        return (a.Value - b.Value).Duration() <= DurationTolerance;
+    }
 
     private static HashSet<string> TokenSet(SearchResult r)
     {
         var set = new HashSet<string>();
         AddTokens(set, r.Title);
-        AddTokens(set, FirstArtist(r.Subtitle));
+        AddTokens(set, ArtistCredits.FirstOrNull(r.Subtitle));
         return set;
     }
 
@@ -116,13 +122,5 @@ public static class SearchMerge
         t = FeatRun.Replace(t, " ");
         t = NonAlnum.Replace(t, " ");
         return string.Join(' ', t.Split(' ', StringSplitOptions.RemoveEmptyEntries));
-    }
-
-    // Subtitles list multiple credits ("A, B, C"); the first is the primary artist.
-    private static string FirstArtist(string? subtitle)
-    {
-        if (string.IsNullOrWhiteSpace(subtitle)) return "";
-        var comma = subtitle.IndexOf(',');
-        return comma < 0 ? subtitle : subtitle[..comma];
     }
 }

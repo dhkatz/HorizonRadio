@@ -38,9 +38,23 @@ public sealed partial class SearchResultRowViewModel : ViewModelBase
     /// <summary>Show the per-row source picker — only when this row has more than one source.</summary>
     public bool HasMultipleSources => Sources.Count > 1;
 
+    private SourceOption _selectedSource;
+
     /// <summary>Which source plays on Add / Play. Defaults to the highest-priority source
-    /// this row has; the picker overrides it.</summary>
-    [ObservableProperty] private SourceOption selectedSource;
+    /// this row has; the picker overrides it. The setter ignores null — the picker's
+    /// two-way binding can momentarily push null while Avalonia reassigns items, and this
+    /// row's display/commands assume a source is always selected.</summary>
+    public SourceOption SelectedSource
+    {
+        get => _selectedSource;
+        set
+        {
+            if (value is null || ReferenceEquals(value, _selectedSource)) return;
+            _selectedSource = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(SelectedSourceName));
+        }
+    }
 
     public SearchResultRowViewModel(MergedResult merged, SearchEnqueuer enqueuer, SearchSourceContext context)
     {
@@ -49,7 +63,7 @@ public sealed partial class SearchResultRowViewModel : ViewModelBase
         Sources = merged.Sources
             .Select(s => new SourceOption(s, s.SourceId, context.NameFor(s.SourceId)))
             .ToList();
-        selectedSource = Sources.OrderBy(o => context.RankOf(o.SourceId)).First();
+        _selectedSource = Sources.OrderBy(o => context.RankOf(o.SourceId)).First();
 
         AddCommand = new RelayCommand(() => _ = enqueuer.EnqueueAsync(SelectedSource.Result, playNow: false));
         PlayCommand = new RelayCommand(() => _ = enqueuer.EnqueueAsync(SelectedSource.Result, playNow: true));
@@ -84,6 +98,4 @@ public sealed partial class SearchResultRowViewModel : ViewModelBase
     }
 
     partial void OnArtChanged(Bitmap? value) => OnPropertyChanged(nameof(HasArt));
-
-    partial void OnSelectedSourceChanged(SourceOption value) => OnPropertyChanged(nameof(SelectedSourceName));
 }
