@@ -25,18 +25,31 @@ public class MetadataConfigMigrationTests
     }
 
     [Fact]
-    public void Existing_config_gains_itunes_at_the_front()
+    public void Existing_config_gains_new_defaults_appended()
     {
         using var dir = TempDir.Create();
         var path = WriteConfig(dir, """{ "order": ["musicbrainz"] }""");
 
         var store = MetadataConfigStore.LoadFromDisk(path);
 
-        // The newly-shipped keyless defaults (iTunes, VocaDB) are added in front of the
-        // existing provider, in their canonical order.
-        Assert.Equal(["itunes", "musicbrainz", "vocadb"], store.Order);
+        // Newly-shipped keyless defaults (iTunes, VocaDB) are appended, NOT inserted ahead
+        // of the user's existing provider.
+        Assert.Equal(["musicbrainz", "itunes", "vocadb"], store.Order);
         Assert.Contains("itunes", store.Introduced);
         Assert.Contains("vocadb", store.Introduced);
+    }
+
+    [Fact]
+    public void Migration_preserves_a_user_prioritized_provider()
+    {
+        using var dir = TempDir.Create();
+        // User deliberately made Spotify their #1 metadata source.
+        var path = WriteConfig(dir, """{ "order": ["spotify", "musicbrainz"] }""");
+
+        var store = MetadataConfigStore.LoadFromDisk(path);
+
+        // Spotify stays first; the new defaults go after it.
+        Assert.Equal(["spotify", "musicbrainz", "itunes", "vocadb"], store.Order);
     }
 
     [Fact]
@@ -62,7 +75,7 @@ public class MetadataConfigMigrationTests
         MetadataConfigStore.LoadFromDisk(path).SaveToDisk(path);
         var reloaded = MetadataConfigStore.LoadFromDisk(path);
 
-        Assert.Equal(["itunes", "musicbrainz", "vocadb"], reloaded.Order);
+        Assert.Equal(["musicbrainz", "itunes", "vocadb"], reloaded.Order);
         Assert.Contains("itunes", reloaded.Introduced);
     }
 }

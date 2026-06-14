@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Audio;
@@ -80,7 +79,7 @@ public sealed class RadioPlayableItem : PlayableItem
         _prepared = true;
         if (_station.FaviconUrl is { } favicon)
         {
-            _stationArt = await TryDownloadAsync(favicon, ct).ConfigureAwait(false);
+            _stationArt = await ImageDownload.TryGetAsync(ImageDownload.Shared, favicon, ct).ConfigureAwait(false);
             if (_stationArt != null) Metadata = BuildTrack(null, null); // attach station logo
         }
     }
@@ -212,18 +211,4 @@ public sealed class RadioPlayableItem : PlayableItem
         "-ar", AudioFormat.SampleRate.ToString(CultureInfo.InvariantCulture),
         "pipe:1",
     ];
-
-    private static async Task<byte[]?> TryDownloadAsync(string url, CancellationToken ct)
-    {
-        try
-        {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-            return await http.GetByteArrayAsync(url, ct).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            Log($"favicon fetch failed: {ex.Message}");
-            return null;
-        }
-    }
 }

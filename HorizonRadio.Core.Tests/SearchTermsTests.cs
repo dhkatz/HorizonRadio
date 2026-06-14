@@ -80,6 +80,25 @@ public class SearchTermsTests
     }
 
     [Fact]
+    public void MatchScore_rejects_a_result_title_that_is_a_subset_of_the_query()
+        // "Sky" is not "Beyond the Sky" — directional coverage rejects the shorter result.
+        => Assert.Null(SearchTerms.MatchScore("Beyond the Sky", "hano", "Sky", "hano"));
+
+    [Fact]
+    public void MatchScore_still_matches_a_longer_catalog_title()
+        // The legitimate reverse: catalog has extra trailing words.
+        => Assert.NotNull(SearchTerms.MatchScore("Sacred Secret", "MuryokuP", "Sacred Secret (Remaster)", "MuryokuP"));
+
+    [Fact]
+    public void MatchScore_title_only_rejects_a_loose_match_but_accepts_an_exact_one()
+    {
+        // No artist to corroborate → a subset/loose title must not match (cover/other-song risk)…
+        Assert.Null(SearchTerms.MatchScore("Beyond the Sky", "", "A Place beyond the starry sky", "MIJIPIN"));
+        // …but an exact title is the best we can do without an artist.
+        Assert.NotNull(SearchTerms.MatchScore("Beyond the Sky", "", "Beyond the Sky", "Whoever"));
+    }
+
+    [Fact]
     public void MatchScore_artist_confirmed_skips_the_artist_gate()
     {
         // The artistId-scoped VocaDB case: artist already confirmed, the credit shows the

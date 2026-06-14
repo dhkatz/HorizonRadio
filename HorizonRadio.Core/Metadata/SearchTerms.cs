@@ -53,20 +53,25 @@ public static class SearchTerms
     }
 
     /// <summary>
-    /// Score how well a catalog result matches the query, or null to reject it. The title
-    /// must overlap strongly (the primary signal) and, when both artists are known, they
-    /// must share at least one token — a same-title track by an unrelated act (e.g.
-    /// "Beyond the Sky" by a metal band vs. the broadcast Vocaloid producer) is a wrong
-    /// match, and a wrong cover is worse than none (we fall back to the station logo).
-    /// Beyond that floor the artist is a ranking bonus, so a partial/looser credit still
-    /// scores — the broadcast artist and a store's credit often differ in formatting
-    /// ("feat." names, a circle, romanization). A 1-token title is too generic to accept
-    /// on the title alone, so those also require artist agreement.
+    /// Score how well a catalog result matches the query, or null to reject it.
     ///
-    /// <paramref name="artistConfirmed"/> = the artist was already established out-of-band
-    /// (e.g. a VocaDB <c>artistId</c>-scoped search): the result's artist string may carry a
-    /// canonical name rather than the broadcast alias ("AIKA" vs. "NGC 3.14"), so the artist
-    /// gate is skipped — a strong title match alone is enough.
+    /// Title is the primary signal, measured DIRECTIONALLY as how much of the query title the
+    /// result covers — so a result whose title is a strict subset of the query ("Sky" for a
+    /// "Beyond the Sky" query) does not score a full match, while the legitimate reverse (the
+    /// catalog has a longer "… (Remaster)" title) still does. Spacing/camelCase differences
+    /// ("BitterSweet" vs "Bitter Sweet") and token reordering count as equal titles.
+    ///
+    /// When both artists are known they must share a token — a same-title track by an
+    /// unrelated act (a metal band's "Beyond the Sky" vs. the broadcast Vocaloid producer) is
+    /// rejected; a wrong cover is worse than none. Beyond that floor the artist is a ranking
+    /// bonus (broadcast vs. store credits differ in formatting/romanization). When NO artist
+    /// is known, a title-only match can latch onto a cover/different song, so we require the
+    /// titles to actually be the same (not a subset). A 1-token title is too generic to accept
+    /// on the title alone.
+    ///
+    /// <paramref name="artistConfirmed"/> = the artist was established out-of-band (e.g. a
+    /// VocaDB <c>artistId</c>-scoped search): the result's artist string may carry a canonical
+    /// name not the broadcast alias ("AIKA" vs. "NGC 3.14"), so the artist gate is skipped.
     /// </summary>
     public static double? MatchScore(string queryTitle, string? queryArtist, string? resultTitle, string? resultArtist,
                                      bool artistConfirmed = false)
@@ -75,39 +80,45 @@ public static class SearchTerms
         var rt = Tokens(resultTitle);
         if (qt.Count == 0 || rt.Count == 0) return null;
 
-        var titleOverlap = Overlap(qt, rt);
-        // Spacing / camelCase differences ("BitterSweet" vs "Bitter Sweet") tokenize apart;
-        // if the titles are equal once squashed to bare alphanumerics, it's a full match.
-        if (titleOverlap < 1.0 && Squash(queryTitle) is { Length: > 0 } qs && qs == Squash(resultTitle))
-            titleOverlap = 1.0;
-        if (titleOverlap < 0.6) return null;
-
-        if (artistConfirmed) return titleOverlap + 0.5;
+        bool titlesEqual = SquashEqual(queryTitle, resultTitle) || SameSet(qt, rt);
+        double titleCover = titlesEqual ? 1.0 : Coverage(qt, rt);
 
         var qa = Tokens(CleanForSearch(queryArtist));
         var ra = Tokens(resultArtist);
-        var artistOverlap = Overlap(qa, ra);
 
-        // Known-but-disjoint artists → different act, reject (the title-only false match).
-        if (qa.Count > 0 && ra.Count > 0 && artistOverlap == 0) return null;
+        if (artistConfirmed) return titleCover >= 0.6 ? titleCover + 0.5 : null;
 
-        // Single-word titles ("Secret", "Heart") match too easily; demand the artist back them up.
-        if (qt.Count < 2 && artistOverlap < 0.5) return null;
+        // No artist to corroborate: a loose/subset title can be a cover or a different song,
+        // so require the titles to genuinely match.
+        if (qa.Count == 0) return titlesEqual ? 1.0 : null;
 
-        return titleOverlap + 0.5 * artistOverlap;
+        if (titleCover < 0.6) return null;
+
+        var artistCover = Coverage(qa, ra);
+        if (ra.Count > 0 && artistCover == 0) return null;   // known but disjoint artist → reject
+        if (qt.Count < 2 && artistCover < 0.5) return null;   // generic 1-word title needs the artist
+
+        return titleCover + 0.5 * artistCover;
     }
 
     // Bare alphanumerics, lower-cased — collapses spacing/punctuation/case for title compare.
     private static string Squash(string? s) =>
         string.IsNullOrEmpty(s) ? "" : new string(s.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
 
-    // Fraction of the smaller token set that appears in the other (order-insensitive).
-    // 0 when either side is empty.
-    private static double Overlap(IReadOnlyList<string> a, IReadOnlyList<string> b)
+    private static bool SquashEqual(string? a, string? b)
     {
-        if (a.Count == 0 || b.Count == 0) return 0;
-        var sb = b.ToHashSet();
-        int shared = a.Count(sb.Contains);
-        return (double)shared / Math.Min(a.Count, b.Count);
+        var sa = Squash(a);
+        return sa.Length > 0 && sa == Squash(b);
+    }
+
+    private static bool SameSet(IReadOnlyList<string> a, IReadOnlyList<string> b) =>
+        a.Count > 0 && new HashSet<string>(a).SetEquals(b);
+
+    // Fraction of the QUERY tokens present in the result (directional). 0 when either is empty.
+    private static double Coverage(IReadOnlyList<string> query, IReadOnlyList<string> result)
+    {
+        if (query.Count == 0 || result.Count == 0) return 0;
+        var rs = result.ToHashSet();
+        return (double)query.Count(rs.Contains) / query.Count;
     }
 }

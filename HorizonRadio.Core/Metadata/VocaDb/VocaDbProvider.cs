@@ -35,8 +35,7 @@ public sealed class VocaDbProvider : IMetadataProvider
     private readonly MetadataCache _cache;
     private readonly HttpClient _http;
     private readonly bool _ownsHttp;
-    private readonly SemaphoreSlim _gate = new(1, 1);
-    private readonly Stopwatch _sinceLast = Stopwatch.StartNew();
+    private readonly RateGate _rate = new(TimeSpan.FromMilliseconds(300));
 
     public VocaDbProvider(MetadataCache cache, HttpClient? http = null)
     {
@@ -77,7 +76,7 @@ public sealed class VocaDbProvider : IMetadataProvider
 
         if (match is null) { _cache.PutMiss(cacheKey); return null; }
 
-        var art = match.ArtUrl != null ? await TryDownloadAsync(match.ArtUrl, ct).ConfigureAwait(false) : null;
+        var art = match.ArtUrl != null ? await ImageDownload.TryGetAsync(_http, match.ArtUrl, ct).ConfigureAwait(false) : null;
         var entry = new MetadataCache.Entry(match.Name, match.Artist, Album: null, AlbumArt: art, Mbid: null, Year: match.Year);
         _cache.Put(cacheKey, entry);
         return ToContribution(entry);
@@ -182,7 +181,7 @@ public sealed class VocaDbProvider : IMetadataProvider
 
     private async Task<JsonElement?> GetJsonAsync(string url, CancellationToken ct)
     {
-        await ThrottleAsync(ct).ConfigureAwait(false);
+        await _rate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             using var resp = await _http.GetAsync(url, ct).ConfigureAwait(false);
@@ -202,28 +201,9 @@ public sealed class VocaDbProvider : IMetadataProvider
     private static string? Str(JsonElement e, string name) =>
         e.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
 
-    private async Task<byte[]?> TryDownloadAsync(string url, CancellationToken ct)
-    {
-        try { return await _http.GetByteArrayAsync(url, ct).ConfigureAwait(false); }
-        catch (Exception ex) { Log($"art fetch failed: {ex.Message}"); return null; }
-    }
-
-    private async Task ThrottleAsync(CancellationToken ct)
-    {
-        await _gate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            var min = TimeSpan.FromMilliseconds(300);
-            var elapsed = _sinceLast.Elapsed;
-            if (elapsed < min) await Task.Delay(min - elapsed, ct).ConfigureAwait(false);
-            _sinceLast.Restart();
-        }
-        finally { _gate.Release(); }
-    }
-
     public ValueTask DisposeAsync()
     {
-        _gate.Dispose();
+        _rate.Dispose();
         if (_ownsHttp) _http.Dispose();
         return ValueTask.CompletedTask;
     }

@@ -15,7 +15,7 @@ namespace HorizonRadio.Core.Sources.Radio;
 /// <see cref="RadioContentPlayer"/>; this wrapper exists for the "make Internet Radio
 /// the active source" path, mirroring <see cref="YouTube.YouTubeSource"/>.
 /// </summary>
-public sealed class RadioSource(RadioStation station, string ffmpegPath)
+public sealed class RadioSource(string locator, string ffmpegPath, RadioBrowserClient directory)
     : IAudioSource, ITransportControls, IPlaybackProgress
 {
     public string Id => RadioSourceFactory.SourceId;
@@ -93,6 +93,21 @@ public sealed class RadioSource(RadioStation station, string ffmpegPath)
 
     private async Task RunAsync(IPcmSink sink, CancellationToken ct)
     {
+        // Resolve the locator -> station here (off the caller's thread); a radio:// locator
+        // hits the directory over the network.
+        RadioStation station;
+        try
+        {
+            station = await RadioContentPlayer.ResolveStationAsync(locator, directory, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { return; }
+        catch (Exception ex)
+        {
+            Log($"resolve failed: {ex.Message}");
+            TrackChanged?.Invoke(new Track("Internet Radio", ex.Message, null, null, Id, DisplayName));
+            return;
+        }
+
         var item = new RadioPlayableItem(station, ffmpegPath);
         _item = item;
 

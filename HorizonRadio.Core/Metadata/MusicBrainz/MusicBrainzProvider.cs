@@ -11,8 +11,8 @@ public sealed class MusicBrainzProvider : IMetadataProvider
     private readonly HttpClient _http;
     private readonly bool _ownsHttp;
     private readonly MetadataCache _cache;
-    private readonly SemaphoreSlim _gate = new(1, 1);
-    private readonly Stopwatch _sinceLast = Stopwatch.StartNew();
+    // MB ToS: ~1 req/sec; the extra 100 ms buffers clock drift that otherwise returns 503.
+    private readonly RateGate _rate = new(TimeSpan.FromMilliseconds(1100));
 
     public MusicBrainzProvider(MetadataCache cache,
                                HttpClient? http = null,
@@ -90,7 +90,7 @@ public sealed class MusicBrainzProvider : IMetadataProvider
             : $"artist:\"{EscapeLucene(cleanArtist)}\" AND recording:\"{EscapeLucene(cleanTitle)}\"";
         var url = $"https://musicbrainz.org/ws/2/recording/?query={Uri.EscapeDataString(query)}&fmt=json&limit=5";
 
-        await ThrottleAsync(ct).ConfigureAwait(false);
+        await _rate.WaitAsync(ct).ConfigureAwait(false);
         using var resp = await _http.GetAsync(url, ct).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode)
         {
@@ -166,7 +166,7 @@ public sealed class MusicBrainzProvider : IMetadataProvider
         var resource = $"https://open.spotify.com/track/{spotifyId}";
         var url = $"https://musicbrainz.org/ws/2/url?resource={Uri.EscapeDataString(resource)}&inc=recording-rels&fmt=json";
 
-        await ThrottleAsync(ct).ConfigureAwait(false);
+        await _rate.WaitAsync(ct).ConfigureAwait(false);
         using var resp = await _http.GetAsync(url, ct).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode)
         {
@@ -195,7 +195,7 @@ public sealed class MusicBrainzProvider : IMetadataProvider
         if (string.IsNullOrEmpty(recordingMbid)) return null;
 
         var recUrl = $"https://musicbrainz.org/ws/2/recording/{recordingMbid}?inc=artist-credits+releases&fmt=json";
-        await ThrottleAsync(ct).ConfigureAwait(false);
+        await _rate.WaitAsync(ct).ConfigureAwait(false);
         using var resp2 = await _http.GetAsync(recUrl, ct).ConfigureAwait(false);
         if (!resp2.IsSuccessStatusCode) return null;
 
@@ -230,41 +230,9 @@ public sealed class MusicBrainzProvider : IMetadataProvider
         return new MetadataCache.Entry(canonicalTitle, canonicalArtist, null, null, null);
     }
 
-    private async Task<byte[]?> FetchCoverArtAsync(string releaseMbid, CancellationToken ct)
-    {
-        // CAA front-500 is the right size for the 180×180 HUD tile.
-        var url = $"https://coverartarchive.org/release/{releaseMbid}/front-500";
-        try
-        {
-            using var resp = await _http.GetAsync(url, ct).ConfigureAwait(false);
-            if (!resp.IsSuccessStatusCode) return null;
-            return await resp.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            Log($"CAA {releaseMbid}: {ex.Message}");
-            return null;
-        }
-    }
-
-    private async Task ThrottleAsync(CancellationToken ct)
-    {
-        // MB ToS: 1 req/sec. Extra 100 ms buffers against clock drift
-        // that otherwise occasionally returns 503.
-        await _gate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            var elapsed = _sinceLast.Elapsed;
-            var min = TimeSpan.FromMilliseconds(1100);
-            if (elapsed < min)
-                await Task.Delay(min - elapsed, ct).ConfigureAwait(false);
-            _sinceLast.Restart();
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
+    // CAA front-500 is the right size for the 180×180 HUD tile; 404 (no art) → null.
+    private Task<byte[]?> FetchCoverArtAsync(string releaseMbid, CancellationToken ct) =>
+        ImageDownload.TryGetAsync(_http, $"https://coverartarchive.org/release/{releaseMbid}/front-500", ct);
 
     private static string EscapeLucene(string s)
     {
@@ -279,7 +247,7 @@ public sealed class MusicBrainzProvider : IMetadataProvider
 
     public ValueTask DisposeAsync()
     {
-        _gate.Dispose();
+        _rate.Dispose();
         if (_ownsHttp) _http.Dispose();
         return ValueTask.CompletedTask;
     }

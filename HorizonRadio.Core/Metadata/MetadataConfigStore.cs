@@ -119,26 +119,15 @@ public sealed class MetadataConfigStore
     }
 
     /// <summary>One-time-per-provider migration: enable a newly-shipped default provider
-    /// (e.g. iTunes) for an existing config that predates it, placing the default providers
-    /// at the front in their canonical priority, then record every known provider as
-    /// introduced so a later user disable is respected rather than re-applied each launch.</summary>
+    /// (e.g. iTunes) for an existing config that predates it. The new providers are
+    /// APPENDED (lowest priority) so the user's existing ordering is never disturbed — a
+    /// user who put Spotify first keeps Spotify first. Every known provider is then recorded
+    /// as introduced, so a later user-disable sticks rather than being re-applied each launch.</summary>
     private void EnableNewDefaultProviders()
     {
-        var newlyDefault = MetadataCatalog.DefaultEnabledOrder
-            .Where(id => !Introduced.Contains(id) && !Order.Contains(id))
-            .ToList();
-
-        if (newlyDefault.Count > 0)
-        {
-            var others = Order.Where(id => !MetadataCatalog.DefaultEnabledOrder.Contains(id)).ToList();
-            // Materialize before clearing Order — these predicates read Order.
-            var defaults = MetadataCatalog.DefaultEnabledOrder
-                .Where(id => Order.Contains(id) || newlyDefault.Contains(id))
-                .ToList();
-            Order.Clear();
-            Order.AddRange(defaults);
-            Order.AddRange(others);
-        }
+        foreach (var id in MetadataCatalog.DefaultEnabledOrder)
+            if (!Introduced.Contains(id) && !Order.Contains(id))
+                Order.Add(id);
 
         foreach (var f in MetadataCatalog.All)
             if (!Introduced.Contains(f.Id)) Introduced.Add(f.Id);

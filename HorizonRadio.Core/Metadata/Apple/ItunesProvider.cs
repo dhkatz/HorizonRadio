@@ -33,8 +33,7 @@ public sealed class ItunesProvider : IMetadataProvider
 
     // Light spacing between calls — the Search API tolerates bursts poorly, and a single
     // lookup can fan out to a few requests across storefronts/query forms.
-    private readonly SemaphoreSlim _gate = new(1, 1);
-    private readonly Stopwatch _sinceLast = Stopwatch.StartNew();
+    private readonly RateGate _rate = new(TimeSpan.FromMilliseconds(250));
 
     public ItunesProvider(MetadataCache cache, HttpClient? http = null, string? country = null)
     {
@@ -70,7 +69,7 @@ public sealed class ItunesProvider : IMetadataProvider
         }
 
         var art = match.ArtworkUrl != null
-            ? await TryDownloadAsync(match.ArtworkUrl, ct).ConfigureAwait(false)
+            ? await ImageDownload.TryGetAsync(_http, match.ArtworkUrl, ct).ConfigureAwait(false)
             : null;
 
         var entry = new MetadataCache.Entry(match.Title, match.Artist, match.Album, art, Mbid: null, Year: match.Year);
@@ -108,7 +107,7 @@ public sealed class ItunesProvider : IMetadataProvider
         // limit=10 so scoring can see past a fuzzy #1 to the real track.
         var url = $"https://itunes.apple.com/search?media=music&entity=song&limit=10&country={store}&term={Uri.EscapeDataString(term)}";
 
-        await ThrottleAsync(ct).ConfigureAwait(false);
+        await _rate.WaitAsync(ct).ConfigureAwait(false);
         using var resp = await _http.GetAsync(url, ct).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode)
         {
@@ -151,19 +150,6 @@ public sealed class ItunesProvider : IMetadataProvider
         return best;
     }
 
-    private async Task ThrottleAsync(CancellationToken ct)
-    {
-        await _gate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            var min = TimeSpan.FromMilliseconds(250);
-            var elapsed = _sinceLast.Elapsed;
-            if (elapsed < min) await Task.Delay(min - elapsed, ct).ConfigureAwait(false);
-            _sinceLast.Restart();
-        }
-        finally { _gate.Release(); }
-    }
-
     // iTunes returns a 100×100 thumbnail URL; swapping the size segment yields full-res art.
     private static string? UpscaleArtwork(string? url) =>
         string.IsNullOrEmpty(url) ? null : url.Replace("100x100bb", "600x600bb");
@@ -175,15 +161,9 @@ public sealed class ItunesProvider : IMetadataProvider
     private static string? Str(JsonElement e, string name) =>
         e.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.String ? p.GetString() : null;
 
-    private async Task<byte[]?> TryDownloadAsync(string url, CancellationToken ct)
-    {
-        try { return await _http.GetByteArrayAsync(url, ct).ConfigureAwait(false); }
-        catch (Exception ex) { Log($"art fetch failed: {ex.Message}"); return null; }
-    }
-
     public ValueTask DisposeAsync()
     {
-        _gate.Dispose();
+        _rate.Dispose();
         if (_ownsHttp) _http.Dispose();
         return ValueTask.CompletedTask;
     }

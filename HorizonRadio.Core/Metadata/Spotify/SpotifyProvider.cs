@@ -148,10 +148,7 @@ public sealed class SpotifyProvider : IMetadataProvider
                            .FirstOrDefault()
                     ?? imgs[0];
             if (!string.IsNullOrEmpty(pick.Url))
-            {
-                try { art = await _httpForArt.GetByteArrayAsync(pick.Url, ct).ConfigureAwait(false); }
-                catch (Exception ex) { Log($"art fetch failed: {ex.Message}"); }
-            }
+                art = await ImageDownload.TryGetAsync(_httpForArt, pick.Url, ct).ConfigureAwait(false);
         }
 
         return new MetadataCache.Entry(
