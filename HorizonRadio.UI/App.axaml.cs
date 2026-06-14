@@ -1,3 +1,4 @@
+using System.IO;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
@@ -13,6 +14,7 @@ using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Core.Sources.Queue;
 using HorizonRadio.Core.Sources.Spotify;
+using HorizonRadio.Core.Sources.YouTube;
 using HorizonRadio.UI.Tools;
 using HorizonRadio.UI.ViewModels;
 using HorizonRadio.UI.Views;
@@ -83,6 +85,18 @@ public partial class App : Application
             {
                 if (factory?.Id == "spotify") _ = _spotifyPlayback.ReleaseAsync();
             };
+
+            // YouTube search needs the configured yt-dlp path; publish a resolver that
+            // reads it fresh from the persisted config (so installing yt-dlp via the
+            // Tools tab mid-session takes effect without a restart), or null when it
+            // isn't set/installed yet — which the search source treats as "no results".
+            var youtubeFactory = (YouTubeSourceFactory)SourceCatalog.Find(YouTubeSourceFactory.SourceId)!;
+            YouTubeRuntime.Initialize(() =>
+            {
+                var path = _store!.Load(youtubeFactory.Id, youtubeFactory.Schema)
+                    .GetString(YouTubeSourceFactory.KeyYtDlp);
+                return !string.IsNullOrWhiteSpace(path) && File.Exists(path) ? path : null;
+            });
 
             _metaStore = MetadataConfigStore.LoadFromDisk();
             var cache = new MetadataCache();

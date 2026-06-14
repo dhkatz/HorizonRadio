@@ -23,13 +23,17 @@ public enum SearchResultKind
 /// <param name="ArtUrl">Remote artwork URL, or null. Loaded lazily by the UI — search
 /// sources return the URL rather than bytes so a result list stays cheap to build.</param>
 /// <param name="Locator">The content locator to enqueue (a Spotify URI / URL, …).</param>
+/// <param name="Duration">Track length, where the source reports one — used by the
+/// cross-source merge to keep different versions of the same title apart (a 4-minute
+/// album cut vs. a 40-second snippet shouldn't fold together). Null when unknown.</param>
 public sealed record SearchResult(
     string SourceId,
     SearchResultKind Kind,
     string Title,
     string Subtitle,
     string? ArtUrl,
-    string Locator);
+    string Locator,
+    TimeSpan? Duration = null);
 
 /// <summary>
 /// Optional capability for an <see cref="IAudioSourceFactory"/> whose source can be

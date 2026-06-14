@@ -7,14 +7,18 @@ namespace HorizonRadio.Core.Sources.YouTube;
 /// Factory for <see cref="YouTubeSource"/>. Exposes yt-dlp + ffmpeg
 /// paths (auto-detected if bundled or on PATH) and the URL to play.
 /// </summary>
-public sealed class YouTubeSourceFactory : IContentSourceFactory
+public sealed class YouTubeSourceFactory : IContentSourceFactory, ISearchSource
 {
+    /// <summary>Catalog id for the YouTube source — the key search results carry so the
+    /// enqueuer can find this factory again (see <see cref="SourceCatalog.Find"/>).</summary>
+    public const string SourceId = "youtube";
+
     public const string KeyYtDlp = "ytDlp";
     public const string KeyFfmpeg = "ffmpeg";
     public const string KeyUrl = "url";
     public const string KeyNormalise = "normalise";
 
-    public string Id => "youtube";
+    public string Id => SourceId;
     public string DisplayName => "YouTube";
     public string? Description => "Stream audio from a YouTube video or playlist URL via yt-dlp.";
 
@@ -74,4 +78,17 @@ public sealed class YouTubeSourceFactory : IContentSourceFactory
     // reuses CreatePlayer directly and opens many refs against it.
     public IAudioSource Create(ConfigValues values)
         => CreatePlayer(values).Open(new ContentRef(Id, values.GetString(ContentKey) ?? ""));
+
+    // -- ISearchSource (yt-dlp ytsearch → youtube.com/watch locators) --
+
+    public Task<IReadOnlyList<SearchResult>> SearchAsync(string query, int limit, CancellationToken ct = default)
+    {
+        var ytDlp = YouTubeRuntime.YtDlpPath;
+        // yt-dlp not installed/configured, or empty query → no results (never throw, so a
+        // missing tool can't break a search that spans other sources).
+        if (ytDlp is null || string.IsNullOrWhiteSpace(query))
+            return Task.FromResult<IReadOnlyList<SearchResult>>([]);
+
+        return YouTubeSearch.SearchTracksAsync(ytDlp, query.Trim(), limit, ct);
+    }
 }

@@ -29,12 +29,13 @@ public sealed partial class TopBarViewModel : ViewModelBase
     private static readonly TimeSpan DebounceDelay = TimeSpan.FromMilliseconds(250);
 
     private readonly SearchEnqueuer? _enqueuer;
-    private readonly Action<string, IReadOnlyList<SearchResult>>? _onSubmit;
+    private readonly SearchSourceContext? _context;
+    private readonly Action<string, UnifiedSearchResult>? _onSubmit;
     private CancellationTokenSource? _searchCts;
 
-    // The raw results of the last completed search, plus the query they're for — so
-    // Submit only reuses them when they actually match the query being submitted.
-    private IReadOnlyList<SearchResult> _lastResults = [];
+    // The last completed search, plus the query it's for — so Submit only reuses it when
+    // it actually matches the query being submitted.
+    private UnifiedSearchResult _lastResult = new([], []);
     private string _lastResultsQuery = "";
 
     /// <summary>The handful of live results under the box.</summary>
@@ -57,9 +58,10 @@ public sealed partial class TopBarViewModel : ViewModelBase
     /// a misleading "no results".</summary>
     [ObservableProperty] private bool needsConnection;
 
-    public TopBarViewModel(SearchEnqueuer enqueuer, Action<string, IReadOnlyList<SearchResult>> onSubmit)
+    public TopBarViewModel(SearchEnqueuer enqueuer, SearchSourceContext context, Action<string, UnifiedSearchResult> onSubmit)
     {
         _enqueuer = enqueuer;
+        _context = context;
         _onSubmit = onSubmit;
     }
 
@@ -89,20 +91,20 @@ public sealed partial class TopBarViewModel : ViewModelBase
         IsDropdownOpen = true;
         HasNoResults = false;
 
-        IReadOnlyList<SearchResult> results;
-        try { results = await UnifiedSearch.SearchAsync(query, SearchLimit, ct); }
+        UnifiedSearchResult result;
+        try { result = await UnifiedSearch.SearchAsync(query, SearchLimit, ct: ct); }
         catch (OperationCanceledException) { return; }
-        catch { results = []; }
+        catch { result = new UnifiedSearchResult([], []); }
 
         if (ct.IsCancellationRequested) return;
 
-        _lastResults = results;
+        _lastResult = result;
         _lastResultsQuery = query;
 
         LiveResults.Clear();
-        foreach (var r in results.Take(DropdownRows))
+        foreach (var merged in SearchMerge.Merge(result.Results).Take(DropdownRows))
         {
-            var row = new SearchResultRowViewModel(r, _enqueuer!);
+            var row = new SearchResultRowViewModel(merged, _enqueuer!, _context!);
             LiveResults.Add(row);
             _ = row.LoadArtAsync(ct);
         }
@@ -110,8 +112,8 @@ public sealed partial class TopBarViewModel : ViewModelBase
         IsSearching = false;
         // Empty because nothing matched vs. because no source is connected — show the
         // right hint for each.
-        NeedsConnection = results.Count == 0 && !UnifiedSearch.HasReadySource;
-        HasNoResults = results.Count == 0 && !NeedsConnection;
+        NeedsConnection = result.Results.Count == 0 && !UnifiedSearch.HasReadySource;
+        HasNoResults = result.Results.Count == 0 && !NeedsConnection;
     }
 
     /// <summary>Open the full search page for the current query (Enter / search button).
@@ -126,11 +128,11 @@ public sealed partial class TopBarViewModel : ViewModelBase
         // and hit Enter before the new search landed, our cached results are stale, so
         // pass none and let the page run a fresh search for the submitted query.
         _searchCts?.Cancel();
-        var results = string.Equals(_lastResultsQuery.Trim(), q, StringComparison.Ordinal)
-            ? _lastResults
-            : [];
+        var result = string.Equals(_lastResultsQuery.Trim(), q, StringComparison.Ordinal)
+            ? _lastResult
+            : new UnifiedSearchResult([], []);
         CloseDropdown();
-        _onSubmit?.Invoke(q, results);
+        _onSubmit?.Invoke(q, result);
     }
 
     /// <summary>Clear the box (the dropdown's not-now affordance / Escape).</summary>
