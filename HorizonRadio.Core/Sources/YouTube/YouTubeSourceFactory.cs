@@ -62,15 +62,17 @@ public sealed class YouTubeSourceFactory : IContentSourceFactory, ISearchSource
 
     public IContentPlayer CreatePlayer(ConfigValues values)
     {
-        var ytDlp = values.GetString(KeyYtDlp);
-        if (string.IsNullOrWhiteSpace(ytDlp) || !File.Exists(ytDlp))
+        // Prefer the per-source path, but fall back to a managed/bundled copy so a tool
+        // installed once (Tools tab) works without re-entering it here.
+        var ytDlp = ToolResolver.Resolve(values.GetString(KeyYtDlp), Tools.ToolKind.YtDlp);
+        if (ytDlp is null)
             throw new InvalidOperationException("YouTube: pick a yt-dlp.exe path.");
 
-        var ffmpeg = values.GetString(KeyFfmpeg);
-        if (string.IsNullOrWhiteSpace(ffmpeg) || !File.Exists(ffmpeg))
+        var ffmpeg = ToolResolver.Resolve(values.GetString(KeyFfmpeg), Tools.ToolKind.Ffmpeg);
+        if (ffmpeg is null)
             throw new InvalidOperationException("YouTube: pick an ffmpeg.exe path.");
 
-        return new YouTubeContentPlayer(ytDlp!, ffmpeg!, values.GetBool(KeyNormalise, false));
+        return new YouTubeContentPlayer(ytDlp, ffmpeg, values.GetBool(KeyNormalise, false));
     }
 
     // Single-start path: build the engine, then open the one URL the form holds.

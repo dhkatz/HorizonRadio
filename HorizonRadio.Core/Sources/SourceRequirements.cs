@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Core.Tools;
 
 namespace HorizonRadio.Core.Sources;
 
@@ -39,8 +39,10 @@ public static class SourceRequirements
         foreach (var field in factory.Schema)
         {
             if (field is not ToolField tool) continue;
-            var path = values.GetString(tool.Key);
-            if ((string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            // A tool counts as available if the source has a valid path OR a managed/
+            // bundled copy exists — so installing it once (Tools tab) satisfies every
+            // source without re-entering the path per source.
+            if (ToolResolver.Resolve(values.GetString(tool.Key), tool.ToolKind) is null
                 && !missing.Contains(tool.ToolKind))
                 missing.Add(tool.ToolKind);
         }

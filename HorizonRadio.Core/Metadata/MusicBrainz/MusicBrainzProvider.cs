@@ -79,8 +79,16 @@ public sealed class MusicBrainzProvider : IMetadataProvider
     private async Task<MetadataCache.Entry?> EnrichByTextAsync(string artist, string title,
                                                                CancellationToken ct)
     {
-        var query = $"artist:\"{EscapeLucene(artist)}\" AND recording:\"{EscapeLucene(title)}\"";
-        var url = $"https://musicbrainz.org/ws/2/recording/?query={Uri.EscapeDataString(query)}&fmt=json&limit=1";
+        // Clean tag noise out of the query so a "[Hatsune Miku]" vocalist tag can't leak
+        // a stray word ("Miku") into the search.
+        var cleanTitle = SearchTerms.CleanForSearch(title);
+        if (string.IsNullOrEmpty(cleanTitle)) return null;
+        var cleanArtist = SearchTerms.CleanForSearch(artist);
+
+        var query = string.IsNullOrEmpty(cleanArtist)
+            ? $"recording:\"{EscapeLucene(cleanTitle)}\""
+            : $"artist:\"{EscapeLucene(cleanArtist)}\" AND recording:\"{EscapeLucene(cleanTitle)}\"";
+        var url = $"https://musicbrainz.org/ws/2/recording/?query={Uri.EscapeDataString(query)}&fmt=json&limit=5";
 
         await ThrottleAsync(ct).ConfigureAwait(false);
         using var resp = await _http.GetAsync(url, ct).ConfigureAwait(false);
@@ -98,14 +106,31 @@ public sealed class MusicBrainzProvider : IMetadataProvider
             recordings.ValueKind != JsonValueKind.Array ||
             recordings.GetArrayLength() == 0) return null;
 
-        var rec = recordings[0];
-        string? canonicalTitle = rec.TryGetProperty("title", out var t) ? t.GetString() : null;
-        string? canonicalArtist = rec.TryGetProperty("artist-credit", out var ac) &&
-                                  ac.ValueKind == JsonValueKind.Array && ac.GetArrayLength() > 0 &&
-                                  ac[0].TryGetProperty("name", out var nm) ? nm.GetString() : null;
+        // MB ranks by its own relevance and will happily return an unrelated recording for
+        // a loose query; score each against the request (title-first) and take the best
+        // that actually matches, so we never attach a wrong album's art.
+        JsonElement rec = default;
+        string? canonicalTitle = null, canonicalArtist = null;
+        double bestScore = double.NegativeInfinity;
+        foreach (var candidate in recordings.EnumerateArray())
+        {
+            var rt = candidate.TryGetProperty("title", out var t) ? t.GetString() : null;
+            if (rt is null) continue;
+            var ra = candidate.TryGetProperty("artist-credit", out var ac) &&
+                     ac.ValueKind == JsonValueKind.Array && ac.GetArrayLength() > 0 &&
+                     ac[0].TryGetProperty("name", out var nm) ? nm.GetString() : null;
+
+            if (SearchTerms.MatchScore(title, artist, rt, ra) is not { } score || score <= bestScore) continue;
+            bestScore = score;
+            rec = candidate;
+            canonicalTitle = rt;
+            canonicalArtist = ra;
+        }
+        if (canonicalTitle is null) return null; // nothing matched the request
 
         if (!rec.TryGetProperty("releases", out var releases) ||
-            releases.ValueKind != JsonValueKind.Array) return null;
+            releases.ValueKind != JsonValueKind.Array)
+            return new MetadataCache.Entry(canonicalTitle, canonicalArtist, null, null, null);
 
         // MB doesn't indicate which release has art; probe the first few via CAA.
         int maxTries = Math.Min(3, releases.GetArrayLength());

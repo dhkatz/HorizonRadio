@@ -199,6 +199,15 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
                 // refines its title/art during prepare).
                 if (_current != null) _model.SetNowPlaying(_current, _lastFromContext);
             },
+            OnMetadataUpdated = item =>
+            {
+                // A live item (radio) changed song mid-play: republish the HUD track
+                // and now-playing so enrichment re-runs for the new song. Guard on the
+                // item still being active so a late callback from a skipped item is ignored.
+                if (!ReferenceEquals(_activeItem, item)) return;
+                TrackChanged?.Invoke(item.Metadata);
+                if (_current != null) _model.SetNowPlaying(_current, _lastFromContext);
+            },
         };
 
         while (!ct.IsCancellationRequested)

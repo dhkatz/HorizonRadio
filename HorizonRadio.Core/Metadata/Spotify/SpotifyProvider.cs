@@ -8,25 +8,32 @@ using SpotifyAPI.Web;
 
 namespace HorizonRadio.Core.Metadata.Spotify;
 
+/// <summary>
+/// Metadata via the Spotify Web API. The client comes from a factory delegate so this
+/// provider works two ways: with its own app credentials (client-credentials flow), or —
+/// when none are configured — by riding on the already-connected Spotify <em>source</em>
+/// (Sources tab), so the user needn't register a second app. The delegate is read each
+/// lookup, so reconnecting the source (or connecting it after startup) just works.
+///
+/// Text lookups search free-text and score results title-first
+/// (<see cref="SearchTerms.MatchScore"/>) rather than gating on an exact artist match —
+/// the broadcast artist often differs from Spotify's credit (a producer vs. a vocalist).
+/// </summary>
 public sealed class SpotifyProvider : IMetadataProvider
 {
     public string Id => "spotify";
 
     private readonly MetadataCache _cache;
-    private readonly string _clientId;
-    private readonly string _clientSecret;
+    private readonly Func<CancellationToken, Task<SpotifyClient?>> _clientFactory;
     private readonly HttpClient _httpForArt = new() { Timeout = TimeSpan.FromSeconds(15) };
-    private readonly SemaphoreSlim _initGate = new(1, 1);
-    private SpotifyClient? _client;
 
-    public SpotifyProvider(MetadataCache cache, string clientId, string clientSecret)
+    public SpotifyProvider(MetadataCache cache, Func<CancellationToken, Task<SpotifyClient?>> clientFactory)
     {
         _cache = cache;
-        _clientId = clientId;
-        _clientSecret = clientSecret;
+        _clientFactory = clientFactory;
     }
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-spotify-mb] {msg}");
+    private static void Log(string msg) => Debug.WriteLine($"[hzn-spotify-mp] {msg}");
 
     public async Task<MetadataContribution?> ContributeAsync(MetadataQuery query, CancellationToken ct)
     {
@@ -34,7 +41,7 @@ public sealed class SpotifyProvider : IMetadataProvider
             !string.IsNullOrEmpty(query.ExternalId) &&
             query.ExternalId.StartsWith("spotify:track:", StringComparison.Ordinal)
                 ? "uri=" + query.ExternalId
-                : !string.IsNullOrEmpty(query.Title) && !string.IsNullOrEmpty(query.Artist)
+                : !string.IsNullOrEmpty(query.Title)
                     ? $"text={query.Artist.ToLowerInvariant()}|{query.Title.ToLowerInvariant()}"
                     : null;
         if (queryKey == null) return null;
@@ -59,31 +66,13 @@ public sealed class SpotifyProvider : IMetadataProvider
         return c.IsEmpty ? null : c;
     }
 
-    private async Task<SpotifyClient> GetClientAsync(CancellationToken ct)
-    {
-        if (_client != null) return _client;
-        await _initGate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (_client != null) return _client;
-            var config = SpotifyClientConfig
-                .CreateDefault()
-                .WithAuthenticator(new ClientCredentialsAuthenticator(_clientId, _clientSecret));
-            _client = new SpotifyClient(config);
-            return _client;
-        }
-        finally
-        {
-            _initGate.Release();
-        }
-    }
-
     private async Task<MetadataCache.Entry?> EnrichByUriAsync(string spotifyUri, CancellationToken ct)
     {
         try
         {
+            var client = await _clientFactory(ct).ConfigureAwait(false);
+            if (client is null) return null;
             var id = spotifyUri.Substring("spotify:track:".Length);
-            var client = await GetClientAsync(ct).ConfigureAwait(false);
             var track = await client.Tracks.Get(id, ct).ConfigureAwait(false);
             return await BuildEntry(track, ct).ConfigureAwait(false);
         }
@@ -99,25 +88,38 @@ public sealed class SpotifyProvider : IMetadataProvider
         }
     }
 
-    private async Task<MetadataCache.Entry?> EnrichByTextAsync(string artist, string title,
-                                                               CancellationToken ct)
+    private async Task<MetadataCache.Entry?> EnrichByTextAsync(string artist, string title, CancellationToken ct)
     {
         try
         {
-            var client = await GetClientAsync(ct).ConfigureAwait(false);
+            var client = await _clientFactory(ct).ConfigureAwait(false);
+            if (client is null) return null;
 
-            // Strip leading "The " — "The Beatles" search returns better
-            // hits than artist:"The Beatles" in MB-normalized corpora.
-            var qArtist = artist.StartsWith("The ", StringComparison.OrdinalIgnoreCase)
-                ? artist.Substring(4) : artist;
-            var query = $"track:\"{Escape(title)}\" artist:\"{Escape(qArtist)}\"";
+            var cleanTitle = SearchTerms.CleanForSearch(title);
+            if (string.IsNullOrEmpty(cleanTitle)) return null;
+            var cleanArtist = SearchTerms.CleanForSearch(artist);
+            var q = string.IsNullOrEmpty(cleanArtist) ? cleanTitle : $"{cleanArtist} {cleanTitle}";
+
+            // Dev-Mode apps cap the search limit at 10; fetch a handful so scoring can see
+            // past a fuzzy top hit to the real track.
             var resp = await client.Search.Item(
-                new SearchRequest(SearchRequest.Types.Track, query) { Limit = 1 }, ct)
-                .ConfigureAwait(false);
+                new SearchRequest(SearchRequest.Types.Track, q) { Limit = 10 }, ct).ConfigureAwait(false);
 
-            var first = resp.Tracks?.Items?.FirstOrDefault();
-            if (first == null) return null;
-            return await BuildEntry(first, ct).ConfigureAwait(false);
+            var items = resp.Tracks?.Items;
+            if (items is null || items.Count == 0) return null;
+
+            FullTrack? best = null;
+            double bestScore = double.NegativeInfinity;
+            foreach (var t in items)
+            {
+                var resultArtist = t.Artists?.FirstOrDefault()?.Name;
+                if (SearchTerms.MatchScore(title, artist, t.Name, resultArtist) is not { } score) continue;
+                if (score <= bestScore) continue;
+                bestScore = score;
+                best = t;
+            }
+
+            return best is null ? null : await BuildEntry(best, ct).ConfigureAwait(false);
         }
         catch (APIException ex)
         {
@@ -168,21 +170,9 @@ public sealed class SpotifyProvider : IMetadataProvider
         return int.TryParse(releaseDate.AsSpan(0, 4), out var y) ? y : null;
     }
 
-    private static string Escape(string s)
-    {
-        var sb = new System.Text.StringBuilder(s.Length + 4);
-        foreach (var c in s)
-        {
-            if (c == '"' || c == '\\') sb.Append('\\');
-            sb.Append(c);
-        }
-        return sb.ToString();
-    }
-
     public ValueTask DisposeAsync()
     {
         _httpForArt.Dispose();
-        _initGate.Dispose();
         return ValueTask.CompletedTask;
     }
 }
