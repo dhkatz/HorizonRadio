@@ -84,17 +84,25 @@ public sealed class QueueModel
 
     // -- UI-side mutation --
 
-    /// <summary>Append resolved items to the explicit ("next in queue") zone.</summary>
-    public void AppendExplicit(IEnumerable<PlayableItem> items)
+    /// <summary>Append resolved items to the explicit ("next in queue") zone, returning
+    /// the ids of the items added (in order) — callers use the first to "play now"
+    /// (see <see cref="JumpToExplicit"/>). Empty if nothing was added.</summary>
+    public IReadOnlyList<string> AppendExplicit(IEnumerable<PlayableItem> items)
     {
-        var added = false;
+        var ids = new List<string>();
         lock (_lock)
         {
-            foreach (var it in items) { _explicit.Add(new QueueItem(it)); added = true; }
+            foreach (var it in items)
+            {
+                var qi = new QueueItem(it);
+                _explicit.Add(qi);
+                ids.Add(qi.Id);
+            }
         }
-        if (!added) return;
+        if (ids.Count == 0) return ids;
         Changed?.Invoke();
         WorkAvailable?.Invoke();
+        return ids;
     }
 
     public void RemoveExplicit(string id)

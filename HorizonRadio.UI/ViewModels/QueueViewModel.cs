@@ -241,19 +241,7 @@ public sealed partial class QueueViewModel : ViewModelBase
         return _artCacheBmp;
     }
 
-    private static Bitmap? DecodeArt(byte[]? bytes)
-    {
-        if (bytes == null || bytes.Length == 0) return null;
-        try
-        {
-            using var ms = new System.IO.MemoryStream(bytes);
-            return new Bitmap(ms);
-        }
-        catch
-        {
-            return null; // malformed art — show the placeholder tile instead
-        }
-    }
+    private static Bitmap? DecodeArt(byte[]? bytes) => Imaging.ImageBytes.ToBitmap(bytes);
 
     partial void OnHasNowPlayingChanged(bool value) => OnPropertyChanged(nameof(IsEmpty));
     partial void OnHasUpcomingChanged(bool value) => OnPropertyChanged(nameof(IsEmpty));

@@ -737,20 +737,5 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         ReevaluateOutput();
     }
 
-    private static Bitmap? DecodeArt(byte[]? bytes)
-    {
-        if (bytes == null || bytes.Length == 0) return null;
-        try
-        {
-            using var ms = new System.IO.MemoryStream(bytes);
-            return new Bitmap(ms);
-        }
-        catch
-        {
-            // Album art payload may be malformed if the ID3 frame had
-            // a non-image MIME type or a partial download. Better a
-            // blank tile than a crashed UI.
-            return null;
-        }
-    }
+    private static Bitmap? DecodeArt(byte[]? bytes) => Imaging.ImageBytes.ToBitmap(bytes);
 }

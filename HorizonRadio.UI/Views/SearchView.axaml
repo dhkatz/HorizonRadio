@@ -1,0 +1,97 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             xmlns:material="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="HorizonRadio.UI.Views.SearchView"
+             x:DataType="vm:SearchViewModel">
+
+    <Design.DataContext>
+        <vm:SearchViewModel />
+    </Design.DataContext>
+
+    <UserControl.Styles>
+        <!-- Whole-row hover surface (transparent bg) reveals the per-row actions. -->
+        <Style Selector="Border.resultRow StackPanel.actions">
+            <Setter Property="Opacity" Value="0"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+        </Style>
+        <Style Selector="Border.resultRow:pointerover StackPanel.actions">
+            <Setter Property="Opacity" Value="1"/>
+            <Setter Property="IsHitTestVisible" Value="True"/>
+        </Style>
+        <Style Selector="Border.resultRow:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SecondaryColor}"/>
+        </Style>
+    </UserControl.Styles>
+
+    <DockPanel LastChildFill="True" Margin="24,16">
+
+        <!-- Header -->
+        <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,0,0,16">
+            <TextBlock Text="Search Results" FontSize="20" FontWeight="SemiBold"/>
+            <TextBlock Text="{Binding Query, StringFormat='Results for “{0}”'}"
+                       FontSize="13" Opacity="0.6"
+                       IsVisible="{Binding Query, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       TextTrimming="CharacterEllipsis"/>
+        </StackPanel>
+
+        <!-- Searching / empty states -->
+        <TextBlock DockPanel.Dock="Top" Text="Searching…" FontSize="13" Opacity="0.55"
+                   IsVisible="{Binding IsSearching}"/>
+        <TextBlock DockPanel.Dock="Top" Text="No results found. Try a different search."
+                   FontSize="13" Opacity="0.55"
+                   IsVisible="{Binding HasNoResults}"/>
+        <TextBlock DockPanel.Dock="Top" Text="Search failed. Check your connection and try again."
+                   FontSize="13" Opacity="0.7" Foreground="#f59e0b"
+                   IsVisible="{Binding HasError}"/>
+        <TextBlock DockPanel.Dock="Top" Text="Connect a music source (e.g. Spotify) in Sources to search."
+                   FontSize="13" Opacity="0.55"
+                   IsVisible="{Binding NeedsConnection}"/>
+
+        <ScrollViewer IsVisible="{Binding HasResults}">
+            <ItemsControl ItemsSource="{Binding Results}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:SearchResultRowViewModel}">
+                        <Border Classes="resultRow" Padding="8" CornerRadius="6" Margin="0,0,0,2">
+                            <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center"
+                                  Background="Transparent">
+                                <!-- Art over a placeholder tile -->
+                                <Border Grid.Column="0" Width="48" Height="48" CornerRadius="4"
+                                        ClipToBounds="True" Margin="0,0,12,0"
+                                        Background="{DynamicResource SecondaryColor}">
+                                    <Panel>
+                                        <material:MaterialIcon Kind="MusicNote" Width="20" Height="20" Opacity="0.5"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <Image Source="{Binding Art}" Stretch="UniformToFill"
+                                               IsVisible="{Binding HasArt}"/>
+                                    </Panel>
+                                </Border>
+                                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="Medium"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding Subtitle}" FontSize="12" Opacity="0.6"
+                                               IsVisible="{Binding HasSubtitle}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Classes="actions" Orientation="Horizontal" Spacing="2"
+                                            VerticalAlignment="Center">
+                                    <Button Classes="Ghost" Padding="6" Command="{Binding PlayCommand}"
+                                            ToolTip.Tip="Play Now">
+                                        <material:MaterialIcon Kind="Play" Width="18" Height="18"/>
+                                    </Button>
+                                    <Button Classes="Ghost" Padding="6" Command="{Binding AddCommand}"
+                                            ToolTip.Tip="Add To Queue">
+                                        <material:MaterialIcon Kind="Plus" Width="18" Height="18"/>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </DockPanel>
+</UserControl>

@@ -1,0 +1,127 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             xmlns:material="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="1024" d:DesignHeight="52"
+             x:Class="HorizonRadio.UI.Views.TopBarView"
+             x:DataType="vm:TopBarViewModel">
+
+    <Design.DataContext>
+        <vm:TopBarViewModel />
+    </Design.DataContext>
+
+    <UserControl.Styles>
+        <!-- Compact result row: Add/Play sit at the right, always visible (the dropdown
+             is a quick-action peek, so no hover-reveal dance like the queue rows). -->
+        <Style Selector="Border.searchPill:pointerover">
+            <Setter Property="BorderBrush" Value="#4A90F8"/>
+        </Style>
+    </UserControl.Styles>
+
+    <!-- Just the search pill + live-results dropdown; this control is injected into the
+         ShadUI title bar's centre slot (see MainWindow.OnApplyTemplate), so it carries no
+         bar chrome of its own — the title bar is the bar. -->
+    <Grid VerticalAlignment="Center" HorizontalAlignment="Center">
+        <Grid VerticalAlignment="Center">
+                <Border x:Name="SearchPill"
+                        Width="360" Height="32"
+                        CornerRadius="16"
+                        Background="{DynamicResource SecondaryColor}"
+                        BorderBrush="{DynamicResource BorderColor}"
+                        BorderThickness="1"
+                        Classes="searchPill"
+                        Padding="12,0">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <material:MaterialIcon Grid.Column="0" Kind="Magnify" Width="16" Height="16"
+                                               Opacity="0.6" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBox x:Name="SearchBox" Grid.Column="1"
+                                 Text="{Binding Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 PlaceholderText="Search for tracks…"
+                                 BorderThickness="0"
+                                 Background="Transparent"
+                                 Padding="0"
+                                 VerticalContentAlignment="Center"
+                                 VerticalAlignment="Center"
+                                 FontSize="13"
+                                 KeyDown="OnSearchKeyDown"
+                                 GotFocus="OnSearchGotFocus"/>
+                        <Button Grid.Column="2" Classes="Ghost" Padding="4"
+                                IsVisible="{Binding Query, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                Command="{Binding ClearCommand}"
+                                VerticalAlignment="Center"
+                                ToolTip.Tip="Clear">
+                            <material:MaterialIcon Kind="Close" Width="14" Height="14" Opacity="0.6"/>
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <!-- Live results, anchored under the pill. Light-dismiss closes it
+                     (writes IsDropdownOpen back via the two-way bind). -->
+                <Popup PlacementTarget="{Binding #SearchPill}"
+                       Placement="Bottom"
+                       HorizontalOffset="0" VerticalOffset="6"
+                       IsLightDismissEnabled="True"
+                       IsOpen="{Binding IsDropdownOpen, Mode=TwoWay}">
+                    <Border Width="420" MaxHeight="380"
+                            Background="{DynamicResource CardBackgroundColor}"
+                            BorderBrush="{DynamicResource BorderColor}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="6">
+                        <Panel>
+                            <!-- Searching / empty states -->
+                            <TextBlock Text="Searching…" FontSize="12" Opacity="0.55" Margin="10,8"
+                                       IsVisible="{Binding IsSearching}"/>
+                            <TextBlock Text="No results found." FontSize="12" Opacity="0.55" Margin="10,8"
+                                       IsVisible="{Binding HasNoResults}"/>
+                            <TextBlock Text="Connect a music source in Sources to search." FontSize="12"
+                                       Opacity="0.55" Margin="10,8" TextWrapping="Wrap"
+                                       IsVisible="{Binding NeedsConnection}"/>
+
+                            <ItemsControl ItemsSource="{Binding LiveResults}"
+                                          IsVisible="{Binding !IsSearching}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:SearchResultRowViewModel}">
+                                        <Border Background="Transparent" Padding="6" CornerRadius="6">
+                                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" VerticalAlignment="Center">
+                                                <!-- Art over a placeholder tile -->
+                                                <Border Grid.Column="0" Width="40" Height="40" CornerRadius="4"
+                                                        ClipToBounds="True" Margin="0,0,10,0"
+                                                        Background="{DynamicResource SecondaryColor}">
+                                                    <Panel>
+                                                        <material:MaterialIcon Kind="MusicNote" Width="18" Height="18" Opacity="0.5"
+                                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        <Image Source="{Binding Art}" Stretch="UniformToFill"
+                                                               IsVisible="{Binding HasArt}"/>
+                                                    </Panel>
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="Medium"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding Subtitle}" FontSize="11" Opacity="0.6"
+                                                               IsVisible="{Binding HasSubtitle}"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                </StackPanel>
+                                                <Button Grid.Column="2" Classes="Ghost" Padding="5"
+                                                        Command="{Binding PlayCommand}"
+                                                        VerticalAlignment="Center" ToolTip.Tip="Play Now">
+                                                    <material:MaterialIcon Kind="Play" Width="16" Height="16"/>
+                                                </Button>
+                                                <Button Grid.Column="3" Classes="Ghost" Padding="5"
+                                                        Command="{Binding AddCommand}"
+                                                        VerticalAlignment="Center" ToolTip.Tip="Add To Queue">
+                                                    <material:MaterialIcon Kind="Plus" Width="16" Height="16"/>
+                                                </Button>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Panel>
+                    </Border>
+                </Popup>
+        </Grid>
+    </Grid>
+</UserControl>
