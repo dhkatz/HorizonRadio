@@ -94,4 +94,40 @@ public class ItunesProviderTests
 
         Assert.Null(ItunesProvider.SelectMatch(json, "[Hatsune Miku] Beyond the Sky", "hano"));
     }
+
+    [Fact]
+    public void SelectMatch_title_only_rejects_an_ambiguous_widely_covered_title()
+    {
+        // Title-only query (no artist): two different artists share the exact title → ambiguous, so
+        // reject rather than attach a random cover's art (the "千本桜" / Senbonzakura case).
+        var json = Json("""
+        {
+          "results": [
+            { "trackName": "千本桜", "artistName": "Cover Band A", "artworkUrl100": "https://x/a/100x100bb.jpg" },
+            { "trackName": "千本桜", "artistName": "Cover Band B", "artworkUrl100": "https://x/b/100x100bb.jpg" }
+          ]
+        }
+        """);
+
+        Assert.Null(ItunesProvider.SelectMatch(json, "千本桜", ""));
+    }
+
+    [Fact]
+    public void SelectMatch_title_only_accepts_when_one_artist_owns_the_title()
+    {
+        // Distinctive title that resolves to a single artist → safe to accept on title alone,
+        // recovering an uploader-credited track (the "(∵)キョトンP - 狂騒ノ現" → Wonderful★opportunity! case).
+        var json = Json("""
+        {
+          "results": [
+            { "trackName": "狂騒ノ現", "artistName": "Wonderful★opportunity!", "collectionName": "X",
+              "artworkUrl100": "https://x/w/100x100bb.jpg" }
+          ]
+        }
+        """);
+
+        var m = ItunesProvider.SelectMatch(json, "狂騒ノ現", "");
+        Assert.NotNull(m);
+        Assert.Equal("Wonderful★opportunity!", m!.Artist);
+    }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Threading;
@@ -155,8 +156,31 @@ public static class MetadataTrace
         public string? InterpArtist;
         public string InterpTitle = "";
         public bool Matched;
-        public List<object> Providers = new();
+        public List<ProviderRec> Providers = new();
     }
+
+    // One contributor's record for an attempt: the final contribution it produced (from the
+    // resolver) merged with the raw catalog results it examined (from the provider's own search).
+    private sealed class ProviderRec
+    {
+        public string Id = "";
+        public bool Matched;
+        public string? Artist;
+        public string? Title;
+        public string? Album;
+        public int ArtBytes;
+        // The cleaned query the provider sent the catalog, and every result it scored (null score =
+        // rejected by the match guard). Present only for the text-search path, not cache hits.
+        public string? Query;
+        public List<object>? Considered;
+    }
+
+    /// <summary>One raw catalog result a provider considered for an interpretation, with the score
+    /// <see cref="HorizonRadio.Core.Metadata.SearchTerms.MatchScore"/> gave it (null = rejected by
+    /// the guard). Captured so a trace line can be replayed offline — feed the attempt's interp
+    /// (title/artist) and each candidate back through MatchScore to test a scoring change without
+    /// re-hitting the network. Providers build these only while <see cref="Enabled"/>.</summary>
+    public readonly record struct CatalogCandidate(string? Title, string? Artist, string? Album, double? Score);
 
     private static readonly AsyncLocal<ResolveScope?> Scope = new();
 
@@ -182,9 +206,40 @@ public static class MetadataTrace
     {
         var s = Scope.Value;
         if (s is null || s.Attempts.Count == 0) return;
-        var a = s.Attempts[^1];
-        a.Providers.Add(new { id, matched, artist, title, album, artBytes });
-        if (matched) a.Matched = true;
+        var attempt = s.Attempts[^1];
+        var rec = GetOrAddProvider(attempt, id);
+        rec.Matched = matched;
+        rec.Artist = artist;
+        rec.Title = title;
+        rec.Album = album;
+        rec.ArtBytes = artBytes;
+        if (matched) attempt.Matched = true;
+    }
+
+    /// <summary>The raw catalog results a provider examined for the current interpretation, with the
+    /// query it sent. Called from inside the provider during its search (the resolve scope flows in
+    /// via <see cref="AsyncLocal{T}"/>); merged into that provider's record for the attempt. This is
+    /// the data that makes a trace line replayable — see <see cref="CatalogCandidate"/>.</summary>
+    public static void ProviderSearch(string id, string query, IReadOnlyList<CatalogCandidate> considered)
+    {
+        var s = Scope.Value;
+        if (s is null || s.Attempts.Count == 0) return;
+        var rec = GetOrAddProvider(s.Attempts[^1], id);
+        rec.Query = query;
+        rec.Considered = considered.Count == 0
+            ? null
+            : considered.Select(c => (object)new { c.Title, c.Artist, c.Album, score = c.Score }).ToList();
+    }
+
+    // One provider record per id within an attempt: the resolver's Provider(...) and the provider's
+    // own ProviderSearch(...) target the same record and fill different fields.
+    private static ProviderRec GetOrAddProvider(AttemptRec attempt, string id)
+    {
+        foreach (var p in attempt.Providers)
+            if (p.Id == id) return p;
+        var rec = new ProviderRec { Id = id };
+        attempt.Providers.Add(rec);
+        return rec;
     }
 
     public static void EndResolve(Track final)
