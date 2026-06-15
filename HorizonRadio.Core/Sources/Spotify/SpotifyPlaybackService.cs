@@ -168,31 +168,44 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
             // librespot that doesn't emit the event). We only re-issue when nothing
             // happened at all, so a track that's merely slow to emit "playing" — but is
             // already streaming — isn't restarted.
-            PlayerResumePlaybackRequest PlayRequest() => new()
+            var playRequest = new PlayerResumePlaybackRequest
             {
                 DeviceId = deviceId,
                 Uris = new List<string> { trackUri },
             };
 
+            // Re-issue the play until librespot confirms it actually started, so a
+            // command lost to the cold-start session race doesn't leave the track
+            // hanging silently. "Confirmed" means any of:
+            //   • the playing/track_changed event arrived (started.Task), or
+            //   • frames are flowing (older librespot that emits no event), or
+            //   • the user paused — frames stop by design while paused, so a 0-frame
+            //     reading there is NOT "didn't start"; re-issuing would replay the
+            //     track from 0 and fight the pause watcher, so treat pause as confirmed.
             const int maxAttempts = 3;
-            for (var attempt = 1; ; attempt++)
+            var confirmed = false;
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
                 await TryControlAsync(
-                    () => client.Player.ResumePlayback(PlayRequest(), ct), "play").ConfigureAwait(false);
+                    () => client.Player.ResumePlayback(playRequest, ct), "play").ConfigureAwait(false);
 
                 // Give librespot a moment to actually start streaming before we trust the
                 // end signal — also guards against a stale end_of_track from a previous
                 // track racing the new play.
                 await WaitWithTimeoutAsync(started.Task, TimeSpan.FromSeconds(5), ct).ConfigureAwait(false);
-                if (started.Task.IsCompleted || _routing.Frames > 0) break; // actually playing
-                if (ct.IsCancellationRequested) break;
-                if (attempt >= maxAttempts)
-                {
-                    Log($"play: never confirmed start after {maxAttempts} attempts; proceeding");
-                    break;
-                }
+
+                confirmed = started.Task.IsCompleted || _routing.Frames > 0 || ctx.IsPaused();
+                if (confirmed || ct.IsCancellationRequested) break;
                 Log($"play: no start after 5s (attempt {attempt}); re-issuing");
             }
+
+            // Never confirmed after the full budget — the play genuinely failed (a
+            // swallowed device error, a dead/unauthorized device). Throw so the engine
+            // logs "item failed" and advances to the next track, rather than spinning
+            // forever in the end-wait below with a position frozen at 0.
+            if (!confirmed && !ct.IsCancellationRequested)
+                throw new InvalidOperationException(
+                    $"Spotify never confirmed playback after {maxAttempts} attempts — the device may be unavailable.");
 
             // Wait for the track to finish. Both end signals are PLAYBACK-based and so
             // freeze while paused — a long pause can no longer end the track early.
