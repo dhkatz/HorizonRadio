@@ -15,4 +15,8 @@ public static class ToolKind
     public const string YtDlp = "yt-dlp";
     public const string Ffmpeg = "ffmpeg";
     public const string Librespot = "librespot";
+
+    /// <summary>The optional local title-extraction model — a single GGUF file (not an exe),
+    /// downloaded via the Tools tab. See <see cref="ToolsPaths.ModelFor"/>.</summary>
+    public const string TitleModel = "title-model";
 }

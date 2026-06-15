@@ -28,8 +28,9 @@ internal static class RadioStreamTitle
 
     /// <summary>Best-guess (artist, title): the normal "Artist - Title", with a channel/uploader
     /// prefix peeled off "Channel - Artist - Title" (the title from the first parse still holds a
-    /// separator → re-split).</summary>
-    public static (string? Artist, string Title) Parse(string raw)
+    /// separator → re-split). The confidence is the raw parse's — how clean the split was — which
+    /// gates whether the optional title-extraction model should escalate.</summary>
+    public static (string? Artist, string Title, ParseConfidence Confidence) Parse(string raw)
     {
         var parsed = TitleArtistParser.Parse(raw);
         var artist = parsed.Artist;
@@ -42,16 +43,17 @@ internal static class RadioStreamTitle
             title = reparsed.Title;
         }
 
-        return (artist, title);
+        return (artist, title, parsed.Confidence);
     }
 
     /// <summary>The best-guess primary plus alternative (artist, title) interpretations to try
-    /// against the catalogs: the other split point and the reversed order. The resolver tries
-    /// the primary first and only falls to the alternatives when it doesn't match, so clean
-    /// titles cost nothing extra.</summary>
-    public static (TitleCandidate Primary, IReadOnlyList<TitleCandidate> Alternatives) ParseCandidates(string raw)
+    /// against the catalogs: the other split point and the reversed order, plus the primary's
+    /// parse <see cref="ParseConfidence"/> (so the caller can escalate to the optional model only
+    /// when the deterministic split is shaky). The resolver tries the primary first and only falls
+    /// to the alternatives when it doesn't match, so clean titles cost nothing extra.</summary>
+    public static (TitleCandidate Primary, IReadOnlyList<TitleCandidate> Alternatives, ParseConfidence Confidence) ParseCandidates(string raw)
     {
-        var (pArtist, pTitle) = Parse(raw);
+        var (pArtist, pTitle, confidence) = Parse(raw);
         var primary = new TitleCandidate(pArtist, pTitle);
 
         var alts = new List<TitleCandidate>();
@@ -63,8 +65,24 @@ internal static class RadioStreamTitle
             AddAlt(alts, primary, new TitleCandidate(segs[^1], segs[^2]));                         // reversed order
         }
 
-        return (primary, alts);
+        // Vocaloid stations often credit the artist as "Romaji (NativeName)" — e.g.
+        // "Itachima-p (いたちま)". The native name in the parens is usually the catalog-matchable
+        // form (VocaDB indexes producers natively), but the search-cleaner strips parentheticals,
+        // leaving only the romaji which may not match. Offer the parenthetical's content as an
+        // alternative artist for the same title; the catalog guard validates it like any candidate.
+        if (!string.IsNullOrWhiteSpace(primary.Artist))
+        {
+            var paren = ParenName.Match(primary.Artist);
+            if (paren.Success && paren.Groups["inner"].Value.Trim() is { Length: > 0 } inner)
+                AddAlt(alts, primary, new TitleCandidate(inner, primary.Title));
+        }
+
+        return (primary, alts, confidence);
     }
+
+    // A trailing parenthetical (ASCII or fullwidth) in an artist credit, e.g. "Itachima-p (いたちま)".
+    private static readonly Regex ParenName =
+        new(@"[(（]\s*(?<inner>[^()（）]+?)\s*[)）]\s*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     private static void AddAlt(List<TitleCandidate> alts, TitleCandidate primary, TitleCandidate c)
     {

@@ -35,7 +35,8 @@ public static class ToolResolver
 
     private static string? DiscoverManaged(string kind)
     {
-        var managed = ToolsPaths.ExeFor(kind);
+        // Model-style tools are a data file (GGUF), not an exe.
+        var managed = kind == ToolKind.TitleModel ? ToolsPaths.ModelFor(kind) : ToolsPaths.ExeFor(kind);
         var here = AppContext.BaseDirectory;
         string[] candidates =
         [

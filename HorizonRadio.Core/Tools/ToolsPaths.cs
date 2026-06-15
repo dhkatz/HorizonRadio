@@ -34,6 +34,16 @@ public static class ToolsPaths
                                   nameof(kind), kind, "unknown tool kind"),
     };
 
+    /// <summary>The on-disk file for a non-exe tool (a downloaded data file rather than a
+    /// program). Currently the title-extraction model's GGUF — <see cref="ExeFor"/> hard-codes
+    /// an <c>.exe</c> name, so model-style tools resolve their path here instead.</summary>
+    public static string ModelFor(string kind) => kind switch
+    {
+        ToolKind.TitleModel => Path.Combine(DirectoryFor(kind), "title-model.gguf"),
+        _ => throw new ArgumentOutOfRangeException(
+                                  nameof(kind), kind, "unknown model tool kind"),
+    };
+
     public static void EnsureDir(string kind) =>
         Directory.CreateDirectory(DirectoryFor(kind));
 }

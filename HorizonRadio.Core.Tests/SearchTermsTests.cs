@@ -14,6 +14,9 @@ public class SearchTermsTests
     [InlineData("Song Title feat. Someone", "Song Title")]
     [InlineData("Tune ft. X & Y", "Tune")]
     [InlineData("Plain Title", "Plain Title")]
+    // Fullwidth lenticular vocalist tag (Vocaloid stations): 【IA】 must be stripped too.
+    [InlineData("【IA】 Azure Lines", "Azure Lines")]
+    [InlineData("【初音ミク】メルト", "メルト")]
     public void CleanForSearch_strips_tags_and_credits(string input, string expected)
         => Assert.Equal(expected, SearchTerms.CleanForSearch(input));
 
@@ -24,7 +27,9 @@ public class SearchTermsTests
     [Theory]
     [InlineData("[Megurine Luka]Sacred Secret [SEV]", "Sacred Secret")]
     [InlineData("Song (Remix)", "Song (Remix)")] // parentheses kept for display
-    public void StripBracketTags_removes_square_brackets_only(string input, string expected)
+    [InlineData("【IA】 Azure Lines [SEG]", "Azure Lines")] // fullwidth vocalist tag + ASCII circle tag
+    [InlineData("〔cover〕 Senbonzakura", "Senbonzakura")] // tortoise-shell tag
+    public void StripBracketTags_removes_bracket_tags(string input, string expected)
         => Assert.Equal(expected, SearchTerms.StripBracketTags(input));
 
     [Fact]
@@ -43,6 +48,24 @@ public class SearchTermsTests
         // unrelated act — reject rather than attach the wrong cover.
         => Assert.Null(SearchTerms.MatchScore(
             "Beyond the Sky", "hano", "Beyond the Sky", "Dreams of Gray"));
+
+    [Fact]
+    public void MatchScore_accepts_a_cross_script_artist_when_the_title_is_an_exact_multiword_match()
+    {
+        // Romaji broadcast name "Bunmyaku" vs kanji catalog name "文脈" share no token, but that's
+        // a script difference, not a contradiction. An exact multi-word title carries the match.
+        Assert.NotNull(SearchTerms.MatchScore("Innocent Favor", "Bunmyaku", "Innocent Favor", "文脈 feat. GUMI"));
+        // …but a 1-word title is too generic to accept without a verifiable artist.
+        Assert.Null(SearchTerms.MatchScore("Favor", "Bunmyaku", "Favor", "文脈"));
+        // …and a subset/loose title is not enough either.
+        Assert.Null(SearchTerms.MatchScore("Innocent Favor", "Bunmyaku", "Favor", "文脈"));
+    }
+
+    [Fact]
+    public void MatchScore_still_rejects_a_same_script_disjoint_artist()
+        // Both romaji, genuinely different act — the cross-script relaxation must NOT apply here
+        // (this is the "metal band Beyond the Sky" guard).
+        => Assert.Null(SearchTerms.MatchScore("Innocent Favor", "Bunmyaku", "Innocent Favor", "Some Other Band"));
 
     [Fact]
     public void MatchScore_allows_a_partial_or_unknown_result_artist()

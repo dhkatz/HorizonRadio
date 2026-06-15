@@ -15,7 +15,16 @@ namespace HorizonRadio.Core.Metadata;
 /// </summary>
 public static class SearchTerms
 {
-    private static readonly Regex Brackets = new(@"[\(\[\{][^\(\)\[\]\{\}]*[\)\]\}]", RegexOptions.Compiled);
+    // ASCII ()[]{}  plus the CJK tag brackets Vocaloid/doujin stations use: 【…】 (lenticular,
+    // the common vocalist tag like 【IA】), 〔…〕 / 〖…〗 (tortoise-shell), and fullwidth （…）.
+    // Without the CJK pairs a title like "【IA】 Azure Lines" reaches the catalog with the
+    // vocalist tag attached and never matches.
+    private static readonly Regex Brackets = new(
+        @"[\(\[\{][^\(\)\[\]\{\}]*[\)\]\}]|【[^【】]*】|〔[^〔〕]*〕|〖[^〖〗]*〗|（[^（）]*）", RegexOptions.Compiled);
+    // Display-side tag strip: square brackets and the CJK lenticular/tortoise tags, but NOT
+    // parentheses (often part of the real title, e.g. "(Remix)").
+    private static readonly Regex TagBrackets = new(
+        @"\[[^\]]*\]|【[^【】]*】|〔[^〔〕]*〕|〖[^〖〗]*〗", RegexOptions.Compiled);
     private static readonly Regex Feat = new(@"\b(feat\.?|ft\.?|featuring)\b.*$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex Whitespace = new(@"\s+", RegexOptions.Compiled);
@@ -33,13 +42,14 @@ public static class SearchTerms
         return t.Length == 0 ? s.Trim() : t;
     }
 
-    /// <summary>Strip only square-bracket tags, used for the radio now-playing title where
-    /// "[Vocalist]Song [Circle]" should display as "Song" but parentheses (often part of
-    /// the real title, e.g. "(Remix)") are kept.</summary>
+    /// <summary>Strip bracketed tags, used for the radio now-playing title where
+    /// "[Vocalist]Song [Circle]" or "【IA】Song" should display as "Song" but parentheses (often
+    /// part of the real title, e.g. "(Remix)") are kept. Handles both ASCII square brackets and
+    /// the CJK lenticular/tortoise tags Vocaloid stations use as vocalist/circle markers.</summary>
     public static string StripBracketTags(string? s)
     {
         if (string.IsNullOrWhiteSpace(s)) return s ?? "";
-        var t = Regex.Replace(s, @"\[[^\]]*\]", " ");
+        var t = TagBrackets.Replace(s, " ");
         t = Whitespace.Replace(t, " ").Trim();
         return t.Length == 0 ? s.Trim() : t;
     }
@@ -95,11 +105,30 @@ public static class SearchTerms
         if (titleCover < 0.6) return null;
 
         var artistCover = Coverage(qa, ra);
-        if (ra.Count > 0 && artistCover == 0) return null;   // known but disjoint artist → reject
+        if (ra.Count > 0 && artistCover == 0)
+        {
+            // Zero overlap usually means a genuinely different act (reject — a wrong cover is worse
+            // than none). But it can also just be different scripts the token compare can't bridge:
+            // a romaji broadcast name ("Bunmyaku") against a kanji catalog name ("文脈"). When the
+            // query artist is romaji-only and the result artist carries CJK, the artist is
+            // unverifiable, not contradicted — fall back to the no-artist rule (a genuinely equal,
+            // multi-word title only; never a loose/subset or 1-word title that could be a cover).
+            bool crossScript = HasLatin(queryArtist) && !HasCjk(queryArtist) && HasCjk(resultArtist);
+            if (crossScript) return titlesEqual && qt.Count >= 2 ? titleCover : null;
+            return null;
+        }
         if (qt.Count < 2 && artistCover < 0.5) return null;   // generic 1-word title needs the artist
 
         return titleCover + 0.5 * artistCover;
     }
+
+    private static bool HasLatin(string? s) =>
+        s != null && s.Any(c => c is (>= 'A' and <= 'Z') or (>= 'a' and <= 'z'));
+
+    private static bool HasCjk(string? s) => s != null && s.Any(c =>
+        c is (>= '぀' and <= 'ヿ')   // hiragana + katakana
+          or (>= '㐀' and <= '鿿')   // CJK unified ideographs
+          or (>= '豈' and <= '﫿')); // CJK compatibility ideographs
 
     // Bare alphanumerics, lower-cased — collapses spacing/punctuation/case for title compare.
     private static string Squash(string? s) =>

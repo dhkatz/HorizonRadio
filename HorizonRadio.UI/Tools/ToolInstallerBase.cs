@@ -30,6 +30,10 @@ public abstract class ToolInstallerBase : IToolInstaller
 
     public abstract Task<string?> GetExpectedHashAsync(HttpClient http, CancellationToken ct);
 
+    /// <summary>Where the installed file lands. Defaults to the kind's exe; model-style tools (a
+    /// downloaded data file, not a program) override to <see cref="ToolsPaths.ModelFor"/>.</summary>
+    protected virtual string InstalledPath => ToolsPaths.ExeFor(Kind);
+
     public virtual async Task<string?> GetInstalledHashAsync(InstalledTool installed, CancellationToken ct)
     {
         // Single-file tools (yt-dlp, librespot): hash the actual installed
@@ -62,7 +66,7 @@ public abstract class ToolInstallerBase : IToolInstaller
         IProgress<ToolInstallProgress>? progress, CancellationToken ct)
     {
         ToolsPaths.EnsureDir(Kind);
-        var dest = ToolsPaths.ExeFor(Kind);
+        var dest = InstalledPath;
         var tmp = dest + ".new";
 
         try

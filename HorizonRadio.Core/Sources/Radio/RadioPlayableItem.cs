@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Audio;
+using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Models;
 
@@ -31,6 +32,13 @@ public sealed class RadioPlayableItem : PlayableItem
     private bool _prepared;
     private byte[]? _stationArt;
     private volatile SubprocessPcmSource? _subproc;
+
+    // Per-song cancellation for the optional title-extraction model: each new ICY title
+    // cancels the previous (still-running) extraction, and _currentRaw guards a stale
+    // result from overwriting a newer song's metadata.
+    private readonly object _modelGate = new();
+    private CancellationTokenSource? _modelCts;
+    private volatile string? _currentRaw;
 
     public RadioPlayableItem(RadioStation station, string ffmpegPath)
     {
@@ -70,7 +78,10 @@ public sealed class RadioPlayableItem : PlayableItem
             // the station itself isn't cached as a song.
             ExternalId: haveSong ? $"radio:{songArtist?.Trim()} - {songTitle!.Trim()}" : null,
             // Alternative parses for the resolver to catalog-validate (only once a song is known).
-            Candidates: haveSong ? candidates : null);
+            Candidates: haveSong ? candidates : null,
+            // The station placeholder isn't a song — don't let the providers search the station
+            // name (it false-matches unrelated tracks and hijacks the logo). Only resolve real songs.
+            Resolvable: haveSong);
     }
 
     public override async Task PrepareAsync(CancellationToken ct)
@@ -92,9 +103,11 @@ public sealed class RadioPlayableItem : PlayableItem
 
         void OnTitle(string raw)
         {
+            _currentRaw = raw;
+
             // Best-guess (artist, title) plus alternative interpretations the resolver validates
             // against the catalogs (channel-prefix, reversed order, fullwidth separators).
-            var (primary, alts) = RadioStreamTitle.ParseCandidates(raw);
+            var (primary, alts, confidence) = RadioStreamTitle.ParseCandidates(raw);
             // Strip "[Vocalist]…[Circle]" tags common on Vocaloid/doujin stations so the
             // displayed title reads as the song ("Sacred Secret"), not the tagged blob.
             var title = SearchTerms.StripBracketTags(primary.Title);
@@ -103,92 +116,217 @@ public sealed class RadioPlayableItem : PlayableItem
                 : alts.Select(c => new TitleCandidate(c.Artist, SearchTerms.StripBracketTags(c.Title))).ToList();
             Metadata = BuildTrack(title, primary.Artist, candidates);
             ctx.OnMetadataUpdated?.Invoke(this);
+
+            // Optional title-extraction model: it can split formats the deterministic parser
+            // can't (no separators, reversed order, mixed-language). The deterministic result is
+            // already on screen; the model refines in the background, and its hypotheses are
+            // still catalog-validated, so a wrong extraction can't surface. Escalate only on a
+            // shaky parse; Always runs on every title and promotes the model to the primary seed.
+            var extractor = TitleExtractorRuntime.Current;
+            var mode = TitleExtractorRuntime.Mode;
+            bool runModel = ShouldRunModel(mode, extractor is not null, confidence);
+            MetadataTrace.Song(_station.Name, raw, primary.Artist, title, confidence.ToString(), candidates,
+                mode.ToString(), runModel);
+            if (!runModel) return;
+
+            CancellationToken modelCt;
+            lock (_modelGate)
+            {
+                _modelCts?.Cancel();
+                _modelCts?.Dispose();
+                _modelCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                modelCt = _modelCts.Token;
+            }
+            _ = EnhanceWithModelAsync(extractor!, mode, raw, ctx, modelCt);
         }
 
         bool announced = false;
         int attempt = 0;
 
-        while (!ct.IsCancellationRequested)
+        try
         {
-            var icy = new IcyStreamReader(_station.StreamUrl);
-            icy.StreamTitleChanged += OnTitle;
-            SubprocessPcmSource? subproc = null;
-            try
+            while (!ct.IsCancellationRequested)
             {
-                await icy.ConnectAsync(ct).ConfigureAwait(false);
-                AdoptIcyNameIfBetter(icy.IcyName);
-
-                subproc = new SubprocessPcmSource(new SubprocessPcmSource.Config
-                {
-                    ExecutablePath = _ffmpegPath,
-                    Args = BuildFfmpegArgs(),
-                    ToolName = "ffmpeg",
-                    RedirectStdin = true,
-                    OnStderrLine = line => Log($"ffmpeg: {line}"),
-                });
-                await subproc.StartAsync(pausing, ct).ConfigureAwait(false);
-                _subproc = subproc;
-
-                var stdin = subproc.StandardInput
-                    ?? throw new InvalidOperationException("ffmpeg stdin unavailable");
-
-                if (!announced)
-                {
-                    announced = true;
-                    ctx.OnStarted?.Invoke(this);
-                }
-                attempt = 0; // a clean connect resets the backoff
-
-                // Feed HTTP→ffmpeg until the stream ends or the decoder dies, then close
-                // stdin so ffmpeg flushes and its read loop completes.
+                var icy = new IcyStreamReader(_station.StreamUrl);
+                icy.StreamTitleChanged += OnTitle;
+                SubprocessPcmSource? subproc = null;
                 try
                 {
-                    await icy.PumpToAsync(stdin, ct).ConfigureAwait(false);
+                    await icy.ConnectAsync(ct).ConfigureAwait(false);
+                    AdoptIcyNameIfBetter(icy.IcyName);
+
+                    subproc = new SubprocessPcmSource(new SubprocessPcmSource.Config
+                    {
+                        ExecutablePath = _ffmpegPath,
+                        Args = BuildFfmpegArgs(),
+                        ToolName = "ffmpeg",
+                        RedirectStdin = true,
+                        OnStderrLine = line => Log($"ffmpeg: {line}"),
+                    });
+                    await subproc.StartAsync(pausing, ct).ConfigureAwait(false);
+                    _subproc = subproc;
+
+                    var stdin = subproc.StandardInput
+                        ?? throw new InvalidOperationException("ffmpeg stdin unavailable");
+
+                    if (!announced)
+                    {
+                        announced = true;
+                        ctx.OnStarted?.Invoke(this);
+                    }
+                    attempt = 0; // a clean connect resets the backoff
+
+                    // Feed HTTP→ffmpeg until the stream ends or the decoder dies, then close
+                    // stdin so ffmpeg flushes and its read loop completes.
+                    try
+                    {
+                        await icy.PumpToAsync(stdin, ct).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        try { stdin.Close(); } catch { }
+                    }
+                    if (subproc.Completion is { } completion)
+                    {
+                        try { await completion.ConfigureAwait(false); } catch { }
+                    }
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw; // per-track skip/stop
+                }
+                catch (Exception ex)
+                {
+                    Log($"stream error: {ex.GetType().Name}: {ex.Message}");
                 }
                 finally
                 {
-                    try { stdin.Close(); } catch { }
+                    icy.StreamTitleChanged -= OnTitle;
+                    await icy.DisposeAsync().ConfigureAwait(false);
+                    if (subproc != null)
+                    {
+                        _subproc = null;
+                        await subproc.DisposeAsync().ConfigureAwait(false);
+                    }
                 }
-                if (subproc.Completion is { } completion)
-                {
-                    try { await completion.ConfigureAwait(false); } catch { }
-                }
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (OperationCanceledException)
-            {
-                throw; // per-track skip/stop
-            }
-            catch (Exception ex)
-            {
-                Log($"stream error: {ex.GetType().Name}: {ex.Message}");
-            }
-            finally
-            {
-                icy.StreamTitleChanged -= OnTitle;
-                await icy.DisposeAsync().ConfigureAwait(false);
-                if (subproc != null)
-                {
-                    _subproc = null;
-                    await subproc.DisposeAsync().ConfigureAwait(false);
-                }
+
+                if (ct.IsCancellationRequested) break;
+
+                // Reconnect with capped exponential backoff (1,2,4,…,30s).
+                attempt++;
+                var secs = Math.Min(30, Math.Pow(2, Math.Min(attempt, 5)));
+                Log($"reconnecting in {secs:0}s (attempt {attempt})");
+                try { await Task.Delay(TimeSpan.FromSeconds(secs), ct).ConfigureAwait(false); }
+                catch (OperationCanceledException) { break; }
             }
 
-            if (ct.IsCancellationRequested) break;
+            ct.ThrowIfCancellationRequested();
+        }
+        finally
+        {
+            lock (_modelGate)
+            {
+                try { _modelCts?.Cancel(); } catch { }
+                _modelCts?.Dispose();
+                _modelCts = null;
+            }
+        }
+    }
 
-            // Reconnect with capped exponential backoff (1,2,4,…,30s).
-            attempt++;
-            var secs = Math.Min(30, Math.Pow(2, Math.Min(attempt, 5)));
-            Log($"reconnecting in {secs:0}s (attempt {attempt})");
-            try { await Task.Delay(TimeSpan.FromSeconds(secs), ct).ConfigureAwait(false); }
-            catch (OperationCanceledException) { break; }
+    /// <summary>Runs the optional title model for one ICY title, in the background, and merges its
+    /// extraction into the published metadata — appending fallback candidates (Escalate) or
+    /// promoting the model's split to the primary seed (Always). Guards against the song changing
+    /// while the model thinks; never throws for ordinary model failures.</summary>
+    private async Task EnhanceWithModelAsync(
+        ITitleExtractor extractor, TitleModelMode mode, string raw, PumpContext ctx, CancellationToken ct)
+    {
+        var swModel = Stopwatch.StartNew();
+        IReadOnlyList<TitleCandidate> extracted;
+        try
+        {
+            extracted = await extractor.ExtractAsync(raw, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { return; }
+        catch (Exception ex)
+        {
+            Log($"title model failed: {ex.GetType().Name}: {ex.Message}");
+            MetadataTrace.Model(raw, swModel.ElapsedMilliseconds, [], applied: false);
+            return;
+        }
+        swModel.Stop();
+
+        var model = extracted
+            .Select(c => new TitleCandidate(c.Artist, SearchTerms.StripBracketTags(c.Title)))
+            .Where(c => !string.IsNullOrWhiteSpace(c.Title))
+            .ToList();
+
+        // The song moved on (or the stream stopped) while the model was thinking → drop it.
+        var stale = ct.IsCancellationRequested || !string.Equals(_currentRaw, raw, StringComparison.Ordinal);
+        var applied = !stale && model.Count > 0;
+        MetadataTrace.Model(raw, swModel.ElapsedMilliseconds, model, applied);
+        if (!applied) return;
+
+        // What OnTitle already published deterministically (its primary on display + alternatives).
+        var current = Metadata;
+        var (title, artist, candidates) = ComposeWithModel(
+            mode, model, new TitleCandidate(current.Artist, current.Title), current.Candidates ?? []);
+
+        Metadata = BuildTrack(title, artist, candidates.Count == 0 ? null : candidates);
+        if (!ct.IsCancellationRequested && string.Equals(_currentRaw, raw, StringComparison.Ordinal))
+            ctx.OnMetadataUpdated?.Invoke(this);
+    }
+
+    /// <summary>Whether the title model should run for this parse: a model must be present and not
+    /// <see cref="TitleModelMode.Off"/>; <see cref="TitleModelMode.Always"/> runs on every title,
+    /// <see cref="TitleModelMode.Escalate"/> only when the deterministic parse is below
+    /// <see cref="ParseConfidence.High"/>.</summary>
+    internal static bool ShouldRunModel(TitleModelMode mode, bool hasExtractor, ParseConfidence confidence) =>
+        hasExtractor && mode != TitleModelMode.Off
+        && (mode == TitleModelMode.Always || confidence != ParseConfidence.High);
+
+    /// <summary>Combine the model's extraction with the deterministic interpretation into the
+    /// (display title, display artist, fallback candidates) to publish. <see
+    /// cref="TitleModelMode.Always"/> promotes the model's top hypothesis to the display and keeps
+    /// the deterministic split as a catalog-validated fallback behind it; <see
+    /// cref="TitleModelMode.Escalate"/> keeps the deterministic primary on display and appends the
+    /// model's hypotheses as fallbacks. <paramref name="model"/> is assumed non-empty and already
+    /// bracket-stripped.</summary>
+    internal static (string Title, string? Artist, List<TitleCandidate> Candidates) ComposeWithModel(
+        TitleModelMode mode, IReadOnlyList<TitleCandidate> model,
+        TitleCandidate deterministicPrimary, IReadOnlyList<TitleCandidate> deterministicAlts)
+    {
+        if (mode == TitleModelMode.Always)
+        {
+            var top = model[0];
+            return (top.Title, top.Artist,
+                MergeCandidates(top, [.. model.Skip(1), deterministicPrimary, .. deterministicAlts]));
         }
 
-        ct.ThrowIfCancellationRequested();
+        return (deterministicPrimary.Title, deterministicPrimary.Artist,
+            MergeCandidates(deterministicPrimary, [.. deterministicAlts, .. model]));
     }
+
+    /// <summary>De-duplicated candidate list excluding <paramref name="primary"/> (the displayed
+    /// interpretation) — by case-insensitive (artist, title), matching the parser's own dedup.</summary>
+    private static List<TitleCandidate> MergeCandidates(TitleCandidate primary, IEnumerable<TitleCandidate> rest)
+    {
+        var result = new List<TitleCandidate>();
+        foreach (var c in rest)
+        {
+            if (string.IsNullOrWhiteSpace(c.Title)) continue;
+            if (Same(c, primary) || result.Any(a => Same(a, c))) continue;
+            result.Add(c);
+        }
+        return result;
+    }
+
+    private static bool Same(TitleCandidate a, TitleCandidate b) =>
+        string.Equals(a.Title.Trim(), b.Title.Trim(), StringComparison.OrdinalIgnoreCase) &&
+        string.Equals((a.Artist ?? "").Trim(), (b.Artist ?? "").Trim(), StringComparison.OrdinalIgnoreCase);
 
     // For the paste-a-URL path we start with no real station name; if the server sends
     // a nicer icy-name, adopt it (only when we don't already have a directory name).

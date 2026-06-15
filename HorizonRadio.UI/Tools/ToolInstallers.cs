@@ -14,5 +14,6 @@ public static class ToolInstallers
         new YtDlpInstaller(),
         new FfmpegInstaller(),
         new LibrespotInstaller(),
+        new TitleModelInstaller(),
     ];
 }

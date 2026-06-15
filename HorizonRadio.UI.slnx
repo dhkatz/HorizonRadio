@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="HorizonRadio.Core/HorizonRadio.Core.csproj" />
   <Project Path="HorizonRadio.Core.Tests/HorizonRadio.Core.Tests.csproj" />
+  <Project Path="HorizonRadio.TitleModel/HorizonRadio.TitleModel.csproj" />
   <Project Path="HorizonRadio.UI/HorizonRadio.UI.csproj" />
 </Solution>
