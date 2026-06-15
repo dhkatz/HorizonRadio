@@ -16,6 +16,16 @@
     },
     "ffmpeg": {
       "policy": "latest"
+    },
+    "title-model": {
+      "policy": "pinned",
+      "version": "Qwen2.5-0.5B-Instruct-Q4_K_M",
+      "platforms": {
+        "win-x64": {
+          "url": "https://huggingface.co/bartowski/Qwen2.5-0.5B-Instruct-GGUF/resolve/41ba88dbac95fed2528c92514c131d73eb5a174b/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
+          "sha256": "6eb923e7d26e9cea28811e1a8e852009b21242fb157b26149d3b188f3a8c8653"
+        }
+      }
     }
   }
 }

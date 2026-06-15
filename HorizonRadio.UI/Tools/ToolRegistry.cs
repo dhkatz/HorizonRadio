@@ -20,6 +20,7 @@ public sealed class ToolRegistry
         ScanKind(ToolKind.YtDlp);
         ScanKind(ToolKind.Ffmpeg);
         ScanKind(ToolKind.Librespot);
+        ScanKind(ToolKind.TitleModel);
         RaiseChanged();
     }
 
@@ -38,12 +39,13 @@ public sealed class ToolRegistry
 
     private void ScanKind(string kind)
     {
-        var exe = ToolsPaths.ExeFor(kind);
-        if (!File.Exists(exe)) return;
+        var path = ToolsPaths.PathFor(kind);
+        if (!File.Exists(path)) return;
 
-        var version = TryReadVersion(exe);
-        var sha = HashVerification.ReadSidecar(exe);
-        _byKind[kind] = new List<InstalledTool> { new InstalledTool(kind, exe, version, sha) };
+        // Model-style tools are a GGUF data file, not an exe — there's no FileVersionInfo to read.
+        var version = ToolsPaths.IsModel(kind) ? null : TryReadVersion(path);
+        var sha = HashVerification.ReadSidecar(path);
+        _byKind[kind] = new List<InstalledTool> { new InstalledTool(kind, path, version, sha) };
     }
 
     private static string? TryReadVersion(string exePath)

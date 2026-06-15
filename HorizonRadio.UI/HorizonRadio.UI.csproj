@@ -81,6 +81,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+      <ProjectReference Include="..\HorizonRadio.TitleModel\HorizonRadio.TitleModel.csproj" />
     </ItemGroup>
 
     <!--

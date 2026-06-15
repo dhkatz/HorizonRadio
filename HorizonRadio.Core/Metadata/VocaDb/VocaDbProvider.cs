@@ -92,11 +92,18 @@ public sealed class VocaDbProvider : IMetadataProvider
 
     private async Task<IReadOnlyList<int>> ResolveArtistIdsAsync(string artist, CancellationToken ct)
     {
-        // Exact name match surfaces the real artist (Auto buries a producer under fuzzy
-        // substring hits); lang=English to match the romanized broadcast name.
-        var url = $"{Base}/artists?query={Uri.EscapeDataString(artist)}&maxResults=10&nameMatchMode=Exact&lang=English";
-        var root = await GetJsonAsync(url, ct).ConfigureAwait(false);
-        return root is { } r ? SelectArtistIds(r, max: 2) : [];
+        // Exact first — it surfaces the real artist without Auto's fuzzy substring hits. But a
+        // romanized broadcast name often doesn't EXACTLY match VocaDB's (hyphen/case/spacing, e.g.
+        // "Itachima-p" vs "ItachimaP"), so fall back to Auto when Exact finds nothing. The
+        // type-ranking here plus the downstream scoped, title-matched song search keep a looser
+        // artist hit from producing a false song match. lang=English matches the romanized name.
+        foreach (var mode in (string[])["Exact", "Auto"])
+        {
+            var url = $"{Base}/artists?query={Uri.EscapeDataString(artist)}&maxResults=10&nameMatchMode={mode}&lang=English";
+            var root = await GetJsonAsync(url, ct).ConfigureAwait(false);
+            if (root is { } r && SelectArtistIds(r, max: 2) is { Count: > 0 } ids) return ids;
+        }
+        return [];
     }
 
     /// <summary>Rank exact-name artist hits by how likely they are the song's main artist
@@ -134,8 +141,20 @@ public sealed class VocaDbProvider : IMetadataProvider
 
     private async Task<Match?> SearchSongsAsync(string nameQuery, string rawTitle, string? rawArtist, int? artistId, CancellationToken ct)
     {
+        // lang=Default keeps the artistString in its native script (e.g. "文脈 feat. GUMI") rather
+        // than translating it (lang=English turns 文脈 into "Context"), which is what lets the
+        // cross-script artist check in SearchTerms.MatchScore bridge a romaji broadcast name to a
+        // kanji catalog name. Title romanization is no longer needed from lang here because Names
+        // brings back every language variant of the title for SelectMatch to score against.
+        //
+        // Trade-off: for an artist VocaDB *can* romanize (ばらっげ -> "BarrageP"), lang=English used
+        // to give a direct artist-token match that also carried 1-word titles. Under lang=Default
+        // that artist is native, so a 1-word title now only resolves via the artist-scoped path
+        // (ResolveArtistIds), not the cross-script branch (which requires a multi-word title). We
+        // accept that: 1-word titles are generic/cover-prone (the single-token guard already
+        // distrusts them), and lang=English's mistranslation of name-like kanji was the worse bug.
         var url = $"{Base}/songs?query={Uri.EscapeDataString(nameQuery)}"
-                + "&maxResults=10&nameMatchMode=Auto&lang=English&fields=Artists,MainPicture,ThumbUrl";
+                + "&maxResults=10&nameMatchMode=Auto&lang=Default&fields=Artists,MainPicture,ThumbUrl,Names";
         // artistId[]= scopes the search to one artist; the array syntax is what the REST API needs.
         // A scoped hit has its artist already confirmed, so the title alone qualifies it.
         bool artistConfirmed = artistId.HasValue;
@@ -161,13 +180,32 @@ public sealed class VocaDbProvider : IMetadataProvider
             if (name is null) continue;
             var artist = Str(s, "artistString");
 
-            if (SearchTerms.MatchScore(queryTitle, queryArtist, name, artist, artistConfirmed) is not { } score) continue;
-            if (score <= bestScore) continue;
+            // Score against every language variant of the title and keep the best — the broadcast
+            // title may be in a different script than the entry's primary (English) name.
+            double? scoreForSong = null;
+            foreach (var variant in NameVariants(s, name))
+                if (SearchTerms.MatchScore(queryTitle, queryArtist, variant, artist, artistConfirmed) is { } sc &&
+                    (scoreForSong is null || sc > scoreForSong))
+                    scoreForSong = sc;
+
+            if (scoreForSong is not { } score || score <= bestScore) continue;
 
             bestScore = score;
             best = new Match(name, artist, PickArt(s), ParseYear(Str(s, "publishDate")));
         }
         return best;
+    }
+
+    /// <summary>The song's primary name plus every alternate-language name (from the <c>Names</c>
+    /// field): so a query title in one script matches an entry surfaced in another.</summary>
+    private static IEnumerable<string> NameVariants(JsonElement song, string primary)
+    {
+        yield return primary;
+        if (song.TryGetProperty("names", out var names) && names.ValueKind == JsonValueKind.Array)
+            foreach (var n in names.EnumerateArray())
+                if (Str(n, "value") is { Length: > 0 } v &&
+                    !string.Equals(v, primary, StringComparison.Ordinal))
+                    yield return v;
     }
 
     // Prefer the original image; fall back to the thumbnail. Both are usually the song's

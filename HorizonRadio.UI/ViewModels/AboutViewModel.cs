@@ -1,11 +1,13 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core;
+using HorizonRadio.Core.Diagnostics;
 
 namespace HorizonRadio.UI.ViewModels;
 
@@ -52,6 +54,25 @@ public sealed partial class AboutViewModel : ViewModelBase
     public AboutViewModel()
     {
         StatusText = _build.IsDev ? "Development build — updates disabled." : "";
+        // Reflect the persisted/active capture state without re-triggering SetEnabled.
+        isDiagnosticsEnabled = MetadataTrace.Enabled;
+    }
+
+    // -- Diagnostics: opt-in metadata-pipeline capture, surfaced here so a user hitting a
+    //    metadata bug can switch it on, reproduce, and attach the log to a report. --
+
+    [ObservableProperty]
+    private bool isDiagnosticsEnabled;
+
+    public string DiagnosticsFolder { get; } = MetadataTrace.Directory;
+
+    partial void OnIsDiagnosticsEnabledChanged(bool value) => MetadataTrace.SetEnabled(value);
+
+    [RelayCommand]
+    private void OpenDiagnosticsFolder()
+    {
+        try { Directory.CreateDirectory(DiagnosticsFolder); } catch { }
+        OpenUrl(DiagnosticsFolder);
     }
 
     /// <summary>

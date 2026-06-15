@@ -30,6 +30,15 @@ public class MetadataResolverTests
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
+    // Throws if asked to contribute — proves a code path never reaches the provider search.
+    private sealed class ThrowingContributor : IMetadataProvider
+    {
+        public string Id => "boom";
+        public Task<MetadataContribution?> ContributeAsync(MetadataQuery q, CancellationToken ct)
+            => throw new InvalidOperationException("a non-resolvable placeholder must not be searched");
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
     private static Track Seed(string title = "SrcTitle", string artist = "", byte[]? art = null, byte[]? fallbackArt = null) =>
         new(title, artist, null, art, "local", "Local Files", FallbackArt: fallbackArt);
 
@@ -43,6 +52,24 @@ public class MetadataResolverTests
         var seed = Seed();
         var result = await resolver.ResolveAsync(seed, CancellationToken.None);
         Assert.Same(seed, result);
+    }
+
+    [Fact]
+    public async Task Non_resolvable_placeholder_skips_the_provider_search()
+    {
+        var resolver = new MetadataResolver();
+        var logo = new byte[] { 4, 2 };
+        // A contributor that would throw if queried — so a green test proves it's never reached.
+        resolver.Configure([new ThrowingContributor()], Policy(["boom"]));
+
+        // A radio station card before any song: not a song, carries its logo, Resolvable = false.
+        var placeholder = new Track("Vocaloid Radio", "Vocaloid Radio", null, logo,
+            "radio", "Internet Radio", Resolvable: false);
+
+        var r = await resolver.ResolveAsync(placeholder, CancellationToken.None);
+
+        Assert.Same(logo, r.AlbumArt);              // station logo kept, not a false-matched cover
+        Assert.Equal("Vocaloid Radio", r.Title);
     }
 
     [Fact]

@@ -33,6 +33,13 @@ public sealed record TitleCandidate(string? Artist, string Title);
 /// fields first, then these, and keeps whichever a catalog confirms. Null/empty for the
 /// common case and for the resolver's output.
 /// </param>
+/// <param name="Resolvable">
+/// Whether this track represents a real song the metadata pipeline should look up. False for
+/// non-song placeholders — e.g. an internet-radio station card shown before the first ICY title
+/// arrives — so the resolver skips the provider search entirely. Without this, a station name
+/// ("Vocaloid Radio") gets run as a query and can false-match an unrelated track, hijacking the
+/// station logo with a stranger's cover. Defaults true; only placeholders opt out.
+/// </param>
 public sealed record Track(
     string Title,
     string Artist,
@@ -44,7 +51,8 @@ public sealed record Track(
     int? Year = null,
     int? TrackNumber = null,
     byte[]? FallbackArt = null,
-    IReadOnlyList<TitleCandidate>? Candidates = null)
+    IReadOnlyList<TitleCandidate>? Candidates = null,
+    bool Resolvable = true)
 {
     /// <summary>Placeholder track with no fields set — a non-null default for
     /// holders that haven't learned their real metadata yet.</summary>

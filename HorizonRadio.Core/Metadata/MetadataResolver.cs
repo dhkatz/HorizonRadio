@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Models;
 
 namespace HorizonRadio.Core.Metadata;
@@ -55,6 +56,11 @@ public sealed class MetadataResolver : IAsyncDisposable
 
     public async Task<Track> ResolveAsync(Track seed, CancellationToken ct)
     {
+        // Non-song placeholders (e.g. a radio station card before the first track) must not be
+        // searched — the station name false-matches unrelated catalog entries. Keep the source's
+        // own art (the station logo) and skip the provider pass.
+        if (!seed.Resolvable) return WithArtFallback(seed);
+
         IReadOnlyList<IMetadataProvider> contributors;
         MetadataPolicy policy;
         lock (_lock) { contributors = _contributors; policy = _policy; }
@@ -62,10 +68,12 @@ public sealed class MetadataResolver : IAsyncDisposable
 
         // Ambiguous source titles attach alternative (artist, title) interpretations; try the
         // primary first, then candidates, keeping the one a catalog confirms.
-        if (seed.Candidates is { Count: > 0 })
-            return await ResolveBestAsync(seed, contributors, policy, ct).ConfigureAwait(false);
-
-        return (await ResolveOneAsync(seed, contributors, policy, ct).ConfigureAwait(false)).Track;
+        MetadataTrace.BeginResolve(seed);
+        var result = seed.Candidates is { Count: > 0 }
+            ? await ResolveBestAsync(seed, contributors, policy, ct).ConfigureAwait(false)
+            : (await ResolveOneAsync(seed, contributors, policy, ct).ConfigureAwait(false)).Track;
+        MetadataTrace.EndResolve(result);
+        return result;
     }
 
     // Resolve the primary interpretation and the candidates, returning the first that a catalog
@@ -114,6 +122,8 @@ public sealed class MetadataResolver : IAsyncDisposable
         string artist = seed.Artist;
         string? album = seed.Album;
 
+        MetadataTrace.BeginAttempt(artist, title);
+
         foreach (var id in policy.Order)
         {
             if (id == MetadataPolicy.SourceId) continue;
@@ -128,10 +138,22 @@ public sealed class MetadataResolver : IAsyncDisposable
                     .ConfigureAwait(false);
             }
             catch (OperationCanceledException) { throw; }
-            catch (Exception ex) { Log($"{id}: {ex.GetType().Name}: {ex.Message}"); continue; }
+            catch (Exception ex)
+            {
+                Log($"{id}: {ex.GetType().Name}: {ex.Message}");
+                MetadataTrace.Provider(id, matched: false, null, null, null, 0);
+                continue;
+            }
 
-            if (contribution is null || contribution.IsEmpty) continue;
+            if (contribution is null || contribution.IsEmpty)
+            {
+                MetadataTrace.Provider(id, matched: false,
+                    contribution?.Artist, contribution?.Title, contribution?.Album, contribution?.Art?.Length ?? 0);
+                continue;
+            }
             byId[id] = contribution;
+            MetadataTrace.Provider(id, matched: true,
+                contribution.Artist, contribution.Title, contribution.Album, contribution.Art?.Length ?? 0);
 
             if (string.IsNullOrEmpty(artist) && !string.IsNullOrEmpty(contribution.Artist)) artist = contribution.Artist!;
             if (string.IsNullOrEmpty(album) && !string.IsNullOrEmpty(contribution.Album)) album = contribution.Album;

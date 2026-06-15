@@ -30,6 +30,10 @@ public abstract class ToolInstallerBase : IToolInstaller
 
     public abstract Task<string?> GetExpectedHashAsync(HttpClient http, CancellationToken ct);
 
+    /// <summary>Where the installed file lands — a model's data file or an exe, per
+    /// <see cref="ToolsPaths.PathFor"/>. Virtual for an installer with a truly bespoke layout.</summary>
+    protected virtual string InstalledPath => ToolsPaths.PathFor(Kind);
+
     public virtual async Task<string?> GetInstalledHashAsync(InstalledTool installed, CancellationToken ct)
     {
         // Single-file tools (yt-dlp, librespot): hash the actual installed
@@ -50,6 +54,38 @@ public abstract class ToolInstallerBase : IToolInstaller
         DefaultRequestHeaders = { { "User-Agent", "HorizonRadio-Tools/1.0" } },
     };
 
+    /// <summary>Resolve the pinned download coordinates for a manifest-pinned tool (librespot, the
+    /// title model): the entry must exist, be <c>pinned</c> policy, have a build for the current
+    /// RID, and a non-empty URL. <paramref name="label"/> names the tool in errors;
+    /// <paramref name="emptyUrlMessage"/> overrides the "URL not filled in" message (e.g. to tell
+    /// the user they can drop the file manually). Shared so every pinned installer validates the
+    /// same way.</summary>
+    protected static ToolPlatform ResolvePinnedPlatform(
+        ToolManifest manifest, string kind, string label, string? emptyUrlMessage = null)
+    {
+        var entry = manifest.For(kind)
+            ?? throw new InvalidOperationException($"tools.manifest.json has no '{kind}' entry.");
+        if (!entry.IsPinned)
+            throw new InvalidOperationException($"{label} manifest policy is '{entry.Policy}', expected 'pinned'.");
+
+        var platform = entry.Platform(ToolManifest.CurrentRid)
+            ?? throw new InvalidOperationException(
+                $"tools.manifest.json has no {label} build for '{ToolManifest.CurrentRid}'.");
+        if (string.IsNullOrWhiteSpace(platform.Url))
+            throw new InvalidOperationException(emptyUrlMessage
+                ?? $"tools.manifest.json {label} '{ToolManifest.CurrentRid}' has an empty URL.");
+
+        return platform;
+    }
+
+    /// <summary>The pinned SHA-256 for the current RID from the manifest, read offline; null when
+    /// absent (post-bump bootstrap window) → the installer downloads-and-trusts with a warning.</summary>
+    protected static string? PinnedHash(ToolManifest manifest, string kind)
+    {
+        var sha = manifest.For(kind)?.Platform(ToolManifest.CurrentRid)?.Sha256;
+        return string.IsNullOrWhiteSpace(sha) ? null : sha;
+    }
+
     /// <summary>
     /// Full install for a single-file tool (yt-dlp, librespot): download
     /// the URL to <c>{exe}.new</c>, verify against
@@ -62,7 +98,7 @@ public abstract class ToolInstallerBase : IToolInstaller
         IProgress<ToolInstallProgress>? progress, CancellationToken ct)
     {
         ToolsPaths.EnsureDir(Kind);
-        var dest = ToolsPaths.ExeFor(Kind);
+        var dest = InstalledPath;
         var tmp = dest + ".new";
 
         try

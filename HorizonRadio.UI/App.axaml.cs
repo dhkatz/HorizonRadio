@@ -15,6 +15,8 @@ using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Core.Sources.Queue;
 using HorizonRadio.Core.Sources.Spotify;
 using HorizonRadio.Core.Sources.YouTube;
+using HorizonRadio.Core.Tools;
+using HorizonRadio.TitleModel;
 using HorizonRadio.UI.Tools;
 using HorizonRadio.UI.ViewModels;
 using HorizonRadio.UI.Views;
@@ -36,6 +38,11 @@ public partial class App : Application
     private EnrichmentService? _enricher;
     private MetadataResolver? _metaResolver;
     private MetadataConfigStore? _metaStore;
+    private ITitleExtractor? _titleExtractor;
+    // Identity (path + last-write) of the installed title model the current extractor was built for,
+    // so ReinitTitleModel rebuilds it when the file actually changes (reinstall/update) and skips
+    // unrelated tool changes. Sentinel so the first call always initializes the runtime.
+    private (string? Path, long WriteTicks) _titleModelStamp = ("\0uninitialized", -1);
     private EventActionExecutor? _eventExecutor;
     private ForzaTelemetryListener? _telemetry;
     private InputBindingService? _inputService;
@@ -51,6 +58,10 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            // Re-arm opt-in metadata diagnostics if the user left them on (or HZN_META_TRACE is set)
+            // before any source can emit, so the first song of the session is captured too.
+            HorizonRadio.Core.Diagnostics.MetadataTrace.RestoreFromSettings();
+
             _store = SourceConfigStore.LoadFromDisk();
 
             _pcm = new PcmPipeClient();
@@ -110,6 +121,38 @@ public partial class App : Application
 
             var toolRegistry = new ToolRegistry();
             var installers = ToolInstallers.CreateAll();
+
+            // Optional local title-extraction model: published to the runtime holder so the
+            // (parameterless) radio source can reach it. Constructed only when a model is actually
+            // installed — the extractor loads lazily on first use, but constructing it eagerly
+            // would have every shaky title spawn a no-op background task. Re-init on tool changes
+            // so installing/uninstalling the model mid-session takes effect without a restart.
+            void ReinitTitleModel()
+            {
+                var path = ToolResolver.Discover(ToolKind.TitleModel);
+                long ticks = 0;
+                if (!string.IsNullOrEmpty(path))
+                    try { ticks = File.GetLastWriteTimeUtc(path).Ticks; } catch { /* unreadable → 0 */ }
+
+                // Skip unrelated tool changes (e.g. installing ffmpeg) — only rebuild when the model
+                // file's identity changed. A genuine reinstall/update changes the write time, so we
+                // build a FRESH extractor rather than reusing the cached one (which would keep serving
+                // the previously-loaded weights until restart).
+                var stamp = (path, ticks);
+                if (stamp == _titleModelStamp) return;
+                _titleModelStamp = stamp;
+
+                var old = _titleExtractor;
+                _titleExtractor = string.IsNullOrEmpty(path)
+                    ? null
+                    : new LlamaTitleExtractor(() => ToolResolver.Discover(ToolKind.TitleModel));
+                TitleExtractorRuntime.Initialize(_titleExtractor, _metaStore!.TitleModelMode);
+                // Dispose the superseded extractor; DisposeAsync waits for any in-flight inference
+                // before freeing the native model, so this is safe to fire-and-forget.
+                if (old != null) _ = old.DisposeAsync().AsTask();
+            }
+            ReinitTitleModel();
+            toolRegistry.Changed += ReinitTitleModel;
 
             // IPC client doubles as a game-event source (the DLL's memory
             // poller); the telemetry listener is a second source. The

@@ -35,6 +35,51 @@ public class VocaDbProviderTests
     }
 
     [Fact]
+    public void SelectMatch_matches_a_katakana_title_against_an_english_name_variant()
+    {
+        // VocaDB returns the primary name English ("Sacrifice") under lang=English, but the
+        // broadcast title is katakana ("サクリファイス"). The Names field carries the Japanese
+        // variant; artist already confirmed via artistId scoping, so the title alone qualifies.
+        var json = Json("""
+        {
+          "items": [
+            { "name": "Sacrifice", "artistString": "ItachimaP feat. Megurine Luka, Hatsune Miku",
+              "thumbUrl": "https://nico/t.jpg",
+              "names": [ { "language": "Japanese", "value": "サクリファイス" },
+                         { "language": "English", "value": "Sacrifice" } ] }
+          ]
+        }
+        """);
+
+        var m = VocaDbProvider.SelectMatch(json, "サクリファイス", "Itachima-p", artistConfirmed: true);
+
+        Assert.NotNull(m);
+        Assert.Equal("https://nico/t.jpg", m!.ArtUrl);
+    }
+
+    [Fact]
+    public void SelectMatch_matches_a_romaji_query_against_a_kanji_artist_via_cross_script()
+    {
+        // The "Innocent Favor / Bunmyaku" case: under lang=Default VocaDB returns the artist
+        // natively ("文脈 feat. GUMI"). The romaji broadcast name "Bunmyaku" can't token-match the
+        // kanji — but that's a script difference, not a contradiction, so an exact multi-word title
+        // carries it (plain path, artist NOT pre-confirmed).
+        var json = Json("""
+        {
+          "items": [
+            { "name": "Innocent Favor", "artistString": "文脈 feat. GUMI", "thumbUrl": "https://nico/t.jpg",
+              "names": [ { "language": "English", "value": "Innocent Favor" } ] }
+          ]
+        }
+        """);
+
+        var m = VocaDbProvider.SelectMatch(json, "Innocent Favor", "Bunmyaku", artistConfirmed: false);
+
+        Assert.NotNull(m);
+        Assert.Equal("https://nico/t.jpg", m!.ArtUrl);
+    }
+
+    [Fact]
     public void SelectMatch_rejects_name_substring_by_unrelated_artist()
     {
         // VocaDB's Auto match returns "Beyond the Sky" ⊂ "A Place beyond the starry sky"

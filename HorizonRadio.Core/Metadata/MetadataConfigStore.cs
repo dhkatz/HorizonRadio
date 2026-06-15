@@ -29,6 +29,11 @@ public sealed class MetadataConfigStore
     /// <summary>Per-field forced provider overrides ("always Spotify for Art").</summary>
     public Dictionary<MetadataField, string> Forced { get; } = new();
 
+    /// <summary>When the optional local title-extraction model runs. Default <see
+    /// cref="TitleModelMode.Escalate"/> (model only on a shaky deterministic parse); has no
+    /// effect until a model is installed via the Tools tab.</summary>
+    public TitleModelMode TitleModelMode { get; set; } = TitleModelMode.Escalate;
+
     private readonly Dictionary<string, Dictionary<string, object?>> _perProvider = new();
 
     private static string DefaultPath =>
@@ -94,6 +99,10 @@ public sealed class MetadataConfigStore
                         prop.Value.GetString() is { Length: > 0 } pid)
                         store.Forced[field] = pid;
 
+            if (root.TryGetProperty("titleModelMode", out var tmm) && tmm.ValueKind == JsonValueKind.String &&
+                Enum.TryParse<TitleModelMode>(tmm.GetString(), ignoreCase: true, out var mode))
+                store.TitleModelMode = mode;
+
             // Migrate a legacy single-provider selection into the ordered list.
             if (store.Order.Count == 0 &&
                 store.SelectedProviderId is { Length: > 0 } legacy &&
@@ -155,6 +164,8 @@ public sealed class MetadataConfigStore
             writer.WriteStartObject("forced");
             foreach (var (field, pid) in Forced) writer.WriteString(field.ToString(), pid);
             writer.WriteEndObject();
+
+            writer.WriteString("titleModelMode", TitleModelMode.ToString());
 
             writer.WriteStartObject("perProvider");
             foreach (var (provId, bag) in _perProvider)
