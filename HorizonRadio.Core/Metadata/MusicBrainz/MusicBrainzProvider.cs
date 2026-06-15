@@ -110,7 +110,7 @@ public sealed class MusicBrainzProvider : IMetadataProvider
         // MB ranks by its own relevance and will happily return an unrelated recording for
         // a loose query; score each against the request (title-first) and take the best
         // that actually matches, so we never attach a wrong album's art.
-        var capture = MetadataTrace.Enabled ? new List<MetadataTrace.CatalogCandidate>() : null;
+        var capture = MetadataTrace.NewCapture();
         JsonElement rec = default;
         string? canonicalTitle = null, canonicalArtist = null;
         double bestScore = double.NegativeInfinity;
@@ -130,7 +130,7 @@ public sealed class MusicBrainzProvider : IMetadataProvider
             canonicalTitle = rt;
             canonicalArtist = ra;
         }
-        if (capture is not null) MetadataTrace.ProviderSearch(Id, query, capture);
+        MetadataTrace.ProviderSearch(Id, query, capture);
         if (canonicalTitle is null) return null; // nothing matched the request
 
         if (!rec.TryGetProperty("releases", out var releases) ||

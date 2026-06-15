@@ -60,7 +60,7 @@ public sealed class VocaDbProvider : IMetadataProvider
         if (hit != null) return ToContribution(hit);
 
         Match? match = null;
-        var capture = MetadataTrace.Enabled ? new List<MetadataTrace.CatalogCandidate>() : null;
+        var capture = MetadataTrace.NewCapture();
 
         // Artist-scoped search first (precise): resolve the broadcast artist to VocaDB
         // artist id(s), then search within their songs.
@@ -76,8 +76,7 @@ public sealed class VocaDbProvider : IMetadataProvider
         // Fallback: plain name search (no artist known, or none of the artist's songs matched).
         match ??= await SearchSongsAsync(title, query.Title, query.Artist, artistId: null, capture, ct).ConfigureAwait(false);
 
-        if (capture is not null)
-            MetadataTrace.ProviderSearch(Id, string.IsNullOrEmpty(artist) ? title : $"{artist} {title}", capture);
+        MetadataTrace.ProviderSearch(Id, string.IsNullOrEmpty(artist) ? title : $"{artist} {title}", capture);
         if (match is null) { _cache.PutMiss(cacheKey); return null; }
 
         // Try the image URLs in order: VocaDB's urlOriginal is often a YouTube hqdefault that 404s
@@ -191,10 +190,10 @@ public sealed class VocaDbProvider : IMetadataProvider
         if (!root.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
             return null;
 
-        // Title-only query (no artist, not artist-scoped): collect the artist of every title-match
-        // so an ambiguous, widely-covered title is rejected rather than attaching a random cover's art.
-        var titleOnlyKeys = !artistConfirmed && string.IsNullOrWhiteSpace(queryArtist)
-            ? new HashSet<string>(StringComparer.Ordinal) : null;
+        // For a title-only query, reject a widely-covered/ambiguous title rather than attaching a
+        // random cover's art. Inert when an artist is present — including the artist-scoped path,
+        // where artistConfirmed always comes with a non-empty queryArtist.
+        var titleGuard = new TitleOnlyGuard(queryArtist);
         Match? best = null;
         double bestScore = double.NegativeInfinity;
         foreach (var s in items.EnumerateArray())
@@ -212,7 +211,7 @@ public sealed class VocaDbProvider : IMetadataProvider
                     scoreForSong = sc;
 
             sink?.Add(new(name, artist, null, scoreForSong));
-            if (scoreForSong is { }) titleOnlyKeys?.Add(SearchTerms.ArtistKey(artist));
+            if (scoreForSong is { }) titleGuard.Observe(artist);
             if (scoreForSong is not { } score) continue;
 
             // Prefer a strictly higher score; on a tie, prefer a candidate that actually has art so
@@ -226,7 +225,7 @@ public sealed class VocaDbProvider : IMetadataProvider
             bestScore = score;
             best = new Match(name, artist, art, ParseYear(Str(s, "publishDate")), OriginalId(s));
         }
-        return titleOnlyKeys is { Count: > 1 } ? null : best;
+        return titleGuard.IsAmbiguous ? null : best;
     }
 
     // VocaDB's link from a Remaster / re-upload to the song it derives from (0 = none). Lets an

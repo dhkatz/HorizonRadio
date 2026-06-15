@@ -173,6 +173,23 @@ public class VocaDbProviderTests
     }
 
     [Fact]
+    public void SelectMatch_title_only_rejects_when_matches_have_blank_artists()
+    {
+        // Two same-title entries with no artistString both key to "" — they must still count as
+        // ambiguous/unverifiable, not collapse into "one artist owns the title".
+        var json = Json("""
+        {
+          "items": [
+            { "name": "千本桜", "thumbUrl": "https://nico/a.jpg" },
+            { "name": "千本桜", "thumbUrl": "https://nico/b.jpg" }
+          ]
+        }
+        """);
+
+        Assert.Null(VocaDbProvider.SelectMatch(json, "千本桜", "", artistConfirmed: false));
+    }
+
+    [Fact]
     public void SelectMatch_title_only_accepts_when_one_artist_owns_the_title()
     {
         // A distinctive title owned by one artist → safe to accept on title alone.

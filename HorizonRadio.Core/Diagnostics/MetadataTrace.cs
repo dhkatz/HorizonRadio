@@ -216,12 +216,19 @@ public static class MetadataTrace
         if (matched) attempt.Matched = true;
     }
 
+    /// <summary>A capture list for a provider's considered results, or null when not capturing — so a
+    /// provider can write <c>var capture = MetadataTrace.NewCapture(); capture?.Add(...)</c> without
+    /// repeating the <see cref="Enabled"/> check, then hand it straight to <see cref="ProviderSearch"/>.</summary>
+    public static List<CatalogCandidate>? NewCapture() => Enabled ? new List<CatalogCandidate>() : null;
+
     /// <summary>The raw catalog results a provider examined for the current interpretation, with the
     /// query it sent. Called from inside the provider during its search (the resolve scope flows in
     /// via <see cref="AsyncLocal{T}"/>); merged into that provider's record for the attempt. This is
-    /// the data that makes a trace line replayable — see <see cref="CatalogCandidate"/>.</summary>
-    public static void ProviderSearch(string id, string query, IReadOnlyList<CatalogCandidate> considered)
+    /// the data that makes a trace line replayable — see <see cref="CatalogCandidate"/>. A null
+    /// <paramref name="considered"/> (capture was off) is a no-op.</summary>
+    public static void ProviderSearch(string id, string query, IReadOnlyList<CatalogCandidate>? considered)
     {
+        if (considered is null) return;
         var s = Scope.Value;
         if (s is null || s.Attempts.Count == 0) return;
         var rec = GetOrAddProvider(s.Attempts[^1], id);

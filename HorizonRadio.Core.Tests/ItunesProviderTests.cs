@@ -113,6 +113,23 @@ public class ItunesProviderTests
     }
 
     [Fact]
+    public void SelectMatch_title_only_gate_applies_to_a_punctuation_only_artist()
+    {
+        // "--" is non-whitespace but cleans to no tokens, so MatchScore scores it title-only; the
+        // ambiguity gate must engage and reject (a raw whitespace check would have left it off).
+        var json = Json("""
+        {
+          "results": [
+            { "trackName": "千本桜", "artistName": "Cover A", "artworkUrl100": "https://x/a/100x100bb.jpg" },
+            { "trackName": "千本桜", "artistName": "Cover B", "artworkUrl100": "https://x/b/100x100bb.jpg" }
+          ]
+        }
+        """);
+
+        Assert.Null(ItunesProvider.SelectMatch(json, "千本桜", "--"));
+    }
+
+    [Fact]
     public void SelectMatch_title_only_accepts_when_one_artist_owns_the_title()
     {
         // Distinctive title that resolves to a single artist → safe to accept on title alone,

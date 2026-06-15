@@ -111,24 +111,24 @@ public sealed class SpotifyProvider : IMetadataProvider
 
             // Capture the query + every scored result for the trace (only when capturing) so this
             // lookup can be replayed through SearchTerms.MatchScore offline.
-            var capture = MetadataTrace.Enabled ? new List<MetadataTrace.CatalogCandidate>() : null;
-            // Title-only query (no artist): collect the artist of every title-match so we can reject
-            // an ambiguous, widely-covered title rather than attach a random cover's art.
-            var titleOnlyKeys = string.IsNullOrWhiteSpace(artist) ? new HashSet<string>(StringComparer.Ordinal) : null;
+            var capture = MetadataTrace.NewCapture();
+            // For a title-only query, reject a widely-covered/ambiguous title rather than attach a
+            // random cover's art; inert when an artist is present.
+            var titleGuard = new TitleOnlyGuard(artist);
             FullTrack? best = null;
             double bestScore = double.NegativeInfinity;
             foreach (var t in items ?? [])
             {
                 var resultArtist = t.Artists?.FirstOrDefault()?.Name;
                 var score = SearchTerms.MatchScore(title, artist, t.Name, resultArtist);
-                if (score is { }) titleOnlyKeys?.Add(SearchTerms.ArtistKey(resultArtist));
+                if (score is { }) titleGuard.Observe(resultArtist);
                 capture?.Add(new(t.Name, resultArtist, t.Album?.Name, score));
                 if (score is not { } sc || sc <= bestScore) continue;
                 bestScore = sc;
                 best = t;
             }
-            if (capture is not null) MetadataTrace.ProviderSearch(Id, q, capture);
-            if (titleOnlyKeys is { Count: > 1 }) return null;   // ambiguous title-only → don't guess
+            MetadataTrace.ProviderSearch(Id, q, capture);
+            if (titleGuard.IsAmbiguous) return null;
 
             return best is null ? null : await BuildEntry(best, ct).ConfigureAwait(false);
         }

@@ -62,10 +62,9 @@ public sealed class ItunesProvider : IMetadataProvider
         var hit = _cache.TryGet(cacheKey);
         if (hit != null) return ToContribution(hit);
 
-        var capture = MetadataTrace.Enabled ? new List<MetadataTrace.CatalogCandidate>() : null;
+        var capture = MetadataTrace.NewCapture();
         var match = await FindBestAsync(title, artist, query.Title, query.Artist, capture, ct).ConfigureAwait(false);
-        if (capture is not null)
-            MetadataTrace.ProviderSearch(Id, string.IsNullOrEmpty(artist) ? title : $"{artist} {title}", capture);
+        MetadataTrace.ProviderSearch(Id, string.IsNullOrEmpty(artist) ? title : $"{artist} {title}", capture);
         if (match is null)
         {
             _cache.PutMiss(cacheKey);
@@ -136,9 +135,9 @@ public sealed class ItunesProvider : IMetadataProvider
         if (!root.TryGetProperty("results", out var results) ||
             results.ValueKind != JsonValueKind.Array) return null;
 
-        // Title-only query (no artist): collect the artist of every title-match so an ambiguous,
-        // widely-covered title is rejected rather than attaching a random cover's art.
-        var titleOnlyKeys = string.IsNullOrWhiteSpace(queryArtist) ? new HashSet<string>(StringComparer.Ordinal) : null;
+        // For a title-only query, reject a widely-covered/ambiguous title rather than attach a
+        // random cover's art; inert when an artist is present.
+        var titleGuard = new TitleOnlyGuard(queryArtist);
         Match? best = null;
         double bestScore = double.NegativeInfinity;
         foreach (var r in results.EnumerateArray())
@@ -148,7 +147,7 @@ public sealed class ItunesProvider : IMetadataProvider
             var artist = Str(r, "artistName");
 
             var score = SearchTerms.MatchScore(queryTitle, queryArtist, title, artist);
-            if (score is { }) titleOnlyKeys?.Add(SearchTerms.ArtistKey(artist));
+            if (score is { }) titleGuard.Observe(artist);
             sink?.Add(new(title, artist, Str(r, "collectionName"), score));
             if (score is not { } sc || sc <= bestScore) continue;
 
@@ -160,7 +159,7 @@ public sealed class ItunesProvider : IMetadataProvider
                 Year: ParseYear(Str(r, "releaseDate")),
                 ArtworkUrl: UpscaleArtwork(Str(r, "artworkUrl100")));
         }
-        return titleOnlyKeys is { Count: > 1 } ? null : best;
+        return titleGuard.IsAmbiguous ? null : best;
     }
 
     // iTunes returns a 100×100 thumbnail URL; swapping the size segment yields full-res art.

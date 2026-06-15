@@ -61,6 +61,12 @@ public static class SearchTerms
     /// "Kerosene" don't. Used to decide whether a set of title-only matches agree on one artist.</summary>
     public static string ArtistKey(string? artist) => Squash(Feat.Replace(artist ?? "", ""));
 
+    /// <summary>True when an artist string carries no search tokens — the "title-only" case, where
+    /// <see cref="MatchScore"/> can only match on title equality. This is the exact predicate
+    /// MatchScore's no-artist branch uses (<c>Tokens(CleanForSearch(artist)).Count == 0</c>), shared
+    /// so the providers' <see cref="TitleOnlyGuard"/> can't drift from the scorer.</summary>
+    public static bool IsArtistless(string? artist) => Tokens(CleanForSearch(artist)).Count == 0;
+
     /// <summary>Lower-cased alphanumeric tokens, for loose match comparison.</summary>
     public static IReadOnlyList<string> Tokens(string? s)
     {
@@ -183,4 +189,34 @@ public static class SearchTerms
         var rs = result.ToHashSet();
         return (double)query.Count(rs.Contains) / query.Count;
     }
+}
+
+/// <summary>
+/// Decides whether a title-only catalog lookup (a query with no usable artist) is safe to accept.
+/// A title match with no artist to corroborate can latch onto a cover or an unrelated same-titled
+/// song, so a provider should only accept one when every title-match points to a single, known
+/// artist. Feed it each result whose title matched (its <see cref="SearchTerms.MatchScore"/> was
+/// non-null); <see cref="IsAmbiguous"/> is then true for a widely-covered title (several distinct
+/// artists) or an unverifiable one (a blank artist credit). The guard is inert — never ambiguous —
+/// for an artist-bearing query.
+///
+/// One implementation, used by every provider, keyed via <see cref="SearchTerms.IsArtistless"/> so
+/// the gate engages on exactly the queries MatchScore scores as title-only (avoiding a raw-vs-
+/// cleaned-artist mismatch).
+/// </summary>
+public sealed class TitleOnlyGuard
+{
+    // Distinct producer-credit keys of the title-matches seen; null when the query has an artist
+    // (gate inert). The empty-string key marks a result whose artist is blank/unverifiable.
+    private readonly HashSet<string>? _artists;
+
+    public TitleOnlyGuard(string? queryArtist)
+        => _artists = SearchTerms.IsArtistless(queryArtist) ? new HashSet<string>(StringComparer.Ordinal) : null;
+
+    /// <summary>Record a result whose title matched the query.</summary>
+    public void Observe(string? resultArtist) => _artists?.Add(SearchTerms.ArtistKey(resultArtist));
+
+    /// <summary>True when the title-only matches are too ambiguous to attach art: more than one
+    /// distinct artist, or a lone match with a blank/unverifiable artist credit.</summary>
+    public bool IsAmbiguous => _artists is { Count: > 1 } || (_artists is { Count: 1 } && _artists.Contains(""));
 }
