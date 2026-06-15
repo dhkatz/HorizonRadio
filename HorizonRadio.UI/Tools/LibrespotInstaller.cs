@@ -32,7 +32,7 @@ public sealed class LibrespotInstaller : ToolInstallerBase
 
     public override async Task InstallAsync(IProgress<ToolInstallProgress>? progress, CancellationToken ct)
     {
-        var platform = ResolvePlatform();
+        var platform = ResolvePinnedPlatform(_manifest, Kind, "librespot");
         using var http = CreateHttpClient(TimeSpan.FromMinutes(5));
         await DownloadVerifyInstallAsync(http, platform.Url, "librespot.exe", progress, ct).ConfigureAwait(false);
     }
@@ -45,27 +45,5 @@ public sealed class LibrespotInstaller : ToolInstallerBase
     /// empty pin (post-bump bootstrap window) yields null → Unknown.
     /// </summary>
     public override Task<string?> GetExpectedHashAsync(HttpClient http, CancellationToken ct)
-    {
-        var sha = _manifest.For(Kind)?.Platform(ToolManifest.CurrentRid)?.Sha256;
-        return Task.FromResult(string.IsNullOrWhiteSpace(sha) ? null : sha);
-    }
-
-    private ToolPlatform ResolvePlatform()
-    {
-        var entry = _manifest.For(Kind)
-            ?? throw new InvalidOperationException(
-                "tools.manifest.json has no 'librespot' entry.");
-        if (!entry.IsPinned)
-            throw new InvalidOperationException(
-                $"librespot manifest policy is '{entry.Policy}', expected 'pinned'.");
-
-        var platform = entry.Platform(ToolManifest.CurrentRid)
-            ?? throw new InvalidOperationException(
-                $"tools.manifest.json has no librespot build for '{ToolManifest.CurrentRid}'.");
-        if (string.IsNullOrWhiteSpace(platform.Url))
-            throw new InvalidOperationException(
-                $"tools.manifest.json librespot '{ToolManifest.CurrentRid}' has an empty URL.");
-
-        return platform;
-    }
+        => Task.FromResult(PinnedHash(_manifest, Kind));
 }

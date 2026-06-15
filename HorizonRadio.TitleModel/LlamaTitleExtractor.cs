@@ -166,12 +166,26 @@ public sealed class LlamaTitleExtractor : ITitleExtractor
         }
     }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
-        _weights?.Dispose();
-        _weights = null;
-        _executor = null;
-        _gate.Dispose();
-        return ValueTask.CompletedTask;
+        // Acquire the gate first so we never free the native model/context out from under an
+        // in-flight inference (a background ExtractAsync holds the gate while inside InferAsync;
+        // disposing _weights mid-call would crash the native runtime). Once we hold it, no further
+        // inference can start. Best-effort: if the wait is somehow contended forever we still tear
+        // down, but in practice the running inference releases within its bounded token budget.
+        try { await _gate.WaitAsync().ConfigureAwait(false); }
+        catch (ObjectDisposedException) { return; }
+
+        try
+        {
+            _weights?.Dispose();
+            _weights = null;
+            _executor = null;
+        }
+        finally
+        {
+            _gate.Release();
+            _gate.Dispose();
+        }
     }
 }

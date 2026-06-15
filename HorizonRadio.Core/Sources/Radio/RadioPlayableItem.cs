@@ -103,7 +103,9 @@ public sealed class RadioPlayableItem : PlayableItem
 
         void OnTitle(string raw)
         {
-            _currentRaw = raw;
+            // Claim this as the current song under the gate before anyone reads _currentRaw, so a
+            // still-running model task for the previous title sees the change and skips its publish.
+            lock (_modelGate) { _currentRaw = raw; }
 
             // Best-guess (artist, title) plus alternative interpretations the resolver validates
             // against the catalogs (channel-prefix, reversed order, fullwidth separators).
@@ -114,8 +116,7 @@ public sealed class RadioPlayableItem : PlayableItem
             var candidates = alts.Count == 0
                 ? null
                 : alts.Select(c => new TitleCandidate(c.Artist, SearchTerms.StripBracketTags(c.Title))).ToList();
-            Metadata = BuildTrack(title, primary.Artist, candidates);
-            ctx.OnMetadataUpdated?.Invoke(this);
+            PublishIfCurrent(raw, BuildTrack(title, primary.Artist, candidates), ctx);
 
             // Optional title-extraction model: it can split formats the deterministic parser
             // can't (no separators, reversed order, mixed-language). The deterministic result is
@@ -275,9 +276,25 @@ public sealed class RadioPlayableItem : PlayableItem
         var (title, artist, candidates) = ComposeWithModel(
             mode, model, new TitleCandidate(current.Artist, current.Title), current.Candidates ?? []);
 
-        Metadata = BuildTrack(title, artist, candidates.Count == 0 ? null : candidates);
-        if (!ct.IsCancellationRequested && string.Equals(_currentRaw, raw, StringComparison.Ordinal))
-            ctx.OnMetadataUpdated?.Invoke(this);
+        // Publish atomically and only while this is still the current song — the re-check and the
+        // write happen under the same gate as OnTitle's publish, so a slow model result can never
+        // clobber a newer title's metadata (the read of `current` above may be stale, but if so the
+        // guard skips the write rather than persisting a frankenstein track).
+        PublishIfCurrent(raw, BuildTrack(title, artist, candidates.Count == 0 ? null : candidates), ctx);
+    }
+
+    /// <summary>Set <see cref="PlayableItem.Metadata"/> and fire the update callback, but only while
+    /// <paramref name="raw"/> is still the current ICY title. The check + write are serialized with
+    /// OnTitle's own publish via <see cref="_modelGate"/> so the background model task and a freshly
+    /// arrived title can't race each other into a stale or torn state.</summary>
+    private void PublishIfCurrent(string raw, Track track, PumpContext ctx)
+    {
+        lock (_modelGate)
+        {
+            if (!string.Equals(_currentRaw, raw, StringComparison.Ordinal)) return;
+            Metadata = track;
+        }
+        ctx.OnMetadataUpdated?.Invoke(this);
     }
 
     /// <summary>Whether the title model should run for this parse: a model must be present and not
@@ -311,22 +328,19 @@ public sealed class RadioPlayableItem : PlayableItem
     }
 
     /// <summary>De-duplicated candidate list excluding <paramref name="primary"/> (the displayed
-    /// interpretation) — by case-insensitive (artist, title), matching the parser's own dedup.</summary>
+    /// interpretation) — by case-insensitive (artist, title), reusing the parser's own dedup rule
+    /// (<see cref="RadioStreamTitle.SameCandidate"/>) so the two paths can't diverge.</summary>
     private static List<TitleCandidate> MergeCandidates(TitleCandidate primary, IEnumerable<TitleCandidate> rest)
     {
         var result = new List<TitleCandidate>();
         foreach (var c in rest)
         {
             if (string.IsNullOrWhiteSpace(c.Title)) continue;
-            if (Same(c, primary) || result.Any(a => Same(a, c))) continue;
+            if (RadioStreamTitle.SameCandidate(c, primary) || result.Any(a => RadioStreamTitle.SameCandidate(a, c))) continue;
             result.Add(c);
         }
         return result;
     }
-
-    private static bool Same(TitleCandidate a, TitleCandidate b) =>
-        string.Equals(a.Title.Trim(), b.Title.Trim(), StringComparison.OrdinalIgnoreCase) &&
-        string.Equals((a.Artist ?? "").Trim(), (b.Artist ?? "").Trim(), StringComparison.OrdinalIgnoreCase);
 
     // For the paste-a-URL path we start with no real station name; if the server sends
     // a nicer icy-name, adopt it (only when we don't already have a directory name).

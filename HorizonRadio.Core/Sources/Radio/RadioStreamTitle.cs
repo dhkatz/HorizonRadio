@@ -87,11 +87,13 @@ internal static class RadioStreamTitle
     private static void AddAlt(List<TitleCandidate> alts, TitleCandidate primary, TitleCandidate c)
     {
         if (string.IsNullOrWhiteSpace(c.Title)) return;
-        if (Same(c, primary) || alts.Any(a => Same(a, c))) return;
+        if (SameCandidate(c, primary) || alts.Any(a => SameCandidate(a, c))) return;
         alts.Add(c);
     }
 
-    private static bool Same(TitleCandidate a, TitleCandidate b) =>
+    /// <summary>Candidate equality for dedup: case-insensitive (artist, title), trimmed, null
+    /// artist treated as empty. The single rule both the parser and the model-merge path use.</summary>
+    internal static bool SameCandidate(TitleCandidate a, TitleCandidate b) =>
         string.Equals(a.Title.Trim(), b.Title.Trim(), StringComparison.OrdinalIgnoreCase) &&
         string.Equals((a.Artist ?? "").Trim(), (b.Artist ?? "").Trim(), StringComparison.OrdinalIgnoreCase);
 }

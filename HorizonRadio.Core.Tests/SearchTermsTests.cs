@@ -68,6 +68,13 @@ public class SearchTermsTests
         => Assert.Null(SearchTerms.MatchScore("Innocent Favor", "Bunmyaku", "Innocent Favor", "Some Other Band"));
 
     [Fact]
+    public void MatchScore_cross_script_looks_at_the_producer_not_a_cjk_vocalist_credit()
+        // The result's CJK is only in the vocalist credit; the producer "Other Band" is a Latin
+        // name the romaji query could have matched, so zero overlap is a real mismatch → reject.
+        // (Without the producer-portion check this would false-match on the exact multi-word title.)
+        => Assert.Null(SearchTerms.MatchScore("Innocent Favor", "Bunmyaku", "Innocent Favor", "Other Band feat. 初音ミク"));
+
+    [Fact]
     public void MatchScore_allows_a_partial_or_unknown_result_artist()
     {
         // Shares a token (looser store credit) → still matches.

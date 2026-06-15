@@ -146,6 +146,13 @@ public sealed class VocaDbProvider : IMetadataProvider
         // cross-script artist check in SearchTerms.MatchScore bridge a romaji broadcast name to a
         // kanji catalog name. Title romanization is no longer needed from lang here because Names
         // brings back every language variant of the title for SelectMatch to score against.
+        //
+        // Trade-off: for an artist VocaDB *can* romanize (ばらっげ -> "BarrageP"), lang=English used
+        // to give a direct artist-token match that also carried 1-word titles. Under lang=Default
+        // that artist is native, so a 1-word title now only resolves via the artist-scoped path
+        // (ResolveArtistIds), not the cross-script branch (which requires a multi-word title). We
+        // accept that: 1-word titles are generic/cover-prone (the single-token guard already
+        // distrusts them), and lang=English's mistranslation of name-like kanji was the worse bug.
         var url = $"{Base}/songs?query={Uri.EscapeDataString(nameQuery)}"
                 + "&maxResults=10&nameMatchMode=Auto&lang=Default&fields=Artists,MainPicture,ThumbUrl,Names";
         // artistId[]= scopes the search to one artist; the array syntax is what the REST API needs.

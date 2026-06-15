@@ -39,12 +39,11 @@ public sealed class ToolRegistry
 
     private void ScanKind(string kind)
     {
-        // Model-style tools are a GGUF data file, not an exe — there's no FileVersionInfo to read.
-        var isModel = kind == ToolKind.TitleModel;
-        var path = isModel ? ToolsPaths.ModelFor(kind) : ToolsPaths.ExeFor(kind);
+        var path = ToolsPaths.PathFor(kind);
         if (!File.Exists(path)) return;
 
-        var version = isModel ? null : TryReadVersion(path);
+        // Model-style tools are a GGUF data file, not an exe — there's no FileVersionInfo to read.
+        var version = ToolsPaths.IsModel(kind) ? null : TryReadVersion(path);
         var sha = HashVerification.ReadSidecar(path);
         _byKind[kind] = new List<InstalledTool> { new InstalledTool(kind, path, version, sha) };
     }

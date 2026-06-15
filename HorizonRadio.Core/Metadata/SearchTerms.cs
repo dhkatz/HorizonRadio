@@ -110,10 +110,17 @@ public static class SearchTerms
             // Zero overlap usually means a genuinely different act (reject — a wrong cover is worse
             // than none). But it can also just be different scripts the token compare can't bridge:
             // a romaji broadcast name ("Bunmyaku") against a kanji catalog name ("文脈"). When the
-            // query artist is romaji-only and the result artist carries CJK, the artist is
+            // query artist is romaji-only and the result's PRODUCER name is non-Latin, the artist is
             // unverifiable, not contradicted — fall back to the no-artist rule (a genuinely equal,
             // multi-word title only; never a loose/subset or 1-word title that could be a cover).
-            bool crossScript = HasLatin(queryArtist) && !HasCjk(queryArtist) && HasCjk(resultArtist);
+            //
+            // Crucially we test the producer (the credit before "feat"), not the whole string: a
+            // result like "Other Band feat. 初音ミク" carries CJK only in the vocalist credit, and
+            // "Other Band" is a Latin producer the romaji query COULD have matched — its zero
+            // overlap is a real mismatch, so that must still reject (the "metal band" guard).
+            var producer = Feat.Replace(resultArtist ?? "", "");
+            bool crossScript = HasLatin(queryArtist) && !HasCjk(queryArtist)
+                && HasCjk(producer) && !HasLatin(producer);
             if (crossScript) return titlesEqual && qt.Count >= 2 ? titleCover : null;
             return null;
         }

@@ -39,6 +39,10 @@ public partial class App : Application
     private MetadataResolver? _metaResolver;
     private MetadataConfigStore? _metaStore;
     private ITitleExtractor? _titleExtractor;
+    // Identity (path + last-write) of the installed title model the current extractor was built for,
+    // so ReinitTitleModel rebuilds it when the file actually changes (reinstall/update) and skips
+    // unrelated tool changes. Sentinel so the first call always initializes the runtime.
+    private (string? Path, long WriteTicks) _titleModelStamp = ("\0uninitialized", -1);
     private EventActionExecutor? _eventExecutor;
     private ForzaTelemetryListener? _telemetry;
     private InputBindingService? _inputService;
@@ -126,13 +130,26 @@ public partial class App : Application
             void ReinitTitleModel()
             {
                 var path = ToolResolver.Discover(ToolKind.TitleModel);
+                long ticks = 0;
+                if (!string.IsNullOrEmpty(path))
+                    try { ticks = File.GetLastWriteTimeUtc(path).Ticks; } catch { /* unreadable → 0 */ }
+
+                // Skip unrelated tool changes (e.g. installing ffmpeg) — only rebuild when the model
+                // file's identity changed. A genuine reinstall/update changes the write time, so we
+                // build a FRESH extractor rather than reusing the cached one (which would keep serving
+                // the previously-loaded weights until restart).
+                var stamp = (path, ticks);
+                if (stamp == _titleModelStamp) return;
+                _titleModelStamp = stamp;
+
                 var old = _titleExtractor;
                 _titleExtractor = string.IsNullOrEmpty(path)
                     ? null
-                    : _titleExtractor ?? new LlamaTitleExtractor(() => ToolResolver.Discover(ToolKind.TitleModel));
+                    : new LlamaTitleExtractor(() => ToolResolver.Discover(ToolKind.TitleModel));
                 TitleExtractorRuntime.Initialize(_titleExtractor, _metaStore!.TitleModelMode);
-                if (old != null && !ReferenceEquals(old, _titleExtractor))
-                    _ = old.DisposeAsync().AsTask(); // fire-and-forget; releases the loaded model
+                // Dispose the superseded extractor; DisposeAsync waits for any in-flight inference
+                // before freeing the native model, so this is safe to fire-and-forget.
+                if (old != null) _ = old.DisposeAsync().AsTask();
             }
             ReinitTitleModel();
             toolRegistry.Changed += ReinitTitleModel;

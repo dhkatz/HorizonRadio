@@ -55,10 +55,13 @@ public static class MetadataTrace
     /// The env var wins when set to anything other than 0/false/off (useful for headless runs).</summary>
     public static void RestoreFromSettings()
     {
-        var env = Environment.GetEnvironmentVariable("HZN_META_TRACE");
-        if (!string.IsNullOrWhiteSpace(env))
+        var env = Environment.GetEnvironmentVariable("HZN_META_TRACE")?.Trim().ToLowerInvariant();
+        if (!string.IsNullOrEmpty(env))
         {
+            // Any value except an explicit falsy one turns capture on (case/whitespace-insensitive,
+            // so "False"/" OFF " disable as intended rather than accidentally enabling).
             if (env is not ("0" or "false" or "off" or "no")) { SetEnabled(true, persist: false); return; }
+            return; // explicitly disabled via env → don't fall through to the persisted setting
         }
         if (ReadPersistedEnabled()) SetEnabled(true, persist: false);
     }

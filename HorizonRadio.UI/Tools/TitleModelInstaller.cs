@@ -24,8 +24,6 @@ public sealed class TitleModelInstaller : ToolInstallerBase
     public override string Description =>
         "Optional local model that extracts artist/song names from messy radio titles (incl. mixed-language). Improves now-playing metadata; radio works without it.";
 
-    protected override string InstalledPath => ToolsPaths.ModelFor(Kind);
-
     private readonly ToolManifest _manifest;
 
     public TitleModelInstaller() : this(ToolManifest.Current) { }
@@ -35,7 +33,11 @@ public sealed class TitleModelInstaller : ToolInstallerBase
 
     public override async Task InstallAsync(IProgress<ToolInstallProgress>? progress, CancellationToken ct)
     {
-        var platform = ResolvePlatform();
+        // Until the model is hosted, the pinned URL is empty — surface a clear message that points
+        // at the manual drop-in path instead of the generic "empty URL" error.
+        var platform = ResolvePinnedPlatform(_manifest, Kind, "title-model",
+            emptyUrlMessage: "The title model isn't published yet — no download URL is pinned. " +
+                $"You can still use it by dropping a .gguf file at {ToolsPaths.ModelFor(Kind)} manually.");
         // Generous timeout: the model is hundreds of MB on a possibly-slow connection.
         using var http = CreateHttpClient(TimeSpan.FromMinutes(30));
         await DownloadVerifyInstallAsync(http, platform.Url, "title model", progress, ct).ConfigureAwait(false);
@@ -44,29 +46,5 @@ public sealed class TitleModelInstaller : ToolInstallerBase
     /// <summary>Freshness baseline is the manifest's pinned hash (read offline). Empty pin (the
     /// model isn't hosted yet) → null → Unknown, same as the other pinned tools.</summary>
     public override Task<string?> GetExpectedHashAsync(HttpClient http, CancellationToken ct)
-    {
-        var sha = _manifest.For(Kind)?.Platform(ToolManifest.CurrentRid)?.Sha256;
-        return Task.FromResult(string.IsNullOrWhiteSpace(sha) ? null : sha);
-    }
-
-    private ToolPlatform ResolvePlatform()
-    {
-        var entry = _manifest.For(Kind)
-            ?? throw new InvalidOperationException(
-                "tools.manifest.json has no 'title-model' entry.");
-        if (!entry.IsPinned)
-            throw new InvalidOperationException(
-                $"title-model manifest policy is '{entry.Policy}', expected 'pinned'.");
-
-        var platform = entry.Platform(ToolManifest.CurrentRid)
-            ?? throw new InvalidOperationException(
-                $"tools.manifest.json has no title-model build for '{ToolManifest.CurrentRid}'.");
-        if (string.IsNullOrWhiteSpace(platform.Url))
-            throw new InvalidOperationException(
-                "The title model isn't published yet — no download URL is pinned. " +
-                "You can still use it by dropping a .gguf file at " +
-                $"{ToolsPaths.ModelFor(Kind)} manually.");
-
-        return platform;
-    }
+        => Task.FromResult(PinnedHash(_manifest, Kind));
 }

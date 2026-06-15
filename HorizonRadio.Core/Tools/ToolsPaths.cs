@@ -44,6 +44,15 @@ public static class ToolsPaths
                                   nameof(kind), kind, "unknown model tool kind"),
     };
 
+    /// <summary>True for tools that are a downloaded data file rather than an executable. The
+    /// single source of truth for "is this a model?" — callers (path resolution, the registry
+    /// scanner, the installer) branch on this instead of comparing kind strings themselves.</summary>
+    public static bool IsModel(string kind) => kind == ToolKind.TitleModel;
+
+    /// <summary>The installed-file path for any kind: a model's data file (<see cref="ModelFor"/>)
+    /// or an exe (<see cref="ExeFor"/>). Use this rather than choosing between the two by kind.</summary>
+    public static string PathFor(string kind) => IsModel(kind) ? ModelFor(kind) : ExeFor(kind);
+
     public static void EnsureDir(string kind) =>
         Directory.CreateDirectory(DirectoryFor(kind));
 }
