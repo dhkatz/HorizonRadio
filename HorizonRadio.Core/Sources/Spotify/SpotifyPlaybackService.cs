@@ -153,17 +153,46 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
         try
         {
             // Play this one track; --autoplay off means librespot stops after it.
-            await client.Player.ResumePlayback(new PlayerResumePlaybackRequest
+            //
+            // On a cold start the device can register in the Web API device list (so
+            // EnsureDeviceAsync already found it) a beat BEFORE librespot's Connect
+            // session is ready to receive commands. The first play is then accepted by
+            // Spotify's cloud but reaches no live session, so no PCM ever flows and the
+            // track hangs silently — the engine's end-wait below never completes because
+            // position stays at 0. (This is the "first queued track never plays until you
+            // skip to the next" bug: only the first play after a cold start races the
+            // session handshake; by the next track the session is up.)
+            //
+            // So don't trust a single fire-and-forget play: re-issue it until librespot
+            // actually reports it started (or begins delivering frames, covering an older
+            // librespot that doesn't emit the event). We only re-issue when nothing
+            // happened at all, so a track that's merely slow to emit "playing" — but is
+            // already streaming — isn't restarted.
+            PlayerResumePlaybackRequest PlayRequest() => new()
             {
                 DeviceId = deviceId,
                 Uris = new List<string> { trackUri },
-            }, ct).ConfigureAwait(false);
+            };
 
-            // Give librespot a moment to actually start streaming before we trust the
-            // end signal — guards against a stale end_of_track from the previous track
-            // racing the new play. If the start event never comes (older librespot),
-            // proceed anyway so a track still plays.
-            await WaitWithTimeoutAsync(started.Task, TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
+            const int maxAttempts = 3;
+            for (var attempt = 1; ; attempt++)
+            {
+                await TryControlAsync(
+                    () => client.Player.ResumePlayback(PlayRequest(), ct), "play").ConfigureAwait(false);
+
+                // Give librespot a moment to actually start streaming before we trust the
+                // end signal — also guards against a stale end_of_track from a previous
+                // track racing the new play.
+                await WaitWithTimeoutAsync(started.Task, TimeSpan.FromSeconds(5), ct).ConfigureAwait(false);
+                if (started.Task.IsCompleted || _routing.Frames > 0) break; // actually playing
+                if (ct.IsCancellationRequested) break;
+                if (attempt >= maxAttempts)
+                {
+                    Log($"play: never confirmed start after {maxAttempts} attempts; proceeding");
+                    break;
+                }
+                Log($"play: no start after 5s (attempt {attempt}); re-issuing");
+            }
 
             // Wait for the track to finish. Both end signals are PLAYBACK-based and so
             // freeze while paused — a long pause can no longer end the track early.
