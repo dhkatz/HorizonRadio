@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using HorizonRadio.Core.Diagnostics;
 using SpotifyAPI.Web;
 
 namespace HorizonRadio.Core.Metadata.Spotify;
@@ -106,18 +108,27 @@ public sealed class SpotifyProvider : IMetadataProvider
                 new SearchRequest(SearchRequest.Types.Track, q) { Limit = 10 }, ct).ConfigureAwait(false);
 
             var items = resp.Tracks?.Items;
-            if (items is null || items.Count == 0) return null;
 
+            // Capture the query + every scored result for the trace (only when capturing) so this
+            // lookup can be replayed through SearchTerms.MatchScore offline.
+            var capture = MetadataTrace.NewCapture();
+            // For a title-only query, reject a widely-covered/ambiguous title rather than attach a
+            // random cover's art; inert when an artist is present.
+            var titleGuard = new TitleOnlyGuard(artist);
             FullTrack? best = null;
             double bestScore = double.NegativeInfinity;
-            foreach (var t in items)
+            foreach (var t in items ?? [])
             {
                 var resultArtist = t.Artists?.FirstOrDefault()?.Name;
-                if (SearchTerms.MatchScore(title, artist, t.Name, resultArtist) is not { } score) continue;
-                if (score <= bestScore) continue;
-                bestScore = score;
+                var score = SearchTerms.MatchScore(title, artist, t.Name, resultArtist);
+                if (score is { }) titleGuard.Observe(resultArtist);
+                capture?.Add(new(t.Name, resultArtist, t.Album?.Name, score));
+                if (score is not { } sc || sc <= bestScore) continue;
+                bestScore = sc;
                 best = t;
             }
+            MetadataTrace.ProviderSearch(Id, q, capture);
+            if (titleGuard.IsAmbiguous) return null;
 
             return best is null ? null : await BuildEntry(best, ct).ConfigureAwait(false);
         }

@@ -84,4 +84,61 @@ public class RadioStreamTitleTests
         Assert.Equal("Sacred Secret", primary.Title);
         Assert.True(Has(alts, "Sacred Secret", "MuryokuP")); // reversed, for catalog validation
     }
+
+    [Fact]
+    public void ParseCandidates_splits_a_spaced_ascii_slash_into_title_and_artist()
+    {
+        // "<uploader> - <TITLE> / <Artist> ft.<vocalist>" — the spaced ASCII "/" separates title and
+        // artist (like the already-handled fullwidth ／). The reversed candidate must recover
+        // (HarryP…, TODAY THE FUTURE) for the catalog to confirm; "(∵)キョトンP" is just the uploader.
+        var (_, alts, _) = RadioStreamTitle.ParseCandidates(
+            "(∵)キョトンP (kyotn) - TODAY THE FUTURE / HarryP ft.初音ミク [1MR8]");
+
+        Assert.True(Has(alts, "HarryP ft.初音ミク [1MR8]", "TODAY THE FUTURE"));
+    }
+
+    [Fact]
+    public void ParseCandidates_does_not_split_an_unspaced_slash()
+    {
+        // "AC/DC" must stay intact — only a space-padded "/" is a separator.
+        var (primary, _, _) = RadioStreamTitle.ParseCandidates("AC/DC - Thunderstruck");
+        Assert.Equal("AC/DC", primary.Artist);
+        Assert.Equal("Thunderstruck", primary.Title);
+    }
+
+    [Fact]
+    public void ParseCandidates_strips_a_duplicated_artist_prefix_from_the_title()
+    {
+        // "AVTechNO! - AVTechNO! tear feat.Hatsune Miku" — the artist is repeated as a title prefix,
+        // which dilutes title coverage. Offer the de-prefixed title so the real "tear" can match.
+        var (primary, alts, _) = RadioStreamTitle.ParseCandidates("AVTechNO! - AVTechNO! tear feat.Hatsune Miku");
+
+        Assert.Equal("AVTechNO!", primary.Artist);
+        Assert.True(Has(alts, "AVTechNO!", "tear feat.Hatsune Miku"));
+    }
+
+    [Fact]
+    public void ParseCandidates_offers_a_title_only_last_resort()
+    {
+        // Uploader-credited track ("(∵)キョトンP" is a channel, not the producer): a title-only
+        // candidate lets the catalog resolve it by title when the results agree on one artist.
+        var (_, alts, _) = RadioStreamTitle.ParseCandidates("(∵)キョトンP (kyotn) - 狂騒ノ現");
+
+        Assert.Contains(alts, c => c.Artist is null && c.Title == "狂騒ノ現");
+    }
+
+    [Fact]
+    public void ParseCandidates_offers_a_bracketed_producer_as_an_alt_artist()
+    {
+        // The "Migratory" case: the real catalog artist ("Clean Tears") is in a bracket the parse
+        // strips, while the leading "keerosah" (uploader) becomes the primary artist. The bracket's
+        // content must be offered as an alt artist for the bare title so the catalog can confirm it.
+        var (primary, alts, _) = RadioStreamTitle.ParseCandidates(
+            "keerosah - [初音ミク] Migratory [Clean Tears] [1MRl]");
+
+        Assert.Equal("keerosah", primary.Artist);
+        Assert.True(Has(alts, "Clean Tears", "Migratory"));   // the producer-in-a-tag candidate
+        Assert.True(Has(alts, "初音ミク", "Migratory"));        // the vocalist tag too (harmless)
+        Assert.False(Has(alts, "1MRl", "Migratory"));         // the station code is filtered out
+    }
 }

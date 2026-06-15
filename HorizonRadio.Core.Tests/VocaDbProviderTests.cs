@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.Text.Json;
+using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Metadata.VocaDb;
 
 namespace HorizonRadio.Core.Tests;
@@ -31,7 +33,7 @@ public class VocaDbProviderTests
         Assert.NotNull(m);
         Assert.Equal("Sacred Secret", m!.Name);
         Assert.Equal(2011, m.Year);
-        Assert.Equal("https://vocadb/x/hqdefault.jpg", m.ArtUrl);
+        Assert.Equal("https://vocadb/x/hqdefault.jpg", m.ArtUrls[0]);
     }
 
     [Fact]
@@ -54,7 +56,7 @@ public class VocaDbProviderTests
         var m = VocaDbProvider.SelectMatch(json, "サクリファイス", "Itachima-p", artistConfirmed: true);
 
         Assert.NotNull(m);
-        Assert.Equal("https://nico/t.jpg", m!.ArtUrl);
+        Assert.Equal("https://nico/t.jpg", m!.ArtUrls[0]);
     }
 
     [Fact]
@@ -76,7 +78,7 @@ public class VocaDbProviderTests
         var m = VocaDbProvider.SelectMatch(json, "Innocent Favor", "Bunmyaku", artistConfirmed: false);
 
         Assert.NotNull(m);
-        Assert.Equal("https://nico/t.jpg", m!.ArtUrl);
+        Assert.Equal("https://nico/t.jpg", m!.ArtUrls[0]);
     }
 
     [Fact]
@@ -97,6 +99,45 @@ public class VocaDbProviderTests
     }
 
     [Fact]
+    public void SelectMatch_returns_all_image_urls_so_a_dead_original_can_fall_through()
+    {
+        // urlOriginal is often a YouTube hqdefault that 404s when the source video is gone; the
+        // urlThumb mirror still resolves. Both must be returned, original first, so the downloader
+        // can fall through (the "ココロ、ユラユラ" art gap).
+        var json = Json("""
+        {
+          "items": [
+            { "name": "Sacred Secret", "artistString": "MuryokuP",
+              "mainPicture": { "urlOriginal": "https://i1.ytimg.com/vi/x/hqdefault.jpg",
+                               "urlThumb": "https://i2.hdslb.com/mirror.jpg" } }
+          ]
+        }
+        """);
+
+        var m = VocaDbProvider.SelectMatch(json, "Sacred Secret", "MuryokuP");
+        Assert.Equal(new[] { "https://i1.ytimg.com/vi/x/hqdefault.jpg", "https://i2.hdslb.com/mirror.jpg" }, m!.ArtUrls);
+    }
+
+    [Fact]
+    public void SelectMatch_surfaces_the_original_version_id_for_an_artless_remaster()
+    {
+        // "Re-Confliction" (a Remaster) has no art of its own but links to the original "Confliction"
+        // (id 54185), which does — surface that id so the provider can borrow the original's image.
+        var json = Json("""
+        {
+          "items": [
+            { "name": "Re-Confliction", "artistString": "kouki feat. GUMI", "originalVersionId": 54185 }
+          ]
+        }
+        """);
+
+        var m = VocaDbProvider.SelectMatch(json, "Re-Confliction", "kouki");
+        Assert.NotNull(m);
+        Assert.Empty(m!.ArtUrls);                 // the remaster itself has no image
+        Assert.Equal(54185, m.OriginalVersionId); // …but points at the original that does
+    }
+
+    [Fact]
     public void SelectMatch_falls_back_to_thumbUrl_when_no_main_picture()
     {
         var json = Json("""
@@ -108,12 +149,57 @@ public class VocaDbProviderTests
         """);
 
         var m = VocaDbProvider.SelectMatch(json, "Sacred Secret", "MuryokuP");
-        Assert.Equal("https://nico/t.jpg", m!.ArtUrl);
+        Assert.Equal("https://nico/t.jpg", m!.ArtUrls[0]);
     }
 
     [Fact]
     public void SelectMatch_handles_empty_items()
         => Assert.Null(VocaDbProvider.SelectMatch(Json("""{ "items": [] }"""), "X", "Y"));
+
+    [Fact]
+    public void SelectMatch_title_only_rejects_an_ambiguous_title()
+    {
+        // No artist + two different artists with the exact title → ambiguous, reject (千本桜 case).
+        var json = Json("""
+        {
+          "items": [
+            { "name": "千本桜", "artistString": "Cover A", "thumbUrl": "https://nico/a.jpg" },
+            { "name": "千本桜", "artistString": "Cover B", "thumbUrl": "https://nico/b.jpg" }
+          ]
+        }
+        """);
+
+        Assert.Null(VocaDbProvider.SelectMatch(json, "千本桜", "", artistConfirmed: false));
+    }
+
+    [Fact]
+    public void SelectMatch_title_only_rejects_when_matches_have_blank_artists()
+    {
+        // Two same-title entries with no artistString both key to "" — they must still count as
+        // ambiguous/unverifiable, not collapse into "one artist owns the title".
+        var json = Json("""
+        {
+          "items": [
+            { "name": "千本桜", "thumbUrl": "https://nico/a.jpg" },
+            { "name": "千本桜", "thumbUrl": "https://nico/b.jpg" }
+          ]
+        }
+        """);
+
+        Assert.Null(VocaDbProvider.SelectMatch(json, "千本桜", "", artistConfirmed: false));
+    }
+
+    [Fact]
+    public void SelectMatch_title_only_accepts_when_one_artist_owns_the_title()
+    {
+        // A distinctive title owned by one artist → safe to accept on title alone.
+        var json = Json("""
+        { "items": [ { "name": "狂騒ノ現", "artistString": "Wonderful★opportunity!", "thumbUrl": "https://nico/t.jpg" } ] }
+        """);
+
+        var m = VocaDbProvider.SelectMatch(json, "狂騒ノ現", "", artistConfirmed: false);
+        Assert.Equal("https://nico/t.jpg", m!.ArtUrls[0]);
+    }
 
     [Fact]
     public void SelectArtistIds_prefers_the_producer_over_same_named_illustrators()
@@ -139,4 +225,51 @@ public class VocaDbProviderTests
     [Fact]
     public void SelectArtistIds_empty_when_no_items()
         => Assert.Empty(VocaDbProvider.SelectArtistIds(Json("""{ "items": [] }"""), 2));
+
+    [Fact]
+    public void SelectMatch_prefers_an_equal_scoring_candidate_that_has_art()
+    {
+        // The "starry song" case: two recordings of the same APG550 song score identically. The
+        // first listed (GUMI) has no image; the second (Kagamine Rin) carries a Niconico thumbnail.
+        // Art presence must break the tie so the now-playing tile isn't left blank.
+        var json = Json("""
+        {
+          "items": [
+            { "name": "starry song", "artistString": "APG550 feat. GUMI" },
+            { "name": "Starry song", "artistString": "APG550 feat. 鏡音リン", "thumbUrl": "https://nico/t.jpg" }
+          ]
+        }
+        """);
+
+        var m = VocaDbProvider.SelectMatch(json, "starry song", "APG550", artistConfirmed: true);
+
+        Assert.NotNull(m);
+        Assert.Equal("https://nico/t.jpg", m!.ArtUrls[0]);   // the art-bearing sibling won the tie
+    }
+
+    [Fact]
+    public void SelectMatch_sink_captures_every_scored_candidate_including_rejected()
+    {
+        // The diagnostics replay data: the sink records each candidate the guard saw, with the
+        // score it gave (null = rejected). Here one song matches and one same-titled track by an
+        // unrelated artist is rejected — both must land in the sink so a trace line can be
+        // re-scored offline to test a guard change.
+        var json = Json("""
+        {
+          "items": [
+            { "name": "Sacred Secret", "artistString": "MuryokuP feat. Megurine Luka" },
+            { "name": "Sacred Secret", "artistString": "Unrelated Band" }
+          ]
+        }
+        """);
+
+        var sink = new List<MetadataTrace.CatalogCandidate>();
+        var m = VocaDbProvider.SelectMatch(json, "Sacred Secret", "MuryokuP", artistConfirmed: false, sink: sink);
+
+        Assert.Equal("Sacred Secret", m!.Name);
+        Assert.Equal(2, sink.Count);                                   // both candidates recorded
+        Assert.All(sink, c => Assert.Equal("Sacred Secret", c.Title));
+        Assert.NotNull(sink[0].Score);                                 // matched the broadcast artist
+        Assert.Null(sink[1].Score);                                    // rejected: unrelated artist
+    }
 }

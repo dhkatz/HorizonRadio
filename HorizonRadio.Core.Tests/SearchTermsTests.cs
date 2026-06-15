@@ -24,6 +24,69 @@ public class SearchTermsTests
     public void CleanForSearch_falls_back_when_cleaning_would_empty()
         => Assert.Equal("[only tags]", SearchTerms.CleanForSearch("[only tags]"));
 
+    [Fact]
+    public void CleanForSearch_keeps_a_title_that_would_reduce_to_punctuation()
+        // "+(Plus)" must not collapse to "+" (no letters/digits → empty query that can never match);
+        // keep the original so "Plus" survives for searching/scoring.
+        => Assert.Equal("+(Plus)", SearchTerms.CleanForSearch("+(Plus)"));
+
+    [Fact]
+    public void ArtistKey_groups_by_producer_credit()
+    {
+        // Same producer with/without a vocalist credit share a key; genuinely different acts don't.
+        Assert.Equal(SearchTerms.ArtistKey("kiichi"), SearchTerms.ArtistKey("kiichi feat. GUMI"));
+        Assert.NotEqual(SearchTerms.ArtistKey("EZFG"), SearchTerms.ArtistKey("Kerosene"));
+    }
+
+    [Fact]
+    public void IsArtistless_matches_MatchScores_no_artist_branch()
+    {
+        Assert.True(SearchTerms.IsArtistless(null));
+        Assert.True(SearchTerms.IsArtistless(""));
+        // Non-whitespace but token-empty — MatchScore scores this title-only, so IsArtistless must
+        // agree (the bug a raw IsNullOrWhiteSpace gate would miss).
+        Assert.True(SearchTerms.IsArtistless("--"));
+        Assert.True(SearchTerms.IsArtistless("（）"));
+        Assert.False(SearchTerms.IsArtistless("MuryokuP"));
+    }
+
+    [Fact]
+    public void TitleOnlyGuard_is_inert_for_an_artist_bearing_query()
+    {
+        var g = new TitleOnlyGuard("MuryokuP");
+        g.Observe("Cover A");
+        g.Observe("Cover B");                 // two distinct artists, but the query had an artist
+        Assert.False(g.IsAmbiguous);
+    }
+
+    [Fact]
+    public void TitleOnlyGuard_engages_for_a_punctuation_only_artist()
+    {
+        // "--" cleans to no tokens, so MatchScore treats it title-only; the guard must engage too.
+        var g = new TitleOnlyGuard("--");
+        g.Observe("Cover A");
+        g.Observe("Cover B");
+        Assert.True(g.IsAmbiguous);
+    }
+
+    [Fact]
+    public void TitleOnlyGuard_flags_distinct_or_blank_artists_but_accepts_one_producer()
+    {
+        var distinct = new TitleOnlyGuard("");
+        distinct.Observe("EZFG");
+        distinct.Observe("Kerosene");
+        Assert.True(distinct.IsAmbiguous);            // several distinct artists → ambiguous
+
+        var blank = new TitleOnlyGuard("");
+        blank.Observe(null);
+        Assert.True(blank.IsAmbiguous);               // lone unverifiable credit → ambiguous
+
+        var single = new TitleOnlyGuard("");
+        single.Observe("Wonderful★opportunity!");
+        single.Observe("Wonderful★opportunity! feat. 初音ミク");
+        Assert.False(single.IsAmbiguous);             // one producer (with/without vocalist) → safe
+    }
+
     [Theory]
     [InlineData("[Megurine Luka]Sacred Secret [SEV]", "Sacred Secret")]
     [InlineData("Song (Remix)", "Song (Remix)")] // parentheses kept for display
@@ -107,6 +170,21 @@ public class SearchTermsTests
         Assert.NotNull(SearchTerms.MatchScore("BitterSweet", "AIKA", "Bitter Sweet", "AIKA"));
         // Still gated on artist when not confirmed — a different act is rejected.
         Assert.Null(SearchTerms.MatchScore("BitterSweet", "NGC 3.14", "Bitter Sweet", "AIKA feat. Hatsune Miku"));
+    }
+
+    [Fact]
+    public void MatchScore_bridges_an_artist_spacing_difference()
+    {
+        // "Kairiki Bear" (broadcast) vs "Kairikibear" (catalog) — same act, spacing only. Token
+        // overlap is zero, so without the squash bridge the correct title match was rejected.
+        Assert.NotNull(SearchTerms.MatchScore(
+            "Imitation Psychotropic", "Kairiki Bear", "Imitation Gallery (Gate of Psychotropic)", "Kairikibear"));
+        // The producer credit (before "feat.") is what's compared, so a vocalist credit is fine.
+        Assert.NotNull(SearchTerms.MatchScore(
+            "Imitation Gallery", "Kairiki Bear", "Imitation Gallery", "Kairikibear feat. GUMI"));
+        // A genuinely different act that merely squashes differently is still rejected.
+        Assert.Null(SearchTerms.MatchScore(
+            "Imitation Psychotropic", "Kairiki Bear", "Imitation Gallery (Gate of Psychotropic)", "Some Other Band"));
     }
 
     [Fact]

@@ -18,9 +18,17 @@
                     Background="{DynamicResource MutedColor}"
                     Margin="0,0,24,0"
                     ClipToBounds="True">
-                <Image Source="{Binding AlbumArt}"
-                       Stretch="UniformToFill"
-                       IsVisible="{Binding AlbumArt, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <Panel>
+                    <!-- Placeholder glyph when nothing (not even a station logo) resolved, so the
+                         tile reads as "no art" rather than a flat empty square. -->
+                    <TextBlock Text="♪"
+                               FontSize="72" Opacity="0.25"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               IsVisible="{Binding AlbumArt, Converter={x:Static ObjectConverters.IsNull}}" />
+                    <Image Source="{Binding AlbumArt}"
+                           Stretch="UniformToFill"
+                           IsVisible="{Binding AlbumArt, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                </Panel>
             </Border>
 
             <Border Grid.Row="0" Grid.Column="1"
@@ -66,9 +74,15 @@
                     Background="{DynamicResource MutedColor}"
                     ClipToBounds="True"
                     Margin="0,0,12,0">
-                <Image Source="{Binding AlbumArt}"
-                       Stretch="UniformToFill"
-                       IsVisible="{Binding AlbumArt, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <Panel>
+                    <TextBlock Text="♪"
+                               FontSize="22" Opacity="0.25"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               IsVisible="{Binding AlbumArt, Converter={x:Static ObjectConverters.IsNull}}" />
+                    <Image Source="{Binding AlbumArt}"
+                           Stretch="UniformToFill"
+                           IsVisible="{Binding AlbumArt, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                </Panel>
             </Border>
             <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
                 <TextBlock Text="{Binding Title}"

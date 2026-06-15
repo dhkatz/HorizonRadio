@@ -39,7 +39,9 @@ public static class SearchTerms
         var t = Brackets.Replace(s, " ");
         t = Feat.Replace(t, " ");
         t = Whitespace.Replace(t, " ").Trim().Trim('-', '–', '—', '|', '~', '·', ' ');
-        return t.Length == 0 ? s.Trim() : t;
+        // Fall back to the trimmed original when cleaning leaves nothing matchable — e.g. "+(Plus)"
+        // would otherwise reduce to "+" (no letters/digits), an empty query that can never match.
+        return t.Any(char.IsLetterOrDigit) ? t : s.Trim();
     }
 
     /// <summary>Strip bracketed tags, used for the radio now-playing title where
@@ -53,6 +55,17 @@ public static class SearchTerms
         t = Whitespace.Replace(t, " ").Trim();
         return t.Length == 0 ? s.Trim() : t;
     }
+
+    /// <summary>A grouping key for an artist credit: the producer name (before "feat."), squashed to
+    /// bare lowercase alphanumerics. "kiichi" and "kiichi feat. GUMI" share a key; "EZFG" and
+    /// "Kerosene" don't. Used to decide whether a set of title-only matches agree on one artist.</summary>
+    public static string ArtistKey(string? artist) => Squash(Feat.Replace(artist ?? "", ""));
+
+    /// <summary>True when an artist string carries no search tokens — the "title-only" case, where
+    /// <see cref="MatchScore"/> can only match on title equality. This is the exact predicate
+    /// MatchScore's no-artist branch uses (<c>Tokens(CleanForSearch(artist)).Count == 0</c>), shared
+    /// so the providers' <see cref="TitleOnlyGuard"/> can't drift from the scorer.</summary>
+    public static bool IsArtistless(string? artist) => Tokens(CleanForSearch(artist)).Count == 0;
 
     /// <summary>Lower-cased alphanumeric tokens, for loose match comparison.</summary>
     public static IReadOnlyList<string> Tokens(string? s)
@@ -105,6 +118,13 @@ public static class SearchTerms
         if (titleCover < 0.6) return null;
 
         var artistCover = Coverage(qa, ra);
+
+        // Spacing/punctuation-only artist differences ("Kairiki Bear" vs "Kairikibear", "DECO*27" vs
+        // "DECO 27") read as zero token overlap, yet they're the same act — bridge them via squash,
+        // exactly as the title compare already does. A squash match is a full-strength corroboration,
+        // so it both clears the zero-overlap gate below and scores like an agreeing artist.
+        if (SquashArtistMatch(queryArtist, resultArtist)) artistCover = 1.0;
+
         if (ra.Count > 0 && artistCover == 0)
         {
             // Zero overlap usually means a genuinely different act (reject — a wrong cover is worse
@@ -147,6 +167,18 @@ public static class SearchTerms
         return sa.Length > 0 && sa == Squash(b);
     }
 
+    // Two artist strings that differ only by spacing/punctuation/case ("Kairiki Bear" vs
+    // "Kairikibear") squash to the same thing — a match token Coverage can't see. The result is
+    // also compared against its producer credit (before "feat."), so a "Band feat. <query>"
+    // vocalist credit can't fabricate a match (the metal-band guard).
+    private static bool SquashArtistMatch(string? queryArtist, string? resultArtist)
+    {
+        var qs = Squash(queryArtist);
+        if (qs.Length == 0) return false;
+        if (qs == Squash(resultArtist)) return true;
+        return qs == Squash(Feat.Replace(resultArtist ?? "", ""));
+    }
+
     private static bool SameSet(IReadOnlyList<string> a, IReadOnlyList<string> b) =>
         a.Count > 0 && new HashSet<string>(a).SetEquals(b);
 
@@ -157,4 +189,34 @@ public static class SearchTerms
         var rs = result.ToHashSet();
         return (double)query.Count(rs.Contains) / query.Count;
     }
+}
+
+/// <summary>
+/// Decides whether a title-only catalog lookup (a query with no usable artist) is safe to accept.
+/// A title match with no artist to corroborate can latch onto a cover or an unrelated same-titled
+/// song, so a provider should only accept one when every title-match points to a single, known
+/// artist. Feed it each result whose title matched (its <see cref="SearchTerms.MatchScore"/> was
+/// non-null); <see cref="IsAmbiguous"/> is then true for a widely-covered title (several distinct
+/// artists) or an unverifiable one (a blank artist credit). The guard is inert — never ambiguous —
+/// for an artist-bearing query.
+///
+/// One implementation, used by every provider, keyed via <see cref="SearchTerms.IsArtistless"/> so
+/// the gate engages on exactly the queries MatchScore scores as title-only (avoiding a raw-vs-
+/// cleaned-artist mismatch).
+/// </summary>
+public sealed class TitleOnlyGuard
+{
+    // Distinct producer-credit keys of the title-matches seen; null when the query has an artist
+    // (gate inert). The empty-string key marks a result whose artist is blank/unverifiable.
+    private readonly HashSet<string>? _artists;
+
+    public TitleOnlyGuard(string? queryArtist)
+        => _artists = SearchTerms.IsArtistless(queryArtist) ? new HashSet<string>(StringComparer.Ordinal) : null;
+
+    /// <summary>Record a result whose title matched the query.</summary>
+    public void Observe(string? resultArtist) => _artists?.Add(SearchTerms.ArtistKey(resultArtist));
+
+    /// <summary>True when the title-only matches are too ambiguous to attach art: more than one
+    /// distinct artist, or a lone match with a blank/unverifiable artist credit.</summary>
+    public bool IsAmbiguous => _artists is { Count: > 1 } || (_artists is { Count: 1 } && _artists.Contains(""));
 }

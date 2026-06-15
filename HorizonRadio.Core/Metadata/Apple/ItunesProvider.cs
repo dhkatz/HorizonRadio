@@ -7,6 +7,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using HorizonRadio.Core.Diagnostics;
 
 namespace HorizonRadio.Core.Metadata.Apple;
 
@@ -61,7 +62,9 @@ public sealed class ItunesProvider : IMetadataProvider
         var hit = _cache.TryGet(cacheKey);
         if (hit != null) return ToContribution(hit);
 
-        var match = await FindBestAsync(title, artist, query.Title, query.Artist, ct).ConfigureAwait(false);
+        var capture = MetadataTrace.NewCapture();
+        var match = await FindBestAsync(title, artist, query.Title, query.Artist, capture, ct).ConfigureAwait(false);
+        MetadataTrace.ProviderSearch(Id, string.IsNullOrEmpty(artist) ? title : $"{artist} {title}", capture);
         if (match is null)
         {
             _cache.PutMiss(cacheKey);
@@ -84,7 +87,8 @@ public sealed class ItunesProvider : IMetadataProvider
     }
 
     private async Task<Match?> FindBestAsync(
-        string cleanTitle, string cleanArtist, string rawTitle, string? rawArtist, CancellationToken ct)
+        string cleanTitle, string cleanArtist, string rawTitle, string? rawArtist,
+        ICollection<MetadataTrace.CatalogCandidate>? sink, CancellationToken ct)
     {
         // Full query first (more precise), then title-only (catches artist-credit mismatches).
         var terms = string.IsNullOrEmpty(cleanArtist)
@@ -95,14 +99,15 @@ public sealed class ItunesProvider : IMetadataProvider
         {
             foreach (var term in terms)
             {
-                var match = await SearchOnceAsync(term, store, rawTitle, rawArtist, ct).ConfigureAwait(false);
+                var match = await SearchOnceAsync(term, store, rawTitle, rawArtist, sink, ct).ConfigureAwait(false);
                 if (match != null) return match; // first confident hit; stores are tried in priority order
             }
         }
         return null;
     }
 
-    private async Task<Match?> SearchOnceAsync(string term, string store, string rawTitle, string? rawArtist, CancellationToken ct)
+    private async Task<Match?> SearchOnceAsync(string term, string store, string rawTitle, string? rawArtist,
+        ICollection<MetadataTrace.CatalogCandidate>? sink, CancellationToken ct)
     {
         // limit=10 so scoring can see past a fuzzy #1 to the real track.
         var url = $"https://itunes.apple.com/search?media=music&entity=song&limit=10&country={store}&term={Uri.EscapeDataString(term)}";
@@ -117,17 +122,22 @@ public sealed class ItunesProvider : IMetadataProvider
 
         using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
         using var doc = await JsonDocument.ParseAsync(stream, default, ct).ConfigureAwait(false);
-        return SelectMatch(doc.RootElement, rawTitle, rawArtist);
+        return SelectMatch(doc.RootElement, rawTitle, rawArtist, sink);
     }
 
     /// <summary>Pick the highest-scoring result that clears the match guard (title-first;
     /// artist a bonus), and lift its fields + a higher-res artwork URL. Pure JSON-in so the
-    /// parse/scoring is unit-testable without HTTP.</summary>
-    internal static Match? SelectMatch(JsonElement root, string queryTitle, string? queryArtist)
+    /// parse/scoring is unit-testable without HTTP. <paramref name="sink"/>, when supplied,
+    /// collects every scored result (for the diagnostics trace) without affecting the choice.</summary>
+    internal static Match? SelectMatch(JsonElement root, string queryTitle, string? queryArtist,
+        ICollection<MetadataTrace.CatalogCandidate>? sink = null)
     {
         if (!root.TryGetProperty("results", out var results) ||
             results.ValueKind != JsonValueKind.Array) return null;
 
+        // For a title-only query, reject a widely-covered/ambiguous title rather than attach a
+        // random cover's art; inert when an artist is present.
+        var titleGuard = new TitleOnlyGuard(queryArtist);
         Match? best = null;
         double bestScore = double.NegativeInfinity;
         foreach (var r in results.EnumerateArray())
@@ -136,10 +146,12 @@ public sealed class ItunesProvider : IMetadataProvider
             if (title is null) continue;
             var artist = Str(r, "artistName");
 
-            if (SearchTerms.MatchScore(queryTitle, queryArtist, title, artist) is not { } score) continue;
-            if (score <= bestScore) continue;
+            var score = SearchTerms.MatchScore(queryTitle, queryArtist, title, artist);
+            if (score is { }) titleGuard.Observe(artist);
+            sink?.Add(new(title, artist, Str(r, "collectionName"), score));
+            if (score is not { } sc || sc <= bestScore) continue;
 
-            bestScore = score;
+            bestScore = sc;
             best = new Match(
                 Title: title,
                 Artist: artist,
@@ -147,7 +159,7 @@ public sealed class ItunesProvider : IMetadataProvider
                 Year: ParseYear(Str(r, "releaseDate")),
                 ArtworkUrl: UpscaleArtwork(Str(r, "artworkUrl100")));
         }
-        return best;
+        return titleGuard.IsAmbiguous ? null : best;
     }
 
     // iTunes returns a 100×100 thumbnail URL; swapping the size segment yields full-res art.

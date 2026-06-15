@@ -7,6 +7,7 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using HorizonRadio.Core.Diagnostics;
 
 namespace HorizonRadio.Core.Metadata.VocaDb;
 
@@ -59,6 +60,7 @@ public sealed class VocaDbProvider : IMetadataProvider
         if (hit != null) return ToContribution(hit);
 
         Match? match = null;
+        var capture = MetadataTrace.NewCapture();
 
         // Artist-scoped search first (precise): resolve the broadcast artist to VocaDB
         // artist id(s), then search within their songs.
@@ -66,17 +68,30 @@ public sealed class VocaDbProvider : IMetadataProvider
         {
             foreach (var artistId in await ResolveArtistIdsAsync(artist, ct).ConfigureAwait(false))
             {
-                match = await SearchSongsAsync(title, query.Title, query.Artist, artistId, ct).ConfigureAwait(false);
+                match = await SearchSongsAsync(title, query.Title, query.Artist, artistId, capture, ct).ConfigureAwait(false);
                 if (match != null) break;
             }
         }
 
         // Fallback: plain name search (no artist known, or none of the artist's songs matched).
-        match ??= await SearchSongsAsync(title, query.Title, query.Artist, artistId: null, ct).ConfigureAwait(false);
+        match ??= await SearchSongsAsync(title, query.Title, query.Artist, artistId: null, capture, ct).ConfigureAwait(false);
 
+        MetadataTrace.ProviderSearch(Id, string.IsNullOrEmpty(artist) ? title : $"{artist} {title}", capture);
         if (match is null) { _cache.PutMiss(cacheKey); return null; }
 
-        var art = match.ArtUrl != null ? await ImageDownload.TryGetAsync(_http, match.ArtUrl, ct).ConfigureAwait(false) : null;
+        // Try the image URLs in order: VocaDB's urlOriginal is often a YouTube hqdefault that 404s
+        // when the source video is gone, while the urlThumb/thumbUrl mirror (Niconico/Bilibili) still
+        // resolves — so fall through to it rather than giving up on the first dead link.
+        var art = await DownloadFirstAsync(match.ArtUrls, ct).ConfigureAwait(false);
+
+        // A Remaster / re-upload entry often carries no art of its own ("Re-Confliction"); borrow the
+        // original version's image, which is the same song's cover.
+        if (art is not { Length: > 0 } && match.OriginalVersionId is { } originalId)
+        {
+            var root = await GetJsonAsync($"{Base}/songs/{originalId}?fields=MainPicture,ThumbUrl&lang=Default", ct).ConfigureAwait(false);
+            if (root is { } r) art = await DownloadFirstAsync(PickArt(r), ct).ConfigureAwait(false);
+        }
+
         var entry = new MetadataCache.Entry(match.Name, match.Artist, Album: null, AlbumArt: art, Mbid: null, Year: match.Year);
         _cache.Put(cacheKey, entry);
         return ToContribution(entry);
@@ -139,7 +154,8 @@ public sealed class VocaDbProvider : IMetadataProvider
 
     // -- song search --
 
-    private async Task<Match?> SearchSongsAsync(string nameQuery, string rawTitle, string? rawArtist, int? artistId, CancellationToken ct)
+    private async Task<Match?> SearchSongsAsync(string nameQuery, string rawTitle, string? rawArtist, int? artistId,
+        ICollection<MetadataTrace.CatalogCandidate>? sink, CancellationToken ct)
     {
         // lang=Default keeps the artistString in its native script (e.g. "文脈 feat. GUMI") rather
         // than translating it (lang=English turns 文脈 into "Context"), which is what lets the
@@ -161,17 +177,23 @@ public sealed class VocaDbProvider : IMetadataProvider
         if (artistId is { } id) url += $"&artistId%5B%5D={id}";
 
         var root = await GetJsonAsync(url, ct).ConfigureAwait(false);
-        return root is { } r ? SelectMatch(r, rawTitle, rawArtist, artistConfirmed) : null;
+        return root is { } r ? SelectMatch(r, rawTitle, rawArtist, artistConfirmed, sink) : null;
     }
 
     /// <summary>Pick the best-scoring song whose name (and, unless <paramref name="artistConfirmed"/>,
     /// artist) clears the match guard, and lift its representative image URL + year. Pure JSON-in
-    /// for unit testing without HTTP.</summary>
-    internal static Match? SelectMatch(JsonElement root, string queryTitle, string? queryArtist, bool artistConfirmed = false)
+    /// for unit testing without HTTP. <paramref name="sink"/>, when supplied, collects every scored
+    /// song (best score across its name variants) for the diagnostics trace.</summary>
+    internal static Match? SelectMatch(JsonElement root, string queryTitle, string? queryArtist,
+        bool artistConfirmed = false, ICollection<MetadataTrace.CatalogCandidate>? sink = null)
     {
         if (!root.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
             return null;
 
+        // For a title-only query, reject a widely-covered/ambiguous title rather than attaching a
+        // random cover's art. Inert when an artist is present — including the artist-scoped path,
+        // where artistConfirmed always comes with a non-empty queryArtist.
+        var titleGuard = new TitleOnlyGuard(queryArtist);
         Match? best = null;
         double bestScore = double.NegativeInfinity;
         foreach (var s in items.EnumerateArray())
@@ -188,12 +210,55 @@ public sealed class VocaDbProvider : IMetadataProvider
                     (scoreForSong is null || sc > scoreForSong))
                     scoreForSong = sc;
 
-            if (scoreForSong is not { } score || score <= bestScore) continue;
+            sink?.Add(new(name, artist, null, scoreForSong));
+            if (scoreForSong is { }) titleGuard.Observe(artist);
+            if (scoreForSong is not { } score) continue;
+
+            // Prefer a strictly higher score; on a tie, prefer a candidate that actually has art so
+            // an equal-scoring sibling with a thumbnail (e.g. the Kagamine Rin version of a song)
+            // wins over an image-less entry (the GUMI version) instead of leaving the tile blank.
+            var art = PickArt(s);
+            bool better = score > bestScore
+                || (score == bestScore && best is not null && best.ArtUrls.Count == 0 && art.Count > 0);
+            if (!better) continue;
 
             bestScore = score;
-            best = new Match(name, artist, PickArt(s), ParseYear(Str(s, "publishDate")));
+            best = new Match(name, artist, art, ParseYear(Str(s, "publishDate")), OriginalId(s));
         }
-        return best;
+        return titleGuard.IsAmbiguous ? null : best;
+    }
+
+    // VocaDB's link from a Remaster / re-upload to the song it derives from (0 = none). Lets an
+    // art-less remaster borrow the original version's image.
+    private static int? OriginalId(JsonElement song) =>
+        song.TryGetProperty("originalVersionId", out var p) && p.ValueKind == JsonValueKind.Number
+            && p.TryGetInt32(out var id) && id > 0 ? id : null;
+
+    // Download the first URL that yields bytes, or null if none do (each is best-effort).
+    private async Task<byte[]?> DownloadFirstAsync(IReadOnlyList<string> urls, CancellationToken ct)
+    {
+        foreach (var url in urls)
+        {
+            var bytes = await ImageDownload.TryGetAsync(_http, url, ct).ConfigureAwait(false);
+            if (bytes is { Length: > 0 }) return bytes;
+        }
+        return null;
+    }
+
+    // All candidate image URLs for a song, best first: the original picture, then its thumbnail
+    // mirror, then the song thumbnail. Distinct and non-empty. Returned as a list (not a single URL)
+    // so a dead urlOriginal can fall through to a working mirror at download time.
+    private static List<string> PickArt(JsonElement song)
+    {
+        var urls = new List<string>();
+        void Add(string? u) { if (!string.IsNullOrEmpty(u) && !urls.Contains(u)) urls.Add(u); }
+        if (song.TryGetProperty("mainPicture", out var mp) && mp.ValueKind == JsonValueKind.Object)
+        {
+            Add(Str(mp, "urlOriginal"));
+            Add(Str(mp, "urlThumb"));
+        }
+        Add(Str(song, "thumbUrl"));
+        return urls;
     }
 
     /// <summary>The song's primary name plus every alternate-language name (from the <c>Names</c>
@@ -206,15 +271,6 @@ public sealed class VocaDbProvider : IMetadataProvider
                 if (Str(n, "value") is { Length: > 0 } v &&
                     !string.Equals(v, primary, StringComparison.Ordinal))
                     yield return v;
-    }
-
-    // Prefer the original image; fall back to the thumbnail. Both are usually the song's
-    // Niconico/YouTube video thumbnail.
-    private static string? PickArt(JsonElement song)
-    {
-        if (song.TryGetProperty("mainPicture", out var mp) && mp.ValueKind == JsonValueKind.Object)
-            return Str(mp, "urlOriginal") ?? Str(mp, "urlThumb") ?? Str(song, "thumbUrl");
-        return Str(song, "thumbUrl");
     }
 
     private async Task<JsonElement?> GetJsonAsync(string url, CancellationToken ct)
@@ -246,5 +302,6 @@ public sealed class VocaDbProvider : IMetadataProvider
         return ValueTask.CompletedTask;
     }
 
-    internal sealed record Match(string Name, string? Artist, string? ArtUrl, int? Year);
+    internal sealed record Match(string Name, string? Artist, IReadOnlyList<string> ArtUrls, int? Year,
+        int? OriginalVersionId = null);
 }

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
+using HorizonRadio.Core.Diagnostics;
 
 namespace HorizonRadio.Core.Metadata.MusicBrainz;
 
@@ -109,6 +110,7 @@ public sealed class MusicBrainzProvider : IMetadataProvider
         // MB ranks by its own relevance and will happily return an unrelated recording for
         // a loose query; score each against the request (title-first) and take the best
         // that actually matches, so we never attach a wrong album's art.
+        var capture = MetadataTrace.NewCapture();
         JsonElement rec = default;
         string? canonicalTitle = null, canonicalArtist = null;
         double bestScore = double.NegativeInfinity;
@@ -120,12 +122,15 @@ public sealed class MusicBrainzProvider : IMetadataProvider
                      ac.ValueKind == JsonValueKind.Array && ac.GetArrayLength() > 0 &&
                      ac[0].TryGetProperty("name", out var nm) ? nm.GetString() : null;
 
-            if (SearchTerms.MatchScore(title, artist, rt, ra) is not { } score || score <= bestScore) continue;
-            bestScore = score;
+            var score = SearchTerms.MatchScore(title, artist, rt, ra);
+            capture?.Add(new(rt, ra, null, score));
+            if (score is not { } sc || sc <= bestScore) continue;
+            bestScore = sc;
             rec = candidate;
             canonicalTitle = rt;
             canonicalArtist = ra;
         }
+        MetadataTrace.ProviderSearch(Id, query, capture);
         if (canonicalTitle is null) return null; // nothing matched the request
 
         if (!rec.TryGetProperty("releases", out var releases) ||
