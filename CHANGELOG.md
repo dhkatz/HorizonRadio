@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **C++ side modernized; clang-tidy now enforced in CI.** Extracted the in-game
+  title write/restore state machine out of the periodic-writer thread into a
+  unit-tested `TitleWriteController`, then swept the native `version.dll` sources
+  against a broad clang-tidy check set (`modernize`/`bugprone`/`performance`/
+  `concurrency`/`cppcoreguidelines`/`misc`): `scoped_lock`, C++20 ranges,
+  `auto`-on-cast, widening/sign-comparison fixes, `noexcept` global ctors,
+  uninitialized-variable/member fixes, and a full const-correctness pass. A new
+  CI job lints the production translation units with `WarningsAsErrors` so
+  regressions can't merge.
+
 ## [0.6.0] - 2026-06-15
 
 ### Added

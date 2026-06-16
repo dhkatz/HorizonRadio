@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <functional>
 #include <horizon/inject/sigscan.hpp>
 #include <optional>
 #include <stdexcept>
@@ -55,15 +56,15 @@ std::optional<int> nibble(char c) {
 
 } // namespace
 
-Pattern compile_pattern(std::string_view s) {
+Pattern compile_pattern(std::string_view ida_style) {
     Pattern p;
-    auto    it = s.begin();
-    while (it != s.end()) {
+    auto    it = ida_style.begin();
+    while (it != ida_style.end()) {
         if (std::isspace(static_cast<unsigned char>(*it))) {
             ++it;
             continue;
         }
-        if (std::distance(it, s.end()) < 2) {
+        if (std::distance(it, ida_style.end()) < 2) {
             throw std::invalid_argument("sigscan: dangling half-byte in pattern");
         }
         const char hi = *it++;
@@ -111,7 +112,7 @@ PatternSet compile_pattern_set(std::string_view ida_style) {
             auto chunk = ida_style.substr(start, i - start);
             // Skip empties (allows leading/trailing/double `|`).
             bool any = false;
-            for (char c : chunk) {
+            for (const char c : chunk) {
                 if (!std::isspace(static_cast<unsigned char>(c))) {
                     any = true;
                     break;
@@ -170,7 +171,7 @@ std::vector<const std::byte*> find_lea_targeting(std::span<const std::byte>     
     if (targets.empty() || text.size() < 7)
         return out;
 
-    const auto* p     = text.data();
+    const auto* p = text.data();
     for (const auto* limit = p + text.size() - 7; p <= limit; ++p) {
         // Match REX(W) prefix that we accept: 0x48 (W only) or 0x4C
         // (R + W). Other REX combinations with W are rare for `lea
@@ -202,8 +203,7 @@ std::uint32_t enclosing_function_rva(std::span<const RUNTIME_FUNCTION> pdata, st
     // function (if instruction_rva also falls before EndAddress).
     if (pdata.empty())
         return 0;
-    auto it = std::upper_bound(pdata.begin(), pdata.end(), instruction_rva,
-                               [](std::uint32_t rva, const RUNTIME_FUNCTION& rf) { return rva < rf.BeginAddress; });
+    auto it = std::ranges::upper_bound(pdata, instruction_rva, std::less{}, &RUNTIME_FUNCTION::BeginAddress);
     if (it == pdata.begin())
         return 0;
     --it;
@@ -221,8 +221,7 @@ std::uint32_t resolve_primary_function_rva(const PeImage& image, std::uint32_t c
 
     auto rf_at = [&](std::uint32_t begin_rva) -> const RUNTIME_FUNCTION* {
         auto pdata = image.pdata();
-        auto it    = std::lower_bound(pdata.begin(), pdata.end(), begin_rva,
-                                      [](const RUNTIME_FUNCTION& rf, std::uint32_t rva) { return rf.BeginAddress < rva; });
+        auto it    = std::ranges::lower_bound(pdata, begin_rva, std::less{}, &RUNTIME_FUNCTION::BeginAddress);
         if (it == pdata.end() || it->BeginAddress != begin_rva)
             return nullptr;
         return &*it;
@@ -327,7 +326,7 @@ AnchorResolution diagnose_function_by_anchor(const PeImage& image, std::string_v
     std::vector<const std::byte*> matches;
     matches.reserve(enclosing.size());
     for (const auto* fn : enclosing) {
-        std::span tail{fn, static_cast<std::size_t>(text_end - fn)};
+        const std::span tail{fn, static_cast<std::size_t>(text_end - fn)};
         if (match_pattern_set_at(tail, prologue))
             matches.push_back(fn);
     }
@@ -366,7 +365,7 @@ const std::byte* find_function_by_pattern(const PeImage& image, const PatternSet
         const auto* fn = reinterpret_cast<const std::byte*>(base + rf.BeginAddress);
         if (fn < text_start || fn >= text_end)
             continue;
-        std::span<const std::byte> tail{fn, static_cast<std::size_t>(text_end - fn)};
+        const std::span tail{fn, static_cast<std::size_t>(text_end - fn)};
         if (match_pattern_set_at(tail, set)) {
             if (++seen > 1)
                 return nullptr;

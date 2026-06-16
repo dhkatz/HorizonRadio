@@ -13,6 +13,7 @@ set(HORIZON_HEADERS
   include/horizon/inject/msvc_string.hpp
   include/horizon/inject/safe_mem.hpp
   include/horizon/inject/sigscan.hpp
+  include/horizon/inject/title_write_controller.hpp
   include/horizon/ipc/ipc_server.hpp
   include/horizon/ipc/pcm_pipe_server.hpp
 )
@@ -83,6 +84,13 @@ add_library(version SHARED
   ${HORIZON_CORE_SOURCES}
   ${HORIZON_HEADERS})
 target_link_libraries(version PRIVATE horizon_common)
+
+# version_proxy.cpp is pure forwarder trampolines whose signatures
+# intentionally redeclare <winver.h>'s exports; clang-tidy's clang-cl
+# frontend flags those as conflicting-type / dllimport-mismatch errors
+# that don't apply to the MSVC build. Nothing to lint here anyway, so
+# skip it. (SKIP_LINTING is CMake 3.27+; older CMake ignores it.)
+set_source_files_properties(src/version_proxy.cpp PROPERTIES SKIP_LINTING ON)
 
 # clang+MinGW prepends "lib" to shared libraries by default (POSIX
 # convention). FH6's loader searches for the bare name `version.dll`,

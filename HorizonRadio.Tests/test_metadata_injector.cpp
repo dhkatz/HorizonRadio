@@ -59,7 +59,7 @@ TEST_CASE("walk_offset_chain: multi-step traversal") {
     struct {
         char  pad[8];
         void* p;
-    } outer{.p = &mid};
+    } outer{.p = static_cast<void*>(&mid)};
 
     std::array<std::ptrdiff_t, 2> chain{8, 0};
     CHECK(walk_offset_chain(&outer, chain) == &leaf);

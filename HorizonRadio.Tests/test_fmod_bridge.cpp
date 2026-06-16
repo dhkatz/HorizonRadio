@@ -274,9 +274,9 @@ TEST_CASE("read callback (no resample): converts s16 to f32 1:1") {
     REQUIRE(bridge.installed());
     REQUIRE(g_captured_read != nullptr);
 
-    constexpr unsigned int         kFrames = 64;
-    std::array<float, kFrames * 2> warmup_out{};
-    int                            warmup_channels = 2;
+    constexpr unsigned int                      kFrames = 64;
+    std::array<float, std::size_t{kFrames} * 2> warmup_out{};
+    int                                         warmup_channels = 2;
     // install_on_handle sets a drain request that the first read
     // honors -- discards any queued PCM. In production that's stale
     // bridge-was-uninstalled audio; in this test we just consume the
@@ -284,15 +284,15 @@ TEST_CASE("read callback (no resample): converts s16 to f32 1:1") {
     g_captured_read(nullptr, nullptr, warmup_out.data(), kFrames, 0, &warmup_channels);
     const auto warmup_underruns = bridge.underrun_count();
 
-    std::array<std::int16_t, kFrames * 2> in_pcm{};
+    std::array<std::int16_t, std::size_t{kFrames} * 2> in_pcm{};
     for (std::size_t i = 0; i < in_pcm.size(); ++i) {
         in_pcm[i] = static_cast<std::int16_t>((i * 257) & 0x7FFF);
     }
     REQUIRE(bridge.push_pcm(in_pcm.data(), kFrames) == kFrames);
 
-    std::array<float, kFrames * 2> out{};
-    int                            channels = 2;
-    auto                           result   = g_captured_read(nullptr, nullptr, out.data(), kFrames, 0, &channels);
+    std::array<float, std::size_t{kFrames} * 2> out{};
+    int                                         channels = 2;
+    auto result = g_captured_read(nullptr, nullptr, out.data(), kFrames, 0, &channels);
     CHECK(result == Result::Ok);
     CHECK(bridge.underrun_count() == warmup_underruns); // no new underruns this read
     for (std::size_t i = 0; i < out.size(); ++i) {
@@ -314,8 +314,8 @@ TEST_CASE("read callback (no resample): silence + underrun count on empty ring")
     bridge.tick();
     REQUIRE(g_captured_read != nullptr);
 
-    constexpr unsigned int         kFrames = 32;
-    std::array<float, kFrames * 2> out;
+    constexpr unsigned int                      kFrames = 32;
+    std::array<float, std::size_t{kFrames} * 2> out;
     out.fill(7.0f);
     int channels = 2;
     g_captured_read(nullptr, nullptr, out.data(), kFrames, 0, &channels);
@@ -340,24 +340,24 @@ TEST_CASE("read callback: resampled output is ~kStep × input frames consumed") 
     REQUIRE(g_captured_read != nullptr);
 
     // Consume the install-time drain on an empty buffer first.
-    constexpr unsigned int            kOutFrames = 512;
-    std::array<float, kOutFrames * 2> warmup{};
-    int                               warmup_channels = 2;
+    constexpr unsigned int                         kOutFrames = 512;
+    std::array<float, std::size_t{kOutFrames} * 2> warmup{};
+    int                                            warmup_channels = 2;
     g_captured_read(nullptr, nullptr, warmup.data(), kOutFrames, 0, &warmup_channels);
     const auto warmup_underruns = bridge.underrun_count();
 
     // Push enough input for ~512 output frames at 44.1k→48k ratio
     // (512 / 0.91875 ≈ 557 input frames; push 700 to leave headroom).
-    std::array<std::int16_t, 700 * 2> in_pcm{};
+    std::array<std::int16_t, std::size_t{700} * 2> in_pcm{};
     for (std::size_t i = 0; i < in_pcm.size(); i += 2) {
         in_pcm[i]     = 1000;
         in_pcm[i + 1] = -1000;
     }
     bridge.push_pcm(in_pcm.data(), 700);
 
-    std::array<float, kOutFrames * 2> out{};
-    int                               channels = 2;
-    auto                              rc = g_captured_read(nullptr, nullptr, out.data(), kOutFrames, 0, &channels);
+    std::array<float, std::size_t{kOutFrames} * 2> out{};
+    int                                            channels = 2;
+    auto rc = g_captured_read(nullptr, nullptr, out.data(), kOutFrames, 0, &channels);
     CHECK(rc == Result::Ok);
     CHECK(bridge.underrun_count() == warmup_underruns); // no new underruns
 

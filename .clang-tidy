@@ -1,10 +1,25 @@
 ---
+# Broad check families on (clang-analyzer, bugprone, modernize, performance,
+# portability, concurrency, cppcoreguidelines, misc) with WarningsAsErrors.
+# The `-` entries below are deliberate opt-outs, not yet-to-be-fixed debt:
+#   * injection-DLL realities -- reinterpret_cast on game memory, pointer
+#     arithmetic in the sigscanner, non-const globals, magic offsets, C arrays
+#     for fixed game-struct fields, printf-style debug logging (vararg);
+#   * high-noise / low-signal checks -- include-cleaner (transitive includes),
+#     easily-swappable-parameters, misplaced-const (false-positives on Win32
+#     HANDLE typedefs), no-recursion;
+#   * style-only -- trailing-return-type, identifier naming/length, cognitive
+#     complexity.
+# Re-enable any of these if you want a dedicated pass.
 Checks: >
   clang-analyzer-*,
   bugprone-*,
   modernize-*,
   performance-*,
   portability-*,
+  concurrency-*,
+  cppcoreguidelines-*,
+  misc-*,
   readability-container-size-empty,
   readability-delete-null-pointer,
   readability-duplicate-include,
@@ -13,14 +28,23 @@ Checks: >
   readability-non-const-parameter,
   readability-redundant-*,
   readability-static-accessed-through-instance,
+  -bugprone-easily-swappable-parameters,
+  -clang-analyzer-optin.core.EnumCastOutOfRange,
+  -cppcoreguidelines-avoid-c-arrays,
   -cppcoreguidelines-avoid-magic-numbers,
   -cppcoreguidelines-avoid-non-const-global-variables,
   -cppcoreguidelines-owning-memory,
   -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,
   -cppcoreguidelines-pro-bounds-constant-array-index,
   -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-type-const-cast,
   -cppcoreguidelines-pro-type-reinterpret-cast,
   -cppcoreguidelines-pro-type-union-access,
+  -cppcoreguidelines-pro-type-vararg,
+  -misc-include-cleaner,
+  -misc-misplaced-const,
+  -misc-no-recursion,
   -modernize-avoid-c-arrays,
   -modernize-use-trailing-return-type,
   -performance-no-int-to-ptr,
@@ -28,6 +52,11 @@ Checks: >
   -readability-identifier-length,
   -readability-identifier-naming,
   -readability-magic-numbers
-WarningsAsErrors: ''
+WarningsAsErrors: '*'
 HeaderFilterRegex: '^(HorizonRadio|HorizonRadio\.Tests)[/\\]'
 FormatStyle: file
+# Parse with exceptions enabled. The MSVC build relies on its lenient
+# default (throw/try compile without /EHsc), but clang-tidy's clang-cl
+# frontend treats throw/try as hard errors unless exceptions are on, which
+# would otherwise break analysis of sigscan/ipc_server and every doctest TU.
+ExtraArgs: ['/EHsc']

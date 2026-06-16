@@ -23,6 +23,7 @@
 #include <horizon/inject/msvc_string.hpp>
 #include <horizon/inject/safe_mem.hpp>
 #include <horizon/inject/sigscan.hpp>
+#include <horizon/inject/title_write_controller.hpp>
 #include <horizon/ipc/ipc_server.hpp>
 #include <horizon/ipc/pcm_pipe_server.hpp>
 #include <memory>
@@ -83,9 +84,9 @@ std::atomic<bool> g_have_track{false};
 // station is active (legacy behavior). g_on_target_station is recomputed
 // each poll (active station name == target) and gates DSP attach +
 // metadata so other stations keep playing the game's own music.
-std::mutex         g_target_mutex;
-std::string        g_target_station;            // empty = any
-std::atomic<bool>  g_on_target_station{true};   // default: replace active
+std::mutex        g_target_mutex;
+std::string       g_target_station;          // empty = any
+std::atomic<bool> g_on_target_station{true}; // default: replace active
 
 // IPC server exposed to the HorizonRadio.UI desktop companion app.
 // Lives for the entire DLL lifetime; events flow out as source
@@ -108,9 +109,13 @@ void log_w(const wchar_t* s) {
     OutputDebugStringW(s);
 }
 
+// printf-style wrapper over OutputDebugStringW. C-style varargs is the
+// pragmatic choice here: a std::format migration would mean rewriting the
+// %ls/%d format strings at every call site for a debug-only logger.
+// NOLINTNEXTLINE(modernize-avoid-variadic-functions)
 void logf(const wchar_t* fmt, ...) {
     wchar_t buf[512];
-    va_list args;
+    va_list args; // NOLINT(cppcoreguidelines-init-variables) -- initialized by va_start
     va_start(args, fmt);
     _vsnwprintf_s(buf, sizeof(buf) / sizeof(buf[0]), _TRUNCATE, fmt, args);
     va_end(args);
@@ -287,7 +292,7 @@ std::unique_ptr<MetadataInjector> bring_up_metadata(const PeImage& game_image) {
 void* safe_deref_slot(void** slot) noexcept {
     if (slot == nullptr)
         return nullptr;
-    return reinterpret_cast<void*>(horizon::inject::safe_read_qword(slot));
+    return reinterpret_cast<void*>(horizon::inject::safe_read_qword(static_cast<const void*>(slot)));
 }
 
 // Sigscan-based RadioState global resolution. Returns the address of
@@ -295,8 +300,8 @@ void* safe_deref_slot(void** slot) noexcept {
 // nullptr if the pattern is missing / drift in the FH6 build.
 void* resolve_radiostate_global(const PeImage& game_image) {
     log_w(L"[horizon-radio] game-resolver: scanning for radio_set_station_by_name...\n");
-    horizon::game::GameResolver resolver(game_image);
-    const auto&                 sig = horizon::game::signatures::kFh6Game;
+    const horizon::game::GameResolver resolver(game_image);
+    const auto&                       sig = horizon::game::signatures::kFh6Game;
     void* slot = resolver.resolve_global_via_rip_load(sig.radio_set_station_by_name, sig.mov_rbx_offset_in_match);
     if (slot == nullptr) {
         log_w(L"[horizon-radio] game-resolver: radio_set_station_by_name pattern "
@@ -308,7 +313,7 @@ void* resolve_radiostate_global(const PeImage& game_image) {
     // Probe the slot once now -- if the resolved address isn't even
     // committed-readable, we know the sigscan went sideways without
     // waiting 10s for the periodic writer to find out.
-    void* probe = safe_deref_slot(static_cast<void**>(slot));
+    const void* probe = safe_deref_slot(static_cast<void**>(slot));
     logf(L"[horizon-radio] game-resolver: initial read of slot yields %p "
          L"(may be null until game initializes RadioState)\n",
          probe);
@@ -370,7 +375,7 @@ void poll_game_events(void* radio_state) {
     const bool active = (ra != 0) && (rb != 0);
 
     static bool s_race_init = false;
-    static bool s_active     = false;
+    static bool s_active    = false;
     if (!s_race_init) {
         s_race_init = true;
         s_active    = active;
@@ -390,7 +395,7 @@ void poll_game_events(void* radio_state) {
     {
         std::string target;
         {
-            std::lock_guard lock(g_target_mutex);
+            const std::scoped_lock lock(g_target_mutex);
             target = g_target_station;
         }
         g_on_target_station.store(target.empty() || name == target, std::memory_order_release);
@@ -407,7 +412,7 @@ void poll_game_events(void* radio_state) {
     }
 }
 
-DWORD WINAPI bridge_init_thread(LPVOID) {
+[[noreturn]] DWORD WINAPI bridge_init_thread(LPVOID) {
     log_w(L"[horizon-radio] init thread started\n");
 
     // IPC server is independent of the bridge; start it early so the
@@ -433,7 +438,7 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
             b->push_pcm(frames, frame_count);
         }
         if (!g_have_track.load(std::memory_order_acquire)) {
-            std::lock_guard lock(g_track_mutex);
+            const std::scoped_lock lock(g_track_mutex);
             if (g_current_track.title.empty()) {
                 g_current_track.title  = "Horizon Radio";
                 g_current_track.artist = "";
@@ -466,9 +471,9 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
         std::string value;
         value.reserve(64);
         while (pos < line.size()) {
-            char c = line[pos++];
+            const char c = line[pos++];
             if (c == '\\' && pos < line.size()) {
-                char esc = line[pos++];
+                const char esc = line[pos++];
                 switch (esc) {
                 case '"':
                     value.push_back('"');
@@ -499,11 +504,11 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
                         return false;
                     unsigned cp = 0;
                     for (int i = 0; i < 4; ++i) {
-                        char     hex = line[pos++];
-                        unsigned d   = (hex >= '0' && hex <= '9')   ? hex - '0'
-                                       : (hex >= 'a' && hex <= 'f') ? hex - 'a' + 10
-                                       : (hex >= 'A' && hex <= 'F') ? hex - 'A' + 10
-                                                                    : 16u;
+                        const char     hex = line[pos++];
+                        const unsigned d   = (hex >= '0' && hex <= '9')   ? hex - '0'
+                                             : (hex >= 'a' && hex <= 'f') ? hex - 'a' + 10
+                                             : (hex >= 'A' && hex <= 'F') ? hex - 'A' + 10
+                                                                          : 16u;
                         if (d > 15)
                             return false;
                         cp = (cp << 4) | d;
@@ -551,9 +556,9 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
         pos += needle.size();
         while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t'))
             ++pos;
-        const char* start = line.c_str() + pos;
-        char*       end   = nullptr;
-        const double v    = std::strtod(start, &end);
+        const char*  start = line.c_str() + pos;
+        char*        end   = nullptr;
+        const double v     = std::strtod(start, &end);
         if (end == start)
             return false;
         out = v;
@@ -576,7 +581,7 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
 
             TrackInfo snapshot;
             {
-                std::lock_guard lock(g_track_mutex);
+                const std::scoped_lock lock(g_track_mutex);
                 g_current_track.title  = title;
                 g_current_track.artist = artist;
                 g_current_track.album  = album;
@@ -599,7 +604,7 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
             // connected snapshot would have it too).
             publish_track_ipc(snapshot, g_active_source_id, g_active_source_display);
 
-            std::wstring wtitle(title.begin(), title.end());
+            const std::wstring wtitle(title.begin(), title.end());
             logf(L"[horizon-radio] cmd set_track: %ls\n", wtitle.c_str());
         } else if (cmd == "set_gain") {
             // Events "set volume / duck" action: scale the bridge's
@@ -622,10 +627,10 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
             if (station == "*")
                 station.clear();
             {
-                std::lock_guard lock(g_target_mutex);
+                const std::scoped_lock lock(g_target_mutex);
                 g_target_station = station;
             }
-            std::wstring ws(station.begin(), station.end());
+            const std::wstring ws(station.begin(), station.end());
             logf(L"[horizon-radio] cmd set_target_station: '%ls'\n", ws.c_str());
         }
     });
@@ -637,7 +642,7 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
         if (g_have_track.load(std::memory_order_acquire)) {
             TrackInfo snapshot;
             {
-                std::lock_guard lock(g_track_mutex);
+                const std::scoped_lock lock(g_track_mutex);
                 snapshot = g_current_track;
             }
             publish_track_ipc(snapshot, g_active_source_id, g_active_source_display);
@@ -720,25 +725,12 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
                     // back when we stop replacing it. Hoisted above the
                     // have-track gate so the restore runs even once the source
                     // stops.
-                    static const void* md_written_instance = nullptr;
-                    static std::string md_saved_title;        // game's title to restore
-                    static std::string md_saved_artist;       //   (kept in sync below)
-                    static bool        md_saved_valid = false;
-                    static std::string md_last_written_title; // what WE put in the block last tick
-                    static std::string md_last_written_artist;
-                    static bool        md_have_last_written = false;
-                    auto               restore_original_title = [&](horizon::inject::MetadataInjector* injector) {
-                        if (md_written_instance && md_saved_valid && injector)
-                            injector->write_to_instance(md_written_instance, "", md_saved_title, md_saved_artist);
-                        md_written_instance  = nullptr;
-                        md_saved_valid       = false;
-                        md_have_last_written = false;
-                    };
+                    static horizon::inject::TitleWriteController title_writer;
 
                     if (inj && rs_slot && vt && g_have_track.load(std::memory_order_acquire)) {
                         TrackInfo t;
                         {
-                            std::lock_guard lock(g_track_mutex);
+                            const std::scoped_lock lock(g_track_mutex);
                             t = g_current_track;
                         }
                         const std::string sound = t.id.empty() ? t.title : t.id;
@@ -749,22 +741,22 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
                         // game's own station plays untouched.
                         const bool on_target = g_on_target_station.load(std::memory_order_acquire);
 
-                        void* radio_state = safe_deref_slot(rs_slot);
+                        const void* radio_state = safe_deref_slot(rs_slot);
 
                         // Cache the instance list; the heap-arena scan is too
                         // expensive to redo every tick. Scan every ~4 ticks
                         // until found (fast attach), then back off to
                         // kRescanIters once we have instances.
                         static std::vector<const void*> cached_instances;
-                        std::vector<const void*>&       instances = cached_instances;
-                        const int scan_interval = cached_instances.empty() ? 4 : kRescanIters;
+                        std::vector<const void*>&       instances     = cached_instances;
+                        const int                       scan_interval = cached_instances.empty() ? 4 : kRescanIters;
                         if (radio_state && (iter % scan_interval == 0)) {
                             const auto t0    = std::chrono::steady_clock::now();
                             cached_instances = horizon::game::find_instances_in_heap_arenas(vt, game_image);
                             const auto ms    = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                                std::chrono::steady_clock::now() - t0)
-                                                .count();
-                            wchar_t scan_msg[200];
+                                                   std::chrono::steady_clock::now() - t0)
+                                                   .count();
+                            wchar_t    scan_msg[200];
                             swprintf_s(scan_msg, L"[horizon-radio] heap-arena scan: %zu candidates in %lldms\n",
                                        cached_instances.size(), static_cast<long long>(ms));
                             OutputDebugStringW(scan_msg);
@@ -811,56 +803,12 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
                             }
                         }
 
-                        // Write our title/artist to ONLY that instance, after
-                        // snapshotting its originals on first touch. If we were
-                        // replacing a different instance before, restore it.
-                        int n = 0;
-                        if (md_written_instance && md_written_instance != active_instance) {
-                            bool present = false;
-                            for (auto* x : instances) {
-                                if (x == md_written_instance) {
-                                    present = true;
-                                    break;
-                                }
-                            }
-                            if (present)
-                                restore_original_title(inj);
-                            else {
-                                md_written_instance = nullptr;
-                                md_saved_valid      = false;
-                            }
-                        }
-                        if (active_instance) {
-                            if (md_written_instance != active_instance) {
-                                // First touch of this block: snapshot the game's
-                                // current title/artist as the restore value.
-                                md_saved_valid      = inj->read_instance_strings(active_instance, md_saved_title,
-                                                                                 md_saved_artist);
-                                md_written_instance  = active_instance;
-                                md_have_last_written = false;
-                            } else if (md_have_last_written) {
-                                // Keep the restore value synced to the game's
-                                // real track: the block holds what we wrote last
-                                // tick UNLESS the game advanced its own track, in
-                                // which case it now holds the game's new title.
-                                // Comparing against our last write (not our
-                                // current one) avoids mistaking our own title for
-                                // the game's on the tick our song changes.
-                                std::string cur_title, cur_artist;
-                                if (inj->read_instance_strings(active_instance, cur_title, cur_artist) &&
-                                    (cur_title != md_last_written_title || cur_artist != md_last_written_artist)) {
-                                    md_saved_title  = cur_title;
-                                    md_saved_artist = cur_artist;
-                                    md_saved_valid  = true;
-                                }
-                            }
-                            n = inj->write_to_instance(active_instance, sound, t.title, t.artist);
-                            if (n) {
-                                md_last_written_title  = t.title;
-                                md_last_written_artist = t.artist;
-                                md_have_last_written   = true;
-                            }
-                        }
+                        // Write our title/artist to ONLY the selected instance,
+                        // snapshotting its originals on first touch and restoring
+                        // any previously-replaced instance. The write/restore
+                        // bookkeeping lives in TitleWriteController.
+                        const int n =
+                            title_writer.on_active(*inj, active_instance, instances, sound, t.title, t.artist);
 
                         // Log only on transitions (keeps DebugView readable).
                         if (n != last_write_n) {
@@ -934,13 +882,13 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
                                 }
                             }
                         }
-                    } else if (md_written_instance && inj) {
+                    } else if (inj) {
                         // Not writing this tick (no track / unresolved): put the
                         // game's original title back so a stopped source doesn't
                         // leave ours frozen on the station. write_to_instance is
                         // SEH-safe and re-checks the vptr, so restoring a block
                         // that was freed since is a no-op, not a crash.
-                        restore_original_title(inj);
+                        title_writer.on_idle(*inj);
                     }
                     ++iter;
                     std::this_thread::sleep_for(kTickInterval);
@@ -979,8 +927,8 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
                 if (!inj)
                     continue;
 
-                char marker[96];
-                int  mn = std::snprintf(marker, sizeof(marker), "--- discovery dump #%d ---", dump_count++);
+                char      marker[96];
+                const int mn = std::snprintf(marker, sizeof(marker), "--- discovery dump #%d ---", dump_count++);
                 g_ipc_server.publish_debug("discover", std::string_view(marker, static_cast<std::size_t>(mn)));
                 g_ipc_server.publish_debug("discover", "scanning heap (this can take a few seconds)...");
                 OutputDebugStringW(L"[horizon-radio] discovery dump begin\n");
@@ -989,29 +937,29 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
 
                 // Breadcrumb so we can tell an empty dump apart from a lost
                 // one: report size before streaming the lines.
-                char szmsg[96];
-                int  sn    = std::snprintf(szmsg, sizeof(szmsg), "dump_candidates returned %zu bytes", dump.size());
+                char      szmsg[96];
+                const int sn = std::snprintf(szmsg, sizeof(szmsg), "dump_candidates returned %zu bytes", dump.size());
                 g_ipc_server.publish_debug("discover", std::string_view(szmsg, static_cast<std::size_t>(sn)));
 
-                std::size_t pos       = 0;
-                int         emitted   = 0;
+                std::size_t pos     = 0;
+                int         emitted = 0;
                 while (pos < dump.size()) {
                     std::size_t end = dump.find('\n', pos);
                     if (end == std::string::npos)
                         end = dump.size();
-                    std::string_view line(dump.data() + pos, end - pos);
+                    const std::string_view line(dump.data() + pos, end - pos);
                     g_ipc_server.publish_debug("discover", line);
                     ++emitted;
                     std::wstring wide(L"[horizon-radio] ");
-                    for (char c : line)
+                    for (const char c : line)
                         wide.push_back(static_cast<wchar_t>(c));
                     wide.push_back(L'\n');
                     OutputDebugStringW(wide.c_str());
                     pos = end + 1;
                 }
 
-                char endmsg[96];
-                int  en = std::snprintf(endmsg, sizeof(endmsg), "--- discovery dump end (%d lines) ---", emitted);
+                char      endmsg[96];
+                const int en = std::snprintf(endmsg, sizeof(endmsg), "--- discovery dump end (%d lines) ---", emitted);
                 g_ipc_server.publish_debug("discover", std::string_view(endmsg, static_cast<std::size_t>(en)));
             }
         }).detach();
@@ -1062,7 +1010,8 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
             }
         }
     }
-    return 0;
+    // Unreachable: the loop above never breaks. The function is [[noreturn]];
+    // a trailing `return` would trip C4645 / clang-diagnostic-invalid-noreturn.
 }
 
 // A proxy version.dll sitting next to our companion UI is pulled into the
@@ -1077,12 +1026,12 @@ DWORD WINAPI bridge_init_thread(LPVOID) {
 // a game exe name we can't verify. "HorizonRadio*" can never match the
 // game (ForzaHorizon6.exe), so this is zero-risk to the real injection.
 bool host_is_companion_ui() {
-    wchar_t path[MAX_PATH];
+    wchar_t     path[MAX_PATH];
     const DWORD n = GetModuleFileNameW(nullptr, path, MAX_PATH);
     if (n == 0 || n >= MAX_PATH)
         return false;
     const wchar_t* base = wcsrchr(path, L'\\');
-    base = base ? base + 1 : path;
+    base                = base ? base + 1 : path;
     if (wcslen(base) < 12)
         return false;
     // Case-insensitive "starts with HorizonRadio" via the Win32 API so we
@@ -1092,6 +1041,8 @@ bool host_is_companion_ui() {
 
 } // namespace
 
+// DllMain is the loader-invoked entry point; it must keep external linkage.
+// NOLINTNEXTLINE(misc-use-internal-linkage)
 BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID /*reserved*/) {
     switch (reason) {
     case DLL_PROCESS_ATTACH:
@@ -1112,6 +1063,10 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID /*reserved*/) {
         // detached deliberately: joining here would deadlock under the loader
         // lock, and on process exit the OS has already terminated them before
         // DLL_PROCESS_DETACH runs.
+        break;
+    default:
+        // DLL_THREAD_ATTACH / DLL_THREAD_DETACH: disabled via
+        // DisableThreadLibraryCalls, and nothing else to do.
         break;
     }
     return TRUE;

@@ -20,7 +20,7 @@ std::string json_escape(std::string_view s) {
     std::string out;
     out.reserve(s.size() + 2);
     out.push_back('"');
-    for (unsigned char c : s) {
+    for (const unsigned char c : s) {
         switch (c) {
         case '"':
             out.append("\\\"");
@@ -78,7 +78,7 @@ std::string base64_encode(const std::uint8_t* data, std::size_t len) {
 }
 } // namespace
 
-IpcServer::IpcServer() = default;
+IpcServer::IpcServer() noexcept = default;
 IpcServer::~IpcServer() {
     stop();
 }
@@ -96,7 +96,7 @@ void IpcServer::stop() {
         return;
 
     {
-        std::scoped_lock lock(pipe_mutex_);
+        const std::scoped_lock lock(pipe_mutex_);
         if (pipe_handle_ != nullptr && pipe_handle_ != INVALID_HANDLE_VALUE) {
             DisconnectNamedPipe(pipe_handle_);
             CloseHandle(pipe_handle_);
@@ -127,7 +127,7 @@ void IpcServer::run() {
         }
 
         {
-            std::scoped_lock lock(pipe_mutex_);
+            const std::scoped_lock lock(pipe_mutex_);
             pipe_handle_ = h;
         }
 
@@ -137,13 +137,11 @@ void IpcServer::run() {
         const auto ok        = ConnectNamedPipe(h, &connect_ov);
         const auto err       = GetLastError();
         bool       connected = false;
-        if (ok) {
-            connected = true;
-        } else if (err == ERROR_PIPE_CONNECTED) {
+        if (ok || err == ERROR_PIPE_CONNECTED) {
             connected = true;
         } else if (err == ERROR_IO_PENDING) {
             while (running_.load(std::memory_order_acquire)) {
-                DWORD w = WaitForSingleObject(connect_event, 200);
+                const DWORD w = WaitForSingleObject(connect_event, 200);
                 if (w == WAIT_OBJECT_0) {
                     connected = true;
                     break;
@@ -156,7 +154,7 @@ void IpcServer::run() {
         CloseHandle(connect_event);
 
         if (!connected) {
-            std::scoped_lock lock(pipe_mutex_);
+            const std::scoped_lock lock(pipe_mutex_);
             if (pipe_handle_ == h) {
                 CloseHandle(h);
                 pipe_handle_ = nullptr;
@@ -174,7 +172,7 @@ void IpcServer::run() {
 
         SnapshotFn cb;
         {
-            std::scoped_lock lock(snapshot_mutex_);
+            const std::scoped_lock lock(snapshot_mutex_);
             cb = snapshot_cb_;
         }
         if (cb)
@@ -203,8 +201,8 @@ void IpcServer::run() {
             }
             if (read_pending) {
                 if (const auto w = WaitForSingleObject(read_event, 500); w == WAIT_OBJECT_0) {
-                    DWORD got = 0;
-                    BOOL  gor = GetOverlappedResult(h, &read_ov, &got, FALSE);
+                    DWORD      got = 0;
+                    const BOOL gor = GetOverlappedResult(h, &read_ov, &got, FALSE);
                     if (!gor || got == 0) {
                         // EOF / disconnect.
                         break;
@@ -240,14 +238,15 @@ void IpcServer::run() {
 
                 CommandFn cb;
                 {
-                    std::scoped_lock lock(command_mutex_);
+                    const std::scoped_lock lock(command_mutex_);
                     cb = command_cb_;
                 }
                 if (cb) {
                     try {
                         cb(line);
                     } catch (...) {
-                        /* swallow; one bad command shouldn't tear down IPC */
+                        // One bad command shouldn't tear down IPC; log and carry on.
+                        OutputDebugStringW(L"[horizon-radio] ipc: command handler threw; ignoring\n");
                     }
                 }
             }
@@ -258,7 +257,7 @@ void IpcServer::run() {
 
         client_connected_.store(false, std::memory_order_release);
         {
-            std::scoped_lock lock(pipe_mutex_);
+            const std::scoped_lock lock(pipe_mutex_);
             if (pipe_handle_ == h) {
                 DisconnectNamedPipe(h);
                 CloseHandle(h);
@@ -297,7 +296,7 @@ void IpcServer::send_line_locked(const std::string& line) {
 void IpcServer::send_hello() {
     std::ostringstream os;
     os << R"({"event":"hello","pid":)" << _getpid() << ",\"version\":\"0.1.0\"}\n";
-    std::scoped_lock lock(pipe_mutex_);
+    const std::scoped_lock lock(pipe_mutex_);
     send_line_locked(os.str());
 }
 
@@ -315,7 +314,7 @@ void IpcServer::publish_track(const TrackEvent& e) {
         os << ",\"art_b64\":null";
     }
     os << "}\n";
-    std::scoped_lock lock(pipe_mutex_);
+    const std::scoped_lock lock(pipe_mutex_);
     send_line_locked(os.str());
 }
 
@@ -327,17 +326,17 @@ void IpcServer::publish_stats(const StatsEvent& e) {
        << ",\"installed\":" << (e.installed ? "true" : "false") << ",\"frames_in\":" << e.frames_in
        << ",\"frames_out\":" << e.frames_out << ",\"underruns\":" << e.underruns
        << ",\"normalizer_gain\":" << e.normalizer_gain << ",\"limiter_gain\":" << e.limiter_gain << "}\n";
-    std::scoped_lock lock(pipe_mutex_);
+    const std::scoped_lock lock(pipe_mutex_);
     send_line_locked(os.str());
 }
 
 void IpcServer::set_snapshot_callback(SnapshotFn cb) {
-    std::scoped_lock lock(snapshot_mutex_);
+    const std::scoped_lock lock(snapshot_mutex_);
     snapshot_cb_ = std::move(cb);
 }
 
 void IpcServer::set_command_callback(CommandFn cb) {
-    std::scoped_lock lock(command_mutex_);
+    const std::scoped_lock lock(command_mutex_);
     command_cb_ = std::move(cb);
 }
 
@@ -346,7 +345,7 @@ void IpcServer::publish_game_event(const std::string_view kind) {
         return;
     std::ostringstream os;
     os << R"({"event":"game_event","kind":)" << json_escape(kind) << "}\n";
-    std::scoped_lock lock(pipe_mutex_);
+    const std::scoped_lock lock(pipe_mutex_);
     send_line_locked(os.str());
 }
 
@@ -355,7 +354,7 @@ void IpcServer::publish_debug(const std::string_view tag, const std::string_view
         return;
     std::ostringstream os;
     os << R"({"event":"debug","tag":)" << json_escape(tag) << R"(,"text":)" << json_escape(text) << "}\n";
-    std::scoped_lock lock(pipe_mutex_);
+    const std::scoped_lock lock(pipe_mutex_);
     send_line_locked(os.str());
 }
 
@@ -365,7 +364,7 @@ void IpcServer::publish_source_changed(const std::string_view id, const std::str
     std::ostringstream os;
     os << R"({"event":"source_changed")"
        << ",\"id\":" << json_escape(id) << ",\"display\":" << json_escape(display) << "}\n";
-    std::scoped_lock lock(pipe_mutex_);
+    const std::scoped_lock lock(pipe_mutex_);
     send_line_locked(os.str());
 }
 } // namespace horizon::ipc

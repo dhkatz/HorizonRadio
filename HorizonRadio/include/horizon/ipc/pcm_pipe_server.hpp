@@ -26,7 +26,7 @@ public:
 
     using pcm_callback = std::function<void(const std::int16_t* frames, std::size_t frame_count)>;
 
-    PcmPipeServer();
+    PcmPipeServer() noexcept;
     ~PcmPipeServer();
 
     void start(pcm_callback on_pcm);

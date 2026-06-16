@@ -1,6 +1,8 @@
+#include <algorithm>
 #include <cmath>
 #include <doctest/doctest.h>
 #include <horizon/audio/normalizer.hpp>
+#include <numbers>
 
 using horizon::audio::Normalizer;
 
@@ -22,11 +24,11 @@ ProcessResult drive_sine(Normalizer& n, float input_peak, std::size_t frames) {
     ProcessResult   r{};
     for (std::size_t i = 0; i < frames; ++i) {
         const float t  = static_cast<float>(i) / kSr;
-        const float v  = input_peak * std::sin(2.0f * 3.14159265f * kFreq * t);
+        const float v  = input_peak * std::sin(2.0f * std::numbers::pi_v<float> * kFreq * t);
         float       l  = v;
         float       r2 = v;
         n.process_stereo(l, r2);
-        r.peak_out = std::max(r.peak_out, std::max(std::abs(l), std::abs(r2)));
+        r.peak_out = std::max({r.peak_out, std::abs(l), std::abs(r2)});
         r.last_l   = l;
         r.last_r   = r2;
     }
@@ -63,7 +65,7 @@ TEST_CASE("Normalizer: AGC boosts a quiet source toward target") {
     n.set_target_rms(0.15f);
     // 60s of a quiet sine — way below target. AGC should boost it
     // up to (but not past) max_gain.
-    drive_sine(n, 0.05f, 60 * 48000);
+    drive_sine(n, 0.05f, std::size_t{60} * 48000);
     CHECK(n.current_gain() > 1.5f);  // clearly boosted
     CHECK(n.current_gain() <= 4.0f); // never exceeds max_gain
 }
@@ -73,7 +75,7 @@ TEST_CASE("Normalizer: AGC attenuates a hot source") {
     n.set_target_rms(0.15f);
     // 60s of a full-scale sine. AGC should pull current_gain below
     // unity since the source is way above target loudness.
-    drive_sine(n, 1.0f, 60 * 48000);
+    drive_sine(n, 1.0f, std::size_t{60} * 48000);
     CHECK(n.current_gain() < 0.5f);
     CHECK(n.current_gain() >= 0.1f); // never exceeds min_gain floor
 }

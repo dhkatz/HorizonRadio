@@ -21,7 +21,7 @@ std::wstring full_pipe_path() {
 
 } // namespace
 
-PcmPipeServer::PcmPipeServer() = default;
+PcmPipeServer::PcmPipeServer() noexcept = default;
 
 PcmPipeServer::~PcmPipeServer() {
     stop();
@@ -40,7 +40,7 @@ void PcmPipeServer::stop() {
     if (!running_.exchange(false, std::memory_order_acq_rel))
         return;
     {
-        std::lock_guard<std::mutex> lock(handle_mutex_);
+        const std::scoped_lock lock(handle_mutex_);
         if (pipe_handle_ != nullptr && pipe_handle_ != INVALID_HANDLE_VALUE) {
             DisconnectNamedPipe(pipe_handle_);
             CloseHandle(pipe_handle_);
@@ -62,24 +62,24 @@ void PcmPipeServer::run() {
 
     while (running_.load(std::memory_order_acquire)) {
         const auto path = full_pipe_path();
-        HANDLE     h    = CreateNamedPipeW(path.c_str(),
-                                           PIPE_ACCESS_INBOUND, // server reads only
-                                           PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, 1, kOutBufferSize, kInBufferSize,
-                                           0, nullptr);
+        HANDLE h = CreateNamedPipeW(path.c_str(),
+                                    PIPE_ACCESS_INBOUND, // server reads only
+                                    PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, 1, kOutBufferSize, kInBufferSize,
+                                    0, nullptr);
 
         if (h == INVALID_HANDLE_VALUE) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             continue;
         }
         {
-            std::lock_guard<std::mutex> lock(handle_mutex_);
+            const std::scoped_lock lock(handle_mutex_);
             pipe_handle_ = h;
         }
 
-        BOOL        ok  = ConnectNamedPipe(h, nullptr);
+        BOOL const  ok  = ConnectNamedPipe(h, nullptr);
         const DWORD err = GetLastError();
         if (!ok && err != ERROR_PIPE_CONNECTED) {
-            std::lock_guard<std::mutex> lock(handle_mutex_);
+            const std::scoped_lock lock(handle_mutex_);
             if (pipe_handle_ == h) {
                 CloseHandle(h);
                 pipe_handle_ = nullptr;
@@ -100,8 +100,8 @@ void PcmPipeServer::run() {
         std::size_t pending  = 0;
         auto*       byte_buf = reinterpret_cast<std::uint8_t*>(buf);
         while (running_.load(std::memory_order_acquire)) {
-            DWORD       got  = 0;
-            const DWORD want = static_cast<DWORD>(kChunkBytes - pending);
+            DWORD      got  = 0;
+            const auto want = static_cast<DWORD>(kChunkBytes - pending);
             if (!ReadFile(h, byte_buf + pending, want, &got, nullptr) || got == 0) {
                 break; // client disconnected
             }
@@ -115,7 +115,7 @@ void PcmPipeServer::run() {
 
         client_connected_.store(false, std::memory_order_release);
         {
-            std::lock_guard<std::mutex> lock(handle_mutex_);
+            const std::scoped_lock lock(handle_mutex_);
             if (pipe_handle_ == h) {
                 DisconnectNamedPipe(h);
                 CloseHandle(h);

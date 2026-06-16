@@ -43,7 +43,7 @@ std::optional<TypeDescriptor> MsvcRtti::find_type_descriptor(std::string_view ma
 
 std::optional<CompleteObjectLocator> MsvcRtti::find_complete_object_locator(TypeDescriptor td) const {
     const std::uintptr_t base   = image_.base();
-    const std::uint32_t  td_rva = static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(td.address) - base);
+    const auto           td_rva = static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(td.address) - base);
 
     auto              rdata = image_.rdata();
     const auto*       p     = reinterpret_cast<const std::uint32_t*>(rdata.data());
@@ -64,7 +64,7 @@ std::optional<CompleteObjectLocator> MsvcRtti::find_complete_object_locator(Type
 }
 
 std::optional<Vtable> MsvcRtti::find_vtable(CompleteObjectLocator col) const {
-    const std::uintptr_t col_addr = reinterpret_cast<std::uintptr_t>(col.address);
+    const auto col_addr = reinterpret_cast<std::uintptr_t>(col.address);
 
     auto              rdata = image_.rdata();
     const auto*       p     = reinterpret_cast<const std::uintptr_t*>(rdata.data());

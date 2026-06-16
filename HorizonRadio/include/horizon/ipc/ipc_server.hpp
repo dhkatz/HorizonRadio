@@ -33,7 +33,7 @@ public:
     // Pipe name without the `\\.\pipe\` prefix. Defaults are fine.
     static constexpr wchar_t kDefaultPipeName[] = L"HorizonRadio";
 
-    IpcServer();
+    IpcServer() noexcept;
     ~IpcServer();
 
     // Start the listener thread. Idempotent; calling twice is a no-op.

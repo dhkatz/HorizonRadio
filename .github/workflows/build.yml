@@ -89,6 +89,48 @@ jobs:
           path: build/Release/version.dll
           if-no-files-found: error
 
+  # Lints the production C++ (version.dll TUs) with clang-tidy via the
+  # windows-x64-analysis preset, which flips on CMAKE_CXX_CLANG_TIDY. The
+  # checks and `WarningsAsErrors: '*'` live in .clang-tidy, so any finding
+  # fails the build. Only the `version` target is built: the test exe has
+  # clang-tidy disabled (doctest + deliberately invalid inputs trip false
+  # positives), and version_proxy.cpp is SKIP_LINTING (its forwarders
+  # redeclare <winver.h>). clang-tidy is pinned so the lint is reproducible.
+  clang-tidy:
+    name: clang-tidy (Windows x64)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC dev environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Set up Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      # Pinned via the clang-tidy wheel so the check is reproducible and the
+      # binary lands somewhere find_program can see (its bin dir is added to
+      # PATH below). Bump deliberately — a clang-tidy bump can surface new
+      # findings.
+      - name: Install clang-tidy (pinned)
+        shell: pwsh
+        run: |
+          pip install clang-tidy==22.1.7
+          python -c "import clang_tidy, os; print(os.path.join(os.path.dirname(clang_tidy.__file__),'data','bin'))" >> $env:GITHUB_PATH
+
+      - name: Configure CMake (analysis preset)
+        run: cmake --preset windows-x64-analysis
+
+      # Build only the version.dll target: it compiles every production TU,
+      # so clang-tidy runs over all shipping code. ~3x slower than a plain
+      # build because every TU is linted during compile.
+      - name: Run clang-tidy (production TUs)
+        run: cmake --build --preset windows-x64-analysis-debug --target version
+
   # Exercises the clang + mingw-w64 cross-compile path (the migration's
   # headline feature) so the toolchain file and the cross presets can't
   # rot undetected. The resulting HorizonRadio.Tests.exe is a Windows
