@@ -743,8 +743,7 @@ void poll_game_events(void* radio_state) {
                             }
                         }
 
-                        const int n =
-                            title_writer.on_active(*inj, active_instance, instances, sound, t.title, t.artist);
+                        const int n = title_writer.on_active(*inj, active_instance, sound, t.title, t.artist);
 
                         // Log only on transitions (keeps DebugView readable).
                         if (n != last_write_n) {
