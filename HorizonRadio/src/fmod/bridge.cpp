@@ -8,32 +8,23 @@ namespace horizon::fmod {
 
 namespace {
 
-// One bridge per process. Set in install_on_handle() BEFORE addDSP
-// and cleared in uninstall_internal() AFTER removeDSP; the trampoline
-// reads with acquire so it observes the bridge in a consistent state
-// relative to FMOD's addDSP / removeDSP serialization.
+// One bridge per process. Set BEFORE addDSP and cleared AFTER removeDSP; the
+// trampoline reads with acquire to stay consistent with FMOD's serialization.
 std::atomic<FmodBridge*> g_active_bridge{nullptr};
 
-// FMOD callbacks operate on small blocks -- typically 512-1024 frames.
-// 4096 covers any realistic worst case; if FMOD ever asks for more
-// we return silence rather than risking a stack overflow.
+// FMOD asks for small blocks (512-1024 frames); 4096 covers worst case, beyond
+// which we return silence rather than overflow the stack scratch.
 constexpr std::size_t kMaxBlockFrames = 4096;
 
-// Channel handle slot inside the embedded RadioStreamFmod. FMOD writes
-// the active channel's packed 32-bit handle here and clears it when
-// the channel is destroyed.
+// Packed 32-bit channel handle slot inside the embedded RadioStreamFmod.
 constexpr std::ptrdiff_t kChannelHandleOffset = 0x20;
 
-// 44.1 kHz -> 48 kHz step. The DSP read callback runs at the channel
-// or mixer rate (48k on FH6); our sources produce 44.1k. We
-// linear-interpolate one sample of output per `kStep` samples of input.
+// 44.1k (source) -> 48k (FH6 mixer) resample step.
 constexpr double kResampleStep = 44100.0 / 48000.0;
 
-// Threshold for "consumer stalled" detection: if the source pushes
-// and the last DSP read callback was more than this long ago, the
-// game is paused / in a cutscene / FMOD muted us. Drop queued
-// audio so resume is current, not "starts from the pause moment,
-// catches up to live over the next 1.5s."
+// If the source pushes but the last read callback was longer ago than this, the
+// consumer is stalled (paused / cutscene / muted) -> drop queued audio so resume
+// is live, not catching up from the pause moment.
 constexpr std::uint64_t kConsumerStallUs = 100'000; // 100 ms
 
 std::uint64_t now_us() noexcept {
@@ -56,8 +47,7 @@ FmodBridge::~FmodBridge() {
 }
 
 void FmodBridge::set_target(System* system, std::byte* radio_stream) noexcept {
-    // If the radio_stream changed, the next tick() will retarget.
-    // If it cleared, the next tick() will uninstall.
+    // The next tick() retargets (changed) or uninstalls (cleared).
     system_       = system;
     radio_stream_ = radio_stream;
 }
@@ -82,11 +72,8 @@ void FmodBridge::tick() noexcept {
         return;
     }
 
-    // read_live_channel_handle validates the raw handle via
-    // Handle::open every tick. We pay that cost on every call (~20 Hz
-    // in production) because the raw slot can stay numerically
-    // unchanged while FMOD treats the channel as destroyed — only
-    // Handle::open tells us authoritatively.
+    // Validate via Handle::open every tick: the raw slot can stay numerically
+    // unchanged while FMOD has destroyed the channel; only open() is authoritative.
     const auto handle = read_live_channel_handle();
     if (handle == 0) {
         if (installed())
@@ -105,11 +92,7 @@ void FmodBridge::uninstall() noexcept {
 }
 
 bool FmodBridge::install_on_handle(const std::uint32_t handle) noexcept {
-    // Lazy-resolve createDsp. FMOD's System::createDSP path isn't always
-    // wired up in .text at DllMain time; by the time we get here (after
-    // discovery has found a chain-valid RadioStreamFmod), the game has
-    // touched its audio subsystem and the LEA is resident. If the
-    // resolver was provided, give it one shot per install attempt.
+    // Lazy-resolve createDsp on first install (see CreateDspResolver in bridge.hpp).
     if (hooks_.createDsp == nullptr && lazy_create_dsp_ != nullptr) {
         if (const auto resolved = lazy_create_dsp_(); resolved != nullptr) {
             OutputDebugStringW(L"[horizon-radio] bridge: resolved createDsp lazily on first install\n");
@@ -117,9 +100,7 @@ bool FmodBridge::install_on_handle(const std::uint32_t handle) noexcept {
         }
     }
     if (hooks_.createDsp == nullptr) {
-        // Still not available — bail; tick() will retry next time
-        // through. Cheap enough to keep polling.
-        return false;
+        return false; // not available yet; tick() retries
     }
 
     DspDescription desc{};

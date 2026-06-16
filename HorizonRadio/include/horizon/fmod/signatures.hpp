@@ -56,27 +56,18 @@ inline constexpr SignatureSet kFh6 = {
 
 namespace horizon::inject::signatures {
 
-// std::string/vector members mean this static's construction can in theory
-// throw (bad_alloc); during a DLL's static init there's nothing to catch it,
-// but that's true of any allocation at load and not worth contorting the
-// config literal to avoid.
+// FH6 metadata chain + field offsets, and how to re-derive them after a game
+// update: AGENTS.md -> "In-game title injection". NOLINT: the std::string
+// members make static init theoretically throwing, unavoidable for the literal.
 // NOLINTNEXTLINE(bugprone-throwing-static-initialization)
 inline const MetadataInjectorConfig kFh6Metadata = {
     .class_mangled_name = ".?AV?$_Ref_count_obj2@VRadioStreamFmod@@@std@@",
 
-    // Reach the now-playing metadata block from the RadioStreamFmod instance:
-    //   instance +0x50 -> track list, +0x08 -> block (list[0], the current
-    //   track). The block holds std::string fields at +0x10 (internal event
-    //   id), +0x30 (title), +0x50 (artist).
-    //
-    // Re-derived May 2026 via the in-process discovery dump after a game
-    // update shifted the chain (field offsets match g0ldyy/fh6-universal-radio,
-    // but their build reached the block via +0x48 -> +0x18). Re-run the dump
-    // if a future update breaks it; static RE is useless here (packed binary).
+    // instance +0x50 -> track list, +0x08 -> current-track block.
     .chain_offsets = {0x50, 0x08},
 
-    // Leave the internal event id (+0x10) alone -- writing our track id there
-    // isn't a valid FMOD event name. We only need the visible title/artist.
+    // Block holds std::strings at +0x10 (internal event id, left alone -- not a
+    // valid FMOD event name), +0x30 (title), +0x50 (artist).
     .sound_name_offset   = std::nullopt,
     .display_name_offset = 0x30,
     .artist_offset       = 0x50,
@@ -96,20 +87,15 @@ struct GameSignatures {
 
     std::string_view radio_state_singleton;
 
-    // ----- In-game event detection (read from the RadioState singleton) -----
-    // Offsets relative to *g_radio_state_global. Sourced from
-    // g0ldyy/fh6-universal-radio's game_state_probe, which reads the SAME
-    // singleton this file resolves (its race pattern is a substring of
-    // radio_set_station_by_name above). Verify with the one-shot state dump
-    // in dllmain before trusting these on a new build.
+    // In-game event detection, offsets relative to *g_radio_state_global.
+    // Verify against dllmain's one-shot state dump on a new build; see
+    // docs/architecture.md -> "In-game event detection".
     std::ptrdiff_t race_active_a_offset; // byte; nonzero with B ⇒ in a race
     std::ptrdiff_t race_active_b_offset; // byte
     std::ptrdiff_t race_restart_offset;  // int32; == -1 on a race restart
-    // Station NAME (MSVC std::string), reached by a pointer chain off the
-    // singleton: *(*(radio_state + chain0) + chain1) + station_name_offset.
-    // Gives the currently-selected station (e.g. "Horizon Pulse"). NOTE: the
-    // name does NOT change when the radio is switched off, so it tracks
-    // station SELECTION only, not on/off.
+    // Station name (MSVC std::string), reached via
+    // *(*(radio_state + chain0) + chain1) + station_name_offset. Tracks station
+    // SELECTION only -- the name does NOT change when the radio is powered off.
     std::ptrdiff_t station_chain0_offset;
     std::ptrdiff_t station_chain1_offset;
     std::ptrdiff_t station_name_offset;

@@ -10,24 +10,10 @@
 
 namespace horizon::ipc {
 
-// IPC server exposed to the HorizonRadio.UI desktop app via a Windows
-// named pipe. Single connection at a time (the UI is the only client).
-//
-// Wire format: newline-delimited UTF-8 JSON. The DLL is the publisher;
-// commands from the UI back to the DLL will come later. Each event
-// has an `"event"` field that names the kind. See the README in the
-// UI project for the full schema; the short version:
-//
-//   {"event":"hello","pid":N,"version":"x.y.z"}
-//   {"event":"track","title":"...","artist":"...","album":null,
-//                    "source_id":"local","source_display":"Local Files",
-//                    "art_b64":null}
-//   {"event":"stats","installed":true,"frames_in":N,"frames_out":N,
-//                    "underruns":N,"normalizer_gain":1.0,"limiter_gain":1.0}
-//   {"event":"source_changed","id":"spotify","display":"Spotify Connect"}
-//
-// All publish() methods are safe to call from any thread; they buffer
-// to an internal outbox and the pipe-writer thread drains it.
+// IPC server exposed to the HorizonRadio.UI desktop app via a Windows named
+// pipe; single connection (the UI is the only client). All publish() methods
+// are thread-safe and cheap when disconnected. Wire protocol (event/command
+// schemas): docs/architecture.md -> "IPC wire protocol".
 class IpcServer {
 public:
     // Pipe name without the `\\.\pipe\` prefix. Defaults are fine.
@@ -80,32 +66,20 @@ public:
     void publish_stats(const StatsEvent& e);
     void publish_source_changed(std::string_view id, std::string_view display);
 
-    // Publish a detected in-game event (race_start, race_finish,
-    // station_changed, …). The C# host maps it to a user-configured
-    // action. Cheap when disconnected.
+    // A detected in-game event (race_start, station_changed, …) the C# host
+    // maps to a user-configured action.
     void publish_game_event(std::string_view kind);
 
     // Free-form debug line surfaced in the UI Console under `tag`.
-    // Cheap when disconnected.
     void publish_debug(std::string_view tag, std::string_view text);
 
-    // Snapshot callback fires whenever a UI client (re)connects. The
-    // callback is expected to re-publish the latest track + active
-    // source via the publish_* methods so the UI doesn't have to wait
-    // for the next track change to display something. Without this,
-    // the UI starts at "Nothing playing" any time the user opens it
-    // after FH6 has already loaded a track.
+    // Fires on every UI (re)connect; re-publishes current track + source so the
+    // UI doesn't sit on its placeholder when attaching mid-playback.
     using SnapshotFn = std::function<void()>;
     void set_snapshot_callback(SnapshotFn cb);
 
-    // Command callback fires for each newline-terminated JSON object the
-    // UI sends back to the DLL. The callback receives the raw line
-    // (without trailing newline). Used today for "set_track" commands
-    // that route C#-side metadata into the game HUD; future commands
-    // (pause, source-switch hints, etc.) ride the same channel.
-    //
-    // Called from the listener thread; callbacks should be cheap or
-    // hand work off to another thread.
+    // Fires for each newline-terminated JSON command from the UI (raw line, no
+    // trailing newline). Runs on the listener thread, so keep it cheap.
     using CommandFn = std::function<void(const std::string& json_line)>;
     void set_command_callback(CommandFn cb);
 

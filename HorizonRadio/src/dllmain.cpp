@@ -1,10 +1,6 @@
 #include <windows.h>
 
-// version.dll proxy forwarders live in src/version_proxy.cpp: 17
-// dllexport trampolines that lazy-load C:\Windows\System32\version.dll
-// and pass each call through. Implemented as C++ definitions (not PE
-// forwarder records) so the same source compiles under both MSVC and
-// clang+MinGW for cross-compile builds.
+// version.dll proxy forwarders live in src/version_proxy.cpp.
 
 #include <atomic>
 #include <chrono>
@@ -38,9 +34,7 @@ using horizon::fmod::FmodResolver;
 using horizon::inject::MetadataInjector;
 using horizon::inject::PeImage;
 
-// Minimum track info the metadata injector + IPC echo path need.
-// Source-side decoding / search lives in the C# HorizonRadio.UI process
-// now; the DLL just stores whatever the UI sends via {"cmd":"set_track"}.
+// Track info the UI sends via {"cmd":"set_track"}; the DLL just stores it.
 struct TrackInfo {
     std::string id; // canonical id from the source (e.g. "spotify:track:abc"); blank for local
     std::string title;
@@ -50,58 +44,28 @@ struct TrackInfo {
 
 HMODULE g_module = nullptr;
 
-// Set when the FmodBridge is constructed; the source thread's on_audio
-// reads this atomically to deliver PCM. Stays null when the bridge
-// can't be brought up (e.g. signatures::kFh6 still empty).
-std::atomic<FmodBridge*> g_bridge_for_push{nullptr};
+// Cross-thread state; see docs/architecture.md -> "Shared state". Published by
+// the resolvers / IPC command handler, read by the periodic writer.
+std::atomic<FmodBridge*>       g_bridge_for_push{nullptr};    // null until bridge is up
+std::atomic<MetadataInjector*> g_metadata_injector{nullptr};  // null until resolved
+std::atomic<void**>            g_radio_state_global{nullptr}; // slot; *it yields RadioState* or null
+std::atomic<const void*>       g_radio_stream_vtable{nullptr};
 
-// Set when MetadataInjector has resolved against the running module.
-// on_track reads atomically to push the latest title/artist into the
-// game's RadioStreamFmod instance. Stays null until kFh6Metadata is
-// filled in with verified offsets.
-std::atomic<MetadataInjector*> g_metadata_injector{nullptr};
-
-// Address of the RadioState global (in FH6's .data BSS region). Set
-// once at startup via GameResolver. *g_radio_state_global yields a
-// RadioState* (or nullptr if the game hasn't initialized it yet).
-std::atomic<void**> g_radio_state_global{nullptr};
-
-// Resolved RadioStreamFmod vtable, cached for the periodic writer's
-// fast scan of RadioState's slot table.
-std::atomic<const void*> g_radio_stream_vtable{nullptr};
-
-// Cached latest track. The C# UI sends one via {"cmd":"set_track"}
-// shortly after starting a source — well before the game's
-// RadioStreamFmod instances exist. The periodic writer re-applies this
-// cached info every tick so the metadata lands as soon as the
-// instances do.
+// Latest track from set_track; the periodic writer re-applies it each tick.
 std::mutex        g_track_mutex;
 TrackInfo         g_current_track;
 std::atomic<bool> g_have_track{false};
 
-// Station targeting. The UI picks which in-game station Horizon Radio
-// replaces via {"cmd":"set_target_station"}. Empty = replace whatever
-// station is active (legacy behavior). g_on_target_station is recomputed
-// each poll (active station name == target) and gates DSP attach +
-// metadata so other stations keep playing the game's own music.
+// Station targeting (set_target_station). on_target gates DSP attach + metadata
+// so other stations keep playing the game's own music; empty target = any.
 std::mutex        g_target_mutex;
 std::string       g_target_station;          // empty = any
 std::atomic<bool> g_on_target_station{true}; // default: replace active
 
-// IPC server exposed to the HorizonRadio.UI desktop companion app.
-// Lives for the entire DLL lifetime; events flow out as source
-// callbacks fire (track changes) and as the periodic writer ticks
-// (bridge stats). Stop() is wired up on DLL_PROCESS_DETACH.
-horizon::ipc::IpcServer g_ipc_server;
+horizon::ipc::IpcServer     g_ipc_server; // lives for the DLL's lifetime; stop() on detach
+horizon::ipc::PcmPipeServer g_pcm_pipe;   // UI writes s16 stereo frames here
 
-// PCM ingress pipe. The C# UI writes s16 stereo frames here; we
-// forward them to the FMOD bridge. Snake-cased pipe name lives in
-// PcmPipeServer; the UI's PcmPipeClient connects on the same name.
-horizon::ipc::PcmPipeServer g_pcm_pipe;
-
-// Active source identity, set by inbound {"cmd":"set_track"} commands.
-// Used to repopulate a freshly-connected UI client via the snapshot
-// callback so a re-launched UI sees the current source name.
+// Active source identity (set_track); re-published to a reconnecting UI.
 std::string g_active_source_id;
 std::string g_active_source_display;
 
@@ -122,8 +86,6 @@ void logf(const wchar_t* fmt, ...) {
     OutputDebugStringW(buf);
 }
 
-// Helper: push a track event over the IPC pipe to the UI companion.
-// Cheap when no UI is attached (IpcServer::connected() short-circuits).
 void publish_track_ipc(const TrackInfo& t, std::string_view source_id, std::string_view source_display) {
     horizon::ipc::IpcServer::TrackEvent ev{};
     ev.title          = t.title;
@@ -134,10 +96,8 @@ void publish_track_ipc(const TrackInfo& t, std::string_view source_id, std::stri
     g_ipc_server.publish_track(ev);
 }
 
-// Returns a constructed FmodBridge if all required entry points
-// resolve; nullptr otherwise. The bridge is constructed but stays
-// dormant (no DSP installed) until the periodic writer hands it a
-// chain-valid RadioStreamFmod target.
+// Construct the bridge if the required entry points resolve (else nullptr). It
+// stays dormant until the periodic writer hands it a target.
 std::unique_ptr<FmodBridge> bring_up_fmod(const PeImage& game_image) {
     FmodResolver resolver(game_image, horizon::fmod::signatures::kFh6);
     auto         hooks = resolver.resolve();
@@ -148,11 +108,8 @@ std::unique_ptr<FmodBridge> bring_up_fmod(const PeImage& game_image) {
          resolver.report().dspRelease ? 1 : 0, resolver.report().setMode ? 1 : 0, resolver.report().handleOpen ? 1 : 0,
          resolver.report().handleUnlock ? 1 : 0);
 
-    // For each unresolved anchored signature, run the diagnostic
-    // resolver and log the outcome stage. Tells us whether the
-    // anchor missed entirely, the lea decode rejected hits, .pdata
-    // had no enclosing function, the prologue patterns didn't match
-    // this build, or the match was ambiguous.
+    // For each unresolved anchored signature, log which resolution stage failed
+    // (anchor / lea / enclosing fn / prologue / ambiguous) to aid re-deriving it.
     auto diag_log = [&](const wchar_t* slot, const horizon::fmod::SignaturePattern& sig, bool resolved) {
         if (resolved)
             return;
@@ -187,10 +144,8 @@ std::unique_ptr<FmodBridge> bring_up_fmod(const PeImage& game_image) {
              L"(anchors=%zu leas=%zu enclosing=%zu prologue_match=%zu)\n",
              slot, stage, d.anchor_count, d.lea_count, d.enclosing_fn_count, d.prologue_match_count);
 
-        // For "no prologue match" / "ambiguous", dump the first 24
-        // bytes at each enclosing function so we can read off the
-        // actual prologue and either extend the alternation or
-        // pick a more discriminating disambiguator.
+        // On prologue-mismatch / ambiguous, dump each enclosing fn's first 24
+        // bytes so the real prologue can be read off and the alternation widened.
         if (d.status == horizon::inject::AnchorResolution::Status::no_prologue_match ||
             d.status == horizon::inject::AnchorResolution::Status::ambiguous) {
             for (auto* fn : d.enclosing_functions) {
@@ -415,24 +370,10 @@ void poll_game_events(void* radio_state) {
 [[noreturn]] DWORD WINAPI bridge_init_thread(LPVOID) {
     log_w(L"[horizon-radio] init thread started\n");
 
-    // IPC server is independent of the bridge; start it early so the
-    // companion UI can attach even before FH6 finishes wiring up its
-    // radio system. Stays a no-op when no UI is connected. The
-    // snapshot callback re-publishes current state on every (re)connect
-    // so the UI doesn't sit on its placeholder when the user attaches
-    // mid-playback.
-    // PCM ingress: forward bytes from the UI process straight to the
-    // FMOD bridge. Cheap when no client is writing — the server thread
-    // sits in ConnectNamedPipe until something attaches.
-    //
-    // First chunk also wakes up the metadata pipeline. The periodic
-    // writer / DSP installer gates on g_have_track being true (the
-    // historical signal "we have audio worth playing"); without a
-    // legacy in-DLL source firing on_track, that flag would stay
-    // false forever and the DSP would never attach to the game radio
-    // channel. Plant a stub so the install path proceeds. The real
-    // metadata will come from the C# side over IPC (UI→DLL command
-    // channel, coming with Phase 4/5).
+    // PCM ingress: forward UI frames to the bridge. The first chunk also plants
+    // a stub track so g_have_track flips true and the DSP install path proceeds
+    // (nothing else fires it now that sources live in C#); real metadata follows
+    // over IPC. See docs/architecture.md -> "Shared state".
     g_pcm_pipe.start([](const std::int16_t* frames, std::size_t frame_count) {
         if (auto* b = g_bridge_for_push.load(std::memory_order_acquire)) {
             b->push_pcm(frames, frame_count);
@@ -447,15 +388,9 @@ void poll_game_events(void* radio_state) {
         }
     });
 
-    // Dispatcher for inbound JSON commands from the UI. Today only
-    // {"cmd":"set_track",...} is handled — used so C#-side sources
-    // (LocalFile, Spotify, …) can route track metadata into the game
-    // HUD via the existing MetadataInjector path. Commands are simple
-    // flat JSON; we scan for the keys we care about rather than pulling
-    // in a full parser.
+    // Inbound JSON commands from the UI (set_track/set_gain/set_target_station).
+    // Flat JSON, so we scan for keys rather than pull in a parser.
     auto json_extract_string = [](const std::string& line, std::string_view key, std::string& out) -> bool {
-        // Match `"key":"..."` allowing for backslash-escaped quotes
-        // inside the value. Plenty for our short, well-formed lines.
         std::string needle = "\"";
         needle.append(key);
         needle.append("\":");
@@ -700,9 +635,7 @@ void poll_game_events(void* radio_state) {
             std::thread([] {
                 std::this_thread::sleep_for(std::chrono::seconds(10));
 
-                // 20 Hz: fast enough that song-change / radio-toggle
-                // transitions feel instant; tick() is microseconds in steady
-                // state (one read + compare, no FMOD calls).
+                // 20 Hz: transitions feel instant; a steady-state tick is microseconds.
                 constexpr auto kTickInterval  = std::chrono::milliseconds(50);
                 constexpr int  kRescanIters   = 100; // ~5 s between heap scans
                 int            last_write_n   = -1;
@@ -719,12 +652,8 @@ void poll_game_events(void* radio_state) {
                     if (rs_slot)
                         poll_game_events(safe_deref_slot(rs_slot));
 
-                    // Title write/restore state (persists across ticks). We
-                    // write our title into ONE block (the instance we inject
-                    // audio into), snapshot its originals first, and write them
-                    // back when we stop replacing it. Hoisted above the
-                    // have-track gate so the restore runs even once the source
-                    // stops.
+                    // Persists across ticks; hoisted above the have-track gate so
+                    // on_idle still restores once the source stops. See TitleWriteController.
                     static horizon::inject::TitleWriteController title_writer;
 
                     if (inj && rs_slot && vt && g_have_track.load(std::memory_order_acquire)) {
@@ -778,12 +707,9 @@ void poll_game_events(void* radio_state) {
                                 preferred_instance = nullptr;
                         }
 
-                        // Pick the single instance we replace: the one whose
-                        // FMOD system resolves (the audible station). Selecting
-                        // by audio — not metadata-write success — keeps the
-                        // title on the station the audio is on, and avoids
-                        // stamping it onto other loaded stations' blocks (which
-                        // share the same vtable).
+                        // Pick the instance whose FMOD system resolves (the audible
+                        // station), so the title lands where the audio is and not on
+                        // other loaded stations' blocks (they share the vtable).
                         auto fmod_resolves = [&](const void* inst) {
                             auto* rs = const_cast<std::byte*>(static_cast<const std::byte*>(inst) + 0x10);
                             return horizon::fmod::resolve_fmod_system_from_stream(game_image, rs) != nullptr;
@@ -803,10 +729,6 @@ void poll_game_events(void* radio_state) {
                             }
                         }
 
-                        // Write our title/artist to ONLY the selected instance,
-                        // snapshotting its originals on first touch and restoring
-                        // any previously-replaced instance. The write/restore
-                        // bookkeeping lives in TitleWriteController.
                         const int n =
                             title_writer.on_active(*inj, active_instance, instances, sound, t.title, t.artist);
 

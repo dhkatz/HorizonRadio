@@ -11,9 +11,7 @@ namespace horizon::inject {
 
 namespace {
 
-// Overwrite a fixed-size char buffer with `value`, truncating to
-// fit and always null-terminating. Used for FH6's char[32] fields
-// in RadioSample::SampleProperties.
+// Truncate-and-null `value` into a fixed char[N] field.
 void write_fixed_char_array(char* target, const std::size_t buf_size, const std::string_view value) {
     if (buf_size == 0)
         return;
@@ -22,12 +20,8 @@ void write_fixed_char_array(char* target, const std::size_t buf_size, const std:
     std::memset(target + copy_len, 0, buf_size - copy_len);
 }
 
-// Plausibility check on a candidate's MSVC std::string slot. Reads
-// the 32-byte header and verifies cap >= 15 (SSO floor) and
-// size <= cap. Together with the refcount filter on the heap scan,
-// this rejects /OPT:ICF false matches: random heap bytes that
-// happened to match the vtable won't have a plausible string
-// header at the chain endpoint.
+// Reject spurious vtable matches: a real MSVC std::string header has cap >= 15
+// (SSO floor), size <= cap, and a sane length.
 bool plausible_msvc_string(const MsvcString* s) noexcept {
     if (s->capacity < 15)
         return false;
@@ -39,17 +33,11 @@ bool plausible_msvc_string(const MsvcString* s) noexcept {
     return true;
 }
 
-// Plausibility check on a candidate's char[N] field. Looks for a
-// readable buffer that either already has ASCII content or is a
-// reasonable null/zero buffer. Catches obvious spurious vptr matches
-// that point at non-string memory.
+// Reject non-string char[N] candidates: accept an all-null/fill buffer or
+// printable ASCII followed by a null terminator; anything else isn't a field.
 bool plausible_char_buffer(const char* buf, std::size_t n) noexcept {
     if (n == 0)
         return false;
-    // Either the buffer is entirely null/CC/FD-fill, or it contains
-    // some printable ASCII followed by a null terminator. Anything
-    // else (high bytes mid-buffer, embedded control codes, etc.)
-    // suggests the candidate isn't a SampleProperties.
     bool saw_printable = false;
     bool saw_null      = false;
     for (std::size_t i = 0; i < n; ++i) {
@@ -135,11 +123,8 @@ int do_write_one(void* base_ptr, const MetadataInjectorConfig& cfg, std::string_
     return 1;
 }
 
-// Full per-instance pipeline (vptr re-check, chain walk, write),
-// wrapped in SEH so an instance that got freed between the heap
-// scan and this point can't kill the thread via a stray AV in
-// walk_offset_chain. The body has no C++ destructors so the
-// __try is legal (MSVC C2712).
+// Per-instance pipeline (vptr re-check, chain walk, write), SEH-guarded so a
+// freed instance can't AV the thread. No C++ destructors in the body (C2712).
 int process_one_instance(const void* instance, std::uintptr_t vt_addr, const MetadataInjectorConfig& cfg,
                          const std::ptrdiff_t* chain_ptr, std::size_t chain_size, std::string_view sn,
                          std::string_view dn, std::string_view ar) {
@@ -163,9 +148,7 @@ int process_one_instance(const void* instance, std::uintptr_t vt_addr, const Met
     }
 }
 
-// Fixed-buffer snapshot of the title/artist strings at a chain endpoint.
-// Plain old data so it can cross the SEH boundary (the __try body must
-// contain no C++ objects with destructors -- MSVC C2712).
+// POD snapshot of the endpoint strings, so it can cross the SEH boundary (C2712).
 struct StringSnapshot {
     char        title[512];
     std::size_t title_len;
@@ -174,11 +157,8 @@ struct StringSnapshot {
     bool        ok;
 };
 
-// SEH-protected read mirroring process_one_instance's chain walk: re-check
-// the vptr, walk the chain, then copy the display-name + artist MsvcStrings
-// into the snapshot buffers. Used to capture the game's original strings
-// before we overwrite them, so we can put them back when we stop replacing
-// a station.
+// SEH-guarded read mirroring process_one_instance's walk: copy the endpoint
+// title/artist into the snapshot so we can restore them later.
 void read_strings_one(const void* instance, std::uintptr_t vt_addr, const MetadataInjectorConfig& cfg,
                       const std::ptrdiff_t* chain_ptr, std::size_t chain_size, StringSnapshot* out) {
     out->ok         = false;
