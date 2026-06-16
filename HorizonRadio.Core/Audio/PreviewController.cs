@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using HorizonRadio.Core.Sources.Config;
 
 namespace HorizonRadio.Core.Audio;
@@ -15,12 +16,23 @@ public sealed class PreviewController : IDisposable
     private readonly TeePcmSink _tee;
     private readonly SourceConfigStore _store;
     private SpeakerPcmSink? _speaker;
+
+    // Volume persistence is debounced: a slider drag fires SetVolume dozens of
+    // times, so we coalesce them and write the store once the slider goes quiet.
+    // _persistLock serializes the disk write against the device/enable-change
+    // paths (UI thread) and the debounce timer (thread pool). Without the
+    // timer the position was only saved on Dispose, so a crash lost it.
+    private readonly object _persistLock = new();
+    private readonly Timer _persistTimer;
+    private static readonly TimeSpan PersistDebounce = TimeSpan.FromMilliseconds(800);
     private bool _volumeDirty;
+    private bool _disposed;
 
     public PreviewController(TeePcmSink tee, SourceConfigStore store)
     {
         _tee = tee;
         _store = store;
+        _persistTimer = new Timer(_ => FlushVolumeIfDirty(), null, Timeout.Infinite, Timeout.Infinite);
         Enabled = store.PreviewEnabled;
         DeviceId = store.PreviewDeviceId;
         Volume = store.PreviewVolume;
@@ -30,6 +42,11 @@ public sealed class PreviewController : IDisposable
 
     public bool Enabled { get; private set; }
     public string? DeviceId { get; private set; }
+
+    /// <summary>The master volume <em>slider position</em> (0..1), persisted as
+    /// <c>previewVolume</c>. Converted to a linear gain via <see cref="VolumeTaper"/>
+    /// before it reaches the speaker. This is the same position the in-game bridge
+    /// uses as a pre-amp, so the one slider governs both outputs.</summary>
     public double Volume { get; private set; }
 
     /// <summary>True when local monitoring is enabled and the speaker device
@@ -64,18 +81,37 @@ public sealed class PreviewController : IDisposable
     public void SetVolume(double volume)
     {
         Volume = volume;
-        if (_speaker != null) _speaker.Volume = (float)volume;
-        // Update the in-memory pref but don't hit disk on every slider tick —
-        // a drag fires this dozens of times. Flushed on Dispose, or sooner by
-        // the next enable/device change (which persist the whole store).
-        _store.PreviewVolume = volume;
-        _volumeDirty = true;
+        // Volume is the raw slider *position*; the speaker takes a linear gain.
+        // Run it through the perceptual taper so the fader eases down smoothly.
+        if (_speaker != null) _speaker.Volume = VolumeTaper.ToGain(volume);
+        // Don't hit disk on every slider tick — a drag fires this dozens of
+        // times. Update the in-memory pref and (re)arm the debounce timer so the
+        // value lands on disk shortly after the slider goes quiet. Arming under
+        // the lock with the _disposed check means we never call Change() on an
+        // already-disposed timer (a slider tick during shutdown teardown).
+        lock (_persistLock)
+        {
+            if (_disposed) return;
+            _store.PreviewVolume = volume;
+            _volumeDirty = true;
+            _persistTimer.Change(PersistDebounce, Timeout.InfiniteTimeSpan);
+        }
+    }
+
+    private void FlushVolumeIfDirty()
+    {
+        lock (_persistLock)
+        {
+            if (!_volumeDirty) return;
+            _store.SaveToDisk();
+            _volumeDirty = false;
+        }
     }
 
     private void StartSpeaker()
     {
         _speaker ??= new SpeakerPcmSink();
-        _speaker.Volume = (float)Volume;
+        _speaker.Volume = VolumeTaper.ToGain(Volume);
         _speaker.Start(DeviceId);
         if (_speaker.IsPlaying)
         {
@@ -102,13 +138,22 @@ public sealed class PreviewController : IDisposable
 
     private void Persist()
     {
-        _store.SaveToDisk();
-        _volumeDirty = false;
+        lock (_persistLock)
+        {
+            _store.SaveToDisk();
+            _volumeDirty = false;
+        }
     }
 
     public void Dispose()
     {
-        if (_volumeDirty) Persist();
+        // Mark disposed under the lock first so any in-flight SetVolume returns
+        // without re-arming the timer we're about to dispose.
+        lock (_persistLock) _disposed = true;
+        _persistTimer.Dispose();
+        // Flush any volume change that hadn't hit its debounce window yet
+        // (lock-guarded, same as every other access to _volumeDirty).
+        FlushVolumeIfDirty();
         _tee.SetPrimaryEnabled(true);
         _tee.DetachPreview();
         _speaker?.Dispose();

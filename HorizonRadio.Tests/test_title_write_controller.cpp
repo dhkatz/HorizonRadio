@@ -4,7 +4,6 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#include <vector>
 
 using horizon::inject::TitleWriteController;
 
@@ -47,11 +46,6 @@ int g_b;
 const void* const kInst1 = &g_a;
 const void* const kInst2 = &g_b;
 
-std::vector<const void*> live(std::initializer_list<const void*> xs) {
-    std::vector<const void*> v(xs);
-    return v;
-}
-
 } // namespace
 
 TEST_CASE("TitleWriteController: first touch snapshots originals, writes ours, restores on idle") {
@@ -59,7 +53,7 @@ TEST_CASE("TitleWriteController: first touch snapshots originals, writes ours, r
     inj.blocks[kInst1] = {"GameTitle", "GameArtist"};
     TitleWriteController c;
 
-    const int n = c.on_active(inj, kInst1, live({kInst1}), "sound", "OurTitle", "OurArtist");
+    const int n = c.on_active(inj, kInst1, "sound", "OurTitle", "OurArtist");
 
     CHECK(n == 1);
     CHECK(c.owns_block());
@@ -88,9 +82,9 @@ TEST_CASE("TitleWriteController: switching to a still-live instance restores the
     inj.blocks[kInst2] = {"Title2", "Artist2"};
     TitleWriteController c;
 
-    c.on_active(inj, kInst1, live({kInst1, kInst2}), "s", "OurTitle", "OurArtist");
-    // Both still present; selection moves to inst2.
-    c.on_active(inj, kInst2, live({kInst1, kInst2}), "s", "OurTitle", "OurArtist");
+    c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist");
+    // Selection moves to inst2.
+    c.on_active(inj, kInst2, "s", "OurTitle", "OurArtist");
 
     CHECK(c.written_instance() == kInst2);
     // inst1 put back to its original, inst2 now holds ours.
@@ -98,19 +92,21 @@ TEST_CASE("TitleWriteController: switching to a still-live instance restores the
     CHECK(inj.blocks[kInst2] == std::pair<std::string, std::string>{"OurTitle", "OurArtist"});
 }
 
-TEST_CASE("TitleWriteController: an instance that left the scan is dropped, not restored") {
+TEST_CASE("TitleWriteController: switching away restores the old block even if it left the scan") {
     FakeInjector inj;
     inj.blocks[kInst1] = {"Title1", "Artist1"};
     inj.blocks[kInst2] = {"Title2", "Artist2"};
     TitleWriteController c;
 
-    c.on_active(inj, kInst1, live({kInst1}), "s", "OurTitle", "OurArtist");
-    // inst1 no longer in the live set (freed) -> must NOT write to it again.
-    c.on_active(inj, kInst2, live({kInst2}), "s", "OurTitle", "OurArtist");
+    c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist");
+    // inst1 has dropped out of the (stale) heap scan, but the restore must
+    // still run: write_to_instance is vptr-checked under SEH, so a truly freed
+    // block is a safe no-op, and skipping it would leave our title frozen on the
+    // station the user tuned past (the neighbor-metadata bug).
+    c.on_active(inj, kInst2, "s", "OurTitle", "OurArtist");
 
     CHECK(c.written_instance() == kInst2);
-    // inst1 keeps our strings (we couldn't safely restore a vanished block).
-    CHECK(inj.blocks[kInst1] == std::pair<std::string, std::string>{"OurTitle", "OurArtist"});
+    CHECK(inj.blocks[kInst1] == std::pair<std::string, std::string>{"Title1", "Artist1"});
     CHECK(inj.blocks[kInst2] == std::pair<std::string, std::string>{"OurTitle", "OurArtist"});
 }
 
@@ -120,11 +116,11 @@ TEST_CASE("TitleWriteController: restore value resyncs when the game advances it
     TitleWriteController c;
 
     // Tick 1: snapshot GameA, write ours.
-    c.on_active(inj, kInst1, live({kInst1}), "s", "Ours", "OursArtist");
+    c.on_active(inj, kInst1, "s", "Ours", "OursArtist");
     // Game advanced its own track underneath us (block no longer holds ours).
     inj.blocks[kInst1] = {"GameB", "ArtistB"};
     // Tick 2: must notice the change and adopt GameB as the new restore value.
-    c.on_active(inj, kInst1, live({kInst1}), "s", "Ours", "OursArtist");
+    c.on_active(inj, kInst1, "s", "Ours", "OursArtist");
 
     c.on_idle(inj);
 
@@ -136,8 +132,8 @@ TEST_CASE("TitleWriteController: a null active instance restores the previously 
     inj.blocks[kInst1] = {"Title1", "Artist1"};
     TitleWriteController c;
 
-    c.on_active(inj, kInst1, live({kInst1}), "s", "OurTitle", "OurArtist");
-    const int n = c.on_active(inj, nullptr, live({kInst1}), "s", "OurTitle", "OurArtist");
+    c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist");
+    const int n = c.on_active(inj, nullptr, "s", "OurTitle", "OurArtist");
 
     CHECK(n == 0);
     CHECK_FALSE(c.owns_block());
@@ -150,7 +146,7 @@ TEST_CASE("TitleWriteController: no original is restored when the first-touch re
     inj.blocks[kInst1] = {"GameTitle", "GameArtist"};
     TitleWriteController c;
 
-    c.on_active(inj, kInst1, live({kInst1}), "s", "OurTitle", "OurArtist");
+    c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist");
     CHECK(inj.blocks[kInst1] == std::pair<std::string, std::string>{"OurTitle", "OurArtist"});
 
     c.on_idle(inj);

@@ -87,18 +87,21 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     /// owned here only so the player bar — bound to this VM — can reach it.</summary>
     public StationTargetViewModel Station { get; }
 
-    /// <summary>Local monitor volume (0..1). Only applies when a local output
-    /// device is selected; the in-game bridge ignores it.</summary>
+    /// <summary>Master volume slider <em>position</em> (0..1). Governs both
+    /// outputs: it's tapered to a perceptual gain and applied to the local
+    /// monitor (<see cref="PreviewController"/>) and, as a pre-amp, to the
+    /// in-game bridge (via <see cref="MasterVolumeChanged"/>).</summary>
     [ObservableProperty] private double previewVolume = 1.0;
 
-    /// <summary>Mute state for the local monitor. Toggled by clicking the volume
+    /// <summary>Raised when the master volume position changes, so the app can
+    /// push the (tapered) pre-amp gain to the in-game bridge. The VM stays
+    /// IPC-unaware — mirrors the station-target wiring.</summary>
+    public event Action<double>? MasterVolumeChanged;
+
+    /// <summary>Mute state for the master volume. Toggled by clicking the volume
     /// icon; remembers the pre-mute level to restore on unmute.</summary>
     [ObservableProperty] private bool isMuted;
     private double _volumeBeforeMute = 1.0;
-
-    /// <summary>True when a local device (not the in-game bridge) is the chosen
-    /// output — gates the volume slider's enabled state.</summary>
-    public bool IsLocalOutput => SelectedOutput is { IsBridge: false };
 
     private readonly SourceRunner? _runner;
     private readonly SourceConfigStore? _store;
@@ -343,7 +346,6 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
 
     partial void OnSelectedOutputChanged(OutputTarget? value)
     {
-        OnPropertyChanged(nameof(IsLocalOutput));
         if (_preview == null || value == null) return;
         if (value.IsBridge)
         {
@@ -362,6 +364,8 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     partial void OnPreviewVolumeChanged(double value)
     {
         _preview?.SetVolume(value);
+        // Also drive the in-game bridge pre-amp (App pushes it over IPC).
+        MasterVolumeChanged?.Invoke(value);
         // Dragging the slider up unmutes; keeps the icon honest.
         if (value > 0 && IsMuted) IsMuted = false;
     }

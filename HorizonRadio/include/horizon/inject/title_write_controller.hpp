@@ -1,7 +1,5 @@
 #pragma once
 
-#include <algorithm>
-#include <span>
 #include <string>
 #include <string_view>
 
@@ -20,25 +18,20 @@ class TitleWriteController {
 public:
     // Tick where we have a track and an already-selected target. `active_instance`
     // is the instance the caller chose to replace (may be null when nothing
-    // resolves this tick). `live_instances` is the current heap-scan set, used to
-    // decide whether a previously-written instance is still alive (restore its
-    // original strings) or has already left the scan (just drop our bookkeeping).
-    // Returns the injector's write count (0 when nothing was written).
+    // resolves this tick). Returns the injector's write count (0 when nothing
+    // was written).
     template <class Injector>
-    int on_active(Injector& inj, const void* active_instance, std::span<const void* const> live_instances,
-                  std::string_view sound, std::string_view title, std::string_view artist) {
-        // If we were replacing a different instance, restore it (when still
-        // live) or just forget it (when it has left the scan -- the block may
-        // be freed, so we must not write to it).
+    int on_active(Injector& inj, const void* active_instance, std::string_view sound, std::string_view title,
+                  std::string_view artist) {
+        // Switching targets: restore the game's originals on the block we were
+        // replacing -- ALWAYS, even if it has dropped out of the (cached,
+        // seconds-stale) heap scan. write_to_instance re-checks the vptr under
+        // SEH, so a block that was actually freed is a safe no-op; skipping the
+        // restore instead leaves our title frozen on the station the user tuned
+        // past, which is the "neighbor stations show our metadata" bug that
+        // showed up when switching stations quickly.
         if (written_instance_ && written_instance_ != active_instance) {
-            // std::ranges::find (C++20), not ranges::contains (C++23): the
-            // clang+mingw cross build's libstdc++ may predate contains.
-            if (std::ranges::find(live_instances, written_instance_) != live_instances.end())
-                restore(inj);
-            else {
-                written_instance_ = nullptr;
-                saved_valid_      = false;
-            }
+            restore(inj);
         }
 
         int n = 0;

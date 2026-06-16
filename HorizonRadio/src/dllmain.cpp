@@ -3,12 +3,14 @@
 // version.dll proxy forwarders live in src/version_proxy.cpp.
 
 #include <atomic>
+#include <charconv>
 #include <chrono>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <cwchar>
+#include <system_error>
 #include <filesystem>
 #include <horizon/fmod/bridge.hpp>
 #include <horizon/fmod/resolver.hpp>
@@ -491,10 +493,14 @@ void poll_game_events(void* radio_state) {
         pos += needle.size();
         while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t'))
             ++pos;
-        const char*  start = line.c_str() + pos;
-        char*        end   = nullptr;
-        const double v     = std::strtod(start, &end);
-        if (end == start)
+        // from_chars, not strtod: locale-independent. The UI sends '.' as the
+        // decimal separator (InvariantCulture); strtod honors LC_NUMERIC, so on
+        // a comma-locale host it would stop at the '.' and read 0 -> silence.
+        const char* first = line.c_str() + pos;
+        const char* last  = line.c_str() + line.size();
+        double      v     = 0.0;
+        const auto [ptr, ec] = std::from_chars(first, last, v);
+        if (ptr == first || ec != std::errc())
             return false;
         out = v;
         return true;
@@ -553,6 +559,20 @@ void poll_game_events(void* radio_state) {
                 if (auto* b = g_bridge_for_push.load(std::memory_order_acquire))
                     b->set_master_gain(static_cast<float>(gain));
                 logf(L"[horizon-radio] cmd set_gain: %.3f\n", gain);
+            }
+        } else if (cmd == "set_master_volume") {
+            // In-app volume slider acting as a pre-amp on the in-game
+            // audio. Separate stage from set_gain (the Events duck) so
+            // the two don't clobber each other. Clamped to [0, 1].
+            double volume = 1.0;
+            if (json_extract_number(line, "volume", volume)) {
+                if (volume < 0.0)
+                    volume = 0.0;
+                if (volume > 1.0)
+                    volume = 1.0;
+                if (auto* b = g_bridge_for_push.load(std::memory_order_acquire))
+                    b->set_user_volume(static_cast<float>(volume));
+                logf(L"[horizon-radio] cmd set_master_volume: %.3f\n", volume);
             }
         } else if (cmd == "set_target_station") {
             // Which in-game station Horizon Radio replaces. Empty string
@@ -677,7 +697,8 @@ void poll_game_events(void* radio_state) {
                         // until found (fast attach), then back off to
                         // kRescanIters once we have instances.
                         static std::vector<const void*> cached_instances;
-                        std::vector<const void*>&       instances     = cached_instances;
+                        // Read-only alias; the scan reassigns cached_instances directly below.
+                        const std::vector<const void*>& instances     = cached_instances;
                         const int                       scan_interval = cached_instances.empty() ? 4 : kRescanIters;
                         if (radio_state && (iter % scan_interval == 0)) {
                             const auto t0    = std::chrono::steady_clock::now();
@@ -729,8 +750,7 @@ void poll_game_events(void* radio_state) {
                             }
                         }
 
-                        const int n =
-                            title_writer.on_active(*inj, active_instance, instances, sound, t.title, t.artist);
+                        const int n = title_writer.on_active(*inj, active_instance, sound, t.title, t.artist);
 
                         // Log only on transitions (keeps DebugView readable).
                         if (n != last_write_n) {

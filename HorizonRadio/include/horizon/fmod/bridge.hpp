@@ -63,12 +63,23 @@ public:
         resample_enabled_.store(enabled, std::memory_order_release);
     }
 
-    // Master output gain [0,1], applied after the normalizer; driven by set_gain.
+    // Events "duck" gain [0,1], applied after the normalizer; driven by set_gain.
+    // Transient: the Events / input-binding "set volume / duck" action owns this.
     void set_master_gain(float gain) noexcept {
         master_gain_.store(gain, std::memory_order_release);
     }
     float master_gain() const noexcept {
         return master_gain_.load(std::memory_order_acquire);
+    }
+
+    // User pre-amp [0,1], the in-app volume slider's tapered gain; driven by
+    // set_master_volume. Multiplied with master_gain (the duck) so the two stay
+    // independent — ducking doesn't clobber the user's level and vice versa.
+    void set_user_volume(float gain) noexcept {
+        user_volume_.store(gain, std::memory_order_release);
+    }
+    float user_volume() const noexcept {
+        return user_volume_.load(std::memory_order_acquire);
     }
 
     // Per-bridge AGC + peak-limiter (on by default).
@@ -115,6 +126,13 @@ private:
     static constexpr std::size_t kChannels   = 2;
     static constexpr std::size_t kRingFrames = 65536; // ~1.5s at 44.1kHz stereo
 
+    // Conservative default pre-amp until the UI asserts the user's slider on
+    // connect. We inject near-full-scale PCM whereas FH6's own stations sit well
+    // below 0 dBFS, so unity would blare. 0.422 (= 0.75³, the default slider
+    // position's cubic taper, ≈ -7.5 dBFS) is calibrated by ear to match a real
+    // station.
+    static constexpr float kDefaultUserVolume = 0.421875f;
+
     ResolvedHooks     hooks_;
     CreateDspResolver lazy_create_dsp_;
 
@@ -143,6 +161,7 @@ private:
 
     std::atomic<bool>          resample_enabled_{true};
     std::atomic<float>         master_gain_{1.0f};
+    std::atomic<float>         user_volume_{kDefaultUserVolume};
     std::atomic<std::uint64_t> frames_in_{0};
     std::atomic<std::uint64_t> frames_out_{0};
     std::atomic<std::uint64_t> underruns_{0};

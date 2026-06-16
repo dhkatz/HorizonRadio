@@ -108,6 +108,20 @@
                 </StackPanel>
             </Border>
 
+            <Border Classes="Card" Padding="14"
+                    IsVisible="{Binding BundledDllStale}">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <materialIcons:MaterialIcon Kind="Update"
+                                                Width="20" Height="20"
+                                                Foreground="#f59e0b"
+                                                VerticalAlignment="Center"/>
+                    <TextBlock Text="A newer version.dll build exists. Rebuild the app to bundle it, then Install."
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               VerticalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+
             <TextBlock Text="{Binding LastActionMessage}"
                        FontSize="11"
                        Opacity="0.8"
