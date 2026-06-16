@@ -56,6 +56,11 @@ inline constexpr SignatureSet kFh6 = {
 
 namespace horizon::inject::signatures {
 
+// std::string/vector members mean this static's construction can in theory
+// throw (bad_alloc); during a DLL's static init there's nothing to catch it,
+// but that's true of any allocation at load and not worth contorting the
+// config literal to avoid.
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization)
 inline const MetadataInjectorConfig kFh6Metadata = {
     .class_mangled_name = ".?AV?$_Ref_count_obj2@VRadioStreamFmod@@@std@@",
 

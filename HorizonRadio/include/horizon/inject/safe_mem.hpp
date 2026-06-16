@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstring>
+#include <utility>
 #include <windows.h>
 
 namespace horizon::inject {
@@ -48,7 +49,7 @@ inline bool safe_read_bytes(void* dst, const void* src, std::size_t n) noexcept 
 
 template <class Fn> bool seh_call(Fn&& fn) noexcept {
     __try {
-        fn();
+        std::forward<Fn>(fn)();
         return true;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;

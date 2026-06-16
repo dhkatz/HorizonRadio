@@ -135,24 +135,6 @@ int do_write_one(void* base_ptr, const MetadataInjectorConfig& cfg, std::string_
     return 1;
 }
 
-// SEH-protected wrapper: spurious vptr-matches that survived
-// plausible_msvc_string() may still touch unmapped or read-only pages
-// during the write. Catching the access violation lets us skip the
-// candidate without taking down the host process.
-//
-// The body of this function must contain NO C++ objects with
-// destructors (MSVC C2712), so the actual work lives in do_write_one
-// above and we just forward arguments here.
-int try_write_one(void* base_ptr, const MetadataInjectorConfig& cfg, std::string_view sn, std::string_view dn,
-                  std::string_view ar) {
-    __try {
-        return do_write_one(base_ptr, cfg, sn, dn, ar);
-    } __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION ? EXCEPTION_EXECUTE_HANDLER
-                                                                 : EXCEPTION_CONTINUE_SEARCH) {
-        return 0;
-    }
-}
-
 // Full per-instance pipeline (vptr re-check, chain walk, write),
 // wrapped in SEH so an instance that got freed between the heap
 // scan and this point can't kill the thread via a stray AV in
@@ -272,7 +254,6 @@ bool MetadataInjector::resolve() {
 
 namespace {
 
-using horizon::inject::is_readable;
 using horizon::inject::safe_read_bytes;
 
 void append_hex_line(std::string& out, std::ptrdiff_t off, const std::uint8_t* p) {
@@ -371,14 +352,6 @@ bool looks_like_heap(const void* addr) noexcept {
         }
     }
     return region >= std::size_t{256} * 1024;
-}
-
-// Lenient: any committed, readable, non-guard page. Used for pointer
-// target dumps where rejecting a valid heap address (because of the
-// RegionSize quirk above) is worse than occasionally dumping a stack
-// or mapped page. Backed by is_readable.
-bool is_committed_readable(const void* addr) noexcept {
-    return is_readable(addr, 1);
 }
 
 // Scan a buffer for runs of printable ASCII bytes followed by a null
