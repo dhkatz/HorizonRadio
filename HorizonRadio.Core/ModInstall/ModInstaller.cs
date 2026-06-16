@@ -33,13 +33,46 @@ public sealed class ModInstaller
 
     public bool HasBundledDll => !string.IsNullOrEmpty(BundledDllHash);
 
+    /// <summary>Dev-only: the C++ build output (<c>build/Release/version.dll</c>)
+    /// found by walking up from the app dir, or null when not running from a
+    /// source tree (e.g. a published install).</summary>
+    public string? BuildOutputDllPath { get; }
+
+    /// <summary>Dev-only: true when a C++ build output exists and differs from
+    /// the bundled DLL — i.e. the DLL was rebuilt but the app wasn't, so the
+    /// bundle (and any install made from it) is stale. The csproj re-copies the
+    /// DLL on build, so the fix is to rebuild the UI. Always false for a
+    /// published install (no build output beside it).</summary>
+    public bool BundledDllStale { get; }
+
     public ModInstaller()
     {
         BundledDllPath = Path.Combine(AppContext.BaseDirectory, "version.dll");
         BundledDllHash = File.Exists(BundledDllPath) ? ComputeHash(BundledDllPath) : "";
+
+        BuildOutputDllPath = FindBuildOutputDll(AppContext.BaseDirectory);
+        if (HasBundledDll && BuildOutputDllPath != null)
+        {
+            try { BundledDllStale = ComputeHash(BuildOutputDllPath) != BundledDllHash; }
+            catch (Exception ex) { Debug.WriteLine($"[hzn-install] build-output hash failed: {ex.Message}"); }
+        }
     }
 
     private const string TargetDllName = "version.dll";
+
+    /// <summary>Walk up from <paramref name="startDir"/> looking for the C++
+    /// build output at <c>build/Release/version.dll</c>. Returns null outside a
+    /// source tree. The depth cap covers bin/{Config}/{tfm} back to the repo root.</summary>
+    private static string? FindBuildOutputDll(string startDir)
+    {
+        var dir = new DirectoryInfo(startDir);
+        for (var i = 0; i < 7 && dir != null; i++, dir = dir.Parent)
+        {
+            var candidate = Path.Combine(dir.FullName, "build", "Release", TargetDllName);
+            if (File.Exists(candidate)) return candidate;
+        }
+        return null;
+    }
     private const string BackupSuffix = ".horizon-backup";
 
     /// <summary>Inspect a candidate FH6 directory and report what's

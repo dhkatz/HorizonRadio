@@ -86,6 +86,11 @@ public sealed partial class ModManagerViewModel : ViewModelBase
 
     public bool BundledDllMissing => !_installer.HasBundledDll;
 
+    /// <summary>Dev-only: the bundled DLL is older than the C++ build output, so
+    /// a local DLL change hasn't been rebundled. Surfaced as a warning so it
+    /// doesn't silently ship/install the stale copy. False in a published build.</summary>
+    public bool BundledDllStale => _installer.BundledDllStale;
+
     public ModManagerViewModel()
     {
         // Run detection once at construction. If exactly one install
