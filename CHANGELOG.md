@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-15
+
+### Added
+
+- **Spotify as a first-class content source** — our engine now drives librespot
+  track-by-track via the Web API, so Spotify tracks, playlists, and albums play
+  in the global **queue**, **Quick Play**, and **Mixes**, interleaved with
+  YouTube/local, with full player-bar **transport and seek**. There are two
+  Spotify entries by design: **Spotify Connect** (the zero-config cast receiver,
+  no developer app needed) and **Spotify** (the driven, mixable source, which
+  needs your own Client ID); they share one librespot device. End-of-track,
+  pause/resume, and position are all derived from playback, so even a long pause
+  can't end a track early.
+- **Unified search** — a single search box in the title bar finds music across
+  sources (**Spotify** and **YouTube**) and queues it. A debounced live dropdown
+  and a full results page share the same results; each result has Add and Play, a
+  per-row source picker, and per-source filter chips. Cross-source duplicates are
+  merged conservatively (title + artist + duration proximity), so covers,
+  remixes, and different-length versions stay separate.
+- **Internet Radio** — a first-class, searchable, mixable source. Browse the
+  radio-browser.info directory or paste a stream URL; live ICY song metadata
+  updates the now-playing card per song, with the station logo as fallback art.
+- **Richer now-playing metadata** — new keyless providers (**Apple/iTunes** and
+  **VocaDB**, alongside MusicBrainz and optional Spotify), title-first match
+  scoring that tolerates spacing/casing differences and rejects
+  same-title/different-artist mismatches, and a candidate-generation →
+  catalog-validation pipeline that resolves ambiguous (incl. CJK / fullwidth /
+  reversed) stream titles without attaching wrong art to widely-covered songs.
+  Album-art recovery for radio improved dramatically (a multi-hour session's
+  ~22% art-misses dropped to near zero).
+- **Optional local title model** — an opt-in, locally-run model (Qwen2.5-0.5B,
+  downloaded from the Tools tab) that extracts artist/title from genuinely
+  freeform stream titles, feeding the same catalog-validation loop so a wrong
+  guess never reaches the UI. Run policy is configurable (Off / Escalate
+  (default) / Always).
+- **Metadata diagnostics** — an opt-in, replayable JSONL trace (About →
+  Diagnostics) capturing each song's raw title, deterministic parse, model
+  extraction, and every provider's scored results, so a metadata bug can be
+  reproduced and attached to a report.
+
+### Changed
+
+- Installed tools (ffmpeg, yt-dlp) are now shared across sources through a single
+  resolver instead of being configured per source. yt-dlp and Spotify pick up a
+  mid-session install without a restart.
+- Art-less metadata results are now retried once stale (by TTL or a logic-version
+  bump), so a matching/parsing fix surfaces on an already-seen song instead of
+  serving a permanent miss.
+- Bumped `SpotifyAPI.Web` 7.2.1 → 7.4.2 for the new `/playlists/{id}/items`
+  endpoint (Spotify removed the old playlist-tracks route in the March 2026 API
+  migration).
+
+### Fixed
+
+- The first Spotify track queued after a fresh app start now reliably plays. A
+  cold-start race let the play command reach Spotify's cloud before librespot's
+  Connect session was ready, so the track hung silently until you skipped to the
+  next; the initial play is now confirmed and re-issued until playback actually
+  begins, and a genuinely failed play advances the queue instead of stalling.
+
 ## [0.5.0] - 2026-06-12
 
 ### Added
@@ -181,7 +241,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial release of Horizon Radio.
 
-[Unreleased]: https://github.com/dhkatz/HorizonRadio/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/dhkatz/HorizonRadio/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/dhkatz/HorizonRadio/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/dhkatz/HorizonRadio/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/dhkatz/HorizonRadio/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/dhkatz/HorizonRadio/compare/v0.3.0...v0.3.1
