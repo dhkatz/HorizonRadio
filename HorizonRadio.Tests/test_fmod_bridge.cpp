@@ -269,6 +269,7 @@ TEST_CASE("read callback (no resample): converts s16 to f32 1:1") {
     FmodBridge bridge(fake_hooks());
     bridge.set_resample_enabled(false);
     bridge.normalizer().set_enabled(false); // we're validating the raw conversion path
+    bridge.set_user_volume(1.0f);           // isolate from the default pre-amp
     bridge.set_target(kFakeSystem, stream.ptr());
     bridge.tick();
     REQUIRE(bridge.installed());
@@ -297,6 +298,47 @@ TEST_CASE("read callback (no resample): converts s16 to f32 1:1") {
     CHECK(bridge.underrun_count() == warmup_underruns); // no new underruns this read
     for (std::size_t i = 0; i < out.size(); ++i) {
         const float expected = static_cast<float>(in_pcm[i]) / 32768.0f;
+        CHECK(out[i] == doctest::Approx(expected).epsilon(0.0001f));
+    }
+}
+
+TEST_CASE("read callback: output scales by user_volume × master_gain") {
+    reset_fakes();
+    FakeRadioStream         stream;
+    constexpr std::uint32_t kHandle = 0x5151'5151;
+    stream.set_handle(kHandle);
+    g_live_handles = {kHandle};
+
+    FmodBridge bridge(fake_hooks());
+    bridge.set_resample_enabled(false);
+    bridge.normalizer().set_enabled(false); // isolate the gain stages
+    // The user pre-amp (slider) and the Events duck multiply together, so a
+    // duck doesn't clobber the user's level and vice versa.
+    bridge.set_user_volume(0.5f);
+    bridge.set_master_gain(0.5f);
+    bridge.set_target(kFakeSystem, stream.ptr());
+    bridge.tick();
+    REQUIRE(bridge.installed());
+    REQUIRE(g_captured_read != nullptr);
+
+    constexpr unsigned int                      kFrames = 64;
+    std::array<float, std::size_t{kFrames} * 2> warmup_out{};
+    int                                         warmup_channels = 2;
+    g_captured_read(nullptr, nullptr, warmup_out.data(), kFrames, 0, &warmup_channels);
+
+    std::array<std::int16_t, std::size_t{kFrames} * 2> in_pcm{};
+    for (std::size_t i = 0; i < in_pcm.size(); ++i) {
+        in_pcm[i] = static_cast<std::int16_t>((i * 257) & 0x7FFF);
+    }
+    REQUIRE(bridge.push_pcm(in_pcm.data(), kFrames) == kFrames);
+
+    std::array<float, std::size_t{kFrames} * 2> out{};
+    int                                         channels = 2;
+    g_captured_read(nullptr, nullptr, out.data(), kFrames, 0, &channels);
+
+    // 0.5 × 0.5 = 0.25 applied on top of the s16→f32 conversion.
+    for (std::size_t i = 0; i < out.size(); ++i) {
+        const float expected = static_cast<float>(in_pcm[i]) / 32768.0f * 0.25f;
         CHECK(out[i] == doctest::Approx(expected).epsilon(0.0001f));
     }
 }
@@ -335,6 +377,7 @@ TEST_CASE("read callback: resampled output is ~kStep × input frames consumed") 
     FmodBridge bridge(fake_hooks());
     // resample_enabled defaults true.
     bridge.normalizer().set_enabled(false); // validating raw resampler math
+    bridge.set_user_volume(1.0f);           // isolate from the default pre-amp
     bridge.set_target(kFakeSystem, stream.ptr());
     bridge.tick();
     REQUIRE(g_captured_read != nullptr);

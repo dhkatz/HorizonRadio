@@ -311,14 +311,14 @@ Result FmodBridge::read(float* out_buffer, const unsigned int length, const int 
     };
 
     auto write_frame = [&](std::size_t frame_idx, float L, float R) {
-        // AGC + peak limiter, then master gain (Events volume/duck),
-        // then hard-clip safety. Normalizer hard-clips internally too;
-        // the explicit clamp here is a belt-and-braces in case the
-        // normalizer is disabled.
+        // AGC + peak limiter, then gain (user pre-amp slider × Events
+        // volume/duck), then hard-clip safety. Normalizer hard-clips
+        // internally too; the explicit clamp here is a belt-and-braces
+        // in case the normalizer is disabled.
         normalizer_.process_stereo(L, R);
-        const float mg = master_gain_.load(std::memory_order_relaxed);
-        L *= mg;
-        R *= mg;
+        const float g = user_volume_.load(std::memory_order_relaxed) * master_gain_.load(std::memory_order_relaxed);
+        L *= g;
+        R *= g;
         L        = L > 1.0f ? 1.0f : (L < -1.0f ? -1.0f : L);
         R        = R > 1.0f ? 1.0f : (R < -1.0f ? -1.0f : R);
         float* o = out_buffer + frame_idx * outchannels;

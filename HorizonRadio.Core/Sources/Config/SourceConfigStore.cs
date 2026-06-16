@@ -46,8 +46,14 @@ public sealed class SourceConfigStore
     /// default). Matches <c>MMDevice.ID</c>.</summary>
     public string? PreviewDeviceId { get; set; }
 
-    /// <summary>Preview playback volume in [0, 1].</summary>
-    public double PreviewVolume { get; set; } = 1.0;
+    /// <summary>Master volume slider <em>position</em> in [0, 1] (persisted as
+    /// <c>previewVolume</c> for back-compat). Tapered to a perceptual gain and
+    /// applied to both the local monitor and the in-game bridge pre-amp. The
+    /// default (0.75 → cubic gain ≈ 0.42 ≈ -7.5 dBFS) is calibrated by ear to sit
+    /// on par with FH6's own stations; the game's music fader scales our injected
+    /// audio and the real stations together, so the match holds across in-game
+    /// volume settings. Tune from here.</summary>
+    public double PreviewVolume { get; set; } = 0.75;
 
     /// <summary>Source ids in the user's preferred order for unified search — the default
     /// "Play" on a merged result uses the highest-priority source it has (the per-result

@@ -220,10 +220,18 @@ public partial class App : Application
             mixSwitcher.Switched += _ => PushStation();
             _runner.ActiveSourceChanged += _ => PushStation();
 
+            // The master volume slider doubles as an in-game pre-amp: push its
+            // tapered gain to the bridge on every change, and re-assert on
+            // (re)connect since the DLL resets to its conservative default.
+            void PushGain() => _ipc?.SendMasterVolume(VolumeTaper.ToGain(vm.NowPlaying.PreviewVolume));
+
+            vm.NowPlaying.MasterVolumeChanged += _ => PushGain();
+
             _ipc.Connected += () =>
             {
                 Dispatcher.UIThread.Post(() => vm.SetConnection(ConnectionState.Connected));
                 PushStation();
+                PushGain();
             };
             _ipc.Disconnected += () => Dispatcher.UIThread.Post(() => vm.SetConnection(ConnectionState.Disconnected));
             _ipc.StatsUpdated += s => Dispatcher.UIThread.Post(() => vm.Stats.Apply(s));

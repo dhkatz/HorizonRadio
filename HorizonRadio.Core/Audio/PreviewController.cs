@@ -30,6 +30,11 @@ public sealed class PreviewController : IDisposable
 
     public bool Enabled { get; private set; }
     public string? DeviceId { get; private set; }
+
+    /// <summary>The master volume <em>slider position</em> (0..1), persisted as
+    /// <c>previewVolume</c>. Converted to a linear gain via <see cref="VolumeTaper"/>
+    /// before it reaches the speaker. This is the same position the in-game bridge
+    /// uses as a pre-amp, so the one slider governs both outputs.</summary>
     public double Volume { get; private set; }
 
     /// <summary>True when local monitoring is enabled and the speaker device
@@ -64,7 +69,9 @@ public sealed class PreviewController : IDisposable
     public void SetVolume(double volume)
     {
         Volume = volume;
-        if (_speaker != null) _speaker.Volume = (float)volume;
+        // Volume is the raw slider *position*; the speaker takes a linear gain.
+        // Run it through the perceptual taper so the fader eases down smoothly.
+        if (_speaker != null) _speaker.Volume = VolumeTaper.ToGain(volume);
         // Update the in-memory pref but don't hit disk on every slider tick —
         // a drag fires this dozens of times. Flushed on Dispose, or sooner by
         // the next enable/device change (which persist the whole store).
@@ -75,7 +82,7 @@ public sealed class PreviewController : IDisposable
     private void StartSpeaker()
     {
         _speaker ??= new SpeakerPcmSink();
-        _speaker.Volume = (float)Volume;
+        _speaker.Volume = VolumeTaper.ToGain(Volume);
         _speaker.Start(DeviceId);
         if (_speaker.IsPlaying)
         {

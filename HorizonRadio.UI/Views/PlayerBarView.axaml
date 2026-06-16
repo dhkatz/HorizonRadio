@@ -245,7 +245,6 @@
                 </ToggleButton>
 
                 <Button Command="{Binding ToggleMuteCommand}"
-                        IsEnabled="{Binding IsLocalOutput}"
                         Background="Transparent" BorderThickness="0"
                         Width="36" Height="36" Padding="0"
                         HorizontalContentAlignment="Center"
@@ -260,9 +259,8 @@
                 </Button>
                 <Slider Width="90" Minimum="0" Maximum="1"
                         Value="{Binding PreviewVolume, Mode=TwoWay}"
-                        IsEnabled="{Binding IsLocalOutput}"
                         VerticalAlignment="Center"
-                        ToolTip.Tip="Local monitor volume"/>
+                        ToolTip.Tip="Volume"/>
             </StackPanel>
         </Grid>
     </Border>
