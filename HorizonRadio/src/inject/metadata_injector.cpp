@@ -4,6 +4,7 @@
 #include <horizon/inject/metadata_injector.hpp>
 #include <horizon/inject/msvc_string.hpp>
 #include <horizon/inject/safe_mem.hpp>
+#include <utility>
 #include <windows.h>
 
 namespace horizon::inject {
@@ -255,8 +256,8 @@ MetadataInjector::MetadataInjector(const PeImage& image, MetadataInjectorConfig 
     : image_(image), config_(std::move(config)) {}
 
 bool MetadataInjector::resolve() {
-    MsvcRtti rtti(image_);
-    auto     td = rtti.find_type_descriptor(config_.class_mangled_name);
+    const MsvcRtti rtti(image_);
+    auto           td = rtti.find_type_descriptor(config_.class_mangled_name);
     if (!td)
         return false;
     auto col = rtti.find_complete_object_locator(*td);
@@ -273,15 +274,14 @@ namespace {
 
 using horizon::inject::is_readable;
 using horizon::inject::safe_read_bytes;
-using horizon::inject::safe_read_qword;
 
 void append_hex_line(std::string& out, std::ptrdiff_t off, const std::uint8_t* p) {
-    char line[80];
-    int  n = std::snprintf(line, sizeof(line),
-                           "  +0x%03zx: %02X %02X %02X %02X %02X %02X %02X %02X "
-                            "%02X %02X %02X %02X %02X %02X %02X %02X  ",
-                           static_cast<std::size_t>(off), p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9],
-                           p[10], p[11], p[12], p[13], p[14], p[15]);
+    char      line[80];
+    const int n = std::snprintf(line, sizeof(line),
+                                "  +0x%03zx: %02X %02X %02X %02X %02X %02X %02X %02X "
+                                "%02X %02X %02X %02X %02X %02X %02X %02X  ",
+                                static_cast<std::size_t>(off), p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8],
+                                p[9], p[10], p[11], p[12], p[13], p[14], p[15]);
     out.append(line, static_cast<std::size_t>(n));
     for (int i = 0; i < 16; ++i) {
         out += (p[i] >= 0x20 && p[i] < 0x7F) ? static_cast<char>(p[i]) : '.';
@@ -307,7 +307,7 @@ void scan_for_msvc_strings(std::string& out, const std::uint8_t* base, std::size
             continue;
 
         char header[160];
-        int  n;
+        int  n = 0;
         if (s->capacity == 15) {
             if (s->size > 15)
                 continue;
@@ -334,9 +334,9 @@ void scan_for_msvc_strings(std::string& out, const std::uint8_t* base, std::size
                 }
             }
             preview_buf[want] = '\0';
-            n                 = std::snprintf(header, sizeof(header),
-                                              "  [msvc_string] +0x%03zx  HEAP size=%2zu cap=%zu  preview=\"%s%s\"\n", off, s->size,
-                                              s->capacity, preview_buf, s->size > 24 ? "..." : "");
+            n = std::snprintf(header, sizeof(header),
+                              "  [msvc_string] +0x%03zx  HEAP size=%2zu cap=%zu  preview=\"%s%s\"\n", off, s->size,
+                              s->capacity, preview_buf, s->size > 24 ? "..." : "");
         }
         if (n > 0)
             out.append(header, static_cast<std::size_t>(n));
@@ -370,7 +370,7 @@ bool looks_like_heap(const void* addr) noexcept {
             region = base_mbi.RegionSize;
         }
     }
-    return region >= (256 * 1024);
+    return region >= std::size_t{256} * 1024;
 }
 
 // Lenient: any committed, readable, non-guard page. Used for pointer
@@ -403,8 +403,8 @@ void scan_for_ascii_strings(std::string& out, const std::uint8_t* base, std::siz
             char              preview[33] = {};
             const std::size_t cp          = std::min<std::size_t>(32, len);
             std::memcpy(preview, base + start, cp);
-            int n = std::snprintf(header, sizeof(header), "    [ascii] +0x%03zx  len=%2zu  \"%s%s\"\n", start, len,
-                                  preview, len > 32 ? "..." : "");
+            const int n = std::snprintf(header, sizeof(header), "    [ascii] +0x%03zx  len=%2zu  \"%s%s\"\n", start,
+                                        len, preview, len > 32 ? "..." : "");
             out.append(header, static_cast<std::size_t>(n));
         }
     }
@@ -469,8 +469,8 @@ void dump_pointer_targets(std::string& out, const std::uint8_t* view_buf, std::s
         if (!looks_like_heap(tgt))
             continue;
 
-        int n = std::snprintf(line, sizeof(line), "%s  field +0x%03zx -> 0x%llx (%zu bytes):\n", indent, off,
-                              static_cast<unsigned long long>(v), bytes_per_target);
+        const int n = std::snprintf(line, sizeof(line), "%s  field +0x%03zx -> 0x%llx (%zu bytes):\n", indent, off,
+                                    static_cast<unsigned long long>(v), bytes_per_target);
         out.append(line, static_cast<std::size_t>(n));
         dump_hex_block(out, tgt, bytes_per_target);
         ++reported;
@@ -507,12 +507,12 @@ std::string MetadataInjector::dump_candidates(std::size_t bytes_per_dump) const 
     // Same SEH-safe, refcount-validated heap-arena scan the periodic writer
     // uses -- not the brute-force find_heap_instances, which reads every
     // committed word unguarded and crashed the game during discovery.
-    std::vector<const void*> instances = horizon::game::find_instances_in_heap_arenas(vt_->address, image_);
+    const std::vector<const void*> instances = horizon::game::find_instances_in_heap_arenas(vt_->address, image_);
 
     char header[200];
-    int  n = std::snprintf(header, sizeof(header),
-                           "[discovery] vtable=%p  heap_candidates=%zu  chain_steps=%zu  dump_bytes=%zu\n",
-                           vt_->address, instances.size(), config_.chain_offsets.size(), bytes_per_dump);
+    int n = std::snprintf(header, sizeof(header),
+                          "[discovery] vtable=%p  heap_candidates=%zu  chain_steps=%zu  dump_bytes=%zu\n", vt_->address,
+                          instances.size(), config_.chain_offsets.size(), bytes_per_dump);
     out.append(header, static_cast<std::size_t>(n));
 
     // We pre-scan each candidate, dropping ones that look entirely
@@ -538,7 +538,7 @@ std::string MetadataInjector::dump_candidates(std::size_t bytes_per_dump) const 
     constexpr std::size_t kMaxReport = 3;
     int                   idx        = 0;
     for (const void* instance : active) {
-        if (static_cast<std::size_t>(idx) >= kMaxReport) {
+        if (std::cmp_greater_equal(idx, kMaxReport)) {
             n = std::snprintf(header, sizeof(header), "[discovery] ... %zu more active candidates not shown\n",
                               active.size() - kMaxReport);
             out.append(header, static_cast<std::size_t>(n));
@@ -593,7 +593,7 @@ bool MetadataInjector::read_instance_strings(const void* instance, std::string& 
     if (!vt_)
         return false;
     const auto     vt_addr = reinterpret_cast<std::uintptr_t>(vt_->address);
-    StringSnapshot snap;
+    StringSnapshot snap{};
     read_strings_one(instance, vt_addr, config_, config_.chain_offsets.data(), config_.chain_offsets.size(), &snap);
     if (!snap.ok)
         return false;

@@ -1,0 +1,123 @@
+#pragma once
+
+#include <span>
+#include <string>
+#include <string_view>
+
+namespace horizon::inject {
+
+// The "write our title into one game metadata block, then put the game's
+// original strings back when we stop replacing it" state machine.
+//
+// Extracted from the periodic-writer thread in dllmain.cpp so the transition
+// logic is unit-testable without the game process. The periodic writer still
+// owns instance *selection* (heap scan + FMOD-resolution) and the audio
+// bridge; this class owns only the title write/restore bookkeeping for the
+// single instance the caller selected.
+//
+// The injector is duck-typed (member templates) so tests can drive it with a
+// fake; production passes a MetadataInjector. The injector must provide:
+//   bool read_instance_strings(const void* instance,
+//                              std::string& out_title, std::string& out_artist) const;
+//   int  write_to_instance(const void* instance, std::string_view sound_name,
+//                          std::string_view display_name, std::string_view artist);
+//
+// Not thread-safe: the periodic writer is the only caller and ticks it from a
+// single thread.
+class TitleWriteController {
+public:
+    // Tick where we have a track and an already-selected target. `active_instance`
+    // is the instance the caller chose to replace (may be null when nothing
+    // resolves this tick). `live_instances` is the current heap-scan set, used to
+    // decide whether a previously-written instance is still alive (restore its
+    // original strings) or has already left the scan (just drop our bookkeeping).
+    // Returns the injector's write count (0 when nothing was written).
+    template <class Injector>
+    int on_active(Injector& inj, const void* active_instance, std::span<const void* const> live_instances,
+                  std::string_view sound, std::string_view title, std::string_view artist) {
+        // If we were replacing a different instance, restore it (when still
+        // live) or just forget it (when it has left the scan -- the block may
+        // be freed, so we must not write to it).
+        if (written_instance_ && written_instance_ != active_instance) {
+            if (contains(live_instances, written_instance_))
+                restore(inj);
+            else {
+                written_instance_ = nullptr;
+                saved_valid_      = false;
+            }
+        }
+
+        int n = 0;
+        if (active_instance) {
+            if (written_instance_ != active_instance) {
+                // First touch of this block: snapshot the game's current
+                // title/artist as the restore value.
+                saved_valid_       = inj.read_instance_strings(active_instance, saved_title_, saved_artist_);
+                written_instance_  = active_instance;
+                have_last_written_ = false;
+            } else if (have_last_written_) {
+                // Keep the restore value synced to the game's real track: the
+                // block holds what we wrote last tick UNLESS the game advanced
+                // its own track, in which case it now holds the game's new
+                // title. Comparing against our last write (not our current one)
+                // avoids mistaking our own title for the game's on the tick our
+                // song changes.
+                std::string cur_title, cur_artist;
+                if (inj.read_instance_strings(active_instance, cur_title, cur_artist) &&
+                    (cur_title != last_written_title_ || cur_artist != last_written_artist_)) {
+                    saved_title_  = std::move(cur_title);
+                    saved_artist_ = std::move(cur_artist);
+                    saved_valid_  = true;
+                }
+            }
+            n = inj.write_to_instance(active_instance, sound, title, artist);
+            if (n) {
+                last_written_title_.assign(title);
+                last_written_artist_.assign(artist);
+                have_last_written_ = true;
+            }
+        }
+        return n;
+    }
+
+    // Tick where we are not writing (no track / unresolved): put the game's
+    // original strings back if we currently own a block, so a stopped source
+    // doesn't leave our title frozen on the station.
+    template <class Injector> void on_idle(Injector& inj) {
+        if (written_instance_)
+            restore(inj);
+    }
+
+    bool owns_block() const noexcept {
+        return written_instance_ != nullptr;
+    }
+    const void* written_instance() const noexcept {
+        return written_instance_;
+    }
+
+private:
+    static bool contains(std::span<const void* const> instances, const void* target) {
+        for (const void* inst : instances)
+            if (inst == target)
+                return true;
+        return false;
+    }
+
+    template <class Injector> void restore(Injector& inj) {
+        if (written_instance_ && saved_valid_)
+            inj.write_to_instance(written_instance_, "", saved_title_, saved_artist_);
+        written_instance_  = nullptr;
+        saved_valid_       = false;
+        have_last_written_ = false;
+    }
+
+    const void* written_instance_ = nullptr; // the block we currently replace (null = none)
+    std::string saved_title_;                // game's original title to restore
+    std::string saved_artist_;               //   (kept in sync as the game advances tracks)
+    bool        saved_valid_ = false;
+    std::string last_written_title_; // what WE wrote into the block last tick
+    std::string last_written_artist_;
+    bool        have_last_written_ = false;
+};
+
+} // namespace horizon::inject

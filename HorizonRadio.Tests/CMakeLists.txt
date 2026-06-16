@@ -32,6 +32,7 @@ set(HORIZON_TEST_SOURCES
   test_normalizer.cpp
   test_ring_buffer.cpp
   test_sigscan.cpp
+  test_title_write_controller.cpp
 )
 
 # The production TUs come straight from HORIZON_CORE_SOURCES (defined in
@@ -44,6 +45,14 @@ add_executable(horizon_radio_tests
 
 set_target_properties(horizon_radio_tests PROPERTIES
   OUTPUT_NAME HorizonRadio.Tests)
+
+# Don't run clang-tidy over the test exe. doctest macros + deliberately
+# invalid inputs (out-of-range enum casts, deref-after-REQUIRE) trip
+# clang-analyzer / bugprone false positives that don't apply to shipping
+# code. The production TUs are linted via the `version` target, which
+# compiles the same HORIZON_CORE_SOURCES. (Empty string disables the
+# inherited CMAKE_CXX_CLANG_TIDY for this target.)
+set_target_properties(horizon_radio_tests PROPERTIES CXX_CLANG_TIDY "")
 
 # horizon_common carries the shared include dirs, compile definitions,
 # warning/optimization flags, and (on MinGW) the static-runtime link

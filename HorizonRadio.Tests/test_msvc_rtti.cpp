@@ -17,7 +17,7 @@ public:
     virtual int compute(int x) {
         return x * 31 + 7;
     }
-    virtual int identify() const {
+    [[nodiscard]] virtual int identify() const {
         return 12345;
     }
 };

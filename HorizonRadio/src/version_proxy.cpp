@@ -62,7 +62,7 @@ namespace {
 // the proxy still works on Windows installs that aren't on C:.
 HMODULE real_version_dll() {
     static HMODULE h = []() -> HMODULE {
-        wchar_t path[MAX_PATH];
+        wchar_t    path[MAX_PATH];
         const UINT n = GetSystemDirectoryW(path, MAX_PATH);
         if (n == 0 || n >= MAX_PATH - 12)
             return nullptr;
@@ -72,12 +72,11 @@ HMODULE real_version_dll() {
     return h;
 }
 
-template <typename Fn>
-Fn resolve(const char* name) {
+template <typename Fn> Fn resolve(const char* name) {
     HMODULE h = real_version_dll();
     if (!h)
         return nullptr;
-    return reinterpret_cast<Fn>(reinterpret_cast<void*>(GetProcAddress(h, name)));
+    return reinterpret_cast<Fn>(GetProcAddress(h, name));
 }
 
 } // namespace
@@ -102,6 +101,8 @@ Fn resolve(const char* name) {
 #define HZN_EXPORT_NAME(name)
 #endif
 
+// NOLINTBEGIN(bugprone-macro-parentheses) -- ret_t is a type-name argument;
+// parenthesizing it (the check's suggested fix) is not valid C++ here.
 #define HZN_VERSION_PROXY(ret_t, name, params, args)                                                                   \
     extern "C" HZN_EXPORT ret_t WINAPI name params {                                                                   \
         using Fn      = ret_t(WINAPI*) params;                                                                         \
@@ -111,48 +112,39 @@ Fn resolve(const char* name) {
         return ptr args;                                                                                               \
     }                                                                                                                  \
     HZN_EXPORT_NAME(name)
+// NOLINTEND(bugprone-macro-parentheses)
 
 // Documented (winver.h) exports.
 HZN_VERSION_PROXY(BOOL, GetFileVersionInfoA, (LPCSTR lp, DWORD h, DWORD len, LPVOID data), (lp, h, len, data))
 HZN_VERSION_PROXY(BOOL, GetFileVersionInfoW, (LPCWSTR lp, DWORD h, DWORD len, LPVOID data), (lp, h, len, data))
-HZN_VERSION_PROXY(BOOL,
-                  GetFileVersionInfoExA,
-                  (DWORD flags, LPCSTR lp, DWORD h, DWORD len, LPVOID data),
+HZN_VERSION_PROXY(BOOL, GetFileVersionInfoExA, (DWORD flags, LPCSTR lp, DWORD h, DWORD len, LPVOID data),
                   (flags, lp, h, len, data))
-HZN_VERSION_PROXY(BOOL,
-                  GetFileVersionInfoExW,
-                  (DWORD flags, LPCWSTR lp, DWORD h, DWORD len, LPVOID data),
+HZN_VERSION_PROXY(BOOL, GetFileVersionInfoExW, (DWORD flags, LPCWSTR lp, DWORD h, DWORD len, LPVOID data),
                   (flags, lp, h, len, data))
 HZN_VERSION_PROXY(DWORD, GetFileVersionInfoSizeA, (LPCSTR lp, LPDWORD out), (lp, out))
 HZN_VERSION_PROXY(DWORD, GetFileVersionInfoSizeW, (LPCWSTR lp, LPDWORD out), (lp, out))
 HZN_VERSION_PROXY(DWORD, GetFileVersionInfoSizeExA, (DWORD flags, LPCSTR lp, LPDWORD out), (flags, lp, out))
 HZN_VERSION_PROXY(DWORD, GetFileVersionInfoSizeExW, (DWORD flags, LPCWSTR lp, LPDWORD out), (flags, lp, out))
-HZN_VERSION_PROXY(DWORD,
-                  VerFindFileA,
-                  (DWORD flags, VER_INPUT_STR n, VER_INPUT_STR wdir, VER_INPUT_STR adir, LPSTR cur, PUINT cln, LPSTR out, PUINT oln),
+HZN_VERSION_PROXY(DWORD, VerFindFileA,
+                  (DWORD flags, VER_INPUT_STR n, VER_INPUT_STR wdir, VER_INPUT_STR adir, LPSTR cur, PUINT cln,
+                   LPSTR out, PUINT oln),
                   (flags, n, wdir, adir, cur, cln, out, oln))
-HZN_VERSION_PROXY(DWORD,
-                  VerFindFileW,
-                  (DWORD flags, VER_INPUT_WSTR n, VER_INPUT_WSTR wdir, VER_INPUT_WSTR adir, LPWSTR cur, PUINT cln, LPWSTR out, PUINT oln),
+HZN_VERSION_PROXY(DWORD, VerFindFileW,
+                  (DWORD flags, VER_INPUT_WSTR n, VER_INPUT_WSTR wdir, VER_INPUT_WSTR adir, LPWSTR cur, PUINT cln,
+                   LPWSTR out, PUINT oln),
                   (flags, n, wdir, adir, cur, cln, out, oln))
-HZN_VERSION_PROXY(DWORD,
-                  VerInstallFileA,
-                  (DWORD f, VER_INPUT_STR src, VER_INPUT_STR dest, VER_INPUT_STR sdir, VER_INPUT_STR cdir, VER_INPUT_STR tdir, LPSTR out, PUINT oln),
+HZN_VERSION_PROXY(DWORD, VerInstallFileA,
+                  (DWORD f, VER_INPUT_STR src, VER_INPUT_STR dest, VER_INPUT_STR sdir, VER_INPUT_STR cdir,
+                   VER_INPUT_STR tdir, LPSTR out, PUINT oln),
                   (f, src, dest, sdir, cdir, tdir, out, oln))
-HZN_VERSION_PROXY(DWORD,
-                  VerInstallFileW,
-                  (DWORD f, VER_INPUT_WSTR src, VER_INPUT_WSTR dest, VER_INPUT_WSTR sdir, VER_INPUT_WSTR cdir, VER_INPUT_WSTR tdir, LPWSTR out, PUINT oln),
+HZN_VERSION_PROXY(DWORD, VerInstallFileW,
+                  (DWORD f, VER_INPUT_WSTR src, VER_INPUT_WSTR dest, VER_INPUT_WSTR sdir, VER_INPUT_WSTR cdir,
+                   VER_INPUT_WSTR tdir, LPWSTR out, PUINT oln),
                   (f, src, dest, sdir, cdir, tdir, out, oln))
 HZN_VERSION_PROXY(DWORD, VerLanguageNameA, (DWORD lang, LPSTR buf, DWORD cch), (lang, buf, cch))
 HZN_VERSION_PROXY(DWORD, VerLanguageNameW, (DWORD lang, LPWSTR buf, DWORD cch), (lang, buf, cch))
-HZN_VERSION_PROXY(BOOL,
-                  VerQueryValueA,
-                  (LPCVOID block, LPCSTR sub, LPVOID* out, PUINT pcb),
-                  (block, sub, out, pcb))
-HZN_VERSION_PROXY(BOOL,
-                  VerQueryValueW,
-                  (LPCVOID block, LPCWSTR sub, LPVOID* out, PUINT pcb),
-                  (block, sub, out, pcb))
+HZN_VERSION_PROXY(BOOL, VerQueryValueA, (LPCVOID block, LPCSTR sub, LPVOID* out, PUINT pcb), (block, sub, out, pcb))
+HZN_VERSION_PROXY(BOOL, VerQueryValueW, (LPCVOID block, LPCWSTR sub, LPVOID* out, PUINT pcb), (block, sub, out, pcb))
 
 // GetFileVersionInfoByHandle is undocumented and not in winver.h, so
 // there's no conflicting dllimport declaration — plain dllexport would

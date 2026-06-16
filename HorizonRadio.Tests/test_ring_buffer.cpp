@@ -2,6 +2,7 @@
 #include <doctest/doctest.h>
 #include <horizon/audio/ring_buffer.hpp>
 #include <thread>
+#include <utility>
 #include <vector>
 
 using horizon::audio::SpscRingBuffer;
@@ -82,7 +83,7 @@ TEST_CASE("concurrent producer and consumer preserve order") {
                 chunk[j] = produced + j;
             const std::size_t pushed = rb.push(chunk.data(), batch);
             produced += static_cast<int>(pushed);
-            if (pushed < static_cast<std::size_t>(batch))
+            if (std::cmp_less(pushed, batch))
                 std::this_thread::yield();
         }
     });

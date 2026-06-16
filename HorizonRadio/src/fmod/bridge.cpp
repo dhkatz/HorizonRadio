@@ -155,7 +155,7 @@ bool FmodBridge::install_on_handle(const std::uint32_t handle) noexcept {
         return false;
     }
 
-    Result     add_rc = static_cast<Result>(~0);
+    auto       add_rc = static_cast<Result>(~0);
     const bool add_ok = seh_call([&] { add_rc = hooks_.addDsp(handle_as_channel(handle), 0, dsp); });
     if (!add_ok || add_rc != Result::Ok) {
         seh_call([&] { hooks_.dspRelease(dsp); });
@@ -265,8 +265,11 @@ std::size_t FmodBridge::push_pcm(const std::int16_t* frames, std::size_t frame_c
     return pushed_frames;
 }
 
+// outchannels is dictated by FMOD's FMOD_DSP_READCALLBACK ABI; it can't be
+// pointer-to-const without breaking the function-pointer type FMOD expects.
 Result FmodBridge::read_trampoline(DspState* /*state*/, float* /*in_buffer*/, float* out_buffer,
-                                   const unsigned int length, int /*inchannels*/, int* outchannels) {
+                                   const unsigned int length, int /*inchannels*/,
+                                   int*               outchannels) { // NOLINT(readability-non-const-parameter)
     auto*     bridge       = g_active_bridge.load(std::memory_order_acquire);
     const int channels_out = (outchannels != nullptr) ? *outchannels : 0;
     if (!bridge || channels_out <= 0 || out_buffer == nullptr) {
@@ -353,13 +356,13 @@ Result FmodBridge::read(float* out_buffer, const unsigned int length, const int 
 
     if (!do_resample) {
         // 1:1 path -- pop frame, emit. Source and channel rates match.
-        std::array<std::int16_t, kMaxBlockFrames * kChannels> scratch;
+        std::array<std::int16_t, kMaxBlockFrames * kChannels> scratch{};
         const std::size_t samples_needed = static_cast<std::size_t>(length) * kChannels;
         const std::size_t samples_got    = ring_.pop(scratch.data(), samples_needed);
         const std::size_t frames_got     = samples_got / kChannels;
         for (std::size_t f = 0; f < frames_got; ++f) {
-            const float L = scratch[2 * f] * kInv32768;
-            const float R = scratch[2 * f + 1] * kInv32768;
+            const float L = static_cast<float>(scratch[2 * f]) * kInv32768;
+            const float R = static_cast<float>(scratch[2 * f + 1]) * kInv32768;
             write_frame(f, L, R);
         }
         if (frames_got < length) {
@@ -390,8 +393,8 @@ Result FmodBridge::read(float* out_buffer, const unsigned int length, const int 
             have_cur_ = true;
         }
         const double t = resample_phase_;
-        const float  L = static_cast<float>(((static_cast<double>(cur_l_) - prev_l_) * t + prev_l_) * kInv32768);
-        const float  R = static_cast<float>(((static_cast<double>(cur_r_) - prev_r_) * t + prev_r_) * kInv32768);
+        const auto   L = static_cast<float>(((static_cast<double>(cur_l_) - prev_l_) * t + prev_l_) * kInv32768);
+        const auto   R = static_cast<float>(((static_cast<double>(cur_r_) - prev_r_) * t + prev_r_) * kInv32768);
         write_frame(f, L, R);
 
         resample_phase_ += kResampleStep;

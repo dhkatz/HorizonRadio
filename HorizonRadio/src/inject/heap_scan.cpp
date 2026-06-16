@@ -39,7 +39,7 @@ void find_heap_instances_streaming(const void* target, std::vector<const void*>&
     const auto*              cursor               = static_cast<const std::byte*>(nullptr);
     std::size_t              bytes_since_progress = 0;
     std::size_t              bytes_total          = 0;
-    constexpr std::size_t    kProgressInterval    = 64 * 1024 * 1024;
+    constexpr std::size_t    kProgressInterval    = std::size_t{64} * 1024 * 1024;
 
     while (VirtualQuery(cursor, &mbi, sizeof(mbi)) == sizeof(mbi)) {
         if (region_is_scannable(mbi)) {

@@ -14,7 +14,7 @@ template <typename Fn> Fn resolve_one(const inject::PeImage& image, const Signat
     if (sig.empty())
         return nullptr;
 
-    const std::byte* hit;
+    const std::byte* hit = nullptr;
     if (sig.anchor.empty()) {
         hit = horizon::inject::find_function_by_pattern(image, sig.pattern);
     } else {

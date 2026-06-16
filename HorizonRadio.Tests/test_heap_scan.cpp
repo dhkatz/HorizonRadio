@@ -14,7 +14,7 @@ using namespace horizon::inject;
 class HorizonHeapScanTarget {
 public:
     virtual ~HorizonHeapScanTarget() = default;
-    virtual int identifier() const {
+    [[nodiscard]] virtual int identifier() const {
         return 0xBEE;
     }
     // Padding fields so a candidate match at the vtable position is
@@ -42,7 +42,7 @@ TEST_CASE("find_heap_instances locates live instances by their vtable") {
     auto instances = find_heap_instances(*vt);
 
     auto contains = [&](const void* p) {
-        return std::find(instances.begin(), instances.end(), p) != instances.end();
+        return std::ranges::find(instances, p) != instances.end();
     };
     CHECK(contains(a.get()));
     CHECK(contains(b.get()));
