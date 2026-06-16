@@ -697,7 +697,8 @@ void poll_game_events(void* radio_state) {
                         // until found (fast attach), then back off to
                         // kRescanIters once we have instances.
                         static std::vector<const void*> cached_instances;
-                        std::vector<const void*>&       instances     = cached_instances;
+                        // Read-only alias; the scan reassigns cached_instances directly below.
+                        const std::vector<const void*>& instances     = cached_instances;
                         const int                       scan_interval = cached_instances.empty() ? 4 : kRescanIters;
                         if (radio_state && (iter % scan_interval == 0)) {
                             const auto t0    = std::chrono::steady_clock::now();
