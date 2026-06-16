@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using HorizonRadio.Core.Sources.Config;
 
 namespace HorizonRadio.Core.Audio;
@@ -15,12 +16,22 @@ public sealed class PreviewController : IDisposable
     private readonly TeePcmSink _tee;
     private readonly SourceConfigStore _store;
     private SpeakerPcmSink? _speaker;
+
+    // Volume persistence is debounced: a slider drag fires SetVolume dozens of
+    // times, so we coalesce them and write the store once the slider goes quiet.
+    // _persistLock serializes the disk write against the device/enable-change
+    // paths (UI thread) and the debounce timer (thread pool). Without the
+    // timer the position was only saved on Dispose, so a crash lost it.
+    private readonly object _persistLock = new();
+    private readonly Timer _persistTimer;
+    private static readonly TimeSpan PersistDebounce = TimeSpan.FromMilliseconds(800);
     private bool _volumeDirty;
 
     public PreviewController(TeePcmSink tee, SourceConfigStore store)
     {
         _tee = tee;
         _store = store;
+        _persistTimer = new Timer(_ => FlushVolumeIfDirty(), null, Timeout.Infinite, Timeout.Infinite);
         Enabled = store.PreviewEnabled;
         DeviceId = store.PreviewDeviceId;
         Volume = store.PreviewVolume;
@@ -72,11 +83,25 @@ public sealed class PreviewController : IDisposable
         // Volume is the raw slider *position*; the speaker takes a linear gain.
         // Run it through the perceptual taper so the fader eases down smoothly.
         if (_speaker != null) _speaker.Volume = VolumeTaper.ToGain(volume);
-        // Update the in-memory pref but don't hit disk on every slider tick —
-        // a drag fires this dozens of times. Flushed on Dispose, or sooner by
-        // the next enable/device change (which persist the whole store).
-        _store.PreviewVolume = volume;
-        _volumeDirty = true;
+        // Don't hit disk on every slider tick — a drag fires this dozens of
+        // times. Update the in-memory pref and (re)arm the debounce timer so the
+        // value lands on disk shortly after the slider goes quiet.
+        lock (_persistLock)
+        {
+            _store.PreviewVolume = volume;
+            _volumeDirty = true;
+        }
+        _persistTimer.Change(PersistDebounce, Timeout.InfiniteTimeSpan);
+    }
+
+    private void FlushVolumeIfDirty()
+    {
+        lock (_persistLock)
+        {
+            if (!_volumeDirty) return;
+            _store.SaveToDisk();
+            _volumeDirty = false;
+        }
     }
 
     private void StartSpeaker()
@@ -109,12 +134,17 @@ public sealed class PreviewController : IDisposable
 
     private void Persist()
     {
-        _store.SaveToDisk();
-        _volumeDirty = false;
+        lock (_persistLock)
+        {
+            _store.SaveToDisk();
+            _volumeDirty = false;
+        }
     }
 
     public void Dispose()
     {
+        _persistTimer.Dispose();
+        // Flush any volume change that hadn't hit its debounce window yet.
         if (_volumeDirty) Persist();
         _tee.SetPrimaryEnabled(true);
         _tee.DetachPreview();
