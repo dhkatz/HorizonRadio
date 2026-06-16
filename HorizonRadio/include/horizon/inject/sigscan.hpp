@@ -21,34 +21,34 @@ class PeImage {
 public:
     explicit PeImage(HMODULE module);
 
-    bool valid() const noexcept {
+    [[nodiscard]] bool valid() const noexcept {
         return base_ != nullptr;
     }
 
-    std::uintptr_t base() const noexcept {
+    [[nodiscard]] std::uintptr_t base() const noexcept {
         return reinterpret_cast<std::uintptr_t>(base_);
     }
-    std::size_t image_size() const noexcept {
+    [[nodiscard]] std::size_t image_size() const noexcept {
         return image_size_;
     }
 
-    std::span<const std::byte> text() const noexcept {
+    [[nodiscard]] std::span<const std::byte> text() const noexcept {
         return text_;
     }
-    std::span<const std::byte> rdata() const noexcept {
+    [[nodiscard]] std::span<const std::byte> rdata() const noexcept {
         return rdata_;
     }
     // MSVC emits TypeDescriptor structs into .data (not .rdata), because
     // the `spare` field is mutated at runtime by the type_info demangle
     // cache. Same for the test exe and for FH6.
-    std::span<const std::byte> data() const noexcept {
+    [[nodiscard]] std::span<const std::byte> data() const noexcept {
         return data_;
     }
 
     // Runtime function table (.pdata). Each entry's BeginAddress and
     // EndAddress are RVAs relative to base(); used to map an arbitrary
     // instruction address back to its enclosing function.
-    std::span<const RUNTIME_FUNCTION> pdata() const noexcept {
+    [[nodiscard]] std::span<const RUNTIME_FUNCTION> pdata() const noexcept {
         return pdata_;
     }
 

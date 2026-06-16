@@ -7,9 +7,14 @@
 #     for fixed game-struct fields, printf-style debug logging (vararg);
 #   * high-noise / low-signal checks -- include-cleaner (transitive includes),
 #     easily-swappable-parameters, misplaced-const (false-positives on Win32
-#     HANDLE typedefs), no-recursion;
+#     HANDLE typedefs), no-recursion, optin.performance.Padding (field-reorder
+#     micro-opt);
+#   * deliberate API/layout choices -- public members on the plain config/hook
+#     aggregates (SignaturePattern, ResolvedHooks), const-ref members in the
+#     short-lived resolver helpers, enum-size on Result (its base type is part
+#     of the FMOD-facing ABI);
 #   * style-only -- trailing-return-type, identifier naming/length, cognitive
-#     complexity.
+#     complexity, pragma-once (the codebase standardizes on #pragma once).
 # Re-enable any of these if you want a dedicated pass.
 Checks: >
   clang-analyzer-*,
@@ -30,7 +35,9 @@ Checks: >
   readability-static-accessed-through-instance,
   -bugprone-easily-swappable-parameters,
   -clang-analyzer-optin.core.EnumCastOutOfRange,
+  -clang-analyzer-optin.performance.Padding,
   -cppcoreguidelines-avoid-c-arrays,
+  -cppcoreguidelines-avoid-const-or-ref-data-members,
   -cppcoreguidelines-avoid-magic-numbers,
   -cppcoreguidelines-avoid-non-const-global-variables,
   -cppcoreguidelines-owning-memory,
@@ -45,18 +52,30 @@ Checks: >
   -misc-include-cleaner,
   -misc-misplaced-const,
   -misc-no-recursion,
+  -misc-non-private-member-variables-in-classes,
   -modernize-avoid-c-arrays,
   -modernize-use-trailing-return-type,
+  -performance-enum-size,
   -performance-no-int-to-ptr,
+  -portability-avoid-pragma-once,
   -readability-function-cognitive-complexity,
   -readability-identifier-length,
   -readability-identifier-naming,
   -readability-magic-numbers
 WarningsAsErrors: '*'
-HeaderFilterRegex: '^(HorizonRadio|HorizonRadio\.Tests)[/\\]'
+# Matches the (absolute) header paths clang-tidy emits, e.g.
+# .../HorizonRadio/include/horizon/.... Scoped to our own include/horizon tree
+# rather than just "HorizonRadio/" so it can't accidentally lint vendored or
+# generated headers (FetchContent's _deps, build outputs) once CI checks the
+# repo out under a ...\HorizonRadio\HorizonRadio\ path. Not ^-anchored: the path
+# is absolute, so an anchor would match nothing and silently un-lint everything.
+HeaderFilterRegex: '[/\\]include[/\\]horizon[/\\]'
 FormatStyle: file
-# Parse with exceptions enabled. The MSVC build relies on its lenient
-# default (throw/try compile without /EHsc), but clang-tidy's clang-cl
-# frontend treats throw/try as hard errors unless exceptions are on, which
-# would otherwise break analysis of sigscan/ipc_server and every doctest TU.
-ExtraArgs: ['/EHsc']
+# /EHsc: parse with exceptions on. The MSVC build relies on its lenient default
+# (throw/try compile without /EHsc), but clang-tidy's clang-cl frontend treats
+# throw/try as hard errors unless exceptions are on, which would otherwise break
+# analysis of sigscan/ipc_server and every doctest TU.
+# -Wno-unused-command-line-argument: clang-cl ignores some MSVC-only flags CMake
+# passes (e.g. Release's /GL); WarningsAsErrors would otherwise promote that
+# benign notice to a failure.
+ExtraArgs: ['/EHsc', '-Wno-unused-command-line-argument']

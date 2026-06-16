@@ -29,6 +29,12 @@ public:
     PcmPipeServer() noexcept;
     ~PcmPipeServer();
 
+    // Owns a worker thread + pipe handle; not copyable or movable.
+    PcmPipeServer(const PcmPipeServer&)            = delete;
+    PcmPipeServer& operator=(const PcmPipeServer&) = delete;
+    PcmPipeServer(PcmPipeServer&&)                 = delete;
+    PcmPipeServer& operator=(PcmPipeServer&&)      = delete;
+
     void start(pcm_callback on_pcm);
     void stop();
 

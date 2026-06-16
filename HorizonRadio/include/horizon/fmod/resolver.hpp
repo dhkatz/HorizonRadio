@@ -22,10 +22,10 @@ namespace horizon::fmod {
 //     .pdata function starts. Used for leaf functions FMOD doesn't
 //     reference by name string (Handle::unlock and friends).
 struct SignaturePattern {
-    std::string_view anchor{};
-    std::string_view pattern{};
+    std::string_view anchor;
+    std::string_view pattern;
 
-    bool empty() const noexcept {
+    [[nodiscard]] bool empty() const noexcept {
         return pattern.empty();
     }
 };
@@ -60,7 +60,7 @@ struct ResolverReport {
     // isn't in .text at DllMain time. We construct the bridge anyway
     // and resolve createDsp on the first install attempt via
     // FmodBridge::set_create_dsp_resolver.
-    bool ready() const noexcept {
+    [[nodiscard]] bool ready() const noexcept {
         return addDsp && removeDsp && dspRelease && handleOpen;
     }
 };
@@ -80,7 +80,7 @@ public:
     // see which slots were filled.
     ResolvedHooks resolve();
 
-    const ResolverReport& report() const noexcept {
+    [[nodiscard]] const ResolverReport& report() const noexcept {
         return report_;
     }
 

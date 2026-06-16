@@ -53,11 +53,15 @@ struct DspDescription {
     void* sys_mix;
 };
 
+// A macro is the only portable way to compute a member offset as a constant
+// expression here; a constexpr template can't replace __builtin_offsetof.
+// NOLINTBEGIN(cppcoreguidelines-macro-usage)
 #if defined(__clang__) || defined(__GNUC__)
 #define HORIZON_OFFSETOF(type, member) __builtin_offsetof(type, member)
 #else
 #define HORIZON_OFFSETOF(type, member) offsetof(type, member)
 #endif
+// NOLINTEND(cppcoreguidelines-macro-usage)
 
 static_assert(sizeof(unsigned int) == 4, "FMOD ABI expects 32-bit int");
 static_assert(sizeof(void*) == 8, "x64 only");

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <span>
 #include <string>
 #include <string_view>
@@ -39,7 +40,9 @@ public:
         // live) or just forget it (when it has left the scan -- the block may
         // be freed, so we must not write to it).
         if (written_instance_ && written_instance_ != active_instance) {
-            if (contains(live_instances, written_instance_))
+            // std::ranges::find (C++20), not ranges::contains (C++23): the
+            // clang+mingw cross build's libstdc++ may predate contains.
+            if (std::ranges::find(live_instances, written_instance_) != live_instances.end())
                 restore(inj);
             else {
                 written_instance_ = nullptr;
@@ -88,21 +91,14 @@ public:
             restore(inj);
     }
 
-    bool owns_block() const noexcept {
+    [[nodiscard]] bool owns_block() const noexcept {
         return written_instance_ != nullptr;
     }
-    const void* written_instance() const noexcept {
+    [[nodiscard]] const void* written_instance() const noexcept {
         return written_instance_;
     }
 
 private:
-    static bool contains(std::span<const void* const> instances, const void* target) {
-        for (const void* inst : instances)
-            if (inst == target)
-                return true;
-        return false;
-    }
-
     template <class Injector> void restore(Injector& inj) {
         if (written_instance_ && saved_valid_)
             inj.write_to_instance(written_instance_, "", saved_title_, saved_artist_);

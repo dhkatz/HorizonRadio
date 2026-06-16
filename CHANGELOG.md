@@ -17,7 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `auto`-on-cast, widening/sign-comparison fixes, `noexcept` global ctors,
   uninitialized-variable/member fixes, and a full const-correctness pass. A new
   CI job lints the production translation units with `WarningsAsErrors` so
-  regressions can't merge.
+  regressions can't merge. Headers are now covered too (an anchored
+  `HeaderFilterRegex` had been silently excluding them), adding `[[nodiscard]]`,
+  rule-of-5 on the thread-owning IPC/PCM servers, and dead-code removal.
 
 ## [0.6.0] - 2026-06-15
 

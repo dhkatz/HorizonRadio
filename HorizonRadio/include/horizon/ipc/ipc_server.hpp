@@ -36,6 +36,12 @@ public:
     IpcServer() noexcept;
     ~IpcServer();
 
+    // Owns a worker thread + pipe handle; not copyable or movable.
+    IpcServer(const IpcServer&)            = delete;
+    IpcServer& operator=(const IpcServer&) = delete;
+    IpcServer(IpcServer&&)                 = delete;
+    IpcServer& operator=(IpcServer&&)      = delete;
+
     // Start the listener thread. Idempotent; calling twice is a no-op.
     void start();
 

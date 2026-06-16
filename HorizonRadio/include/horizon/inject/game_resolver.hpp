@@ -21,7 +21,7 @@ public:
     // the RIP-relative displacement, and return the address of the
     // global it loads from. Returns nullptr if the pattern is missing
     // or the MOV bytes don't match the expected `48 8B 1D` prefix.
-    void* resolve_global_via_rip_load(std::string_view pattern, std::ptrdiff_t mov_offset_in_match) const;
+    [[nodiscard]] void* resolve_global_via_rip_load(std::string_view pattern, std::ptrdiff_t mov_offset_in_match) const;
 
 private:
     const inject::PeImage& image_;
@@ -45,7 +45,7 @@ private:
 // Caps at `max_hits` candidates to bound scan time; with the filters
 // applied, real candidates are typically <10.
 std::vector<const void*> find_instances_in_heap_arenas(const void* expected_vtable, const inject::PeImage& image,
-                                                       std::size_t min_region_bytes = 64 * 1024,
+                                                       std::size_t min_region_bytes = std::size_t{64} * 1024,
                                                        std::size_t max_hits         = 64);
 
 } // namespace horizon::game
