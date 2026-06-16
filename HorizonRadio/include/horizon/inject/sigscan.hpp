@@ -10,13 +10,9 @@
 
 namespace horizon::inject {
 
-// View into a loaded PE module. Construction parses the NT headers from
-// the in-memory image (not the on-disk file: section addresses are RVAs
-// relative to the loaded base, not file offsets).
-//
-// Used by the FMOD bridge to scan for byte signatures in the game's
-// .text section and by the metadata injector to find RTTI structures
-// in .rdata. Source-agnostic -- nothing in here knows about audio.
+// View into a loaded PE module; parses NT headers from the in-memory image
+// (section addresses are loaded RVAs, not file offsets). Used for byte-signature
+// scans in .text and RTTI lookups in .rdata.
 class PeImage {
 public:
     explicit PeImage(HMODULE module);
@@ -98,11 +94,9 @@ PatternSet compile_pattern_set(std::string_view ida_style);
 // than every alternative.
 bool match_pattern_set_at(std::span<const std::byte> haystack, const PatternSet& set);
 
-// Finds NUL-terminated occurrences of `needle` in `haystack`. Both
-// the byte preceding the match and the byte following it must be
-// `\0` (or the match must start at haystack[0]) so we don't pick up
-// the tail of a longer string. Used to locate FMOD anchor strings
-// like "ChannelControl::addDSP" in .rdata.
+// NUL-terminated occurrences of `needle` (preceding + following byte must be
+// `\0`, so we don't match the tail of a longer string). Locates FMOD anchor
+// strings like "ChannelControl::addDSP" in .rdata.
 std::vector<const std::byte*> find_anchor_strings(std::span<const std::byte> haystack, std::string_view needle);
 
 // Walks `text` looking for x64 `lea reg, [rip + disp32]` instructions
@@ -166,11 +160,9 @@ struct AnchorResolution {
     std::size_t      prologue_match_count = 0;
     const std::byte* result               = nullptr;
 
-    // The first few enclosing-function addresses (deduplicated, in
-    // discovery order). Populated even when status == no_prologue_match
-    // or ambiguous, so callers can dump the actual prologue bytes
-    // and either widen the alternation or pick a better disambiguator.
-    // Capped at 4 to keep the result small.
+    // First few enclosing-function addresses (deduped), populated even on
+    // no_prologue_match/ambiguous so callers can dump prologue bytes and widen
+    // the alternation. Capped at 4.
     std::array<const std::byte*, 4> enclosing_functions{};
 };
 

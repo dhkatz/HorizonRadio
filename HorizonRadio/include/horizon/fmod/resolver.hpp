@@ -6,21 +6,10 @@
 
 namespace horizon::fmod {
 
-// One signature entry: optional FMOD anchor string + a pattern
-// (alternation via `|`). Empty `pattern` means "skip this slot"; the
-// resolver leaves it null and reports `false`.
-//
-// Two resolution modes:
-//
-//   Non-empty `anchor`: find the anchor string in .rdata, find every
-//     `lea reg, [rip+disp32]` in .text whose target is the anchor,
-//     and walk back via .pdata to the enclosing function. Accept the
-//     unique function whose prologue matches `pattern`. Robust
-//     against prologue variations and reordering of unrelated code.
-//
-//   Empty `anchor`: scan .text directly for `pattern`, preferring
-//     .pdata function starts. Used for leaf functions FMOD doesn't
-//     reference by name string (Handle::unlock and friends).
+// One signature entry: optional anchor string + pattern (alternation via `|`).
+// Empty `pattern` skips the slot. Non-empty `anchor` => anchored resolution
+// (.rdata string -> referencing lea -> .pdata enclosing fn); empty `anchor` =>
+// direct .text scan. See docs/architecture.md -> "Signature resolution".
 struct SignaturePattern {
     std::string_view anchor;
     std::string_view pattern;
@@ -53,24 +42,16 @@ struct ResolverReport {
     bool handleOpen   = false;
     bool handleUnlock = false;
 
-    // Required for any DSP install path: addDsp/removeDsp/dspRelease
-    // plus handleOpen for live-channel validation. createDsp is
-    // intentionally omitted — FMOD lazy-loads its System::createDSP
-    // code path on certain FH6 builds, so the LEA we anchor against
-    // isn't in .text at DllMain time. We construct the bridge anyway
-    // and resolve createDsp on the first install attempt via
-    // FmodBridge::set_create_dsp_resolver.
+    // Required for the DSP install path. createDsp is intentionally omitted: FMOD
+    // lazy-loads it, so the bridge resolves it on first install instead.
     [[nodiscard]] bool ready() const noexcept {
         return addDsp && removeDsp && dspRelease && handleOpen;
     }
 };
 
 // Resolves FMOD function pointers in a loaded module by byte signature.
-//
-// Game-agnostic: signatures are passed in, not hardcoded. When FH6
-// patches and the patterns drift, we update SignatureSet rather than
-// touching the resolver itself. The same class works for any future
-// game whose FMOD entry points we want to find.
+// Game-agnostic: signatures are passed in (update SignatureSet on drift, not
+// this class).
 class FmodResolver {
 public:
     FmodResolver(const inject::PeImage& image, SignatureSet sigs);

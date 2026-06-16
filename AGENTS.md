@@ -51,6 +51,10 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   `source_changed`, `game_event`, and `debug` events; the UI sends `set_track`,
   `set_gain`, and `set_target_station` commands.
 
+For the code-level internals of the native side — thread model, audio/metadata
+data flow, signature resolution, the SEH strategy, and the full IPC wire
+protocol — see [`docs/architecture.md`](docs/architecture.md).
+
 ## Building
 
 The C++ side builds with CMake (`CMakeLists.txt`) via the `windows-x64`

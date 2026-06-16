@@ -1,32 +1,8 @@
-// version.dll proxy forwarders.
-//
-// The game loads this DLL as `version.dll` from its own directory
-// (Windows search order finds it before the system copy). Every
-// export of the real C:\Windows\System32\version.dll must therefore
-// be present here, or the game crashes during its module init. We
-// implement each as a thin trampoline that lazy-loads the real OS
-// version.dll and calls through.
-//
-// Why trampolines instead of PE forwarder records (the historical
-// `#pragma comment(linker, "/export:Name=path.Name")` approach):
-// path-qualified forwarders are MSVC linker syntax — clang in MinGW
-// target mode silently drops them, and `.def` EXPORTS without a path
-// would recurse on our own DLL. Trampolines compile under both
-// toolchains, removing the cross-compile blocker.
-//
-// How each trampoline is exported differs by compiler, because
-// <winver.h> declares all 16 documented entry points with WINBASEAPI
-// (dllimport):
-//   - clang+MinGW: define them `__declspec(dllexport)`. MinGW only
-//     warns (-Winconsistent-dllimport) about the dllimport→dllexport
-//     mismatch and still exports our implementation. This is the path
-//     the Linux/macOS cross build relies on.
-//   - MSVC: the same mismatch is a hard error (C2375, "redefinition;
-//     different linkage" — not a suppressible warning), so we instead
-//     define them with normal linkage (which matches the header and
-//     compiles clean) and export each via
-//     `#pragma comment(linker, "/EXPORT:Name")`. No `=path`, so it
-//     exports our trampoline rather than forwarding — no recursion.
+// version.dll proxy forwarders: thin trampolines that lazy-load the real
+// C:\Windows\System32\version.dll and call through, so FH6 (which loads us as
+// version.dll) doesn't crash on a missing export. Why trampolines over PE
+// forwarders, and the per-compiler export mechanism: docs/architecture.md ->
+// "version.dll proxy".
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -42,11 +18,8 @@
 #pragma clang diagnostic ignored "-Winconsistent-dllimport"
 #endif
 
-// MSVC's winver.h declares VerFindFile* / VerInstallFile* with
-// LPCSTR / LPCWSTR for the input-string params; mingw-w64's declares
-// them with LPSTR / LPWSTR (no const). C++ requires our definitions
-// to match the prior declarations exactly, so we pick the right
-// spelling per compiler.
+// Input-string params: MSVC's winver.h uses LPCSTR/LPCWSTR, mingw-w64's uses
+// LPSTR/LPWSTR. Our definitions must match the prior declaration exactly.
 #if defined(_MSC_VER) && !defined(__clang__)
 using VER_INPUT_STR  = LPCSTR;
 using VER_INPUT_WSTR = LPCWSTR;
@@ -57,9 +30,8 @@ using VER_INPUT_WSTR = LPWSTR;
 
 namespace {
 
-// Lazy-load the real C:\Windows\System32\version.dll once. The
-// system-directory path is read at runtime via GetSystemDirectoryW so
-// the proxy still works on Windows installs that aren't on C:.
+// Lazy-load the real version.dll once. System dir resolved at runtime so this
+// works on installs that aren't on C:.
 HMODULE real_version_dll() {
     static HMODULE h = []() -> HMODULE {
         wchar_t    path[MAX_PATH];
@@ -81,18 +53,10 @@ template <typename Fn> Fn resolve(const char* name) {
 
 } // namespace
 
-// One macro per trampoline. Defines a function whose name and
-// signature match a real version.dll export, looks the real one up
-// once via GetProcAddress, and forwards. The static caches the
-// resolved pointer.
-//
-// Return type is taken verbatim — for BOOL functions, returning
-// `Ret{}` (zero) on failure mirrors the real version.dll's behavior
-// when given a bad input.
-//
-// HZN_EXPORT / HZN_EXPORT_NAME select the per-compiler export
-// mechanism described in the file header: dllexport on clang+MinGW,
-// normal linkage plus a `/EXPORT:` linker pragma on MSVC.
+// One trampoline per export: forward to the resolved real function (cached),
+// returning `ret_t{}` on resolve failure. HZN_EXPORT/HZN_EXPORT_NAME select the
+// per-compiler export mechanism (dllexport on clang+MinGW, /EXPORT: pragma on
+// MSVC) -- see docs/architecture.md.
 #if defined(_MSC_VER) && !defined(__clang__)
 #define HZN_EXPORT
 #define HZN_EXPORT_NAME(name) __pragma(comment(linker, "/EXPORT:" #name))

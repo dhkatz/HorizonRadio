@@ -7,24 +7,15 @@
 
 namespace horizon::inject {
 
-// The "write our title into one game metadata block, then put the game's
-// original strings back when we stop replacing it" state machine.
+// Owns the "write our title into one game metadata block, then restore the
+// game's originals when we stop" bookkeeping for the single instance the
+// periodic writer picked (the writer owns instance selection). Extracted so the
+// transition logic is unit-testable; see docs/architecture.md -> "Metadata
+// path". Not thread-safe (the writer is the only caller).
 //
-// Extracted from the periodic-writer thread in dllmain.cpp so the transition
-// logic is unit-testable without the game process. The periodic writer still
-// owns instance *selection* (heap scan + FMOD-resolution) and the audio
-// bridge; this class owns only the title write/restore bookkeeping for the
-// single instance the caller selected.
-//
-// The injector is duck-typed (member templates) so tests can drive it with a
-// fake; production passes a MetadataInjector. The injector must provide:
-//   bool read_instance_strings(const void* instance,
-//                              std::string& out_title, std::string& out_artist) const;
-//   int  write_to_instance(const void* instance, std::string_view sound_name,
-//                          std::string_view display_name, std::string_view artist);
-//
-// Not thread-safe: the periodic writer is the only caller and ticks it from a
-// single thread.
+// Injector is duck-typed so tests can pass a fake; it must provide:
+//   bool read_instance_strings(const void*, std::string& title, std::string& artist) const;
+//   int  write_to_instance(const void*, std::string_view sound, title, artist);
 class TitleWriteController {
 public:
     // Tick where we have a track and an already-selected target. `active_instance`
