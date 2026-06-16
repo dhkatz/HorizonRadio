@@ -221,9 +221,19 @@ public partial class App : Application
             _runner.ActiveSourceChanged += _ => PushStation();
 
             // The master volume slider doubles as an in-game pre-amp: push its
-            // tapered gain to the bridge on every change, and re-assert on
-            // (re)connect since the DLL resets to its conservative default.
-            void PushGain() => _ipc?.SendMasterVolume(VolumeTaper.ToGain(vm.NowPlaying.PreviewVolume));
+            // tapered gain to the bridge on every change (live feedback while
+            // dragging is intentional), and re-assert on (re)connect since the
+            // DLL resets to its conservative default. Skip resends of an
+            // unchanged value so a jiggle within one gain step — or a reconnect
+            // at the same level — doesn't spam the pipe; `force` overrides the
+            // dedup on connect, where the DLL genuinely needs the value again.
+            var lastSentGain = float.NaN;
+            void PushGain(bool force = false)
+            {
+                var gain = VolumeTaper.ToGain(vm.NowPlaying.PreviewVolume);
+                if (!force && gain.Equals(lastSentGain)) return;
+                if (_ipc?.SendMasterVolume(gain) == true) lastSentGain = gain;
+            }
 
             vm.NowPlaying.MasterVolumeChanged += _ => PushGain();
 
@@ -231,7 +241,7 @@ public partial class App : Application
             {
                 Dispatcher.UIThread.Post(() => vm.SetConnection(ConnectionState.Connected));
                 PushStation();
-                PushGain();
+                PushGain(force: true);
             };
             _ipc.Disconnected += () => Dispatcher.UIThread.Post(() => vm.SetConnection(ConnectionState.Disconnected));
             _ipc.StatsUpdated += s => Dispatcher.UIThread.Post(() => vm.Stats.Apply(s));

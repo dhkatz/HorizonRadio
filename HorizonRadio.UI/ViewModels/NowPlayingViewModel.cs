@@ -98,14 +98,10 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     /// IPC-unaware — mirrors the station-target wiring.</summary>
     public event Action<double>? MasterVolumeChanged;
 
-    /// <summary>Mute state for the local monitor. Toggled by clicking the volume
+    /// <summary>Mute state for the master volume. Toggled by clicking the volume
     /// icon; remembers the pre-mute level to restore on unmute.</summary>
     [ObservableProperty] private bool isMuted;
     private double _volumeBeforeMute = 1.0;
-
-    /// <summary>True when a local device (not the in-game bridge) is the chosen
-    /// output — gates the volume slider's enabled state.</summary>
-    public bool IsLocalOutput => SelectedOutput is { IsBridge: false };
 
     private readonly SourceRunner? _runner;
     private readonly SourceConfigStore? _store;
@@ -350,7 +346,6 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
 
     partial void OnSelectedOutputChanged(OutputTarget? value)
     {
-        OnPropertyChanged(nameof(IsLocalOutput));
         if (_preview == null || value == null) return;
         if (value.IsBridge)
         {

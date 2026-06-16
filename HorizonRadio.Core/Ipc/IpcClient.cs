@@ -67,25 +67,23 @@ public sealed class IpcClient(string pipeName = IpcClient.DefaultPipeName) : IAs
     /// false when the pipe isn't connected. Independent of the user's master
     /// volume pre-amp (<see cref="SendMasterVolume"/>); the bridge multiplies
     /// the two so ducking doesn't overwrite the slider.</summary>
-    public bool SendGain(float gain)
-    {
-        if (gain < 0f) gain = 0f;
-        if (gain > 1f) gain = 1f;
-        var line = string.Create(CultureInfo.InvariantCulture,
-            $"{{\"cmd\":\"set_gain\",\"gain\":{gain:0.###}}}\n");
-        return SendRaw(line);
-    }
+    public bool SendGain(float gain) => SendGainCommand("set_gain", "gain", gain);
 
     /// <summary>Set the bridge's user pre-amp gain (0..1) — the in-app volume
     /// slider's tapered gain applied to in-game audio. Best-effort; returns
     /// false when the pipe isn't connected (re-asserted on reconnect, since the
     /// DLL resets to its conservative default).</summary>
-    public bool SendMasterVolume(float gain)
+    public bool SendMasterVolume(float gain) => SendGainCommand("set_master_volume", "volume", gain);
+
+    /// <summary>Emit a clamped {cmd, field: gain} command. Six decimals so the
+    /// wire value reproduces the slider's cubic-tapered gain exactly (e.g. the
+    /// 0.75 default → 0.421875, matching the bridge's cold-start default) and
+    /// low positions don't round to silence.</summary>
+    private bool SendGainCommand(string cmd, string field, float gain)
     {
-        if (gain < 0f) gain = 0f;
-        if (gain > 1f) gain = 1f;
+        gain = Math.Clamp(gain, 0f, 1f);
         var line = string.Create(CultureInfo.InvariantCulture,
-            $"{{\"cmd\":\"set_master_volume\",\"volume\":{gain:0.###}}}\n");
+            $"{{\"cmd\":\"{cmd}\",\"{field}\":{gain:0.######}}}\n");
         return SendRaw(line);
     }
 

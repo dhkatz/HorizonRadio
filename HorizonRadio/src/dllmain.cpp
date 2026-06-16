@@ -3,12 +3,14 @@
 // version.dll proxy forwarders live in src/version_proxy.cpp.
 
 #include <atomic>
+#include <charconv>
 #include <chrono>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <cwchar>
+#include <system_error>
 #include <filesystem>
 #include <horizon/fmod/bridge.hpp>
 #include <horizon/fmod/resolver.hpp>
@@ -491,10 +493,14 @@ void poll_game_events(void* radio_state) {
         pos += needle.size();
         while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t'))
             ++pos;
-        const char*  start = line.c_str() + pos;
-        char*        end   = nullptr;
-        const double v     = std::strtod(start, &end);
-        if (end == start)
+        // from_chars, not strtod: locale-independent. The UI sends '.' as the
+        // decimal separator (InvariantCulture); strtod honors LC_NUMERIC, so on
+        // a comma-locale host it would stop at the '.' and read 0 -> silence.
+        const char* first = line.c_str() + pos;
+        const char* last  = line.c_str() + line.size();
+        double      v     = 0.0;
+        const auto [ptr, ec] = std::from_chars(first, last, v);
+        if (ptr == first || ec != std::errc())
             return false;
         out = v;
         return true;

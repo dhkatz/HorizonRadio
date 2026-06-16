@@ -23,6 +23,10 @@ public class VolumeTaperTests
         => Assert.Equal(expected, VolumeTaper.ToGain(position), 5);
 
     [Fact]
+    public void ToGain_maps_NaN_to_silence()
+        => Assert.Equal(0f, VolumeTaper.ToGain(double.NaN));
+
+    [Fact]
     public void ToGain_is_monotonic_increasing()
     {
         var prev = -1f;

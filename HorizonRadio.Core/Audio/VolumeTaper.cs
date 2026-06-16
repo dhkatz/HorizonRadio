@@ -17,10 +17,12 @@ namespace HorizonRadio.Core.Audio;
 public static class VolumeTaper
 {
     /// <summary>Convert a slider position in [0,1] to a linear gain in [0,1].
-    /// Out-of-range input is clamped.</summary>
+    /// Out-of-range input is clamped; NaN maps to silence (Math.Clamp would
+    /// propagate it, and a NaN gain poisons every downstream sample).</summary>
     public static float ToGain(double position)
     {
-        var p = position < 0.0 ? 0.0 : (position > 1.0 ? 1.0 : position);
+        if (double.IsNaN(position)) return 0f;
+        var p = Math.Clamp(position, 0.0, 1.0);
         return (float)(p * p * p);
     }
 }

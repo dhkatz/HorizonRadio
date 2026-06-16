@@ -26,6 +26,7 @@ public sealed class PreviewController : IDisposable
     private readonly Timer _persistTimer;
     private static readonly TimeSpan PersistDebounce = TimeSpan.FromMilliseconds(800);
     private bool _volumeDirty;
+    private bool _disposed;
 
     public PreviewController(TeePcmSink tee, SourceConfigStore store)
     {
@@ -85,13 +86,16 @@ public sealed class PreviewController : IDisposable
         if (_speaker != null) _speaker.Volume = VolumeTaper.ToGain(volume);
         // Don't hit disk on every slider tick — a drag fires this dozens of
         // times. Update the in-memory pref and (re)arm the debounce timer so the
-        // value lands on disk shortly after the slider goes quiet.
+        // value lands on disk shortly after the slider goes quiet. Arming under
+        // the lock with the _disposed check means we never call Change() on an
+        // already-disposed timer (a slider tick during shutdown teardown).
         lock (_persistLock)
         {
+            if (_disposed) return;
             _store.PreviewVolume = volume;
             _volumeDirty = true;
+            _persistTimer.Change(PersistDebounce, Timeout.InfiniteTimeSpan);
         }
-        _persistTimer.Change(PersistDebounce, Timeout.InfiniteTimeSpan);
     }
 
     private void FlushVolumeIfDirty()
@@ -143,9 +147,13 @@ public sealed class PreviewController : IDisposable
 
     public void Dispose()
     {
+        // Mark disposed under the lock first so any in-flight SetVolume returns
+        // without re-arming the timer we're about to dispose.
+        lock (_persistLock) _disposed = true;
         _persistTimer.Dispose();
-        // Flush any volume change that hadn't hit its debounce window yet.
-        if (_volumeDirty) Persist();
+        // Flush any volume change that hadn't hit its debounce window yet
+        // (lock-guarded, same as every other access to _volumeDirty).
+        FlushVolumeIfDirty();
         _tee.SetPrimaryEnabled(true);
         _tee.DetachPreview();
         _speaker?.Dispose();
