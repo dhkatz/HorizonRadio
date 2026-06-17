@@ -113,6 +113,26 @@
                     </shadui:SidebarItem.Icon>
                 </shadui:SidebarItem>
 
+                <shadui:SidebarItemLabel Text="Library" AsSeparator="True"/>
+
+                <shadui:SidebarItem Content="Mixes"
+                                    Command="{Binding ShowMixesCommand}"
+                                    IsChecked="{Binding IsMixesWorkspace}"
+                                    Route="mixes">
+                    <shadui:SidebarItem.Icon>
+                        <material:MaterialIcon Kind="PlaylistMusic" Width="18" Height="18"/>
+                    </shadui:SidebarItem.Icon>
+                </shadui:SidebarItem>
+
+                <shadui:SidebarItem Content="History"
+                                    Command="{Binding ShowHistoryCommand}"
+                                    IsChecked="{Binding IsHistoryWorkspace}"
+                                    Route="history">
+                    <shadui:SidebarItem.Icon>
+                        <material:MaterialIcon Kind="History" Width="18" Height="18"/>
+                    </shadui:SidebarItem.Icon>
+                </shadui:SidebarItem>
+
                 <shadui:SidebarItemLabel Text="Settings" AsSeparator="True"/>
 
                 <shadui:SidebarItem Content="Sources"
@@ -121,15 +141,6 @@
                                     Route="sources">
                     <shadui:SidebarItem.Icon>
                         <material:MaterialIcon Kind="Music" Width="18" Height="18"/>
-                    </shadui:SidebarItem.Icon>
-                </shadui:SidebarItem>
-
-                <shadui:SidebarItem Content="Mixes"
-                                    Command="{Binding ShowMixesCommand}"
-                                    IsChecked="{Binding IsMixesWorkspace}"
-                                    Route="mixes">
-                    <shadui:SidebarItem.Icon>
-                        <material:MaterialIcon Kind="PlaylistMusic" Width="18" Height="18"/>
                     </shadui:SidebarItem.Icon>
                 </shadui:SidebarItem>
 
@@ -333,15 +344,6 @@
 
                 <Separator Margin="0,4"/>
 
-                <ToggleButton Command="{Binding ShowSourcesCommand}"
-                              IsChecked="{Binding IsSourcesWorkspace}"
-                              Height="40" Width="40"
-                              HorizontalContentAlignment="Center"
-                              VerticalContentAlignment="Center"
-                              Padding="0"
-                              ToolTip.Tip="Sources">
-                    <material:MaterialIcon Kind="Music" Width="18" Height="18"/>
-                </ToggleButton>
                 <ToggleButton Command="{Binding ShowMixesCommand}"
                               IsChecked="{Binding IsMixesWorkspace}"
                               Height="40" Width="40"
@@ -350,6 +352,27 @@
                               Padding="0"
                               ToolTip.Tip="Mixes">
                     <material:MaterialIcon Kind="PlaylistMusic" Width="18" Height="18"/>
+                </ToggleButton>
+                <ToggleButton Command="{Binding ShowHistoryCommand}"
+                              IsChecked="{Binding IsHistoryWorkspace}"
+                              Height="40" Width="40"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              Padding="0"
+                              ToolTip.Tip="History">
+                    <material:MaterialIcon Kind="History" Width="18" Height="18"/>
+                </ToggleButton>
+
+                <Separator Margin="0,4"/>
+
+                <ToggleButton Command="{Binding ShowSourcesCommand}"
+                              IsChecked="{Binding IsSourcesWorkspace}"
+                              Height="40" Width="40"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              Padding="0"
+                              ToolTip.Tip="Sources">
+                    <material:MaterialIcon Kind="Music" Width="18" Height="18"/>
                 </ToggleButton>
                 <ToggleButton Command="{Binding ShowMetadataCommand}"
                               IsChecked="{Binding IsMetadataWorkspace}"
@@ -508,6 +531,9 @@
             </Grid>
             <Grid IsVisible="{Binding IsSearchWorkspace}">
                 <views:SearchView DataContext="{Binding Search}"/>
+            </Grid>
+            <Grid IsVisible="{Binding IsHistoryWorkspace}">
+                <views:HistoryView DataContext="{Binding History}"/>
             </Grid>
             </Panel>
         </Grid>

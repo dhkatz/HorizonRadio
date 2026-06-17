@@ -5,6 +5,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Events;
+using HorizonRadio.Core.History;
 using HorizonRadio.Core.Input;
 using HorizonRadio.Core.Ipc;
 using HorizonRadio.Core.Metadata;
@@ -48,6 +49,8 @@ public partial class App : Application
     private InputBindingService? _inputService;
     private SpotifyConnection? _spotifyConnection;
     private SpotifyPlaybackService? _spotifyPlayback;
+    private PlayHistoryStore? _historyStore;
+    private PlayHistoryService? _historyService;
 
     public override void Initialize()
     {
@@ -174,6 +177,11 @@ public partial class App : Application
             var queuePlayback = new QueuePlayback(_runner, _store, contentResolver);
             var mixSwitcher = new MixSwitcher(mixStore, queuePlayback, _runner);
 
+            // Play history: records every song the runner reports (deduped), tags freeform songs
+            // it can't identify via the metadata pipeline, and persists (debounced) to history.json.
+            _historyStore = PlayHistoryStore.LoadFromDisk();
+            _historyService = new PlayHistoryService(_historyStore, _runner);
+
             // One dispatcher turns an EventAction into a transport/source/mix/
             // volume call; both the Events tab (game events) and the Controls tab
             // (input bindings) feed it, so they share capability checks.
@@ -198,7 +206,7 @@ public partial class App : Application
             dialogManager.Register<QuickPlayDialogView, QuickPlayDialogViewModel>();
             dialogManager.Register<QueueAddModeDialogView, QueueAddModeDialogViewModel>();
 
-            var vm = new MainWindowViewModel(_runner, _store, mixStore, mixSwitcher, queuePlayback, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, toasts, dialogManager);
+            var vm = new MainWindowViewModel(_runner, _store, mixStore, mixSwitcher, queuePlayback, _historyStore, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, toasts, dialogManager);
             desktop.MainWindow = new MainWindow { DataContext = vm };
 
             // Station targeting. "Which in-game station do we replace right now?"
@@ -265,6 +273,7 @@ public partial class App : Application
             {
                 _eventExecutor?.Dispose();
                 _inputService?.Dispose();
+                _historyService?.Dispose(); // unsubscribes from the runner + flushes the final save
                 mixSwitcher.Dispose();
                 queuePlayback.Dispose();
                 _preview?.Dispose();

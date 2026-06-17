@@ -15,6 +15,14 @@ namespace HorizonRadio.Core.Sources.Local;
 /// </summary>
 public sealed class LocalPlayableItem : PlayableItem
 {
+    /// <summary>Namespace prefix for a local file's <see cref="Track.ExternalId"/>, so a path
+    /// id is distinguishable from a remote source's id and round-trips to a re-playable locator
+    /// (see <see cref="ReplayLocator"/>). Public so play-history replay can strip it.</summary>
+    public const string ExternalIdPrefix = "local:";
+
+    /// <summary>Build the <see cref="Track.ExternalId"/> for a local file path.</summary>
+    public static string LocalExternalId(string path) => ExternalIdPrefix + path;
+
     private readonly string _path;
     private bool _prepared;
     private long _positionTicks;
@@ -33,7 +41,10 @@ public sealed class LocalPlayableItem : PlayableItem
             AlbumArt: null,
             SourceId: "local",
             SourceDisplay: "Local Files",
-            ExternalId: null);
+            // The file path, namespaced like other sources' ids ("youtube:…", "radio:…"), so
+            // play history can replay the same file. Providers only special-case "spotify:track:"
+            // ids, so a "local:" id is inert to enrichment (the cache key stays text-based).
+            ExternalId: LocalExternalId(path));
     }
 
     public override TimeSpan Position => new(Interlocked.Read(ref _positionTicks));
@@ -80,7 +91,7 @@ public sealed class LocalPlayableItem : PlayableItem
             var trackNo = tag.Tag.Track is > 0 ? (int?)tag.Tag.Track : null;
 
             Metadata = new Track(title, artist, album, art, "local", "Local Files",
-                ExternalId: null, Year: year, TrackNumber: trackNo);
+                ExternalId: LocalExternalId(_path), Year: year, TrackNumber: trackNo);
             if (tag.Properties?.Duration is { Ticks: > 0 } dur) Duration = dur;
         }
         catch (Exception ex)
