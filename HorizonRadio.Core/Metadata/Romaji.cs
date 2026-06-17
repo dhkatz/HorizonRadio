@@ -19,10 +19,11 @@ namespace HorizonRadio.Core.Metadata;
 /// </summary>
 public static class Romaji
 {
-    // Accept a match when the romanizations are this close (1 - editDistance/maxLen). Loose enough
-    // to bridge Hepburn/Nippon and long-vowel spelling wobble ("shi"/"si", "ou"/"o"), tight enough
-    // that two different names ("kurokumo" vs "hachiojip") fall well short.
-    private const double SimilarityThreshold = 0.7;
+    // Accept a match when the romanizations are this close (1 - editDistance/maxLen). Canonicalize
+    // already folds Hepburn/Nippon and long-vowel/sokuon wobble to equal, so a legit pair is usually
+    // exact or one edit on a longish name; 0.8 still clears that (1 edit on ≥5 chars) while rejecting
+    // short coincidences like "yuki"/"yoki" (0.75) and the bug case "kurokumo"/"hachiojip".
+    private const double SimilarityThreshold = 0.8;
 
     /// <summary>Romanize a purely-kana string (hiragana/katakana, spaces/·/long-marks allowed), or
     /// null if it contains kanji or any other non-kana letter — i.e. "can't fully read this".</summary>
@@ -75,7 +76,9 @@ public static class Romaji
             sokuon = false;
 
             sb.Append(r);
-            if (r.Length > 0 && IsVowel(r[^1])) lastVowel = r[^1];
+            // Track the trailing vowel for a following長音 mark; clear it after a consonant-final
+            // mora (ん → "n") so "カンー" reads "kan", not "kana" (repeating a stale vowel).
+            lastVowel = r.Length > 0 && IsVowel(r[^1]) ? r[^1] : '\0';
         }
 
         var result = sb.ToString();
@@ -90,9 +93,10 @@ public static class Romaji
         var cb = Canonicalize(b);
         if (ca.Length == 0 || cb.Length == 0) return false;
         if (ca == cb) return true;
-        // A clearly-contained name (one is a prefix/substring of the other) is the same act with a
-        // suffix like a producer "P" — but only when both are long enough to be meaningful.
-        if (ca.Length >= 3 && cb.Length >= 3 && (ca.Contains(cb) || cb.Contains(ca))) return true;
+        // One name is the other plus a one-char suffix (a producer's trailing "P"): same act. The
+        // length must be within one char, or a short name gets swallowed by a longer unrelated one
+        // ("miku" ⊂ "hatsunemiku", "rin" ⊂ "rinka").
+        if (Math.Abs(ca.Length - cb.Length) <= 1 && (ca.Contains(cb) || cb.Contains(ca))) return true;
 
         var dist = Levenshtein(ca, cb);
         var sim = 1.0 - (double)dist / Math.Max(ca.Length, cb.Length);
@@ -106,8 +110,8 @@ public static class Romaji
         if (string.IsNullOrEmpty(s)) return "";
         var t = new string(s.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
         foreach (var (from, to) in DigraphFolds) t = t.Replace(from, to);
-        t = t.Replace("ou", "o").Replace("oo", "o").Replace("uu", "u");
-        // Collapse any doubled letter (long vowels "aa", sokuon "tt", "kk", …) to a single.
+        t = t.Replace("ou", "o"); // long ō written "ou"; "oo"/"uu" are handled by the collapse below
+        // Collapse any doubled letter (long vowels "aa"/"oo"/"uu", sokuon "tt", "kk", …) to a single.
         var sb = new StringBuilder(t.Length);
         foreach (var ch in t)
             if (sb.Length == 0 || sb[^1] != ch) sb.Append(ch);
@@ -224,6 +228,8 @@ public static class Romaji
         ['ゅ'] = "yu",
         ['ょ'] = "yo",
         ['ゎ'] = "wa",
+        ['ゕ'] = "ka", // ヵ folds here (small katakana ka)
+        ['ゖ'] = "ke", // ヶ folds here (small katakana ke)
     };
 
     private static readonly Dictionary<string, string> Digraphs = new()
