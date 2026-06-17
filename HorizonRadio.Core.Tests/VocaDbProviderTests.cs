@@ -272,4 +272,103 @@ public class VocaDbProviderTests
         Assert.NotNull(sink[0].Score);                                 // matched the broadcast artist
         Assert.Null(sink[1].Score);                                    // rejected: unrelated artist
     }
+
+    // -- PV links (play history replay sources) --
+
+    [Fact]
+    public void SelectPvs_keeps_the_best_pv_per_streamable_service()
+    {
+        var json = Json("""
+        {
+          "pvs": [
+            { "service": "Youtube", "url": "https://youtu.be/reprint", "pvType": "Reprint", "disabled": false },
+            { "service": "Youtube", "url": "https://youtu.be/original", "pvType": "Original", "disabled": false },
+            { "service": "NicoNicoDouga", "url": "https://www.nicovideo.jp/watch/sm1", "pvType": "Original", "disabled": false }
+          ]
+        }
+        """);
+
+        var pvs = VocaDbProvider.SelectPvs(json);
+
+        Assert.Equal(2, pvs.Count);
+        Assert.Equal("YouTube", pvs[0].Service);                       // first-seen service order
+        Assert.Equal("https://youtu.be/original", pvs[0].Url);          // Original beats Reprint
+        Assert.Equal("Niconico", pvs[1].Service);                       // friendly label, not "NicoNicoDouga"
+    }
+
+    [Fact]
+    public void SelectPvs_skips_disabled_and_non_streamable_services()
+    {
+        var json = Json("""
+        {
+          "pvs": [
+            { "service": "Youtube", "url": "https://youtu.be/dead", "pvType": "Original", "disabled": true },
+            { "service": "Piapro", "url": "https://piapro.jp/x", "pvType": "Original", "disabled": false },
+            { "service": "SoundCloud", "url": "https://soundcloud.com/a/b", "pvType": "Original", "disabled": false }
+          ]
+        }
+        """);
+
+        var pvs = VocaDbProvider.SelectPvs(json);
+
+        var only = Assert.Single(pvs);
+        Assert.Equal("SoundCloud", only.Service);                       // disabled YouTube + non-streamable Piapro dropped
+    }
+
+    [Fact]
+    public void SelectAlbumId_prefers_a_primary_release_over_a_compilation()
+    {
+        var json = Json("""
+        {
+          "albums": [
+            { "id": 1, "discType": "Compilation", "coverPictureMime": "image/jpeg", "releaseDate": { "year": 2014, "month": 11, "day": 3, "isEmpty": false } },
+            { "id": 2, "discType": "Single", "coverPictureMime": "image/jpeg", "releaseDate": { "year": 2015, "month": 1, "day": 1, "isEmpty": false } }
+          ]
+        }
+        """);
+
+        Assert.Equal(2, VocaDbProvider.SelectAlbumId(json)); // Single (rank) beats the earlier Compilation
+    }
+
+    [Fact]
+    public void SelectAlbumId_prefers_the_earliest_among_primary_releases_and_skips_coverless()
+    {
+        var json = Json("""
+        {
+          "albums": [
+            { "id": 5, "discType": "Album", "coverPictureMime": "image/jpeg", "releaseDate": { "year": 2016, "month": 5, "day": 1, "isEmpty": false } },
+            { "id": 6, "discType": "Single", "coverPictureMime": "image/jpeg", "releaseDate": { "year": 2014, "month": 2, "day": 1, "isEmpty": false } },
+            { "id": 7, "discType": "Single", "coverPictureMime": "", "releaseDate": { "year": 2008, "month": 1, "day": 1, "isEmpty": false } }
+          ]
+        }
+        """);
+
+        Assert.Equal(6, VocaDbProvider.SelectAlbumId(json)); // earliest primary WITH a cover (7 has none)
+    }
+
+    [Fact]
+    public void SelectAlbumId_null_when_no_album_has_a_cover()
+        => Assert.Null(VocaDbProvider.SelectAlbumId(Json("""
+        { "albums": [ { "id": 9, "discType": "Album", "coverPictureMime": "" } ] }
+        """)));
+
+    [Fact]
+    public void SelectMatch_prepends_the_album_cover_ahead_of_the_video_thumbnail()
+    {
+        var json = Json("""
+        {
+          "items": [
+            { "name": "Sacred Secret", "artistString": "MuryokuP", "thumbUrl": "https://nico/t.jpg",
+              "albums": [ { "id": 42, "discType": "Single", "coverPictureMime": "image/jpeg",
+                            "releaseDate": { "year": 2011, "month": 8, "day": 1, "isEmpty": false } } ] }
+          ]
+        }
+        """);
+
+        var m = VocaDbProvider.SelectMatch(json, "Sacred Secret", "MuryokuP");
+
+        Assert.Equal("https://static.vocadb.net/img/Album/mainOrig/42.jpg", m!.ArtUrls[0]); // square cover first
+        Assert.Contains("https://nico/t.jpg", m.ArtUrls);                                    // thumbnail kept as fallback
+        Assert.Equal(42, m.AlbumId);
+    }
 }

@@ -29,6 +29,24 @@ public sealed class MetadataCacheTests : IDisposable
         new(_root, retryTtl: TimeSpan.FromDays(14), cacheVersion: version, now: () => now);
 
     [Fact]
+    public void Pvs_round_trip_through_disk()
+    {
+        var pvs = new[]
+        {
+            new PlayableRef("YouTube", "https://youtu.be/a"),
+            new PlayableRef("Niconico", "https://www.nicovideo.jp/watch/sm1"),
+        };
+        Cache(T0).Put(Key, new MetadataCache.Entry("Song", "Artist", null, new byte[] { 1 }, Mbid: null, Year: 2014, Pvs: pvs));
+
+        var hit = Cache(T0).TryGet(Key); // fresh instance → reads from disk
+
+        Assert.NotNull(hit!.Pvs);
+        Assert.Equal(2, hit.Pvs!.Count);
+        Assert.Equal("YouTube", hit.Pvs[0].Service);
+        Assert.Equal("https://www.nicovideo.jp/watch/sm1", hit.Pvs[1].Url);
+    }
+
+    [Fact]
     public void Art_bearing_entry_is_kept_even_when_old_and_a_version_behind()
     {
         Cache(T0, version: 1).Put(Key, new MetadataCache.Entry("Song", "Artist", "Album",

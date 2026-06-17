@@ -92,14 +92,15 @@ public sealed class VocaDbProvider : IMetadataProvider
             if (root is { } r) art = await DownloadFirstAsync(PickArt(r), ct).ConfigureAwait(false);
         }
 
-        var entry = new MetadataCache.Entry(match.Name, match.Artist, Album: null, AlbumArt: art, Mbid: null, Year: match.Year);
+        var entry = new MetadataCache.Entry(match.Name, match.Artist, Album: null, AlbumArt: art, Mbid: null,
+            Year: match.Year, Pvs: match.Pvs);
         _cache.Put(cacheKey, entry);
         return ToContribution(entry);
     }
 
     private static MetadataContribution? ToContribution(MetadataCache.Entry e)
     {
-        var c = new MetadataContribution(e.Title, e.Artist, e.Album, e.AlbumArt, e.Year);
+        var c = new MetadataContribution(e.Title, e.Artist, e.Album, e.AlbumArt, e.Year, e.Pvs);
         return c.IsEmpty ? null : c;
     }
 
@@ -170,7 +171,7 @@ public sealed class VocaDbProvider : IMetadataProvider
         // accept that: 1-word titles are generic/cover-prone (the single-token guard already
         // distrusts them), and lang=English's mistranslation of name-like kanji was the worse bug.
         var url = $"{Base}/songs?query={Uri.EscapeDataString(nameQuery)}"
-                + "&maxResults=10&nameMatchMode=Auto&lang=Default&fields=Artists,MainPicture,ThumbUrl,Names";
+                + "&maxResults=10&nameMatchMode=Auto&lang=Default&fields=Artists,MainPicture,ThumbUrl,Names,Albums,PVs";
         // artistId[]= scopes the search to one artist; the array syntax is what the REST API needs.
         // A scoped hit has its artist already confirmed, so the title alone qualifies it.
         bool artistConfirmed = artistId.HasValue;
@@ -217,13 +218,19 @@ public sealed class VocaDbProvider : IMetadataProvider
             // Prefer a strictly higher score; on a tie, prefer a candidate that actually has art so
             // an equal-scoring sibling with a thumbnail (e.g. the Kagamine Rin version of a song)
             // wins over an image-less entry (the GUMI version) instead of leaving the tile blank.
+            // Prefer a real square album cover (when the song is on an album that has one) over the
+            // song's own 16:9 video thumbnail; DownloadFirstAsync falls through to the thumbnail if
+            // the album image is missing.
             var art = PickArt(s);
+            var albumId = SelectAlbumId(s);
+            if (albumId is { } aid) art.Insert(0, AlbumCoverUrl(aid));
+
             bool better = score > bestScore
                 || (score == bestScore && best is not null && best.ArtUrls.Count == 0 && art.Count > 0);
             if (!better) continue;
 
             bestScore = score;
-            best = new Match(name, artist, art, ParseYear(Str(s, "publishDate")), OriginalId(s));
+            best = new Match(name, artist, art, ParseYear(Str(s, "publishDate")), OriginalId(s), albumId, SelectPvs(s));
         }
         return titleGuard.IsAmbiguous ? null : best;
     }
@@ -233,6 +240,105 @@ public sealed class VocaDbProvider : IMetadataProvider
     private static int? OriginalId(JsonElement song) =>
         song.TryGetProperty("originalVersionId", out var p) && p.ValueKind == JsonValueKind.Number
             && p.TryGetInt32(out var id) && id > 0 ? id : null;
+
+    // The static URL for an album's square cover. The mainOrig/<id>.jpg pattern is stable; a wrong
+    // guess just 404s and DownloadFirstAsync falls through to the song thumbnail.
+    private static string AlbumCoverUrl(int albumId) =>
+        $"https://static.vocadb.net/img/Album/mainOrig/{albumId}.jpg";
+
+    /// <summary>Choose which of a song's albums to take cover art from: among albums that actually
+    /// have a cover, prefer a real release (Album/Single/EP) over a compilation/video, then the
+    /// earliest release date, then VocaDB's own order. Pure JSON-in for unit testing.</summary>
+    internal static int? SelectAlbumId(JsonElement song)
+    {
+        if (!song.TryGetProperty("albums", out var albums) || albums.ValueKind != JsonValueKind.Array)
+            return null;
+
+        (int Rank, long Date, int Order, int Id)? best = null;
+        var order = 0;
+        foreach (var a in albums.EnumerateArray())
+        {
+            order++;
+            if (string.IsNullOrEmpty(Str(a, "coverPictureMime"))) continue; // no cover → skip
+            if (!a.TryGetProperty("id", out var idEl) || idEl.ValueKind != JsonValueKind.Number
+                || !idEl.TryGetInt32(out var id)) continue;
+
+            var cand = (DiscTypeRank(Str(a, "discType")), ReleaseSortKey(a), order, id);
+            // Lower rank, then earlier date, then earlier order.
+            if (best is null || cand.CompareTo((best.Value.Rank, best.Value.Date, best.Value.Order, best.Value.Id)) < 0)
+                best = cand;
+        }
+        return best?.Id;
+    }
+
+    // Lower = more representative of the song's original release.
+    private static int DiscTypeRank(string? discType) => discType switch
+    {
+        "Album" or "Single" or "EP" => 0,
+        "SplitAlbum" => 1,
+        "Compilation" => 2,
+        _ => 3, // Video, Artbook, Other, Unknown, …
+    };
+
+    // yyyymmdd for earliest-first sorting; a missing/empty date sorts last so dated releases win.
+    private static long ReleaseSortKey(JsonElement album)
+    {
+        if (!album.TryGetProperty("releaseDate", out var d) || d.ValueKind != JsonValueKind.Object)
+            return long.MaxValue;
+        if (d.TryGetProperty("isEmpty", out var e) && e.ValueKind == JsonValueKind.True)
+            return long.MaxValue;
+        int y = IntOr(d, "year", 9999), m = IntOr(d, "month", 12), day = IntOr(d, "day", 31);
+        return (y * 10000L) + (m * 100L) + day;
+    }
+
+    private static int IntOr(JsonElement e, string name, int fallback) =>
+        e.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out var i)
+            ? i : fallback;
+
+    // VocaDB PV "service" values we can hand to the yt-dlp engine, mapped to a friendly label.
+    private static readonly Dictionary<string, string> StreamableServices =
+        new(StringComparer.Ordinal)
+        {
+            ["Youtube"] = "YouTube",
+            ["NicoNicoDouga"] = "Niconico",
+            ["Bilibili"] = "Bilibili",
+            ["SoundCloud"] = "SoundCloud",
+            ["Vimeo"] = "Vimeo",
+            ["Bandcamp"] = "Bandcamp",
+        };
+
+    /// <summary>The song's promotion-video links worth keeping as playable sources: non-disabled,
+    /// on a yt-dlp-streamable service, the best PV per service (Original &gt; Reprint &gt; Other),
+    /// in first-seen service order. Pure JSON-in for unit testing.</summary>
+    internal static IReadOnlyList<PlayableRef> SelectPvs(JsonElement song)
+    {
+        if (!song.TryGetProperty("pvs", out var pvs) || pvs.ValueKind != JsonValueKind.Array)
+            return [];
+
+        var bestByService = new Dictionary<string, (int Rank, string Url, string Display)>(StringComparer.Ordinal);
+        var order = new List<string>();
+        foreach (var pv in pvs.EnumerateArray())
+        {
+            if (pv.TryGetProperty("disabled", out var dis) && dis.ValueKind == JsonValueKind.True) continue;
+            var service = Str(pv, "service");
+            if (service is null || !StreamableServices.TryGetValue(service, out var display)) continue;
+            var pvUrl = Str(pv, "url");
+            if (string.IsNullOrEmpty(pvUrl)) continue;
+
+            var rank = PvTypeRank(Str(pv, "pvType"));
+            if (!bestByService.TryGetValue(service, out var cur)) { bestByService[service] = (rank, pvUrl!, display); order.Add(service); }
+            else if (rank < cur.Rank) bestByService[service] = (rank, pvUrl!, display);
+        }
+        return [.. order.Select(s => new PlayableRef(bestByService[s].Display, bestByService[s].Url))];
+    }
+
+    // Lower = a more canonical upload (the official original beats a reprint beats a random copy).
+    private static int PvTypeRank(string? pvType) => pvType switch
+    {
+        "Original" => 0,
+        "Reprint" => 1,
+        _ => 2,
+    };
 
     // Download the first URL that yields bytes, or null if none do (each is best-effort).
     private async Task<byte[]?> DownloadFirstAsync(IReadOnlyList<string> urls, CancellationToken ct)
@@ -303,5 +409,5 @@ public sealed class VocaDbProvider : IMetadataProvider
     }
 
     internal sealed record Match(string Name, string? Artist, IReadOnlyList<string> ArtUrls, int? Year,
-        int? OriginalVersionId = null);
+        int? OriginalVersionId = null, int? AlbumId = null, IReadOnlyList<PlayableRef>? Pvs = null);
 }

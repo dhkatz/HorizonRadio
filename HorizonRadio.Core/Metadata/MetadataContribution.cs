@@ -11,10 +11,14 @@ public sealed record MetadataContribution(
     string? Artist = null,
     string? Album = null,
     byte[]? Art = null,
-    int? Year = null)
+    int? Year = null,
+    IReadOnlyList<PlayableRef>? Playables = null)
 {
     public static readonly MetadataContribution Empty = new();
 
+    // Playables are descriptive extras (where the track can be played), not a merged metadata field,
+    // so they don't count toward emptiness — a contribution that ONLY knows PV links still says
+    // nothing about title/artist/art and shouldn't read as a metadata match.
     public bool IsEmpty =>
         string.IsNullOrEmpty(Title) &&
         string.IsNullOrEmpty(Artist) &&

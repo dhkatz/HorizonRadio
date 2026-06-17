@@ -46,7 +46,8 @@ public sealed class MetadataCache
         string? Album,
         byte[]? AlbumArt,
         string? Mbid,
-        int? Year = null);
+        int? Year = null,
+        IReadOnlyList<PlayableRef>? Pvs = null);
 
     /// <param name="retryTtl">How long an art-less entry (miss / partial hit) is trusted before it
     /// is retried. Defaults to 14 days.</param>
@@ -103,7 +104,8 @@ public sealed class MetadataCache
                     Album: GetString(r, "album"),
                     AlbumArt: GetBase64(r, "art_b64"),
                     Mbid: GetString(r, "mbid"),
-                    Year: GetInt(r, "year"));
+                    Year: GetInt(r, "year"),
+                    Pvs: GetPvs(r));
                 fresh = GetInt(r, "cache_ver") == _cacheVersion
                         && GetLong(r, "cached_at") is { } at
                         && _now() - DateTimeOffset.FromUnixTimeSeconds(at) < _retryTtl;
@@ -150,6 +152,18 @@ public sealed class MetadataCache
             if (entry.Year is { } year) writer.WriteNumber("year", year);
             if (entry.AlbumArt is { Length: > 0 })
                 writer.WriteString("art_b64", Convert.ToBase64String(entry.AlbumArt));
+            if (entry.Pvs is { Count: > 0 })
+            {
+                writer.WriteStartArray("pvs");
+                foreach (var pv in entry.Pvs)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteString("service", pv.Service);
+                    writer.WriteString("url", pv.Url);
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndArray();
+            }
             // Stamp every write so an art-less entry can be aged out (TTL) or invalidated (version).
             writer.WriteNumber("cached_at", _now().ToUnixTimeSeconds());
             writer.WriteNumber("cache_ver", _cacheVersion);
@@ -183,5 +197,19 @@ public sealed class MetadataCache
         if (string.IsNullOrEmpty(s)) return null;
         try { return Convert.FromBase64String(s); }
         catch { return null; }
+    }
+
+    private static List<PlayableRef>? GetPvs(JsonElement r)
+    {
+        if (!r.TryGetProperty("pvs", out var arr) || arr.ValueKind != JsonValueKind.Array) return null;
+        var list = new List<PlayableRef>();
+        foreach (var p in arr.EnumerateArray())
+        {
+            var service = GetString(p, "service");
+            var url = GetString(p, "url");
+            if (!string.IsNullOrEmpty(service) && !string.IsNullOrEmpty(url))
+                list.Add(new PlayableRef(service!, url!));
+        }
+        return list.Count > 0 ? list : null;
     }
 }
