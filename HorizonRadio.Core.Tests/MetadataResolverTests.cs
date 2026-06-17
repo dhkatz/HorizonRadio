@@ -231,7 +231,7 @@ public class MetadataResolverTests
             [new MatchingContributor("itunes", "RealArtist", "Real Song", new MetadataContribution(Art: [1]))],
             Policy(["itunes"]));
 
-        var (_, matched) = await resolver.ResolveDetailedAsync(
+        var (_, matched, _) = await resolver.ResolveDetailedAsync(
             Seed(title: "Real Song", artist: "RealArtist"), CancellationToken.None);
 
         Assert.True(matched);
@@ -245,7 +245,7 @@ public class MetadataResolverTests
             [new MatchingContributor("itunes", "Someone Else", "Other Song", new MetadataContribution(Art: [1]))],
             Policy(["itunes"]));
 
-        var (_, matched) = await resolver.ResolveDetailedAsync(
+        var (_, matched, _) = await resolver.ResolveDetailedAsync(
             Seed(title: "Mystery", artist: "Unknown"), CancellationToken.None);
 
         Assert.False(matched);
@@ -261,7 +261,7 @@ public class MetadataResolverTests
 
         var seed = RadioSeed("Heavenz - テロメアの産声", "ExGrooveCh",
             [new TitleCandidate("Heavenz", "テロメアの産声")]);
-        var (_, matched) = await resolver.ResolveDetailedAsync(seed, CancellationToken.None);
+        var (_, matched, _) = await resolver.ResolveDetailedAsync(seed, CancellationToken.None);
 
         Assert.True(matched);
     }
@@ -270,7 +270,28 @@ public class MetadataResolverTests
     public async Task ResolveDetailed_reports_unmatched_with_no_contributors()
     {
         var resolver = new MetadataResolver();
-        var (_, matched) = await resolver.ResolveDetailedAsync(Seed(), CancellationToken.None);
+        var (_, matched, _) = await resolver.ResolveDetailedAsync(Seed(), CancellationToken.None);
         Assert.False(matched);
+    }
+
+    [Fact]
+    public async Task ResolveDetailed_surfaces_provider_playables()
+    {
+        var resolver = new MetadataResolver();
+        var pvs = new[]
+        {
+            new PlayableRef("YouTube", "https://youtu.be/abc"),
+            new PlayableRef("Niconico", "https://www.nicovideo.jp/watch/sm1"),
+        };
+        resolver.Configure(
+            [new FakeContributor("vocadb", new MetadataContribution(Title: "Canonical", Artist: "Producer", Playables: pvs))],
+            Policy(["vocadb"]));
+
+        var result = await resolver.ResolveDetailedAsync(Seed(title: "Canonical", artist: "Producer"), CancellationToken.None);
+
+        Assert.True(result.Matched);
+        Assert.Equal(2, result.Playables.Count);
+        Assert.Equal("YouTube", result.Playables[0].Service);
+        Assert.Equal("https://www.nicovideo.jp/watch/sm1", result.Playables[1].Url);
     }
 }

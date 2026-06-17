@@ -1,6 +1,9 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Sources;
+using HorizonRadio.Core.Sources.YouTube;
 
 namespace HorizonRadio.Core.History;
 
@@ -37,5 +40,21 @@ public static class HistorySourceMatch
     }
 
     private static HashSet<string> Tokenize(string s) =>
-        SearchMerge.Normalize(s).Split(' ', System.StringSplitOptions.RemoveEmptyEntries).ToHashSet();
+        SearchMerge.Normalize(s).Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet();
+
+    /// <summary>Turn a resolved track's PV links into replay sources. They all route through the
+    /// yt-dlp engine (the "youtube" content factory plays any yt-dlp-supported URL), but each keeps
+    /// its real service as the picker label ("YouTube", "Niconico", …) — so a Niconico PV is offered
+    /// and played without a separate Niconico source.</summary>
+    public static IReadOnlyList<ReplaySource> FromPvs(IReadOnlyList<PlayableRef> pvs) =>
+        [.. pvs.Select(pv => new ReplaySource(YouTubeSourceFactory.SourceId, pv.Service, pv.Url))];
+
+    /// <summary>Combine the precise PV sources with name-search hits: PVs first, then any search hit
+    /// for a service the PVs don't already cover (deduped by display, so a fuzzy YouTube search hit
+    /// is dropped in favor of the exact YouTube PV while a Spotify hit is still added).</summary>
+    public static IReadOnlyList<ReplaySource> Combine(IReadOnlyList<ReplaySource> pvs, IReadOnlyList<ReplaySource> searchHits)
+    {
+        var seen = new HashSet<string>(pvs.Select(s => s.SourceDisplay), StringComparer.OrdinalIgnoreCase);
+        return [.. pvs, .. searchHits.Where(s => seen.Add(s.SourceDisplay))];
+    }
 }
