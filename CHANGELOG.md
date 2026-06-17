@@ -38,7 +38,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   artist's same-titled song (e.g. くろくも's "KiLLER LADY") through the cross-script
   artist bridge, pulling in that cover's art. A lightweight kana romanizer now
   verifies a kana catalog artist actually sounds like the broadcast name before the
-  bridge accepts the match.
+  bridge accepts the match. The bridge now also **rejects a catalog artist it can't
+  verify** rather than accepting on the title alone — closing the kanji case where an
+  orchestral cover (e.g. the Tokyo Philharmonic's "Tell Your World") attached its
+  symphony-album cover to a producer's remix. Genuine romaji↔kanji acts are still
+  matched via VocaDB's artist-scoped search. (A fuller kanji romanizer to re-admit
+  kanji cross-script matches is planned as an optional add-on.)
 
 ## [0.6.0] - 2026-06-15
 

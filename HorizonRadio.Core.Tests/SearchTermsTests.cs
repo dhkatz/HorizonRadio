@@ -113,16 +113,27 @@ public class SearchTermsTests
             "Beyond the Sky", "hano", "Beyond the Sky", "Dreams of Gray"));
 
     [Fact]
-    public void MatchScore_accepts_a_cross_script_artist_when_the_title_is_an_exact_multiword_match()
+    public void MatchScore_rejects_an_unverifiable_kanji_cross_script_artist()
     {
-        // Romaji broadcast name "Bunmyaku" vs kanji catalog name "文脈" share no token, but that's
-        // a script difference, not a contradiction. An exact multi-word title carries the match.
-        Assert.NotNull(SearchTerms.MatchScore("Innocent Favor", "Bunmyaku", "Innocent Favor", "文脈 feat. GUMI"));
-        // …but a 1-word title is too generic to accept without a verifiable artist.
+        // Romaji broadcast name "Bunmyaku" vs kanji catalog name "文脈" share no token. We can't
+        // cheaply romanize kanji to confirm it's the same act (vs an unrelated same-titled cover),
+        // so it's unverifiable → reject rather than blind-accept on the title alone. A genuine
+        // romaji↔kanji match is still reached via VocaDB's artistId-scoped search (artistConfirmed).
+        Assert.Null(SearchTerms.MatchScore("Innocent Favor", "Bunmyaku", "Innocent Favor", "文脈 feat. GUMI"));
+        // A 1-word or subset/loose title is likewise not enough without a verifiable artist.
         Assert.Null(SearchTerms.MatchScore("Favor", "Bunmyaku", "Favor", "文脈"));
-        // …and a subset/loose title is not enough either.
         Assert.Null(SearchTerms.MatchScore("Innocent Favor", "Bunmyaku", "Favor", "文脈"));
     }
+
+    [Fact]
+    public void MatchScore_rejects_a_kanji_named_cover_with_a_matching_title()
+        // The real bug: iTunes returns the Tokyo Philharmonic's orchestral "Tell Your World"
+        // (東京フィルハーモニー交響楽団) for a "Hanasoumen-P" remix query. Exact title + cross-script
+        // used to blind-accept the kanji producer, so the symphony album's square cover won the merge
+        // over the correct remix art. The kanji is unverifiable → now rejected.
+        => Assert.Null(SearchTerms.MatchScore(
+            "Tell Your World (HSP Bootleg Remix)", "Hanasoumen-P(HSP)",
+            "Tell Your World", "東京フィルハーモニー交響楽団"));
 
     [Fact]
     public void MatchScore_still_rejects_a_same_script_disjoint_artist()

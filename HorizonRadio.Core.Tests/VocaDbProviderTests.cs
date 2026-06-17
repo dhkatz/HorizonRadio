@@ -60,12 +60,12 @@ public class VocaDbProviderTests
     }
 
     [Fact]
-    public void SelectMatch_matches_a_romaji_query_against_a_kanji_artist_via_cross_script()
+    public void SelectMatch_rejects_an_unverifiable_kanji_artist_on_the_plain_path()
     {
-        // The "Innocent Favor / Bunmyaku" case: under lang=Default VocaDB returns the artist
-        // natively ("文脈 feat. GUMI"). The romaji broadcast name "Bunmyaku" can't token-match the
-        // kanji — but that's a script difference, not a contradiction, so an exact multi-word title
-        // carries it (plain path, artist NOT pre-confirmed).
+        // The "Innocent Favor / Bunmyaku" case on the PLAIN path (artist not pre-confirmed): VocaDB
+        // returns the artist natively ("文脈 feat. GUMI"). We can't cheaply romanize kanji to confirm
+        // it's the same act as the romaji broadcast name (vs an unrelated same-titled cover), so it's
+        // rejected here. The genuine match comes from the artistId-scoped path below.
         var json = Json("""
         {
           "items": [
@@ -75,7 +75,25 @@ public class VocaDbProviderTests
         }
         """);
 
-        var m = VocaDbProvider.SelectMatch(json, "Innocent Favor", "Bunmyaku", artistConfirmed: false);
+        Assert.Null(VocaDbProvider.SelectMatch(json, "Innocent Favor", "Bunmyaku", artistConfirmed: false));
+    }
+
+    [Fact]
+    public void SelectMatch_matches_a_kanji_artist_when_the_artist_is_pre_confirmed()
+    {
+        // The legit "Bunmyaku" → "文脈" match: VocaDB's artistId-scoped search resolves the artist
+        // out-of-band, so the result is artistConfirmed and the cross-script artist gate is skipped —
+        // an exact title carries it. This is the path that handles genuine romaji↔kanji acts.
+        var json = Json("""
+        {
+          "items": [
+            { "name": "Innocent Favor", "artistString": "文脈 feat. GUMI", "thumbUrl": "https://nico/t.jpg",
+              "names": [ { "language": "English", "value": "Innocent Favor" } ] }
+          ]
+        }
+        """);
+
+        var m = VocaDbProvider.SelectMatch(json, "Innocent Favor", "Bunmyaku", artistConfirmed: true);
 
         Assert.NotNull(m);
         Assert.Equal("https://nico/t.jpg", m!.ArtUrls[0]);
