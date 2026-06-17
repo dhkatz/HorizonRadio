@@ -131,9 +131,10 @@ public sealed partial class HistoryViewModel : ViewModelBase
         {
             var entry = row.Entry;
             var seed = BuildSeed(entry);
-            var (final, matched) = _resolver is { HasContributors: true }
+            var resolved = _resolver is { HasContributors: true }
                 ? await _resolver.ResolveDetailedAsync(seed, CancellationToken.None).ConfigureAwait(false)
-                : (seed, false);
+                : new MetadataResult(seed, false, []);
+            var final = resolved.Track;
             var art = final.AlbumArt is { Length: > 0 } ? DecodeArt(final.AlbumArt) : null;
 
             // A freeform song (no re-addressable origin) needs identification + a playable URL.
@@ -141,15 +142,21 @@ public sealed partial class HistoryViewModel : ViewModelBase
             HistoryMatchState? newState = null;
             if (entry.Sources.Count == 0 && _resolver is { HasContributors: true })
             {
-                if (matched)
+                if (resolved.Matched)
                 {
-                    // Catalog confirmed the identity → trust a search by the canonical name and store
-                    // a playable URL per service. Searching only when matched is what keeps a fuzzy
+                    // Catalog confirmed the identity. Prefer VocaDB's PV links (the exact official
+                    // uploads, incl. Niconico) and supplement with a name search for any other
+                    // service (e.g. Spotify). Searching only when matched is what keeps a fuzzy
                     // title-only parse from latching onto the wrong artist's same-titled track.
-                    var (sources, ran) = await FindSourcesAsync(final, CancellationToken.None).ConfigureAwait(false);
-                    foundSources = sources;
+                    var pvSources = HistorySourceMatch.FromPvs(resolved.Playables);
+                    var (searchHits, ran) = await FindSourcesAsync(final, CancellationToken.None).ConfigureAwait(false);
+                    foundSources = HistorySourceMatch.Combine(pvSources, searchHits);
                     newState = HistoryMatchState.Matched;
-                    settled = ran; // no search source ready → leave unsettled so we retry for the URL
+                    // Settle when the search actually ran, or when we have PVs and there's no search
+                    // source that could ever add more. If a search source exists but wasn't ready yet
+                    // (ran == false), stay unsettled so a later pass can still add e.g. Spotify —
+                    // having a PV mustn't permanently suppress the other services.
+                    settled = ran || (pvSources.Count > 0 && !UnifiedSearch.HasSearchableSource);
                 }
                 else
                 {

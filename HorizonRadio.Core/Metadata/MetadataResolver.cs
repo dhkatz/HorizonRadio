@@ -64,17 +64,17 @@ public sealed class MetadataResolver : IAsyncDisposable
     /// freeform (radio) songs we couldn't identify, separately from the merged metadata it
     /// shows. A non-resolvable placeholder or a no-contributor setup reports <c>false</c>.
     /// </summary>
-    public async Task<(Track Track, bool Matched)> ResolveDetailedAsync(Track seed, CancellationToken ct)
+    public async Task<MetadataResult> ResolveDetailedAsync(Track seed, CancellationToken ct)
     {
         // Non-song placeholders (e.g. a radio station card before the first track) must not be
         // searched — the station name false-matches unrelated catalog entries. Keep the source's
         // own art (the station logo) and skip the provider pass.
-        if (!seed.Resolvable) return (WithArtFallback(seed), false);
+        if (!seed.Resolvable) return new MetadataResult(WithArtFallback(seed), false, []);
 
         IReadOnlyList<IMetadataProvider> contributors;
         MetadataPolicy policy;
         lock (_lock) { contributors = _contributors; policy = _policy; }
-        if (contributors.Count == 0) return (WithArtFallback(seed), false);
+        if (contributors.Count == 0) return new MetadataResult(WithArtFallback(seed), false, []);
 
         // Ambiguous source titles attach alternative (artist, title) interpretations; try the
         // primary first, then candidates, keeping the one a catalog confirms.
@@ -92,7 +92,7 @@ public sealed class MetadataResolver : IAsyncDisposable
     // win ahead of an artist-corroborated one. A clean "Artist - Title" still short-circuits on
     // its first (primary) resolve. If nothing matches, the primary's resolution stands (display =
     // primary parse + station-logo fallback).
-    private static async Task<(Track Track, bool Matched)> ResolveBestAsync(
+    private static async Task<MetadataResult> ResolveBestAsync(
         Track seed, IReadOnlyList<IMetadataProvider> contributors, MetadataPolicy policy, CancellationToken ct)
     {
         var primary = seed with { Candidates = null };
@@ -104,23 +104,23 @@ public sealed class MetadataResolver : IAsyncDisposable
         var ordered = all.Where(t => !string.IsNullOrWhiteSpace(t.Artist))
                          .Concat(all.Where(t => string.IsNullOrWhiteSpace(t.Artist)));
 
-        Track? primaryTrack = null;
+        MetadataResult? primaryResult = null;
         foreach (var s in ordered)
         {
-            var (track, matched) = await ResolveOneAsync(s, contributors, policy, ct).ConfigureAwait(false);
-            if (ReferenceEquals(s, primary)) primaryTrack = track;
-            if (matched) return (track, true);
+            var result = await ResolveOneAsync(s, contributors, policy, ct).ConfigureAwait(false);
+            if (ReferenceEquals(s, primary)) primaryResult = result;
+            if (result.Matched) return result; // the confirmed interpretation, with its PV links
         }
 
         // Nothing matched: the primary interpretation's resolution stands (display = primary
         // parse + station-logo fallback), and we report no catalog confirmation.
-        return (primaryTrack ?? (await ResolveOneAsync(primary, contributors, policy, ct).ConfigureAwait(false)).Track, false);
+        return primaryResult ?? await ResolveOneAsync(primary, contributors, policy, ct).ConfigureAwait(false);
     }
 
     // Run one seed through the contributor chain. Matched = a network contributor produced a
     // non-empty contribution (they only do so when their own match guard passed) — i.e. a
     // catalog confirmed this interpretation.
-    private static async Task<(Track Track, bool Matched)> ResolveOneAsync(
+    private static async Task<MetadataResult> ResolveOneAsync(
         Track seed, IReadOnlyList<IMetadataProvider> contributors, MetadataPolicy policy, CancellationToken ct)
     {
         var byId = new Dictionary<string, MetadataContribution>(StringComparer.Ordinal)
@@ -171,8 +171,16 @@ public sealed class MetadataResolver : IAsyncDisposable
             if (string.IsNullOrEmpty(album) && !string.IsNullOrEmpty(contribution.Album)) album = contribution.Album;
         }
 
+        // Playable links any contributor learned (VocaDB PVs today), deduped by service+url, in
+        // contributor order — carried alongside the merged metadata for play history to replay from.
+        var playables = byId.Values
+            .Where(c => c.Playables is { Count: > 0 })
+            .SelectMany(c => c.Playables!)
+            .DistinctBy(p => (p.Service, p.Url))
+            .ToList();
+
         // More than just the source contributed → a catalog matched this interpretation.
-        return (Merge(seed, byId, policy) with { Candidates = null }, byId.Count > 1);
+        return new MetadataResult(Merge(seed, byId, policy) with { Candidates = null }, byId.Count > 1, playables);
     }
 
     private static MetadataContribution SourceContribution(Track t) => new(

@@ -27,10 +27,12 @@ namespace HorizonRadio.Core.Metadata;
 /// </summary>
 public sealed class MetadataCache
 {
-    /// <summary>Bump when matching/parsing logic changes enough that previously art-less results
-    /// (misses and partial hits) deserve a retry. Entries stamped with a different version are
-    /// treated as stale. Legacy entries (no stamp) read as version 0, so a bump invalidates them.</summary>
-    public const int CurrentCacheVersion = 1;
+    /// <summary>Bump when matching/parsing logic changes enough that previously cached results
+    /// deserve a re-fetch — including a richer extraction (e.g. now capturing PV links and album
+    /// covers). Entries stamped with a different version are treated as stale and re-fetched even if
+    /// they carry art. Legacy entries (no stamp) read as version 0, so a bump invalidates them.
+    /// v2: VocaDB PV links + linked-album cover art.</summary>
+    public const int CurrentCacheVersion = 2;
 
     private static readonly TimeSpan DefaultRetryTtl = TimeSpan.FromDays(14);
 
@@ -46,7 +48,8 @@ public sealed class MetadataCache
         string? Album,
         byte[]? AlbumArt,
         string? Mbid,
-        int? Year = null);
+        int? Year = null,
+        IReadOnlyList<PlayableRef>? Pvs = null);
 
     /// <param name="retryTtl">How long an art-less entry (miss / partial hit) is trusted before it
     /// is retried. Defaults to 14 days.</param>
@@ -92,7 +95,7 @@ public sealed class MetadataCache
         try
         {
             Entry entry;
-            bool fresh;
+            bool versionCurrent, withinTtl;
             using (var stream = File.OpenRead(path))
             using (var doc = JsonDocument.Parse(stream))
             {
@@ -103,16 +106,21 @@ public sealed class MetadataCache
                     Album: GetString(r, "album"),
                     AlbumArt: GetBase64(r, "art_b64"),
                     Mbid: GetString(r, "mbid"),
-                    Year: GetInt(r, "year"));
-                fresh = GetInt(r, "cache_ver") == _cacheVersion
-                        && GetLong(r, "cached_at") is { } at
+                    Year: GetInt(r, "year"),
+                    Pvs: GetPvs(r));
+                versionCurrent = GetInt(r, "cache_ver") == _cacheVersion;
+                withinTtl = GetLong(r, "cached_at") is { } at
                         && _now() - DateTimeOffset.FromUnixTimeSeconds(at) < _retryTtl;
             }
 
-            // Art never changes for a recording, so an art-bearing entry is kept forever. An
-            // art-less one (miss / partial hit) is honored only while fresh; once stale it's
-            // dropped and treated as absent so the lookup re-runs and can pick up a fix.
-            if (entry.AlbumArt is { Length: > 0 } || fresh)
+            // A durable result — cover art or PV links — is kept indefinitely (neither changes for a
+            // recording), but ONLY while the entry's logic version matches: a version bump re-fetches
+            // even art-bearing entries so newly-extracted fields (PVs, real album covers) backfill
+            // onto songs already in the cache. An entry without either durable field (a miss / partial
+            // hit) is honored only while still fresh; once stale or version-behind it's dropped so the
+            // lookup re-runs and can pick up a fix.
+            var durable = entry.AlbumArt is { Length: > 0 } || entry.Pvs is { Count: > 0 };
+            if (versionCurrent && (durable || withinTtl))
             {
                 _memoryCache[key] = entry;
                 return entry;
@@ -150,6 +158,18 @@ public sealed class MetadataCache
             if (entry.Year is { } year) writer.WriteNumber("year", year);
             if (entry.AlbumArt is { Length: > 0 })
                 writer.WriteString("art_b64", Convert.ToBase64String(entry.AlbumArt));
+            if (entry.Pvs is { Count: > 0 })
+            {
+                writer.WriteStartArray("pvs");
+                foreach (var pv in entry.Pvs)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteString("service", pv.Service);
+                    writer.WriteString("url", pv.Url);
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndArray();
+            }
             // Stamp every write so an art-less entry can be aged out (TTL) or invalidated (version).
             writer.WriteNumber("cached_at", _now().ToUnixTimeSeconds());
             writer.WriteNumber("cache_ver", _cacheVersion);
@@ -183,5 +203,19 @@ public sealed class MetadataCache
         if (string.IsNullOrEmpty(s)) return null;
         try { return Convert.FromBase64String(s); }
         catch { return null; }
+    }
+
+    private static List<PlayableRef>? GetPvs(JsonElement r)
+    {
+        if (!r.TryGetProperty("pvs", out var arr) || arr.ValueKind != JsonValueKind.Array) return null;
+        var list = new List<PlayableRef>();
+        foreach (var p in arr.EnumerateArray())
+        {
+            var service = GetString(p, "service");
+            var url = GetString(p, "url");
+            if (!string.IsNullOrEmpty(service) && !string.IsNullOrEmpty(url))
+                list.Add(new PlayableRef(service!, url!));
+        }
+        return list.Count > 0 ? list : null;
     }
 }
