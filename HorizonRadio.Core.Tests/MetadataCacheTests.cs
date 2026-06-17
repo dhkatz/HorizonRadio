@@ -47,17 +47,41 @@ public sealed class MetadataCacheTests : IDisposable
     }
 
     [Fact]
-    public void Art_bearing_entry_is_kept_even_when_old_and_a_version_behind()
+    public void Art_bearing_entry_is_kept_forever_within_the_same_version()
     {
-        Cache(T0, version: 1).Put(Key, new MetadataCache.Entry("Song", "Artist", "Album",
+        Cache(T0, version: 2).Put(Key, new MetadataCache.Entry("Song", "Artist", "Album",
             new byte[] { 1, 2, 3 }, Mbid: null));
 
-        // Far past the TTL and a newer logic version — art entries still never expire.
+        // Far past the TTL but same logic version — durable art never expires.
         var hit = Cache(T0.AddDays(999), version: 2).TryGet(Key);
 
         Assert.NotNull(hit);
-        Assert.Equal("Song", hit!.Title);
-        Assert.NotNull(hit.AlbumArt);
+        Assert.NotNull(hit!.AlbumArt);
+    }
+
+    [Fact]
+    public void Version_bump_re_fetches_even_an_art_bearing_entry()
+    {
+        // An art-bearing entry from an older logic version is now invalidated, so a richer
+        // extraction (PV links, album covers) can backfill onto songs already cached.
+        Cache(T0, version: 1).Put(Key, new MetadataCache.Entry("Song", "Artist", "Album",
+            new byte[] { 1, 2, 3 }, Mbid: null));
+
+        Assert.Null(Cache(T0.AddHours(1), version: 2).TryGet(Key)); // version-behind → re-fetch
+    }
+
+    [Fact]
+    public void Pv_bearing_art_less_entry_is_kept_past_the_ttl()
+    {
+        // PV links are durable like art — a Niconico-only track whose thumbnail download failed must
+        // not lose its replay links to the TTL.
+        Cache(T0, version: 2).Put(Key, new MetadataCache.Entry("Song", "Artist", null, null, null,
+            Pvs: new[] { new PlayableRef("Niconico", "https://www.nicovideo.jp/watch/sm1") }));
+
+        var hit = Cache(T0.AddDays(999), version: 2).TryGet(Key);
+
+        Assert.NotNull(hit);
+        Assert.Single(hit!.Pvs!);
     }
 
     [Fact]

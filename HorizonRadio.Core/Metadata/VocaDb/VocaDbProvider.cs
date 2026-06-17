@@ -215,24 +215,28 @@ public sealed class VocaDbProvider : IMetadataProvider
             if (scoreForSong is { }) titleGuard.Observe(artist);
             if (scoreForSong is not { } score) continue;
 
-            // Prefer a strictly higher score; on a tie, prefer a candidate that actually has art so
-            // an equal-scoring sibling with a thumbnail (e.g. the Kagamine Rin version of a song)
-            // wins over an image-less entry (the GUMI version) instead of leaving the tile blank.
-            // Prefer a real square album cover (when the song is on an album that has one) over the
-            // song's own 16:9 video thumbnail; DownloadFirstAsync falls through to the thumbnail if
-            // the album image is missing.
-            var art = PickArt(s);
-            var albumId = SelectAlbumId(s);
-            if (albumId is { } aid) art.Insert(0, AlbumCoverUrl(aid));
-
+            // Prefer a strictly higher score; on a tie, prefer a candidate that actually has its own
+            // art (a real thumbnail) so an equal-scoring sibling with art (e.g. the Kagamine Rin
+            // version) wins over an image-less entry (the GUMI version) instead of leaving the tile
+            // blank. The album cover is added to the WINNER afterwards, so it can't skew this proxy.
+            var ownArt = PickArt(s);
             bool better = score > bestScore
-                || (score == bestScore && best is not null && best.ArtUrls.Count == 0 && art.Count > 0);
+                || (score == bestScore && best is not null && best.ArtUrls.Count == 0 && ownArt.Count > 0);
             if (!better) continue;
 
             bestScore = score;
-            best = new Match(name, artist, art, ParseYear(Str(s, "publishDate")), OriginalId(s), albumId, SelectPvs(s));
+            best = new Match(name, artist, ownArt, ParseYear(Str(s, "publishDate")), OriginalId(s),
+                SelectAlbumId(s), SelectPvs(s));
         }
-        return titleGuard.IsAmbiguous ? null : best;
+        if (titleGuard.IsAmbiguous) return null;
+
+        // Prefer a real square album cover over the winner's own 16:9 video thumbnail: prepend the
+        // album image URLs ahead of its thumbnail (DownloadFirstAsync tries them in order and falls
+        // through to the thumbnail if the album image is missing). Both extensions are offered
+        // because VocaDB serves some covers only as .png.
+        if (best is { AlbumId: { } albumId })
+            best = best with { ArtUrls = [.. AlbumCoverUrls(albumId), .. best.ArtUrls] };
+        return best;
     }
 
     // VocaDB's link from a Remaster / re-upload to the song it derives from (0 = none). Lets an
@@ -241,10 +245,14 @@ public sealed class VocaDbProvider : IMetadataProvider
         song.TryGetProperty("originalVersionId", out var p) && p.ValueKind == JsonValueKind.Number
             && p.TryGetInt32(out var id) && id > 0 ? id : null;
 
-    // The static URL for an album's square cover. The mainOrig/<id>.jpg pattern is stable; a wrong
-    // guess just 404s and DownloadFirstAsync falls through to the song thumbnail.
-    private static string AlbumCoverUrl(int albumId) =>
-        $"https://static.vocadb.net/img/Album/mainOrig/{albumId}.jpg";
+    // The static URLs for an album's square cover. The mainOrig/<id>.<ext> pattern is stable, but the
+    // extension follows the source image — VocaDB serves some covers only as .png — so we offer both
+    // and let DownloadFirstAsync take whichever resolves (and fall through to the thumbnail if neither).
+    private static string[] AlbumCoverUrls(int albumId) =>
+    [
+        $"https://static.vocadb.net/img/Album/mainOrig/{albumId}.jpg",
+        $"https://static.vocadb.net/img/Album/mainOrig/{albumId}.png",
+    ];
 
     /// <summary>Choose which of a song's albums to take cover art from: among albums that actually
     /// have a cover, prefer a real release (Album/Single/EP) over a compilation/video, then the
@@ -281,13 +289,15 @@ public sealed class VocaDbProvider : IMetadataProvider
     };
 
     // yyyymmdd for earliest-first sorting; a missing/empty date sorts last so dated releases win.
+    // A partial date (year known, month/day absent — common on VocaDB) defaults to the START of the
+    // period (Jan 1), so a year-only original beats a fully-dated later-month reissue of that year.
     private static long ReleaseSortKey(JsonElement album)
     {
         if (!album.TryGetProperty("releaseDate", out var d) || d.ValueKind != JsonValueKind.Object)
             return long.MaxValue;
         if (d.TryGetProperty("isEmpty", out var e) && e.ValueKind == JsonValueKind.True)
             return long.MaxValue;
-        int y = IntOr(d, "year", 9999), m = IntOr(d, "month", 12), day = IntOr(d, "day", 31);
+        int y = IntOr(d, "year", 9999), m = IntOr(d, "month", 1), day = IntOr(d, "day", 1);
         return (y * 10000L) + (m * 100L) + day;
     }
 

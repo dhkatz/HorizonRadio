@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **VocaDB now supplies real album art and playable links.** A matched VocaDB song
+  contributes its linked album's square cover (preferred over the 16:9 video
+  thumbnail) and its promotion-video (PV) links — the official/reprint uploads on
+  YouTube, Niconico, Bilibili, SoundCloud, … — which become one-click replay
+  sources in play history. Non-YouTube PVs play through the existing yt-dlp engine,
+  labeled by their real service. (Existing cached songs backfill on next play via a
+  cache-version bump.)
+
 ### Changed
 
 - **C++ side modernized; clang-tidy now enforced in CI.** Extracted the in-game

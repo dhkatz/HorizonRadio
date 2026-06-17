@@ -152,9 +152,11 @@ public sealed partial class HistoryViewModel : ViewModelBase
                     var (searchHits, ran) = await FindSourcesAsync(final, CancellationToken.None).ConfigureAwait(false);
                     foundSources = HistorySourceMatch.Combine(pvSources, searchHits);
                     newState = HistoryMatchState.Matched;
-                    // Settled once we have any source; if a PV gave us one, a not-yet-ready search
-                    // source needn't block us, but with neither we retry later for a URL.
-                    settled = ran || pvSources.Count > 0;
+                    // Settle when the search actually ran, or when we have PVs and there's no search
+                    // source that could ever add more. If a search source exists but wasn't ready yet
+                    // (ran == false), stay unsettled so a later pass can still add e.g. Spotify —
+                    // having a PV mustn't permanently suppress the other services.
+                    settled = ran || (pvSources.Count > 0 && !UnifiedSearch.HasSearchableSource);
                 }
                 else
                 {
