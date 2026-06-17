@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HorizonRadio.Core.History;
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Models;
 using HorizonRadio.Core.ModInstall;
@@ -48,6 +49,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// submitting a query from <see cref="TopBar"/>.</summary>
     public SearchViewModel Search { get; }
 
+    /// <summary>The play-history workspace.</summary>
+    public HistoryViewModel History { get; }
+
     /// <summary>Toast host bound in <c>MainWindow.axaml</c>; view models raise
     /// transient notifications through it (e.g. output-unavailable errors).</summary>
     public ToastManager ToastManager { get; }
@@ -73,6 +77,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Queue = new QueueViewModel();
         TopBar = new TopBarViewModel();
         Search = new SearchViewModel();
+        History = new HistoryViewModel();
         HookModBanner();
     }
 
@@ -81,6 +86,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                                MixStore mixStore,
                                MixSwitcher mixSwitcher,
                                QueuePlayback queue,
+                               PlayHistoryStore historyStore,
                                MetadataResolver metaResolver,
                                Core.Sources.Mixes.MixContentResolver contentResolver,
                                MetadataViewModel metadata,
@@ -114,6 +120,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Search = new SearchViewModel(searchEnqueuer, searchContext);
         TopBar = new TopBarViewModel(searchEnqueuer, searchContext, ShowSearch);
 
+        // History replays directly when it can; otherwise it re-searches the song on the
+        // full search page (the same picker), so no-locator (radio) songs stay playable.
+        History = new HistoryViewModel(historyStore, queue, metaResolver, OpenSearchFor, toasts);
+
         HookModBanner();
     }
 
@@ -124,6 +134,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         Search.Show(query, result);
         SelectedWorkspaceIndex = 11;
+    }
+
+    /// <summary>Open the search page for a fresh query (no precomputed results) — the History
+    /// tab's "find this song again" path when a played song has no re-addressable origin.</summary>
+    public void OpenSearchFor(string query)
+    {
+        SelectedWorkspaceIndex = 11;
+        _ = Search.RunAsync(query);
     }
 
     private void HookModBanner()
@@ -156,7 +174,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _ => "",
     };
 
-    // 0 = Now Playing, 1 = Sources, 2 = Metadata, 3 = Stats, 4 = Mod Manager, 5 = Tools, 6 = Events, 7 = Console, 8 = Controls, 9 = Mixes, 10 = About, 11 = Search
+    // 0 = Now Playing, 1 = Sources, 2 = Metadata, 3 = Stats, 4 = Mod Manager, 5 = Tools, 6 = Events, 7 = Console, 8 = Controls, 9 = Mixes, 10 = About, 11 = Search, 12 = History
     [ObservableProperty] private int selectedWorkspaceIndex;
 
     public bool IsNowPlayingWorkspace => SelectedWorkspaceIndex == 0;
@@ -171,6 +189,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public bool IsMixesWorkspace => SelectedWorkspaceIndex == 9;
     public bool IsAboutWorkspace => SelectedWorkspaceIndex == 10;
     public bool IsSearchWorkspace => SelectedWorkspaceIndex == 11;
+    public bool IsHistoryWorkspace => SelectedWorkspaceIndex == 12;
 
     public string CurrentRoute => SelectedWorkspaceIndex switch
     {
@@ -185,6 +204,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         9 => "mixes",
         10 => "about",
         11 => "search", // no SidebarItem matches → nav shows nothing selected (intended)
+        12 => "history",
         _ => "now-playing",
     };
 
@@ -212,7 +232,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsMixesWorkspace));
         OnPropertyChanged(nameof(IsAboutWorkspace));
         OnPropertyChanged(nameof(IsSearchWorkspace));
+        OnPropertyChanged(nameof(IsHistoryWorkspace));
         OnPropertyChanged(nameof(CurrentRoute));
+
+        // Showing History gives any rows that couldn't resolve earlier (e.g. a search source that
+        // connected after startup) another chance to find art / playable sources.
+        if (value == 12) History.RefreshEnrichment();
     }
 
     partial void OnIsSidebarExpandedChanged(bool value)
@@ -232,6 +257,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand] private void ShowControls() => SelectedWorkspaceIndex = 8;
     [RelayCommand] private void ShowMixes() => SelectedWorkspaceIndex = 9;
     [RelayCommand] private void ShowAbout() => SelectedWorkspaceIndex = 10;
+    [RelayCommand] private void ShowHistory() => SelectedWorkspaceIndex = 12;
 
     public void SetConnection(ConnectionState state)
     {

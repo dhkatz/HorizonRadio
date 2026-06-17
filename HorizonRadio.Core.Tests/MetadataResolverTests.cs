@@ -220,4 +220,57 @@ public class MetadataResolverTests
         Assert.Same(logo, r.AlbumArt);                      // station-logo fallback
         Assert.Null(r.Candidates);                          // cleared on output
     }
+
+    // -- match verdict (drives play history's "couldn't identify" warning) --
+
+    [Fact]
+    public async Task ResolveDetailed_reports_matched_when_a_catalog_confirms()
+    {
+        var resolver = new MetadataResolver();
+        resolver.Configure(
+            [new MatchingContributor("itunes", "RealArtist", "Real Song", new MetadataContribution(Art: [1]))],
+            Policy(["itunes"]));
+
+        var (_, matched) = await resolver.ResolveDetailedAsync(
+            Seed(title: "Real Song", artist: "RealArtist"), CancellationToken.None);
+
+        Assert.True(matched);
+    }
+
+    [Fact]
+    public async Task ResolveDetailed_reports_unmatched_when_no_provider_confirms()
+    {
+        var resolver = new MetadataResolver();
+        resolver.Configure(
+            [new MatchingContributor("itunes", "Someone Else", "Other Song", new MetadataContribution(Art: [1]))],
+            Policy(["itunes"]));
+
+        var (_, matched) = await resolver.ResolveDetailedAsync(
+            Seed(title: "Mystery", artist: "Unknown"), CancellationToken.None);
+
+        Assert.False(matched);
+    }
+
+    [Fact]
+    public async Task ResolveDetailed_reports_matched_via_a_confirmed_candidate()
+    {
+        var resolver = new MetadataResolver();
+        resolver.Configure(
+            [new MatchingContributor("itunes", "Heavenz", "テロメアの産声", new MetadataContribution(Art: [1]))],
+            Policy(["itunes"]));
+
+        var seed = RadioSeed("Heavenz - テロメアの産声", "ExGrooveCh",
+            [new TitleCandidate("Heavenz", "テロメアの産声")]);
+        var (_, matched) = await resolver.ResolveDetailedAsync(seed, CancellationToken.None);
+
+        Assert.True(matched);
+    }
+
+    [Fact]
+    public async Task ResolveDetailed_reports_unmatched_with_no_contributors()
+    {
+        var resolver = new MetadataResolver();
+        var (_, matched) = await resolver.ResolveDetailedAsync(Seed(), CancellationToken.None);
+        Assert.False(matched);
+    }
 }

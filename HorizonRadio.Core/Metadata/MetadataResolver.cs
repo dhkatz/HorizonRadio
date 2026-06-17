@@ -54,25 +54,35 @@ public sealed class MetadataResolver : IAsyncDisposable
     /// alone needs no resolve pass).</summary>
     public bool HasContributors { get { lock (_lock) return _contributors.Count > 0; } }
 
-    public async Task<Track> ResolveAsync(Track seed, CancellationToken ct)
+    public async Task<Track> ResolveAsync(Track seed, CancellationToken ct) =>
+        (await ResolveDetailedAsync(seed, ct).ConfigureAwait(false)).Track;
+
+    /// <summary>
+    /// Like <see cref="ResolveAsync"/>, but also reports whether a catalog actually confirmed
+    /// the track (<c>Matched</c>) — i.e. a network contributor produced a non-empty
+    /// contribution, not just the source echoing its own seed. Play history uses this to flag
+    /// freeform (radio) songs we couldn't identify, separately from the merged metadata it
+    /// shows. A non-resolvable placeholder or a no-contributor setup reports <c>false</c>.
+    /// </summary>
+    public async Task<(Track Track, bool Matched)> ResolveDetailedAsync(Track seed, CancellationToken ct)
     {
         // Non-song placeholders (e.g. a radio station card before the first track) must not be
         // searched — the station name false-matches unrelated catalog entries. Keep the source's
         // own art (the station logo) and skip the provider pass.
-        if (!seed.Resolvable) return WithArtFallback(seed);
+        if (!seed.Resolvable) return (WithArtFallback(seed), false);
 
         IReadOnlyList<IMetadataProvider> contributors;
         MetadataPolicy policy;
         lock (_lock) { contributors = _contributors; policy = _policy; }
-        if (contributors.Count == 0) return WithArtFallback(seed);
+        if (contributors.Count == 0) return (WithArtFallback(seed), false);
 
         // Ambiguous source titles attach alternative (artist, title) interpretations; try the
         // primary first, then candidates, keeping the one a catalog confirms.
         MetadataTrace.BeginResolve(seed);
         var result = seed.Candidates is { Count: > 0 }
             ? await ResolveBestAsync(seed, contributors, policy, ct).ConfigureAwait(false)
-            : (await ResolveOneAsync(seed, contributors, policy, ct).ConfigureAwait(false)).Track;
-        MetadataTrace.EndResolve(result);
+            : await ResolveOneAsync(seed, contributors, policy, ct).ConfigureAwait(false);
+        MetadataTrace.EndResolve(result.Track);
         return result;
     }
 
@@ -82,7 +92,7 @@ public sealed class MetadataResolver : IAsyncDisposable
     // win ahead of an artist-corroborated one. A clean "Artist - Title" still short-circuits on
     // its first (primary) resolve. If nothing matches, the primary's resolution stands (display =
     // primary parse + station-logo fallback).
-    private static async Task<Track> ResolveBestAsync(
+    private static async Task<(Track Track, bool Matched)> ResolveBestAsync(
         Track seed, IReadOnlyList<IMetadataProvider> contributors, MetadataPolicy policy, CancellationToken ct)
     {
         var primary = seed with { Candidates = null };
@@ -99,10 +109,12 @@ public sealed class MetadataResolver : IAsyncDisposable
         {
             var (track, matched) = await ResolveOneAsync(s, contributors, policy, ct).ConfigureAwait(false);
             if (ReferenceEquals(s, primary)) primaryTrack = track;
-            if (matched) return track;
+            if (matched) return (track, true);
         }
 
-        return primaryTrack ?? (await ResolveOneAsync(primary, contributors, policy, ct).ConfigureAwait(false)).Track;
+        // Nothing matched: the primary interpretation's resolution stands (display = primary
+        // parse + station-logo fallback), and we report no catalog confirmation.
+        return (primaryTrack ?? (await ResolveOneAsync(primary, contributors, policy, ct).ConfigureAwait(false)).Track, false);
     }
 
     // Run one seed through the contributor chain. Matched = a network contributor produced a
