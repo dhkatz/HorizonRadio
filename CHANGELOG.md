@@ -31,6 +31,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `HeaderFilterRegex` had been silently excluding them), adding `[[nodiscard]]`,
   rule-of-5 on the thread-owning IPC/PCM servers, and dead-code removal.
 
+### Fixed
+
+- **Internet-radio tracks no longer attach a wrong same-titled cover.** A romaji
+  broadcast artist (e.g. "HachiojiP") could match an unrelated Japanese-named
+  artist's same-titled song (e.g. くろくも's "KiLLER LADY") through the cross-script
+  artist bridge, pulling in that cover's art. A lightweight kana romanizer now
+  verifies a kana catalog artist actually sounds like the broadcast name before the
+  bridge accepts the match.
+
 ## [0.6.0] - 2026-06-15
 
 ### Added

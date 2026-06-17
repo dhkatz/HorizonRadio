@@ -138,6 +138,19 @@ public class SearchTermsTests
         => Assert.Null(SearchTerms.MatchScore("Innocent Favor", "Bunmyaku", "Innocent Favor", "Other Band feat. 初音ミク"));
 
     [Fact]
+    public void MatchScore_rejects_a_kana_cover_by_a_different_artist()
+        // The real bug: iTunes returns "KiLLER LADY" by くろくも (kurokumo) for a HachiojiP query.
+        // Exact title + cross-script used to accept it; romanizing the kana producer shows
+        // "kurokumo" ≠ "hachiojip", so the wrong cover's art is now rejected.
+        => Assert.Null(SearchTerms.MatchScore("KiLLER LADY", "HachiojiP feat. GUMI", "KiLLER LADY", "くろくも"));
+
+    [Fact]
+    public void MatchScore_accepts_a_kana_artist_that_romanizes_to_the_query()
+        // The legit cross-script case the romanizer should still bridge: the same act, broadcast in
+        // romaji and listed in kana, sounds alike → accept on the exact multi-word title.
+        => Assert.NotNull(SearchTerms.MatchScore("Sweet Devil", "Mafumafu", "Sweet Devil", "まふまふ"));
+
+    [Fact]
     public void MatchScore_allows_a_partial_or_unknown_result_artist()
     {
         // Shares a token (looser store credit) → still matches.
