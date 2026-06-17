@@ -141,8 +141,18 @@ public static class SearchTerms
             var producer = Feat.Replace(resultArtist ?? "", "");
             bool crossScript = HasLatin(queryArtist) && !HasCjk(queryArtist)
                 && HasCjk(producer) && !HasLatin(producer);
-            if (crossScript) return titlesEqual && qt.Count >= 2 ? titleCover : null;
-            return null;
+            if (!crossScript || !titlesEqual || qt.Count < 2) return null;
+
+            // Cross-script + exact multi-word title is necessary but NOT sufficient: a same-titled
+            // cover by an unrelated Japanese-named artist looks identical to a real romaji↔CJK
+            // match. When the catalog producer is purely KANA we can romanize it and confirm it
+            // actually sounds like the broadcast name — rejecting "くろくも" for a "HachiojiP" query
+            // while still bridging "まふまふ"/"Mafumafu". A KANJI name can't be cheaply romanized,
+            // so it stays on the (unverified) title-only acceptance rather than being wrongly rejected.
+            var producerRomaji = Romaji.TryRomanize(producer);
+            if (producerRomaji != null && !Romaji.SoundsLike(Feat.Replace(queryArtist ?? "", ""), producerRomaji))
+                return null;
+            return titleCover;
         }
         if (qt.Count < 2 && artistCover < 0.5) return null;   // generic 1-word title needs the artist
 
