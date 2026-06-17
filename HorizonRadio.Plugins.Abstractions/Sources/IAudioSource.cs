@@ -37,7 +37,7 @@ public interface IAudioSource : IAsyncDisposable
 
 /// <summary>
 /// Destination for PCM produced by a source. The default implementation
-/// is a thin wrapper over <see cref="Ipc.PcmPipeClient"/>, but the
+/// is a thin wrapper over the host's <c>PcmPipeClient</c>, but the
 /// abstraction lets us unit-test sources against an in-memory sink and
 /// later add an "audio preview" path for the UI itself.
 /// </summary>

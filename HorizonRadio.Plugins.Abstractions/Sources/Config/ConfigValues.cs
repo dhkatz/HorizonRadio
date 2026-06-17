@@ -5,7 +5,7 @@ namespace HorizonRadio.Core.Sources.Config;
 /// <summary>
 /// Typed bag of user-supplied values for a source's configuration,
 /// keyed by <see cref="ConfigField.Key"/>. Round-trips through JSON
-/// for persistence (see <see cref="SourceConfigStore"/>), so values
+/// for persistence (see the host's <c>SourceConfigStore</c>), so values
 /// should be JSON-friendly primitives: string, bool, double, int.
 ///
 /// Factories read out of this via the typed accessors; missing keys

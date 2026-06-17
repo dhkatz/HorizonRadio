@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The plugin SDK: a dependency-free contract leaf. Metadata/Source plugins and the host
+    all reference this and nothing heavier, so a plugin needs only this assembly's types
+    (factory + capability interfaces, the config-field schema, and the plain DTOs they
+    traffic in). Keep it zero-dependency — no NAudio/Spotify/Avalonia, no I/O — so it stays
+    a stable, safely-shared contract (a single type identity across host and every plugin).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

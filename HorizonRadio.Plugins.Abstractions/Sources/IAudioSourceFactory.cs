@@ -6,7 +6,7 @@ namespace HorizonRadio.Core.Sources;
 /// <summary>
 /// Describes one kind of audio source and constructs instances from
 /// user-supplied configuration. The factory is the registration unit:
-/// <see cref="SourceCatalog"/> lists them, the UI renders a config
+/// the host's source catalog lists them, the UI renders a config
 /// form from <see cref="Schema"/>, and <see cref="Create"/> turns the
 /// completed config into a runnable <see cref="IAudioSource"/>.
 ///
