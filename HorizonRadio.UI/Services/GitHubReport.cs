@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
 using System.Text;
@@ -21,17 +20,11 @@ public static class GitHubReport
 
     public static void OpenIssueDraft(PlayHistoryEntry entry, ToastManager? toasts = null)
     {
-        try
-        {
-            var url = $"{NewIssueUrl}?title={Uri.EscapeDataString(BuildTitle(entry))}" +
-                      $"&body={Uri.EscapeDataString(BuildBody(entry))}";
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-        }
-        catch (Exception ex)
-        {
+        var url = $"{NewIssueUrl}?title={Uri.EscapeDataString(BuildTitle(entry))}" +
+                  $"&body={Uri.EscapeDataString(BuildBody(entry))}";
+        if (!BrowserLauncher.Open(url))
             toasts?.CreateToast("Couldn't open the report")
-                .WithContent(ex.Message).WithDelay(6).DismissOnClick().ShowError();
-        }
+                .WithContent("Failed to open your browser.").WithDelay(6).DismissOnClick().ShowError();
     }
 
     private static string BuildTitle(PlayHistoryEntry e)

@@ -41,10 +41,10 @@ public sealed partial class QueueViewModel : ViewModelBase
     // into now-playing doesn't reveal an un-enriched row popping in at the bottom.
     private const int EnrichLookahead = 18;
 
-    // Cap concurrent metadata-only yt-dlp resolves so the window trickles in rather
-    // than spawning a dozen processes at once. Caps the queue's enrichment to ≤3 at
-    // a time (the Mixes tab has its own separate ≤3 enumerate cap).
-    private static readonly SemaphoreSlim MetaGate = new(3, 3);
+    // Cap concurrent metadata-only yt-dlp resolves so the window trickles in rather than spawning
+    // a dozen processes at once. Shared process-wide (see EnrichmentThrottle) so the queue and the
+    // History tab enriching at the same time can't together exceed the cap.
+    private static SemaphoreSlim MetaGate => EnrichmentThrottle.Gate;
 
     /// <summary>Now-playing line at the top of the sidebar.</summary>
     [ObservableProperty] private string nowPlayingTitle = "";

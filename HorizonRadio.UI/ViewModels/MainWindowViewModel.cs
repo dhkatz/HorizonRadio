@@ -234,6 +234,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsSearchWorkspace));
         OnPropertyChanged(nameof(IsHistoryWorkspace));
         OnPropertyChanged(nameof(CurrentRoute));
+
+        // Showing History gives any rows that couldn't resolve earlier (e.g. a search source that
+        // connected after startup) another chance to find art / playable sources.
+        if (value == 12) History.RefreshEnrichment();
     }
 
     partial void OnIsSidebarExpandedChanged(bool value)

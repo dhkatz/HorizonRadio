@@ -21,10 +21,11 @@ namespace HorizonRadio.Core.History;
 /// </summary>
 public sealed class PlayHistoryService : IDisposable
 {
-    /// <summary>A song superseded within this window of starting is treated as skipped, not heard.
-    /// Also wide enough to fold a background title-model refinement of the same radio song (which
-    /// arrives as a second track change a few seconds later) onto a single entry.</summary>
-    public static readonly TimeSpan SkipWindow = TimeSpan.FromSeconds(12);
+    /// <summary>A song superseded within this window of starting is treated as skipped (not really
+    /// heard) and dropped — "a few seconds", deliberately short so two genuinely distinct songs a
+    /// little apart are both kept. Deterministic radio re-fires are collapsed by signature, not this
+    /// window; only a title-model parse that promotes a different primary mid-window relies on it.</summary>
+    public static readonly TimeSpan SkipWindow = TimeSpan.FromSeconds(5);
 
     private const int SaveDebounceMs = 2000;
 
@@ -131,7 +132,14 @@ public sealed class PlayHistoryService : IDisposable
         if (_persist)
         {
             _store.Changed -= ScheduleSave;
-            _saveTimer?.Dispose();
+            // Drain any in-flight debounce callback before the final save so the timer thread and
+            // this thread don't write the file concurrently. Dispose(WaitHandle) signals when all
+            // callbacks have completed; bound the wait so shutdown can't hang.
+            if (_saveTimer != null)
+            {
+                using var drained = new ManualResetEvent(false);
+                if (_saveTimer.Dispose(drained)) drained.WaitOne(TimeSpan.FromSeconds(5));
+            }
             _store.SaveToDisk(); // flush the final state synchronously
         }
     }

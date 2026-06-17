@@ -88,14 +88,16 @@ public sealed class PlayHistoryStore
         if (changed) Changed?.Invoke();
     }
 
-    /// <summary>Store the playable sources found for a (freeform) entry. No-op if the entry is gone.</summary>
+    /// <summary>Store the playable sources found for a (freeform) entry. No-op (no event) if the
+    /// entry is gone or the set is unchanged — so a re-resolve that finds the same (or still no)
+    /// sources doesn't churn the UI or re-trigger a save.</summary>
     public void SetSources(string id, IReadOnlyList<ReplaySource> sources)
     {
         bool changed = false;
         lock (_lock)
         {
             var e = _entries.FirstOrDefault(x => x.Id == id);
-            if (e != null) { e.Sources = sources; changed = true; }
+            if (e != null && !e.Sources.SequenceEqual(sources)) { e.Sources = sources; changed = true; }
         }
         if (changed) Changed?.Invoke();
     }
@@ -142,62 +144,76 @@ public sealed class PlayHistoryStore
     public void SaveToDisk(string? path = null)
     {
         path ??= DefaultPath;
-        List<PlayHistoryEntry> snapshot;
-        lock (_lock) snapshot = _entries.ToList();
+
+        // Serialize INSIDE the lock: entries are mutated in place (SetSources/SetMatchState), so
+        // reading their fields outside the lock would race a concurrent writer. Building the JSON
+        // is CPU-only (no I/O), so holding the lock is brief; the file write happens after release.
+        byte[] bytes;
+        lock (_lock)
+        {
+            using var ms = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(ms, new JsonWriterOptions { Indented = true }))
+            {
+                writer.WriteStartObject();
+                writer.WriteStartArray("entries");
+                foreach (var e in _entries)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteString("id", e.Id);
+                    writer.WriteString("playedAt", e.PlayedAt.ToString("o", CultureInfo.InvariantCulture));
+                    writer.WriteString("title", e.Title);
+                    writer.WriteString("artist", e.Artist);
+                    if (e.Album != null) writer.WriteString("album", e.Album);
+                    if (e.Year is { } y) writer.WriteNumber("year", y);
+                    writer.WriteString("sourceId", e.SourceId);
+                    writer.WriteString("sourceDisplay", e.SourceDisplay);
+                    writer.WriteString("matchState", e.MatchState.ToString());
+                    if (e.Sources.Count > 0)
+                    {
+                        writer.WriteStartArray("sources");
+                        foreach (var s in e.Sources)
+                        {
+                            writer.WriteStartObject();
+                            writer.WriteString("sourceId", s.SourceId);
+                            writer.WriteString("display", s.SourceDisplay);
+                            writer.WriteString("locator", s.Locator);
+                            writer.WriteEndObject();
+                        }
+                        writer.WriteEndArray();
+                    }
+                    if (e.Candidates.Count > 0)
+                    {
+                        writer.WriteStartArray("candidates");
+                        foreach (var c in e.Candidates)
+                        {
+                            writer.WriteStartObject();
+                            if (c.Artist != null) writer.WriteString("artist", c.Artist);
+                            writer.WriteString("title", c.Title);
+                            writer.WriteEndObject();
+                        }
+                        writer.WriteEndArray();
+                    }
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndArray();
+                writer.WriteEndObject();
+            }
+            bytes = ms.ToArray();
+        }
+
+        // Write to a unique temp then atomically rename, so a crash or a concurrent save can never
+        // leave a half-written/truncated history.json (a plain File.Create truncates in place).
+        var tmp = $"{path}.{Guid.NewGuid():n}.tmp";
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-
-            using var stream = File.Create(path);
-            using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
-
-            writer.WriteStartObject();
-            writer.WriteStartArray("entries");
-            foreach (var e in snapshot)
-            {
-                writer.WriteStartObject();
-                writer.WriteString("id", e.Id);
-                writer.WriteString("playedAt", e.PlayedAt.ToString("o", CultureInfo.InvariantCulture));
-                writer.WriteString("title", e.Title);
-                writer.WriteString("artist", e.Artist);
-                if (e.Album != null) writer.WriteString("album", e.Album);
-                if (e.Year is { } y) writer.WriteNumber("year", y);
-                writer.WriteString("sourceId", e.SourceId);
-                writer.WriteString("sourceDisplay", e.SourceDisplay);
-                writer.WriteString("matchState", e.MatchState.ToString());
-                if (e.Sources.Count > 0)
-                {
-                    writer.WriteStartArray("sources");
-                    foreach (var s in e.Sources)
-                    {
-                        writer.WriteStartObject();
-                        writer.WriteString("sourceId", s.SourceId);
-                        writer.WriteString("display", s.SourceDisplay);
-                        writer.WriteString("locator", s.Locator);
-                        writer.WriteEndObject();
-                    }
-                    writer.WriteEndArray();
-                }
-                if (e.Candidates.Count > 0)
-                {
-                    writer.WriteStartArray("candidates");
-                    foreach (var c in e.Candidates)
-                    {
-                        writer.WriteStartObject();
-                        if (c.Artist != null) writer.WriteString("artist", c.Artist);
-                        writer.WriteString("title", c.Title);
-                        writer.WriteEndObject();
-                    }
-                    writer.WriteEndArray();
-                }
-                writer.WriteEndObject();
-            }
-            writer.WriteEndArray();
-            writer.WriteEndObject();
+            File.WriteAllBytes(tmp, bytes);
+            File.Move(tmp, path, overwrite: true);
         }
         catch (Exception ex)
         {
             Log($"save failed: {ex.Message}");
+            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { /* best effort */ }
         }
     }
 

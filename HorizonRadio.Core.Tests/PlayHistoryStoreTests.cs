@@ -67,6 +67,42 @@ public class PlayHistoryStoreTests
     }
 
     [Fact]
+    public void SetSources_only_notifies_on_a_real_change()
+    {
+        var store = new PlayHistoryStore();
+        store.Add(Entry("a", DateTimeOffset.UtcNow));
+        var fired = 0;
+        store.Changed += () => fired++;
+
+        var sources = new[] { new ReplaySource("youtube", "YouTube", "yt1") };
+        store.SetSources("a", sources);
+        Assert.Equal(1, fired);
+
+        store.SetSources("a", new[] { new ReplaySource("youtube", "YouTube", "yt1") }); // value-equal → no event
+        Assert.Equal(1, fired);
+
+        store.SetSources("a", []); // empty→empty also no-ops once already empty
+        store.SetSources("missing", sources);
+        Assert.Equal(2, fired); // only the clear-to-empty counted (a real change from the youtube source)
+        Assert.Empty(store.All.Single().Sources);
+    }
+
+    [Fact]
+    public void SaveToDisk_overwrites_atomically_without_leaving_temp_files()
+    {
+        using var dir = TempDir.Create();
+        var path = Path.Combine(dir.Path, "history.json");
+        var store = new PlayHistoryStore();
+        store.Add(Entry("a", DateTimeOffset.UtcNow));
+        store.SaveToDisk(path);
+        store.Add(Entry("b", DateTimeOffset.UtcNow.AddSeconds(1)));
+        store.SaveToDisk(path); // overwrite an existing file
+
+        Assert.Equal(2, PlayHistoryStore.LoadFromDisk(path).All.Count);
+        Assert.Empty(Directory.GetFiles(dir.Path, "*.tmp")); // temp renamed away, none left behind
+    }
+
+    [Fact]
     public void Remove_and_Clear()
     {
         var store = new PlayHistoryStore();

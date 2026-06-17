@@ -42,12 +42,10 @@ public sealed partial class HistoryViewModel : ViewModelBase
     private readonly Action<string>? _openSearch;
     private readonly ToastManager? _toasts;
 
-    // Each row enriched at most once per view session; the resolver/search caches make it cheap.
+    // Rows whose enrichment has settled (art + verdict + any playable sources resolved). A row is
+    // removed from here if its enrichment couldn't complete (no search source ready yet, or a
+    // transient error), so it's retried on the next rebuild / tab view rather than stuck forever.
     private readonly HashSet<string> _enriched = new();
-    private const int EnrichLookahead = 30;
-
-    // Cap concurrent resolves/searches so a long list trickles in rather than stampeding yt-dlp.
-    private static readonly SemaphoreSlim MetaGate = new(3, 3);
 
     public ObservableCollection<HistoryRowViewModel> Items { get; } = new();
 
@@ -98,8 +96,13 @@ public sealed partial class HistoryViewModel : ViewModelBase
         }
 
         IsEmpty = Items.Count == 0;
-        EnrichWindow();
+        EnrichRows();
     }
+
+    /// <summary>Re-run enrichment for any not-yet-settled rows. Called when the History tab is
+    /// shown, so rows that couldn't resolve earlier (e.g. a search source connected after startup)
+    /// get another chance without waiting for a store change.</summary>
+    public void RefreshEnrichment() => EnrichRows();
 
     private HistoryRowViewModel CreateRow(PlayHistoryEntry entry) => new(
         entry,
@@ -107,24 +110,23 @@ public sealed partial class HistoryViewModel : ViewModelBase
         report: e => GitHubReport.OpenIssueDraft(e, _toasts),
         remove: id => _store?.Remove(id));
 
-    private void EnrichWindow()
+    private void EnrichRows()
     {
         // Enrichment fetches art (needs the resolver) and, for freeform songs, playable sources
-        // (needs a searchable source). Run if either is available.
+        // (needs a searchable source). Run if either is available. Every row is enriched (not just
+        // a fixed window) so songs deep in the list still get art, a verdict, and replay sources;
+        // the shared gate keeps the actual work trickling a few at a time.
         if (_resolver is not { HasContributors: true } && !UnifiedSearch.HasReadySource) return;
-        var n = Math.Min(EnrichLookahead, Items.Count);
-        for (var i = 0; i < n; i++)
-        {
-            var row = Items[i];
+        foreach (var row in Items)
             if (_enriched.Add(row.Id)) _ = EnrichRowAsync(row);
-        }
     }
 
     // Resolve a row's art and — for a freeform song with no playable source yet — find one per
     // service by searching the catalog-canonical name, then store both. Throttled, off the UI thread.
     private async Task EnrichRowAsync(HistoryRowViewModel row)
     {
-        await MetaGate.WaitAsync().ConfigureAwait(false);
+        await EnrichmentThrottle.Gate.WaitAsync().ConfigureAwait(false);
+        var settled = true;
         try
         {
             var entry = row.Entry;
@@ -134,47 +136,64 @@ public sealed partial class HistoryViewModel : ViewModelBase
                 : (seed, false);
             var art = final.AlbumArt is { Length: > 0 } ? DecodeArt(final.AlbumArt) : null;
 
-            // Only freeform songs (no re-addressable origin) need a source lookup.
+            // A freeform song (no re-addressable origin) needs identification + a playable URL.
             IReadOnlyList<ReplaySource>? foundSources = null;
             HistoryMatchState? newState = null;
-            if (entry.Sources.Count == 0)
+            if (entry.Sources.Count == 0 && _resolver is { HasContributors: true })
             {
-                foundSources = await FindSourcesAsync(final, CancellationToken.None).ConfigureAwait(false);
-                // Identified if we found somewhere to play it, or a catalog confirmed it; else flag it.
-                newState = foundSources.Count > 0 || matched ? HistoryMatchState.Matched : HistoryMatchState.Unmatched;
+                if (matched)
+                {
+                    // Catalog confirmed the identity → trust a search by the canonical name and store
+                    // a playable URL per service. Searching only when matched is what keeps a fuzzy
+                    // title-only parse from latching onto the wrong artist's same-titled track.
+                    var (sources, ran) = await FindSourcesAsync(final, CancellationToken.None).ConfigureAwait(false);
+                    foundSources = sources;
+                    newState = HistoryMatchState.Matched;
+                    settled = ran; // no search source ready → leave unsettled so we retry for the URL
+                }
+                else
+                {
+                    // Couldn't confirm what this song is → flag it for the report action.
+                    newState = HistoryMatchState.Unmatched;
+                }
             }
 
             Dispatcher.UIThread.Post(() =>
             {
                 if (art != null) row.Thumbnail = art;
-                if (foundSources != null)
-                {
-                    _store?.SetSources(entry.Id, foundSources);
-                    if (newState is { } ns) _store?.SetMatchState(entry.Id, ns);
-                    row.SyncFromEntry();
-                }
+                if (foundSources != null) _store?.SetSources(entry.Id, foundSources);
+                if (newState is { } ns) _store?.SetMatchState(entry.Id, ns);
+                row.SyncFromEntry();
+                if (!settled) _enriched.Remove(entry.Id); // retry on the next rebuild / tab view
             });
         }
-        catch (Exception ex) { Debug.WriteLine($"[hzn-history-vm] enrich: {ex.Message}"); }
-        finally { MetaGate.Release(); }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[hzn-history-vm] enrich: {ex.Message}");
+            Dispatcher.UIThread.Post(() => _enriched.Remove(row.Id)); // let a later pass retry
+        }
+        finally { EnrichmentThrottle.Gate.Release(); }
     }
 
     // Find a playable URL per service for an identified song. Searches the canonical name and keeps
     // only the conservatively-matching hit per source (the multi-source set the picker offers).
-    private static async Task<IReadOnlyList<ReplaySource>> FindSourcesAsync(Track song, CancellationToken ct)
+    // Returns ran = false when no search source was available or the search errored, so the caller
+    // can retry later rather than treating "couldn't search" as "no sources exist".
+    private static async Task<(IReadOnlyList<ReplaySource> Sources, bool Ran)> FindSourcesAsync(Track song, CancellationToken ct)
     {
-        if (!UnifiedSearch.HasReadySource) return [];
+        if (!UnifiedSearch.HasReadySource) return ([], false);
         var query = $"{song.Artist} {song.Title}".Trim();
-        if (string.IsNullOrWhiteSpace(query)) return [];
+        if (string.IsNullOrWhiteSpace(query)) return ([], true);
 
         UnifiedSearchResult result;
         try { result = await UnifiedSearch.SearchAsync(query, SearchLimit, ct: ct).ConfigureAwait(false); }
         catch (OperationCanceledException) { throw; }
-        catch (Exception ex) { Debug.WriteLine($"[hzn-history-vm] source search: {ex.Message}"); return []; }
+        catch (Exception ex) { Debug.WriteLine($"[hzn-history-vm] source search: {ex.Message}"); return ([], false); }
 
-        return HistorySourceMatch.Select(song.Artist, song.Title, result.Results)
+        var sources = HistorySourceMatch.Select(song.Artist, song.Title, result.Results)
             .Select(r => new ReplaySource(r.SourceId, SourceCatalog.Find(r.SourceId)?.DisplayName ?? r.SourceId, r.Locator))
             .ToList();
+        return (sources, true);
     }
 
     // Reconstruct a resolver seed from a stored entry. A Spotify uri (kept as a replay source) also

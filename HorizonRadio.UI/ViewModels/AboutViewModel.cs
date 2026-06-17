@@ -1,5 +1,4 @@
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Threading;
@@ -136,16 +135,5 @@ public sealed partial class AboutViewModel : ViewModelBase
     [RelayCommand]
     private void OpenLicense() => OpenUrl($"{_repoUrl}/blob/main/LICENSE");
 
-    private static void OpenUrl(string? url)
-    {
-        if (string.IsNullOrWhiteSpace(url)) return;
-        try
-        {
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[hzn-about] open url failed: {ex.Message}");
-        }
-    }
+    private static void OpenUrl(string? url) => Services.BrowserLauncher.Open(url);
 }
