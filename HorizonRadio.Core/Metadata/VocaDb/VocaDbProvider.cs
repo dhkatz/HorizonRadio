@@ -33,12 +33,12 @@ public sealed class VocaDbProvider : IMetadataProvider
 
     private const string Base = "https://vocadb.net/api";
 
-    private readonly MetadataCache _cache;
+    private readonly IMetadataCache _cache;
     private readonly HttpClient _http;
     private readonly bool _ownsHttp;
     private readonly RateGate _rate = new(TimeSpan.FromMilliseconds(300));
 
-    public VocaDbProvider(MetadataCache cache, HttpClient? http = null)
+    public VocaDbProvider(IMetadataCache cache, HttpClient? http = null)
     {
         _cache = cache;
         _ownsHttp = http is null;
@@ -92,13 +92,13 @@ public sealed class VocaDbProvider : IMetadataProvider
             if (root is { } r) art = await DownloadFirstAsync(PickArt(r), ct).ConfigureAwait(false);
         }
 
-        var entry = new MetadataCache.Entry(match.Name, match.Artist, Album: null, AlbumArt: art, Mbid: null,
+        var entry = new MetadataCacheEntry(match.Name, match.Artist, Album: null, AlbumArt: art, Mbid: null,
             Year: match.Year, Pvs: match.Pvs);
         _cache.Put(cacheKey, entry);
         return ToContribution(entry);
     }
 
-    private static MetadataContribution? ToContribution(MetadataCache.Entry e)
+    private static MetadataContribution? ToContribution(MetadataCacheEntry e)
     {
         var c = new MetadataContribution(e.Title, e.Artist, e.Album, e.AlbumArt, e.Year, e.Pvs);
         return c.IsEmpty ? null : c;

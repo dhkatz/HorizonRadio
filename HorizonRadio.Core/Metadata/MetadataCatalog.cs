@@ -5,6 +5,7 @@ using HorizonRadio.Core.Metadata.Apple;
 using HorizonRadio.Core.Metadata.MusicBrainz;
 using HorizonRadio.Core.Metadata.Spotify;
 using HorizonRadio.Core.Metadata.VocaDb;
+using HorizonRadio.Plugins.Abstractions;
 
 namespace HorizonRadio.Core.Metadata;
 
@@ -37,7 +38,7 @@ public static class MetadataCatalog
     /// the providers in the user's order, and the per-field forced overrides.
     /// </summary>
     public static (IReadOnlyList<IMetadataProvider> Contributors, MetadataPolicy Policy) BuildPipeline(
-        MetadataConfigStore store, MetadataCache cache)
+        MetadataConfigStore store, IPluginContext context)
     {
         var contributors = new List<IMetadataProvider>();
         var enabledIds = new List<string>();
@@ -47,7 +48,7 @@ public static class MetadataCatalog
             try
             {
                 var values = store.Load(factory.Id, factory.Schema);
-                contributors.Add(factory.Create(values, cache));
+                contributors.Add(factory.Create(values, context));
                 enabledIds.Add(factory.Id);
             }
             catch (System.Exception ex)

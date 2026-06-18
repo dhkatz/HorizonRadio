@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Spotify;
+using HorizonRadio.Plugins.Abstractions;
 using SpotifyAPI.Web;
 
 namespace HorizonRadio.Core.Metadata.Spotify;
@@ -35,7 +36,7 @@ public sealed class SpotifyProviderFactory : IMetadataProviderFactory
             Description: "Pairs with the Client ID above (client-credentials flow). Stored unencrypted in your config file; treat the file like any other credential store."),
     ];
 
-    public IMetadataProvider Create(ConfigValues values, MetadataCache cache)
+    public IMetadataProvider Create(ConfigValues values, IPluginContext context)
     {
         var id = values.GetString(KeyClientId);
         var secret = values.GetString(KeyClientSecret);
@@ -46,13 +47,13 @@ public sealed class SpotifyProviderFactory : IMetadataProviderFactory
             // authenticator refreshes its app token internally.
             var client = new SpotifyClient(SpotifyClientConfig.CreateDefault()
                 .WithAuthenticator(new ClientCredentialsAuthenticator(id!, secret!)));
-            return new SpotifyProvider(cache, _ => Task.FromResult<SpotifyClient?>(client));
+            return new SpotifyProvider(context.Cache, _ => Task.FromResult<SpotifyClient?>(client));
         }
 
         // No separate credentials: ride on the connected Spotify source so the user needn't
         // register a second app. Read the connection lazily (it may initialize after the
         // pipeline is first built) and no-op until the source is connected.
-        return new SpotifyProvider(cache, ct =>
+        return new SpotifyProvider(context.Cache, ct =>
             SpotifyRuntime.Connection?.GetClientAsync(ct) ?? Task.FromResult<SpotifyClient?>(null));
     }
 }

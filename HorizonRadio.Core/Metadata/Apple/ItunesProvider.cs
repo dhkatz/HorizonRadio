@@ -27,7 +27,7 @@ public sealed class ItunesProvider : IMetadataProvider
 {
     public string Id => "itunes";
 
-    private readonly MetadataCache _cache;
+    private readonly IMetadataCache _cache;
     private readonly HttpClient _http;
     private readonly bool _ownsHttp;
     private readonly IReadOnlyList<string> _storefronts;
@@ -36,7 +36,7 @@ public sealed class ItunesProvider : IMetadataProvider
     // lookup can fan out to a few requests across storefronts/query forms.
     private readonly RateGate _rate = new(TimeSpan.FromMilliseconds(250));
 
-    public ItunesProvider(MetadataCache cache, HttpClient? http = null, string? country = null)
+    public ItunesProvider(IMetadataCache cache, HttpClient? http = null, string? country = null)
     {
         _cache = cache;
         _ownsHttp = http is null;
@@ -75,12 +75,12 @@ public sealed class ItunesProvider : IMetadataProvider
             ? await ImageDownload.TryGetAsync(_http, match.ArtworkUrl, ct).ConfigureAwait(false)
             : null;
 
-        var entry = new MetadataCache.Entry(match.Title, match.Artist, match.Album, art, Mbid: null, Year: match.Year);
+        var entry = new MetadataCacheEntry(match.Title, match.Artist, match.Album, art, Mbid: null, Year: match.Year);
         _cache.Put(cacheKey, entry);
         return ToContribution(entry);
     }
 
-    private static MetadataContribution? ToContribution(MetadataCache.Entry e)
+    private static MetadataContribution? ToContribution(MetadataCacheEntry e)
     {
         var c = new MetadataContribution(e.Title, e.Artist, e.Album, e.AlbumArt, e.Year);
         return c.IsEmpty ? null : c;

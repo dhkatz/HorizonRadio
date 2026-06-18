@@ -19,6 +19,7 @@ using HorizonRadio.Core.Sources.Spotify;
 using HorizonRadio.Core.Sources.YouTube;
 using HorizonRadio.Core.Tools;
 using HorizonRadio.TitleModel;
+using HorizonRadio.UI.Services;
 using HorizonRadio.UI.Tools;
 using HorizonRadio.UI.ViewModels;
 using HorizonRadio.UI.Views;
@@ -124,13 +125,16 @@ public partial class App : Application
 
             _metaStore = provider.GetRequiredService<MetadataConfigStore>();
             var cache = provider.GetRequiredService<MetadataCache>();
+            // Host services handed to metadata provider factories (the cache today; grows as more
+            // plugin kinds come online). Built once and shared across pipeline builds.
+            var pluginContext = new HostPluginContext(cache);
             // The metadata pipeline: a shared resolver (source + ordered providers,
             // per-field policy) drives both play-time enrichment and list enrichment.
             _metaResolver = new MetadataResolver();
-            var (metaContributors, metaPolicy) = MetadataCatalog.BuildPipeline(_metaStore, cache);
+            var (metaContributors, metaPolicy) = MetadataCatalog.BuildPipeline(_metaStore, pluginContext);
             _metaResolver.Configure(metaContributors, metaPolicy);
             _enricher = new EnrichmentService(_runner, _metaResolver);
-            var metaVm = new MetadataViewModel(_metaStore, cache, _metaResolver);
+            var metaVm = new MetadataViewModel(_metaStore, pluginContext, _metaResolver);
 
             var toolRegistry = new ToolRegistry();
             var installers = ToolInstallers.CreateAll();

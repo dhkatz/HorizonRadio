@@ -8,6 +8,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Plugins.Abstractions;
+using HorizonRadio.UI.Services;
 
 namespace HorizonRadio.UI.ViewModels;
 
@@ -20,7 +22,7 @@ namespace HorizonRadio.UI.ViewModels;
 public sealed partial class MetadataViewModel : ViewModelBase
 {
     private readonly MetadataConfigStore _store;
-    private readonly MetadataCache _cache;
+    private readonly IPluginContext _context;
     private readonly MetadataResolver _resolver;
 
     /// <summary>Providers in priority order (enabled first, then the rest). The user
@@ -33,10 +35,10 @@ public sealed partial class MetadataViewModel : ViewModelBase
     [ObservableProperty] private string statusMessage = "";
     [ObservableProperty] private bool hasError;
 
-    public MetadataViewModel(MetadataConfigStore store, MetadataCache cache, MetadataResolver resolver)
+    public MetadataViewModel(MetadataConfigStore store, IPluginContext context, MetadataResolver resolver)
     {
         _store = store;
-        _cache = cache;
+        _context = context;
         _resolver = resolver;
         BuildProviders();
         BuildFields();
@@ -46,7 +48,7 @@ public sealed partial class MetadataViewModel : ViewModelBase
     public MetadataViewModel()
     {
         _store = new MetadataConfigStore();
-        _cache = new MetadataCache();
+        _context = new HostPluginContext(new MetadataCache());
         _resolver = null!;
         BuildProviders();
         BuildFields();
@@ -141,7 +143,7 @@ public sealed partial class MetadataViewModel : ViewModelBase
             _store.SelectedProviderId = null; // superseded by Order
             _store.SaveToDisk();
 
-            var (contributors, policy) = MetadataCatalog.BuildPipeline(_store, _cache);
+            var (contributors, policy) = MetadataCatalog.BuildPipeline(_store, _context);
             _resolver.Configure(contributors, policy);
 
             StatusMessage = _store.Order.Count == 0
