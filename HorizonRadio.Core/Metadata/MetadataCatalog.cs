@@ -13,13 +13,19 @@ public static class MetadataCatalog
 {
     public const string NoneId = "none";
 
-    public static IReadOnlyList<IMetadataProviderFactory> All { get; } =
+    /// <summary>The metadata plugins, in display order; each contributes its provider factory(ies).
+    /// Hardcoded here for now — a later step discovers them from separate plugin assemblies, at which
+    /// point this list becomes the discovery result. <see cref="All"/> flattens their providers.</summary>
+    public static IReadOnlyList<IMetadataPlugin> Plugins { get; } =
     [
-        new SpotifyProviderFactory(),
-        new ItunesProviderFactory(),
-        new MusicBrainzProviderFactory(),
-        new VocaDbProviderFactory(),
+        new SpotifyMetadataPlugin(),
+        new ItunesMetadataPlugin(),
+        new MusicBrainzMetadataPlugin(),
+        new VocaDbMetadataPlugin(),
     ];
+
+    public static IReadOnlyList<IMetadataProviderFactory> All { get; } =
+        [.. Plugins.SelectMany(p => p.Providers)];
 
     /// <summary>Providers enabled out of the box (keyless, no setup), highest priority
     /// first. Spotify is excluded — it needs credentials. VocaDB is last: it fills the
