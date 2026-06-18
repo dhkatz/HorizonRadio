@@ -21,6 +21,7 @@ using HorizonRadio.TitleModel;
 using HorizonRadio.UI.Tools;
 using HorizonRadio.UI.ViewModels;
 using HorizonRadio.UI.Views;
+using Microsoft.Extensions.DependencyInjection;
 using ShadUI;
 
 namespace HorizonRadio.UI;
@@ -65,7 +66,15 @@ public partial class App : Application
             // before any source can emit, so the first song of the session is captured too.
             HorizonRadio.Core.Diagnostics.MetadataTrace.RestoreFromSettings();
 
-            _store = SourceConfigStore.LoadFromDisk();
+            // Build the DI container for the Core engine's leaf services (the persisted config
+            // stores + the metadata cache) and resolve them from it instead of hand-constructing
+            // them — the first step of moving ownership/lifetime to DI. Built inside the desktop
+            // branch so the XAML designer (which never enters here) is unaffected.
+            var services = new ServiceCollection();
+            services.AddHorizonCore();
+            var provider = services.BuildServiceProvider();
+
+            _store = provider.GetRequiredService<SourceConfigStore>();
 
             _pcm = new PcmPipeClient();
             _pcm.Start();
@@ -112,8 +121,8 @@ public partial class App : Application
                 return !string.IsNullOrWhiteSpace(path) && File.Exists(path) ? path : null;
             });
 
-            _metaStore = MetadataConfigStore.LoadFromDisk();
-            var cache = new MetadataCache();
+            _metaStore = provider.GetRequiredService<MetadataConfigStore>();
+            var cache = provider.GetRequiredService<MetadataCache>();
             // The metadata pipeline: a shared resolver (source + ordered providers,
             // per-field policy) drives both play-time enrichment and list enrichment.
             _metaResolver = new MetadataResolver();
@@ -161,13 +170,13 @@ public partial class App : Application
             // poller); the telemetry listener is a second source. The
             // executor runs the user's configured action for each event.
             _ipc = new IpcClient();
-            var eventRules = EventRuleStore.LoadFromDisk();
+            var eventRules = provider.GetRequiredService<EventRuleStore>();
             _telemetry = new ForzaTelemetryListener();
 
             // Saved mixes + the single switcher all launches route through (owns
             // the "current mix" notion for Next/Previous). One-time migrate any
             // legacy profiles.json into one-entry mixes on first run.
-            var mixStore = MixStore.LoadFromDisk();
+            var mixStore = provider.GetRequiredService<MixStore>();
             MixMigration.MaybeMigrate(mixStore);
 
             // The global queue owns playback now: one engine plays straight down the
@@ -179,7 +188,7 @@ public partial class App : Application
 
             // Play history: records every song the runner reports (deduped), tags freeform songs
             // it can't identify via the metadata pipeline, and persists (debounced) to history.json.
-            _historyStore = PlayHistoryStore.LoadFromDisk();
+            _historyStore = provider.GetRequiredService<PlayHistoryStore>();
             _historyService = new PlayHistoryService(_historyStore, _runner);
 
             // One dispatcher turns an EventAction into a transport/source/mix/
@@ -192,7 +201,7 @@ public partial class App : Application
 
             // Controls: global keyboard/mouse (SharpHook) + controllers (SDL),
             // mapped to the same actions through the shared dispatcher.
-            var controlsStore = InputBindingStore.LoadFromDisk();
+            var controlsStore = provider.GetRequiredService<InputBindingStore>();
             _inputService = new InputBindingService(
                 new IInputBackend[] { new SharpHookBackend(), new SdlInputBackend() },
                 controlsStore, dispatcher);
@@ -285,6 +294,8 @@ public partial class App : Application
                 if (_spotifyConnection != null) await _spotifyConnection.DisposeAsync();
                 if (_ipc != null) await _ipc.DisposeAsync();
                 if (_pcm != null) await _pcm.DisposeAsync();
+                // Dispose the container last — it owns the leaf singletons (stores + cache).
+                await provider.DisposeAsync();
             };
 
             vm.SetConnection(ConnectionState.Connecting);
