@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using HorizonRadio.Core;
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Events;
 using HorizonRadio.Core.History;

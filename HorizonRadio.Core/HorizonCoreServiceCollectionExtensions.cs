@@ -4,8 +4,9 @@ using HorizonRadio.Core.Input;
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Microsoft.Extensions.DependencyInjection;
+namespace HorizonRadio.Core;
 
 /// <summary>
 /// Registers the Core engine's services into a DI container. This is the first step of the
