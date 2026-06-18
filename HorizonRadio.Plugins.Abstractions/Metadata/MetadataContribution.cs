@@ -3,7 +3,7 @@ namespace HorizonRadio.Core.Metadata;
 /// <summary>
 /// What a single contributor (the source itself, MusicBrainz, Spotify, the local
 /// model, …) knows about a track — every field nullable, because a contributor
-/// supplies only what it can. The <see cref="MetadataResolver"/> collects one of
+/// supplies only what it can. The host's <c>MetadataResolver</c> collects one of
 /// these per contributor and merges them per the user's <see cref="MetadataPolicy"/>.
 /// </summary>
 public sealed record MetadataContribution(

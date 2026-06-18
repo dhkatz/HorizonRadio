@@ -11,12 +11,12 @@ public enum SearchResultKind
 
 /// <summary>
 /// One hit from a unified search: enough to render a result row and, on click, hand
-/// straight to <see cref="Queue.QueuePlayback.EnqueueLocatorAsync"/>. <see cref="Locator"/>
+/// straight to the host's queue (<c>QueuePlayback.EnqueueLocatorAsync</c>). <see cref="Locator"/>
 /// is a <see cref="ContentRef"/>-ready string for <see cref="SourceId"/>'s factory
 /// (e.g. a <c>spotify:track:…</c> URI), so "search → queue" needs no new playback code.
 /// </summary>
 /// <param name="SourceId">Catalog id of the source that produced this — the key for
-/// <see cref="SourceCatalog.Find"/> to get the factory to enqueue against.</param>
+/// the host to find the factory to enqueue against.</param>
 /// <param name="Kind">Track / album / playlist, for the row's glyph and grouping.</param>
 /// <param name="Title">Primary line (track or album/playlist name).</param>
 /// <param name="Subtitle">Secondary line (artist, or owner for a playlist).</param>
