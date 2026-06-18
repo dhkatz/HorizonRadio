@@ -83,6 +83,7 @@
     <ItemGroup>
       <ProjectReference Include="..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
       <ProjectReference Include="..\HorizonRadio.Metadata.Apple\HorizonRadio.Metadata.Apple.csproj" />
+      <ProjectReference Include="..\HorizonRadio.Metadata.MusicBrainz\HorizonRadio.Metadata.MusicBrainz.csproj" />
       <ProjectReference Include="..\HorizonRadio.Metadata.VocaDB\HorizonRadio.Metadata.VocaDB.csproj" />
       <ProjectReference Include="..\HorizonRadio.TitleModel\HorizonRadio.TitleModel.csproj" />
     </ItemGroup>
