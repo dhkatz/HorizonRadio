@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Plugins.Abstractions;
 
 namespace HorizonRadio.Core.Metadata.Apple;
 
@@ -21,6 +22,6 @@ public sealed class ItunesProviderFactory : IMetadataProviderFactory
             Description: "Two-letter Apple storefront to search first. Leave blank for US. Japan and US are always tried as fallbacks, so Japanese releases are found regardless."),
     ];
 
-    public IMetadataProvider Create(ConfigValues values, MetadataCache cache)
-        => new ItunesProvider(cache, country: values.GetString(KeyCountry));
+    public IMetadataProvider Create(ConfigValues values, IPluginContext context)
+        => new ItunesProvider(context.Cache, country: values.GetString(KeyCountry));
 }

@@ -11,11 +11,11 @@ public sealed class MusicBrainzProvider : IMetadataProvider
 
     private readonly HttpClient _http;
     private readonly bool _ownsHttp;
-    private readonly MetadataCache _cache;
+    private readonly IMetadataCache _cache;
     // MB ToS: ~1 req/sec; the extra 100 ms buffers clock drift that otherwise returns 503.
     private readonly RateGate _rate = new(TimeSpan.FromMilliseconds(1100));
 
-    public MusicBrainzProvider(MetadataCache cache,
+    public MusicBrainzProvider(IMetadataCache cache,
                                HttpClient? http = null,
                                string? contact = null)
     {
@@ -71,13 +71,13 @@ public sealed class MusicBrainzProvider : IMetadataProvider
         return ToContribution(entry);
     }
 
-    private static MetadataContribution? ToContribution(MetadataCache.Entry e)
+    private static MetadataContribution? ToContribution(MetadataCacheEntry e)
     {
         var c = new MetadataContribution(e.Title, e.Artist, e.Album, e.AlbumArt, e.Year);
         return c.IsEmpty ? null : c;
     }
 
-    private async Task<MetadataCache.Entry?> EnrichByTextAsync(string artist, string title,
+    private async Task<MetadataCacheEntry?> EnrichByTextAsync(string artist, string title,
                                                                CancellationToken ct)
     {
         // Clean tag noise out of the query so a "[Hatsune Miku]" vocalist tag can't leak
@@ -135,7 +135,7 @@ public sealed class MusicBrainzProvider : IMetadataProvider
 
         if (!rec.TryGetProperty("releases", out var releases) ||
             releases.ValueKind != JsonValueKind.Array)
-            return new MetadataCache.Entry(canonicalTitle, canonicalArtist, null, null, null);
+            return new MetadataCacheEntry(canonicalTitle, canonicalArtist, null, null, null);
 
         // MB doesn't indicate which release has art; probe the first few via CAA.
         int maxTries = Math.Min(3, releases.GetArrayLength());
@@ -152,7 +152,7 @@ public sealed class MusicBrainzProvider : IMetadataProvider
             var art = await FetchCoverArtAsync(mbid, ct).ConfigureAwait(false);
             if (art != null)
             {
-                return new MetadataCache.Entry(
+                return new MetadataCacheEntry(
                     Title: canonicalTitle,
                     Artist: canonicalArtist,
                     Album: album,
@@ -161,10 +161,10 @@ public sealed class MusicBrainzProvider : IMetadataProvider
             }
         }
 
-        return new MetadataCache.Entry(canonicalTitle, canonicalArtist, null, null, null);
+        return new MetadataCacheEntry(canonicalTitle, canonicalArtist, null, null, null);
     }
 
-    private async Task<MetadataCache.Entry?> EnrichBySpotifyUriAsync(string spotifyUri,
+    private async Task<MetadataCacheEntry?> EnrichBySpotifyUriAsync(string spotifyUri,
                                                                      CancellationToken ct)
     {
         var spotifyId = spotifyUri.Substring("spotify:track:".Length);
@@ -229,10 +229,10 @@ public sealed class MusicBrainzProvider : IMetadataProvider
 
             var art = await FetchCoverArtAsync(mbid, ct).ConfigureAwait(false);
             if (art != null)
-                return new MetadataCache.Entry(canonicalTitle, canonicalArtist, album, art, mbid);
+                return new MetadataCacheEntry(canonicalTitle, canonicalArtist, album, art, mbid);
         }
 
-        return new MetadataCache.Entry(canonicalTitle, canonicalArtist, null, null, null);
+        return new MetadataCacheEntry(canonicalTitle, canonicalArtist, null, null, null);
     }
 
     // CAA front-500 is the right size for the 180×180 HUD tile; 404 (no art) → null.

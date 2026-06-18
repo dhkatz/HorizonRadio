@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Plugins.Abstractions;
 
 namespace HorizonRadio.Core.Metadata.MusicBrainz;
 
@@ -21,9 +22,9 @@ public sealed class MusicBrainzProviderFactory : IMetadataProviderFactory
             Description: "Email or URL included in the User-Agent. MB's ToS asks for one; it isn't checked, but it's polite."),
     ];
 
-    public IMetadataProvider Create(ConfigValues values, MetadataCache cache)
+    public IMetadataProvider Create(ConfigValues values, IPluginContext context)
     {
         var contact = values.GetString(KeyContact);
-        return new MusicBrainzProvider(cache, contact: contact);
+        return new MusicBrainzProvider(context.Cache, contact: contact);
     }
 }

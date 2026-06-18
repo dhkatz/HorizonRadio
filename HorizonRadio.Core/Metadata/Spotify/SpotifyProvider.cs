@@ -25,11 +25,11 @@ public sealed class SpotifyProvider : IMetadataProvider
 {
     public string Id => "spotify";
 
-    private readonly MetadataCache _cache;
+    private readonly IMetadataCache _cache;
     private readonly Func<CancellationToken, Task<SpotifyClient?>> _clientFactory;
     private readonly HttpClient _httpForArt = new() { Timeout = TimeSpan.FromSeconds(15) };
 
-    public SpotifyProvider(MetadataCache cache, Func<CancellationToken, Task<SpotifyClient?>> clientFactory)
+    public SpotifyProvider(IMetadataCache cache, Func<CancellationToken, Task<SpotifyClient?>> clientFactory)
     {
         _cache = cache;
         _clientFactory = clientFactory;
@@ -62,13 +62,13 @@ public sealed class SpotifyProvider : IMetadataProvider
     }
 
     // Raw findings as a contribution — the resolver decides which fields win.
-    private static MetadataContribution? ToContribution(MetadataCache.Entry e)
+    private static MetadataContribution? ToContribution(MetadataCacheEntry e)
     {
         var c = new MetadataContribution(e.Title, e.Artist, e.Album, e.AlbumArt, e.Year);
         return c.IsEmpty ? null : c;
     }
 
-    private async Task<MetadataCache.Entry?> EnrichByUriAsync(string spotifyUri, CancellationToken ct)
+    private async Task<MetadataCacheEntry?> EnrichByUriAsync(string spotifyUri, CancellationToken ct)
     {
         try
         {
@@ -90,7 +90,7 @@ public sealed class SpotifyProvider : IMetadataProvider
         }
     }
 
-    private async Task<MetadataCache.Entry?> EnrichByTextAsync(string artist, string title, CancellationToken ct)
+    private async Task<MetadataCacheEntry?> EnrichByTextAsync(string artist, string title, CancellationToken ct)
     {
         try
         {
@@ -144,7 +144,7 @@ public sealed class SpotifyProvider : IMetadataProvider
         }
     }
 
-    private async Task<MetadataCache.Entry?> BuildEntry(FullTrack t, CancellationToken ct)
+    private async Task<MetadataCacheEntry?> BuildEntry(FullTrack t, CancellationToken ct)
     {
         var artistName = t.Artists?.FirstOrDefault()?.Name;
         var albumName = t.Album?.Name;
@@ -162,7 +162,7 @@ public sealed class SpotifyProvider : IMetadataProvider
                 art = await ImageDownload.TryGetAsync(_httpForArt, pick.Url, ct).ConfigureAwait(false);
         }
 
-        return new MetadataCache.Entry(
+        return new MetadataCacheEntry(
             Title: t.Name,
             Artist: artistName,
             Album: albumName,

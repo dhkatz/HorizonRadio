@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Plugins.Abstractions;
 
 namespace HorizonRadio.Core.Metadata.VocaDb;
 
@@ -12,5 +13,5 @@ public sealed class VocaDbProviderFactory : IMetadataProviderFactory
     // Keyless, no configuration.
     public IReadOnlyList<ConfigField> Schema { get; } = [];
 
-    public IMetadataProvider Create(ConfigValues values, MetadataCache cache) => new VocaDbProvider(cache);
+    public IMetadataProvider Create(ConfigValues values, IPluginContext context) => new VocaDbProvider(context.Cache);
 }
