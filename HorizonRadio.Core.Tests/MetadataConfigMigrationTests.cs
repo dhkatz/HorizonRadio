@@ -1,4 +1,8 @@
 using HorizonRadio.Core.Metadata;
+using HorizonRadio.Core.Metadata.Apple;
+using HorizonRadio.Core.Metadata.MusicBrainz;
+using HorizonRadio.Core.Metadata.Spotify;
+using HorizonRadio.Core.Metadata.VocaDb;
 
 namespace HorizonRadio.Core.Tests;
 
@@ -8,6 +12,17 @@ namespace HorizonRadio.Core.Tests;
 /// </summary>
 public class MetadataConfigMigrationTests
 {
+    // The config store derives its defaults / "introduced" set from the catalog, which the
+    // composition root populates at startup. Mirror that here so the migration sees the real
+    // provider set (incl. VocaDB, now its own plugin assembly).
+    public MetadataConfigMigrationTests() => MetadataCatalog.Initialize(
+    [
+        new SpotifyMetadataPlugin(),
+        new ItunesMetadataPlugin(),
+        new MusicBrainzMetadataPlugin(),
+        new VocaDbMetadataPlugin(),
+    ]);
+
     private static string WriteConfig(TempDir dir, string json)
     {
         var path = Path.Combine(dir.Path, "metadata-config.json");
