@@ -1,10 +1,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using HorizonRadio.Core.Metadata.Apple;
-using HorizonRadio.Core.Metadata.MusicBrainz;
-using HorizonRadio.Core.Metadata.Spotify;
-using HorizonRadio.Core.Metadata.VocaDb;
 using HorizonRadio.Plugins.Abstractions;
 
 namespace HorizonRadio.Core.Metadata;
@@ -13,19 +9,24 @@ public static class MetadataCatalog
 {
     public const string NoneId = "none";
 
-    /// <summary>The metadata plugins, in display order; each contributes its provider factory(ies).
-    /// Hardcoded here for now — a later step discovers them from separate plugin assemblies, at which
-    /// point this list becomes the discovery result. <see cref="All"/> flattens their providers.</summary>
-    public static IReadOnlyList<IMetadataPlugin> Plugins { get; } =
-    [
-        new SpotifyMetadataPlugin(),
-        new ItunesMetadataPlugin(),
-        new MusicBrainzMetadataPlugin(),
-        new VocaDbMetadataPlugin(),
-    ];
+    private static IReadOnlyList<IMetadataPlugin> _plugins = [];
 
-    public static IReadOnlyList<IMetadataProviderFactory> All { get; } =
-        [.. Plugins.SelectMany(p => p.Providers)];
+    /// <summary>Register the available metadata plugins. Called once by the composition root — which
+    /// references the plugin assemblies and so can name them — BEFORE any provider config is loaded
+    /// (<see cref="MetadataConfigStore"/> derives its fresh-install defaults and "introduced" set from
+    /// <see cref="All"/>, so the catalog must be populated first). Plugins are listed in display order.</summary>
+    public static void Initialize(IReadOnlyList<IMetadataPlugin> plugins)
+    {
+        _plugins = plugins;
+        All = [.. plugins.SelectMany(p => p.Providers)];
+    }
+
+    /// <summary>The registered metadata plugins, in display order.</summary>
+    public static IReadOnlyList<IMetadataPlugin> Plugins => _plugins;
+
+    /// <summary>Every provider factory the registered plugins contribute, flattened in display order.
+    /// Empty until <see cref="Initialize"/> runs.</summary>
+    public static IReadOnlyList<IMetadataProviderFactory> All { get; private set; } = [];
 
     /// <summary>Providers enabled out of the box (keyless, no setup), highest priority
     /// first. Spotify is excluded — it needs credentials. VocaDB is last: it fills the

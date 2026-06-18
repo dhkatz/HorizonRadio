@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    VocaDB metadata plugin. References the host (Core) for shared helpers (SearchTerms, RateGate,
+    Romaji, the metadata cache key) and the plugin SDK (Abstractions, transitively via Core). The
+    first metadata provider extracted into its own assembly — the pattern the others follow.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- SelectMatch/SelectArtistIds/SelectAlbumId/SelectPvs are internal + unit-tested. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="HorizonRadio.Core.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+  </ItemGroup>
+
+</Project>

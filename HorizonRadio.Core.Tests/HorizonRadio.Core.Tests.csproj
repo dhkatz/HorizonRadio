@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+    <ProjectReference Include="..\HorizonRadio.Metadata.VocaDB\HorizonRadio.Metadata.VocaDB.csproj" />
   </ItemGroup>
 
 </Project>

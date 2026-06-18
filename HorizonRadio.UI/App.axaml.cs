@@ -10,6 +10,10 @@ using HorizonRadio.Core.History;
 using HorizonRadio.Core.Input;
 using HorizonRadio.Core.Ipc;
 using HorizonRadio.Core.Metadata;
+using HorizonRadio.Core.Metadata.Apple;
+using HorizonRadio.Core.Metadata.MusicBrainz;
+using HorizonRadio.Core.Metadata.Spotify;
+using HorizonRadio.Core.Metadata.VocaDb;
 using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
@@ -122,6 +126,17 @@ public partial class App : Application
                     .GetString(YouTubeSourceFactory.KeyYtDlp);
                 return !string.IsNullOrWhiteSpace(path) && File.Exists(path) ? path : null;
             });
+
+            // Register the metadata plugins (the composition root references the plugin assemblies)
+            // before the config store loads — it derives fresh-install defaults + the "introduced"
+            // set from the catalog, so the catalog must be populated first. Order = display order.
+            MetadataCatalog.Initialize(
+            [
+                new SpotifyMetadataPlugin(),
+                new ItunesMetadataPlugin(),
+                new MusicBrainzMetadataPlugin(),
+                new VocaDbMetadataPlugin(),
+            ]);
 
             _metaStore = provider.GetRequiredService<MetadataConfigStore>();
             var cache = provider.GetRequiredService<MetadataCache>();
