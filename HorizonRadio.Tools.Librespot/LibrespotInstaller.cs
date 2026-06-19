@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Tools;
 
-namespace HorizonRadio.UI.Tools;
+namespace HorizonRadio.Tools.Librespot;
 
 /// <summary>
 /// Installs librespot.exe. Unlike yt-dlp/ffmpeg (which track their upstream's "latest"), librespot

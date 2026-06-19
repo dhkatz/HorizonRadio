@@ -76,7 +76,8 @@ public partial class App : Application
             HorizonRadio.Core.Diagnostics.MetadataTrace.RestoreFromSettings();
 
             // Register the source plugins (the composition root references the plugin assemblies)
-            // before anything resolves a source from the catalog. Order = display order.
+            // before anything resolves a source from the catalog. Order = display order. (The tool
+            // catalog is already seeded in Program.BuildAvaloniaApp, before any source ctor probes it.)
             SourceCatalog.Initialize(
             [
                 new LocalSourcePlugin(),

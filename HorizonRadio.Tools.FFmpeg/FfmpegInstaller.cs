@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Tools;
 
-namespace HorizonRadio.UI.Tools;
+namespace HorizonRadio.Tools.FFmpeg;
 
 /// <summary>
 /// Downloads the gyan.dev "release-essentials" ffmpeg build and extracts
