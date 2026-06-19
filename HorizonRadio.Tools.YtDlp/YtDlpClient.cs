@@ -1,8 +1,10 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Core.Sources;
 
-namespace HorizonRadio.Core.Sources.YouTube;
+namespace HorizonRadio.Tools.YtDlp;
 
 /// <summary>
 /// Thin wrapper over yt-dlp.exe. We use it for two things:
@@ -288,7 +290,7 @@ public static class YtDlpClient
         };
         foreach (var a in args) psi.ArgumentList.Add(a);
 
-        Diagnostics.ProcessConsole.Append("yt-dlp", "$ yt-dlp " + string.Join(' ', args));
+        ProcessConsole.Append("yt-dlp", "$ yt-dlp " + string.Join(' ', args));
 
         using var proc = Process.Start(psi)
                          ?? throw new InvalidOperationException($"failed to spawn {exe}");
@@ -322,7 +324,7 @@ public static class YtDlpClient
 
         // yt-dlp writes progress/warnings/errors to stderr; surface them
         // in the Console tab whether or not the run succeeded.
-        Diagnostics.ProcessConsole.AppendBlock("yt-dlp", stderr);
+        ProcessConsole.AppendBlock("yt-dlp", stderr);
 
         if (proc.ExitCode != 0)
         {

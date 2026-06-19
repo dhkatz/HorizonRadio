@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Models;
+using HorizonRadio.Tools.YtDlp;
 
 namespace HorizonRadio.Core.Sources.YouTube;
 

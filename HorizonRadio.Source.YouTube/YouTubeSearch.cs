@@ -1,3 +1,5 @@
+using HorizonRadio.Tools.YtDlp;
+
 namespace HorizonRadio.Core.Sources.YouTube;
 
 /// <summary>

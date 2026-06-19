@@ -3,6 +3,7 @@ using System.Globalization;
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Models;
+using HorizonRadio.Tools.YtDlp;
 
 namespace HorizonRadio.Core.Sources.YouTube;
 

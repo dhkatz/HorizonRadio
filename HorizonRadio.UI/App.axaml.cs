@@ -26,6 +26,7 @@ using HorizonRadio.Core.Sources.Test;
 using HorizonRadio.Core.Sources.YouTube;
 using HorizonRadio.Core.Tools;
 using HorizonRadio.TitleModel;
+using HorizonRadio.Tools.Librespot;
 using HorizonRadio.UI.Services;
 using HorizonRadio.UI.Tools;
 using HorizonRadio.UI.ViewModels;
