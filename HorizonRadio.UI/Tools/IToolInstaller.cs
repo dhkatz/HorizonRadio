@@ -9,7 +9,7 @@ namespace HorizonRadio.UI.Tools;
 /// <summary>
 /// One installer per tool kind. Implementations download, extract (if
 /// needed), and atomically place the binary at
-/// <see cref="ToolsPaths.ExeFor"/>. They are stateless — the registry
+/// <see cref="ToolsPaths.PathFor"/>. They are stateless — the registry
 /// owns "what's installed", installers only know "how to install".
 /// </summary>
 public interface IToolInstaller

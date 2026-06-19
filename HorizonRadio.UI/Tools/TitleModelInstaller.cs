@@ -11,7 +11,7 @@ namespace HorizonRadio.UI.Tools;
 /// <see cref="ToolManifest"/>. Like librespot it's a specific asset WE pin (a chosen model build),
 /// not an upstream "latest", so we download the exact URL and verify against the manifest's own
 /// SHA-256. Unlike the exe tools it's a data file with no version probe; the base install path is
-/// redirected to <see cref="ToolsPaths.ModelFor"/> via <see cref="InstalledPath"/>.
+/// redirected to <see cref="ToolsPaths.PathFor"/> via <see cref="InstalledPath"/>.
 ///
 /// The model is large (hundreds of MB) and entirely optional — radio works without it (deterministic
 /// parsing). Installing it lets the local LLM extract artist/title from freeform stream titles the
@@ -37,7 +37,7 @@ public sealed class TitleModelInstaller : ToolInstallerBase
         // at the manual drop-in path instead of the generic "empty URL" error.
         var platform = ResolvePinnedPlatform(_manifest, Kind, "title-model",
             emptyUrlMessage: "The title model isn't published yet — no download URL is pinned. " +
-                $"You can still use it by dropping a .gguf file at {ToolsPaths.ModelFor(Kind)} manually.");
+                $"You can still use it by dropping a .gguf file at {ToolsPaths.PathFor(Kind)} manually.");
         // Generous timeout: the model is hundreds of MB on a possibly-slow connection.
         using var http = CreateHttpClient(TimeSpan.FromMinutes(30));
         await DownloadVerifyInstallAsync(http, platform.Url, "title model", progress, ct).ConfigureAwait(false);
