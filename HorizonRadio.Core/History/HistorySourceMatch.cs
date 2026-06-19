@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Sources;
-using HorizonRadio.Core.Sources.YouTube;
 
 namespace HorizonRadio.Core.History;
 
@@ -46,8 +45,12 @@ public static class HistorySourceMatch
     /// yt-dlp engine (the "youtube" content factory plays any yt-dlp-supported URL), but each keeps
     /// its real service as the picker label ("YouTube", "Niconico", …) — so a Niconico PV is offered
     /// and played without a separate Niconico source.</summary>
+    // "youtube" is the yt-dlp content factory's source id (must match YouTubeSourceFactory.SourceId);
+    // inlined so Core/History stays decoupled from the YouTube source assembly (see HistoryReplay).
+    private const string YouTubeSourceId = "youtube";
+
     public static IReadOnlyList<ReplaySource> FromPvs(IReadOnlyList<PlayableRef> pvs) =>
-        [.. pvs.Select(pv => new ReplaySource(YouTubeSourceFactory.SourceId, pv.Service, pv.Url))];
+        [.. pvs.Select(pv => new ReplaySource(YouTubeSourceId, pv.Service, pv.Url))];
 
     /// <summary>Combine the precise PV sources with name-search hits: PVs first, then any search hit
     /// for a service the PVs don't already cover (deduped by display, so a fuzzy YouTube search hit
