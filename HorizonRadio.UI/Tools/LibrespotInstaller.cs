@@ -7,15 +7,12 @@ using HorizonRadio.Core.Tools;
 namespace HorizonRadio.UI.Tools;
 
 /// <summary>
-/// Installs librespot.exe from the pinned blobstore asset named in the
-/// embedded <see cref="ToolManifest"/>. Unlike yt-dlp/ffmpeg (which track
-/// their upstream's "latest"), librespot is one WE build, pinned to the
-/// rev this app was tested against — so we download the exact asset the
-/// manifest points at and verify it against the manifest's own SHA-256
-/// (our expectation), not a source-supplied sums file.
+/// Installs librespot.exe. Unlike yt-dlp/ffmpeg (which track their upstream's "latest"), librespot
+/// is one WE build, pinned to the rev this app was tested against — so we download the exact asset
+/// and verify it against our own SHA-256, not a source-supplied sums file. The pinned URL + hash
+/// live here (the tool owns its own provisioning) rather than in a shared manifest.
 ///
-/// Single-file, like yt-dlp: the shared base handles download → verify →
-/// atomic move → sidecar.
+/// Single-file, like yt-dlp: the shared base handles download → verify → atomic move → sidecar.
 /// </summary>
 public sealed class LibrespotInstaller : ToolInstallerBase
 {
@@ -23,27 +20,20 @@ public sealed class LibrespotInstaller : ToolInstallerBase
     public override string DisplayName => "librespot";
     public override string Description => "Spotify Connect client. Cast from your Spotify app to play through the in-game radio.";
 
-    private readonly ToolManifest _manifest;
-
-    public LibrespotInstaller() : this(ToolManifest.Current) { }
-
-    // Injectable for tests / alternate manifests.
-    public LibrespotInstaller(ToolManifest manifest) => _manifest = manifest;
+    // Pinned to the librespot build this app was tested against. Bump both together on update.
+    private const string Url =
+        "https://github.com/dhkatz/HorizonRadio/releases/download/tools/librespot-33bf3a77ed4b-x86_64-pc-windows-msvc.exe";
+    private const string Sha256 =
+        "a7175f4e2df83489c01da71122b4fb685d08ae0d0ee65d4b166722bda13ec1c3";
 
     public override async Task InstallAsync(IProgress<ToolInstallProgress>? progress, CancellationToken ct)
     {
-        var platform = ResolvePinnedPlatform(_manifest, Kind, "librespot");
         using var http = CreateHttpClient(TimeSpan.FromMinutes(5));
-        await DownloadVerifyInstallAsync(http, platform.Url, "librespot.exe", progress, ct).ConfigureAwait(false);
+        await DownloadVerifyInstallAsync(http, Url, "librespot.exe", progress, ct).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// The freshness baseline is the manifest's pinned hash — read offline
-    /// from the embedded manifest, never the network. Comparing the
-    /// installed librespot to upstream librespot would be upstream-drift
-    /// detection, which is the maintainer's CI job, not the app's. An
-    /// empty pin (post-bump bootstrap window) yields null → Unknown.
-    /// </summary>
+    /// <summary>The freshness baseline is our pinned hash, read offline (never the network) —
+    /// comparing to upstream librespot would be the maintainer's CI job, not the app's.</summary>
     public override Task<string?> GetExpectedHashAsync(HttpClient http, CancellationToken ct)
-        => Task.FromResult(PinnedHash(_manifest, Kind));
+        => Task.FromResult<string?>(Sha256);
 }

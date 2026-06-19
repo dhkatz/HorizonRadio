@@ -53,17 +53,6 @@
         <AvaloniaResource Include="Assets\**" />
     </ItemGroup>
 
-    <!--
-      The tool manifest (repo root) is the single source of truth for
-      pinned tool versions/URLs/hashes; embed it so the app reads it
-      offline at runtime (HorizonRadio.UI.Tools.ToolManifest). See
-      docs/tool-provisioning.md.
-    -->
-    <ItemGroup>
-        <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\tools.manifest.json"
-                          Link="tools.manifest.json" />
-    </ItemGroup>
-
     <ItemGroup>
         <PackageReference Include="Avalonia" Version="12.0.3" />
         <PackageReference Include="Avalonia.Desktop" Version="12.0.3" />
