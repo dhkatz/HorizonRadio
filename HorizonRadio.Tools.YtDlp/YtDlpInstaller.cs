@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Tools;
 
-namespace HorizonRadio.UI.Tools;
+namespace HorizonRadio.Tools.YtDlp;
 
 /// <summary>
 /// Downloads the latest yt-dlp.exe from the official GitHub releases.

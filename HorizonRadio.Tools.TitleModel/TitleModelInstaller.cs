@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Tools;
 
-namespace HorizonRadio.UI.Tools;
+namespace HorizonRadio.Tools.TitleModel;
 
 /// <summary>
 /// Installs the optional local title-extraction model — a single GGUF file. Like librespot it's a

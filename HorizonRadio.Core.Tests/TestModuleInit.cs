@@ -5,6 +5,7 @@ using HorizonRadio.Core.Sources.Radio;
 using HorizonRadio.Core.Sources.Spotify;
 using HorizonRadio.Core.Sources.Test;
 using HorizonRadio.Core.Sources.YouTube;
+using HorizonRadio.Core.Tools;
 
 namespace HorizonRadio.Core.Tests;
 
@@ -17,12 +18,26 @@ namespace HorizonRadio.Core.Tests;
 internal static class TestModuleInit
 {
     [ModuleInitializer]
-    internal static void Init() => SourceCatalog.Initialize(
-    [
-        new LocalSourcePlugin(),
-        new SpotifySourcePlugin(),
-        new YouTubeSourcePlugin(),
-        new RadioSourcePlugin(),
-        new TestToneSourcePlugin(),
-    ]);
+    internal static void Init()
+    {
+        // Seed the tool catalog first, mirroring the host (App seeds it before the source plugins).
+        // Some source factories probe for their tool (Spotify → librespot) in their ctor, so the
+        // catalog must be populated before SourceCatalog.Initialize constructs the plugins.
+        ToolCatalog.Initialize(
+        [
+            new ToolDescriptor(ToolKind.YtDlp, "yt-dlp.exe"),
+            new ToolDescriptor(ToolKind.Ffmpeg, "ffmpeg.exe"),
+            new ToolDescriptor(ToolKind.Librespot, "librespot.exe"),
+            new ToolDescriptor(ToolKind.TitleModel, "title-model.gguf", IsData: true),
+        ]);
+
+        SourceCatalog.Initialize(
+        [
+            new LocalSourcePlugin(),
+            new SpotifySourcePlugin(),
+            new YouTubeSourcePlugin(),
+            new RadioSourcePlugin(),
+            new TestToneSourcePlugin(),
+        ]);
+    }
 }
