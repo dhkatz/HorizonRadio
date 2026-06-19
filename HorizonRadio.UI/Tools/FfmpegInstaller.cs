@@ -68,7 +68,7 @@ public sealed class FfmpegInstaller : ToolInstallerBase
             // the file the registry surfaces, and it's the same hash chain
             // (zip integrity ⇒ contents integrity) the freshness check
             // re-compares against the current upstream zip hash.
-            HashVerification.WriteSidecar(ToolsPaths.ExeFor(Kind), expected ?? actual);
+            HashVerification.WriteSidecar(ToolsPaths.PathFor(Kind), expected ?? actual);
 
             progress?.Report(new ToolInstallProgress("Done", Fraction: 1.0));
         }
