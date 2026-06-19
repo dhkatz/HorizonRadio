@@ -3,6 +3,7 @@
   <Project Path="HorizonRadio.Core/HorizonRadio.Core.csproj" />
   <Project Path="HorizonRadio.Metadata.Apple/HorizonRadio.Metadata.Apple.csproj" />
   <Project Path="HorizonRadio.Metadata.MusicBrainz/HorizonRadio.Metadata.MusicBrainz.csproj" />
+  <Project Path="HorizonRadio.Metadata.Spotify/HorizonRadio.Metadata.Spotify.csproj" />
   <Project Path="HorizonRadio.Metadata.VocaDB/HorizonRadio.Metadata.VocaDB.csproj" />
   <Project Path="HorizonRadio.Core.Tests/HorizonRadio.Core.Tests.csproj" />
   <Project Path="HorizonRadio.TitleModel/HorizonRadio.TitleModel.csproj" />
