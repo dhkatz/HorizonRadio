@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Spotify source plugin: the user's account connection (PKCE Web API), the driven librespot
+       playback service, the zero-config Connect receiver, search, and link parsing. References the
+       host (Core) for shared playback infra + the SDK (Abstractions, transitively). Owns the
+       SpotifyAPI.Web dependency (moved here from Core — no other Core code uses it). The Spotify
+       metadata plugin takes a companion dependency on this assembly to reuse the live connection. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SpotifyAPI.Web" Version="7.4.2" />
+  </ItemGroup>
+
+</Project>
