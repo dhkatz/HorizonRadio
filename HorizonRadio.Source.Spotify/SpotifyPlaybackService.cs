@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using HorizonRadio.Core.Audio;
+using HorizonRadio.Tools.Librespot;
 using SpotifyAPI.Web;
 
 namespace HorizonRadio.Core.Sources.Spotify;

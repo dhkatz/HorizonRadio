@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using HorizonRadio.Core.Tools;
 
-namespace HorizonRadio.Core.Sources.Spotify;
+namespace HorizonRadio.Tools.Librespot;
 
 /// <summary>librespot launch knobs, shared by both Spotify sources (the zero-config
 /// cast receiver and the engine-driven content source).</summary>

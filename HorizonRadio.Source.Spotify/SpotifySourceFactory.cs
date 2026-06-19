@@ -1,5 +1,6 @@
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Tools;
+using HorizonRadio.Tools.Librespot;
 
 namespace HorizonRadio.Core.Sources.Spotify;
 

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using HorizonRadio.Core.Models;
+using HorizonRadio.Tools.Librespot;
 
 namespace HorizonRadio.Core.Sources.Spotify;
 
