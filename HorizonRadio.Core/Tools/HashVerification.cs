@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace HorizonRadio.UI.Tools;
+namespace HorizonRadio.Core.Tools;
 
 /// <summary>
 /// SHA-256 utilities for tool downloads. Two operations: compute the

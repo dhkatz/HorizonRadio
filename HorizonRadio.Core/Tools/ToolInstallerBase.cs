@@ -3,9 +3,8 @@ using System.IO;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Tools;
 
-namespace HorizonRadio.UI.Tools;
+namespace HorizonRadio.Core.Tools;
 
 /// <summary>
 /// Shared plumbing for the per-tool installers: the streaming download
