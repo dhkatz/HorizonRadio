@@ -30,6 +30,7 @@
     <ProjectReference Include="..\HorizonRadio.Metadata.VocaDB\HorizonRadio.Metadata.VocaDB.csproj" />
     <ProjectReference Include="..\HorizonRadio.Source.Local\HorizonRadio.Source.Local.csproj" />
     <ProjectReference Include="..\HorizonRadio.Source.Radio\HorizonRadio.Source.Radio.csproj" />
+    <ProjectReference Include="..\HorizonRadio.Source.Spotify\HorizonRadio.Source.Spotify.csproj" />
     <ProjectReference Include="..\HorizonRadio.Source.Test\HorizonRadio.Source.Test.csproj" />
     <ProjectReference Include="..\HorizonRadio.Source.YouTube\HorizonRadio.Source.YouTube.csproj" />
   </ItemGroup>

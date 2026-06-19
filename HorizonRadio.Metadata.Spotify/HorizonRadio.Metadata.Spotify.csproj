@@ -1,14 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Spotify metadata plugin. References the host (Core) for shared helpers, the SDK (Abstractions,
-    transitively), SpotifyAPI.Web (transitively via Core), and — when no app credentials are set —
-    the connected Spotify source's SpotifyRuntime (in Core) to ride on its Web API client.
-    No InternalsVisibleTo: nothing internal is unit-tested.
+    Spotify metadata plugin. References the host (Core) for shared helpers + the SDK (Abstractions,
+    transitively), SpotifyAPI.Web for the Web API client, and — when no app credentials are set — the
+    Spotify SOURCE plugin to ride on its connected Web API client (SpotifyRuntime.Connection).
 
-    NOTE: the SpotifyRuntime static reach is a Sources-layer coupling; it'll be replaced by a
-    host-mediated shared connection when the Source plugins are split (where SpotifyRuntime is
-    reworked). For now this is the same coupling as before, just across the assembly boundary.
+    That source reference is a deliberate "companion dependency": the Spotify metadata + source
+    plugins are the same vendor integration split across two plugin types, so metadata depending on
+    its own source is allowed (the architecture rule forbids deps between UNRELATED plugins, not this).
+    No InternalsVisibleTo: nothing internal is unit-tested.
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -18,6 +18,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+    <ProjectReference Include="..\HorizonRadio.Source.Spotify\HorizonRadio.Source.Spotify.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SpotifyAPI.Web" Version="7.4.2" />
   </ItemGroup>
 
 </Project>
