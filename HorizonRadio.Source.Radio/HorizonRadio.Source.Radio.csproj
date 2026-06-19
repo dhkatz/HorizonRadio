@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Internet-radio source plugin (ICY stream reader + Radio Browser directory). References the
+       host (Core) for shared playback infra (the ffmpeg PCM subprocess, the title-model hook,
+       search-term matching) + the SDK (Abstractions, transitively). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+  </ItemGroup>
+
+  <!-- RadioStreamTitle is internal; its title-parsing tests live in Core.Tests. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="HorizonRadio.Core.Tests" />
+  </ItemGroup>
+
+</Project>

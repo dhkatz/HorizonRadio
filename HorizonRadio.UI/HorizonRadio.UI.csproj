@@ -76,6 +76,7 @@
       <ProjectReference Include="..\HorizonRadio.Metadata.Spotify\HorizonRadio.Metadata.Spotify.csproj" />
       <ProjectReference Include="..\HorizonRadio.Metadata.VocaDB\HorizonRadio.Metadata.VocaDB.csproj" />
       <ProjectReference Include="..\HorizonRadio.Source.Local\HorizonRadio.Source.Local.csproj" />
+      <ProjectReference Include="..\HorizonRadio.Source.Radio\HorizonRadio.Source.Radio.csproj" />
       <ProjectReference Include="..\HorizonRadio.Tools.YtDlp\HorizonRadio.Tools.YtDlp.csproj" />
       <ProjectReference Include="..\HorizonRadio.Tools.FFmpeg\HorizonRadio.Tools.FFmpeg.csproj" />
       <ProjectReference Include="..\HorizonRadio.Tools.Librespot\HorizonRadio.Tools.Librespot.csproj" />

@@ -6,6 +6,7 @@
   <Project Path="HorizonRadio.Metadata.Spotify/HorizonRadio.Metadata.Spotify.csproj" />
   <Project Path="HorizonRadio.Metadata.VocaDB/HorizonRadio.Metadata.VocaDB.csproj" />
   <Project Path="HorizonRadio.Source.Local/HorizonRadio.Source.Local.csproj" />
+  <Project Path="HorizonRadio.Source.Radio/HorizonRadio.Source.Radio.csproj" />
   <Project Path="HorizonRadio.Tools.YtDlp/HorizonRadio.Tools.YtDlp.csproj" />
   <Project Path="HorizonRadio.Tools.FFmpeg/HorizonRadio.Tools.FFmpeg.csproj" />
   <Project Path="HorizonRadio.Tools.Librespot/HorizonRadio.Tools.Librespot.csproj" />
