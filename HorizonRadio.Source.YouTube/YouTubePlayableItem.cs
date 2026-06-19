@@ -1,8 +1,8 @@
 using System.Diagnostics;
-using System.Globalization;
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Models;
+using HorizonRadio.Tools.FFmpeg;
 using HorizonRadio.Tools.YtDlp;
 
 namespace HorizonRadio.Core.Sources.YouTube;
@@ -123,7 +123,7 @@ public sealed class YouTubePlayableItem : PlayableItem
 
         ctx.OnStarted?.Invoke(this);
 
-        var args = BuildFfmpegArgs(_resolved.StreamUrl, _normalise);
+        var args = Ffmpeg.BuildUrlDecodeArgs(_resolved.StreamUrl, _normalise);
         var pausing = new PausingSink(ctx.Sink, ctx.IsPaused, ctx.ResumeGate, ct);
 
         await using var subproc = new SubprocessPcmSource(new SubprocessPcmSource.Config
@@ -149,31 +149,6 @@ public sealed class YouTubePlayableItem : PlayableItem
         // Completion returns on EOF (natural) or cancellation (skip/stop); the
         // token tells which, so surface a cancel as OperationCanceledException.
         ct.ThrowIfCancellationRequested();
-    }
-
-    private static string[] BuildFfmpegArgs(string streamUrl, bool normalise)
-    {
-        var list = new List<string>
-        {
-            "-hide_banner",
-            "-loglevel", "error",
-            "-reconnect", "1",
-            "-reconnect_streamed", "1",
-            "-reconnect_delay_max", "5",
-            "-i", streamUrl,
-            "-vn",
-            "-f", "s16le",
-            "-ac", AudioFormat.Channels.ToString(CultureInfo.InvariantCulture),
-            "-ar", AudioFormat.SampleRate.ToString(CultureInfo.InvariantCulture),
-        };
-        if (normalise)
-        {
-            list.Add("-af");
-            list.Add("loudnorm=I=-16:TP=-1.5:LRA=11");
-        }
-
-        list.Add("pipe:1");
-        return list.ToArray();
     }
 
     public override async Task<Track?> TryGetMetadataAsync(CancellationToken ct)

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -10,6 +9,7 @@ using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Models;
+using HorizonRadio.Tools.FFmpeg;
 
 namespace HorizonRadio.Core.Sources.Radio;
 
@@ -159,7 +159,7 @@ public sealed class RadioPlayableItem : PlayableItem
                     subproc = new SubprocessPcmSource(new SubprocessPcmSource.Config
                     {
                         ExecutablePath = _ffmpegPath,
-                        Args = BuildFfmpegArgs(),
+                        Args = Ffmpeg.BuildStdinDecodeArgs(),
                         ToolName = "ffmpeg",
                         RedirectStdin = true,
                         OnStderrLine = line => Log($"ffmpeg: {line}"),
@@ -352,15 +352,4 @@ public sealed class RadioPlayableItem : PlayableItem
         if (Metadata.ExternalId is null) Metadata = BuildTrack(null, null);
     }
 
-    private static string[] BuildFfmpegArgs() =>
-    [
-        "-hide_banner",
-        "-loglevel", "error",
-        "-i", "pipe:0",
-        "-vn",
-        "-f", "s16le",
-        "-ac", AudioFormat.Channels.ToString(CultureInfo.InvariantCulture),
-        "-ar", AudioFormat.SampleRate.ToString(CultureInfo.InvariantCulture),
-        "pipe:1",
-    ];
 }
