@@ -1,36 +1,35 @@
 using System.Collections.Generic;
 using System.Linq;
-using HorizonRadio.Core.Sources.Local;
-using HorizonRadio.Core.Sources.Radio;
-using HorizonRadio.Core.Sources.Spotify;
-using HorizonRadio.Core.Sources.Test;
-using HorizonRadio.Core.Sources.YouTube;
+using HorizonRadio.Plugins.Abstractions;
 
 namespace HorizonRadio.Core.Sources;
 
 /// <summary>
-/// Static registry of every <see cref="IAudioSourceFactory"/> the app
-/// knows about. The UI's source picker is bound to <see cref="All"/>;
-/// adding a new source means dropping a new factory here.
+/// Registry of every <see cref="IAudioSourceFactory"/> the app knows about. The UI's source picker
+/// is bound to <see cref="All"/>; <see cref="Find"/> resolves an id to its factory.
 ///
-/// Kept dead simple on purpose — no DI container, no plugin discovery.
-/// If we later want runtime-loadable sources we can swap the static
-/// list for a scan, but the call sites won't change.
+/// Populated by the composition root via <see cref="Initialize"/> — which references the source
+/// plugin assemblies and so can name them — before any source is resolved. Until then the catalog
+/// is empty. Call sites read <see cref="All"/>/<see cref="Find"/> exactly as before.
 /// </summary>
 public static class SourceCatalog
 {
-    public static IReadOnlyList<IAudioSourceFactory> All { get; } =
-    [
-        new LocalFileSourceFactory(),
-        // Two Spotify entries, by design: the zero-setup Connect receiver (cast from
-        // your phone, no developer app) and the driven, mixable source (links, queue,
-        // mixes; needs your own Client ID). See SpotifyContentSourceFactory.SourceId.
-        new SpotifySourceFactory(),
-        new SpotifyContentSourceFactory(),
-        new YouTubeSourceFactory(),
-        new RadioSourceFactory(),
-        new TestToneSourceFactory()
-    ];
+    private static IReadOnlyList<ISourcePlugin> _plugins = [];
+
+    /// <summary>Register the available source plugins (in display order). Called once at startup,
+    /// before the catalog is read.</summary>
+    public static void Initialize(IReadOnlyList<ISourcePlugin> plugins)
+    {
+        _plugins = plugins;
+        All = [.. plugins.SelectMany(p => p.Sources)];
+    }
+
+    /// <summary>The registered source plugins, in display order.</summary>
+    public static IReadOnlyList<ISourcePlugin> Plugins => _plugins;
+
+    /// <summary>Every source factory the registered plugins contribute, flattened in display order.
+    /// Empty until <see cref="Initialize"/> runs.</summary>
+    public static IReadOnlyList<IAudioSourceFactory> All { get; private set; } = [];
 
     public static IAudioSourceFactory? Find(string id) =>
         All.FirstOrDefault(f => f.Id == id);
