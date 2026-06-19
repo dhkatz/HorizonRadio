@@ -17,9 +17,12 @@ using HorizonRadio.Core.Metadata.VocaDb;
 using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Core.Sources.Local;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Core.Sources.Queue;
+using HorizonRadio.Core.Sources.Radio;
 using HorizonRadio.Core.Sources.Spotify;
+using HorizonRadio.Core.Sources.Test;
 using HorizonRadio.Core.Sources.YouTube;
 using HorizonRadio.Core.Tools;
 using HorizonRadio.TitleModel;
@@ -71,6 +74,17 @@ public partial class App : Application
             // Re-arm opt-in metadata diagnostics if the user left them on (or HZN_META_TRACE is set)
             // before any source can emit, so the first song of the session is captured too.
             HorizonRadio.Core.Diagnostics.MetadataTrace.RestoreFromSettings();
+
+            // Register the source plugins (the composition root references the plugin assemblies)
+            // before anything resolves a source from the catalog. Order = display order.
+            SourceCatalog.Initialize(
+            [
+                new LocalSourcePlugin(),
+                new SpotifySourcePlugin(),
+                new YouTubeSourcePlugin(),
+                new RadioSourcePlugin(),
+                new TestToneSourcePlugin(),
+            ]);
 
             // Build the DI container for the Core engine's leaf services (the persisted config
             // stores + the metadata cache) and resolve them from it instead of hand-constructing
