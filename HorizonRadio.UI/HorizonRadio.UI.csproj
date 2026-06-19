@@ -86,6 +86,7 @@
       <ProjectReference Include="..\HorizonRadio.Metadata.MusicBrainz\HorizonRadio.Metadata.MusicBrainz.csproj" />
       <ProjectReference Include="..\HorizonRadio.Metadata.Spotify\HorizonRadio.Metadata.Spotify.csproj" />
       <ProjectReference Include="..\HorizonRadio.Metadata.VocaDB\HorizonRadio.Metadata.VocaDB.csproj" />
+      <ProjectReference Include="..\HorizonRadio.Source.Local\HorizonRadio.Source.Local.csproj" />
       <ProjectReference Include="..\HorizonRadio.TitleModel\HorizonRadio.TitleModel.csproj" />
     </ItemGroup>
 
