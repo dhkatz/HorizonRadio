@@ -26,6 +26,7 @@
     <ProjectReference Include="..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
     <ProjectReference Include="..\HorizonRadio.Metadata.Apple\HorizonRadio.Metadata.Apple.csproj" />
     <ProjectReference Include="..\HorizonRadio.Metadata.MusicBrainz\HorizonRadio.Metadata.MusicBrainz.csproj" />
+    <ProjectReference Include="..\HorizonRadio.Metadata.Spotify\HorizonRadio.Metadata.Spotify.csproj" />
     <ProjectReference Include="..\HorizonRadio.Metadata.VocaDB\HorizonRadio.Metadata.VocaDB.csproj" />
   </ItemGroup>
 
