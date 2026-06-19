@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Test-tone diagnostic source plugin (a generated sine sweep for verifying the audio path).
+       References the host (Core) + the SDK (Abstractions, transitively). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+  </ItemGroup>
+
+</Project>

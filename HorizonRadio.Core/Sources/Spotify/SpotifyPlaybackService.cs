@@ -8,7 +8,7 @@ namespace HorizonRadio.Core.Sources.Spotify;
 
 /// <summary>
 /// Drives Spotify playback <em>track-by-track</em> from our own engine, the way
-/// <see cref="YouTube.YouTubePlayableItem"/> drives ffmpeg — the opposite of the
+/// <c>YouTubePlayableItem</c> drives ffmpeg — the opposite of the
 /// legacy self-driven receiver, where Spotify (the user's phone) decided what
 /// played and we were a passive Connect target.
 ///
