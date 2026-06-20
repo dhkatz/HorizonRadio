@@ -8,5 +8,6 @@ public sealed class ItunesMetadataPlugin : IMetadataPlugin
 {
     public string Id => "itunes";
     public string DisplayName => "Apple Music (iTunes)";
+    public int SortOrder => 20;
     public IReadOnlyList<IMetadataProviderFactory> Providers { get; } = [new ItunesProviderFactory()];
 }

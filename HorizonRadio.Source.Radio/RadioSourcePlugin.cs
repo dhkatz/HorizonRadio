@@ -8,5 +8,6 @@ public sealed class RadioSourcePlugin : ISourcePlugin
 {
     public string Id => "radio";
     public string DisplayName => "Internet Radio";
+    public int SortOrder => 40;
     public IReadOnlyList<IAudioSourceFactory> Sources { get; } = [new RadioSourceFactory()];
 }

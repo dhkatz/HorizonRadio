@@ -8,5 +8,6 @@ public sealed class SpotifyMetadataPlugin : IMetadataPlugin
 {
     public string Id => "spotify";
     public string DisplayName => "Spotify";
+    public int SortOrder => 10;
     public IReadOnlyList<IMetadataProviderFactory> Providers { get; } = [new SpotifyProviderFactory()];
 }

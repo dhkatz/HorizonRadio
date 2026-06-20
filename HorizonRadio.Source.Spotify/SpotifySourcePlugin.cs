@@ -12,6 +12,7 @@ public sealed class SpotifySourcePlugin : ISourcePlugin
 {
     public string Id => "spotify";
     public string DisplayName => "Spotify";
+    public int SortOrder => 20;
     public IReadOnlyList<IAudioSourceFactory> Sources { get; } =
         [new SpotifySourceFactory(), new SpotifyContentSourceFactory()];
 }

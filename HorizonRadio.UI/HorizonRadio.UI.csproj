@@ -48,6 +48,22 @@
         <AssemblyMetadata Include="Channel" Value="$(Channel)" />
     </ItemGroup>
 
+    <!--
+      Emit one [AssemblyMetadata("PluginAssembly_X", "X")] per referenced HorizonRadio assembly so
+      PluginDiscovery can load + scan them at runtime. Generated from the actual project references
+      (no hand-maintained list), and is the single-file-safe way to enumerate the bundled plugin
+      assemblies: DependencyContext.Default is null in a single-file app, and there's no API to list
+      bundle contents, but Assembly.Load by name resolves from the bundle. The distinct key per
+      assembly avoids MSBuild collapsing same-Include items; the %(…) batching only expands inside a
+      target, hence this isn't a plain ItemGroup. (Phase 2's external plugins load by path from a
+      plugins dir, a separate path that doesn't need this.) -->
+    <Target Name="EmitPluginAssemblyMetadata" BeforeTargets="GetAssemblyAttributes">
+        <ItemGroup>
+            <AssemblyMetadata Include="PluginAssembly_%(ProjectReference.Filename)"
+                              Value="%(ProjectReference.Filename)" />
+        </ItemGroup>
+    </Target>
+
     <ItemGroup>
         <Folder Include="Models\" />
         <AvaloniaResource Include="Assets\**" />
