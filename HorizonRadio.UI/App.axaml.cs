@@ -83,12 +83,15 @@ public partial class App : Application
             // already seeded in Program.BuildAvaloniaApp, before any source ctor probes it.)
             SourceCatalog.Initialize(PluginDiscovery.DiscoverPlugins<ISourcePlugin>());
 
-            // Build the DI container for the Core engine's leaf services (the persisted config
-            // stores + the metadata cache) and resolve them from it instead of hand-constructing
-            // them — the first step of moving ownership/lifetime to DI. Built inside the desktop
-            // branch so the XAML designer (which never enters here) is unaffected.
+            // Build the DI container and resolve the safe-to-own services from it instead of
+            // hand-constructing them — moving their ownership/lifetime to DI. AddHorizonCore wires
+            // Core's services (Core owns how to build them); the two UI host services are registered
+            // here directly since this is their only composition root. Built inside the desktop branch
+            // so the XAML designer (which never enters here) is unaffected.
             var services = new ServiceCollection();
-            services.AddHorizonCore().AddHorizonUiServices();
+            services.AddHorizonCore();
+            services.AddSingleton<ToolRegistry>();
+            services.AddSingleton<IPluginContext>(sp => new HostPluginContext(sp.GetRequiredService<MetadataCache>()));
             var provider = services.BuildServiceProvider();
 
             _store = provider.GetRequiredService<SourceConfigStore>();
