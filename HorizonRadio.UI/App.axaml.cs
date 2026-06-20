@@ -25,6 +25,7 @@ using HorizonRadio.Core.Sources.Spotify;
 using HorizonRadio.Core.Sources.Test;
 using HorizonRadio.Core.Sources.YouTube;
 using HorizonRadio.Core.Tools;
+using HorizonRadio.Plugins.Abstractions;
 using HorizonRadio.TitleModel;
 using HorizonRadio.Tools.Librespot;
 using HorizonRadio.UI.Services;
@@ -76,17 +77,11 @@ public partial class App : Application
             // before any source can emit, so the first song of the session is captured too.
             HorizonRadio.Core.Diagnostics.MetadataTrace.RestoreFromSettings();
 
-            // Register the source plugins (the composition root references the plugin assemblies)
-            // before anything resolves a source from the catalog. Order = display order. (The tool
-            // catalog is already seeded in Program.BuildAvaloniaApp, before any source ctor probes it.)
-            SourceCatalog.Initialize(
-            [
-                new LocalSourcePlugin(),
-                new SpotifySourcePlugin(),
-                new YouTubeSourcePlugin(),
-                new RadioSourcePlugin(),
-                new TestToneSourcePlugin(),
-            ]);
+            // Discover the source plugins by scanning the loaded plugin assemblies (rather than naming
+            // each here) before anything resolves a source from the catalog — the seam the install
+            // model rests on. SortOrder gives the picker its display order. (The tool catalog is
+            // already seeded in Program.BuildAvaloniaApp, before any source ctor probes it.)
+            SourceCatalog.Initialize(PluginDiscovery.DiscoverPlugins<ISourcePlugin>());
 
             // Build the DI container for the Core engine's leaf services (the persisted config
             // stores + the metadata cache) and resolve them from it instead of hand-constructing
@@ -143,16 +138,11 @@ public partial class App : Application
                 return !string.IsNullOrWhiteSpace(path) && File.Exists(path) ? path : null;
             });
 
-            // Register the metadata plugins (the composition root references the plugin assemblies)
-            // before the config store loads — it derives fresh-install defaults + the "introduced"
-            // set from the catalog, so the catalog must be populated first. Order = display order.
-            MetadataCatalog.Initialize(
-            [
-                new SpotifyMetadataPlugin(),
-                new ItunesMetadataPlugin(),
-                new MusicBrainzMetadataPlugin(),
-                new VocaDbMetadataPlugin(),
-            ]);
+            // Discover the metadata plugins by scanning the loaded plugin assemblies (rather than
+            // naming each here) before the config store loads — it derives fresh-install defaults + the
+            // "introduced" set from the catalog, so the catalog must be populated first. SortOrder gives
+            // the provider list its display order.
+            MetadataCatalog.Initialize(PluginDiscovery.DiscoverPlugins<IMetadataPlugin>());
 
             _metaStore = provider.GetRequiredService<MetadataConfigStore>();
             var cache = provider.GetRequiredService<MetadataCache>();

@@ -8,5 +8,6 @@ public sealed class LocalSourcePlugin : ISourcePlugin
 {
     public string Id => "local";
     public string DisplayName => "Local Files";
+    public int SortOrder => 10;
     public IReadOnlyList<IAudioSourceFactory> Sources { get; } = [new LocalFileSourceFactory()];
 }

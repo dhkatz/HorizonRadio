@@ -12,4 +12,13 @@ public interface IPlugin
 
     /// <summary>User-facing label.</summary>
     string DisplayName { get; }
+
+    /// <summary>
+    /// Relative position among plugins of the same kind, ascending — the host orders the discovered
+    /// plugins by this (then by <see cref="Id"/> as a stable tiebreak) so the source picker and
+    /// metadata provider list have a deterministic order even though assembly-scan discovery does not.
+    /// First-party plugins set explicit values to preserve their shipped order; third-party plugins
+    /// default to the end.
+    /// </summary>
+    int SortOrder => int.MaxValue;
 }

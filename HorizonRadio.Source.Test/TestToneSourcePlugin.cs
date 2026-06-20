@@ -8,5 +8,6 @@ public sealed class TestToneSourcePlugin : ISourcePlugin
 {
     public string Id => "testtone";
     public string DisplayName => "Test Tone";
+    public int SortOrder => 50;
     public IReadOnlyList<IAudioSourceFactory> Sources { get; } = [new TestToneSourceFactory()];
 }

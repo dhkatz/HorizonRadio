@@ -8,5 +8,6 @@ public sealed class VocaDbMetadataPlugin : IMetadataPlugin
 {
     public string Id => "vocadb";
     public string DisplayName => "VocaDB";
+    public int SortOrder => 40;
     public IReadOnlyList<IMetadataProviderFactory> Providers { get; } = [new VocaDbProviderFactory()];
 }
