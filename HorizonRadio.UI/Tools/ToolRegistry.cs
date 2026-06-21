@@ -17,7 +17,10 @@ public sealed class ToolRegistry
     public void Rescan()
     {
         _byKind.Clear();
-        foreach (var tool in ToolCatalog.All) ScanKind(tool.Id);
+        ScanKind(ToolKind.YtDlp);
+        ScanKind(ToolKind.Ffmpeg);
+        ScanKind(ToolKind.Librespot);
+        ScanKind(ToolKind.TitleModel);
         RaiseChanged();
     }
 

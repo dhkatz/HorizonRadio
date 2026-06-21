@@ -3,36 +3,24 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
-using HorizonRadio.Core;
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Events;
 using HorizonRadio.Core.History;
 using HorizonRadio.Core.Input;
 using HorizonRadio.Core.Ipc;
 using HorizonRadio.Core.Metadata;
-using HorizonRadio.Core.Metadata.Apple;
-using HorizonRadio.Core.Metadata.MusicBrainz;
-using HorizonRadio.Core.Metadata.Spotify;
-using HorizonRadio.Core.Metadata.VocaDb;
 using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
-using HorizonRadio.Core.Sources.Local;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Core.Sources.Queue;
-using HorizonRadio.Core.Sources.Radio;
 using HorizonRadio.Core.Sources.Spotify;
-using HorizonRadio.Core.Sources.Test;
 using HorizonRadio.Core.Sources.YouTube;
 using HorizonRadio.Core.Tools;
-using HorizonRadio.Plugins.Abstractions;
 using HorizonRadio.TitleModel;
-using HorizonRadio.Tools.Librespot;
-using HorizonRadio.UI.Services;
 using HorizonRadio.UI.Tools;
 using HorizonRadio.UI.ViewModels;
 using HorizonRadio.UI.Views;
-using Microsoft.Extensions.DependencyInjection;
 using ShadUI;
 
 namespace HorizonRadio.UI;
@@ -77,24 +65,7 @@ public partial class App : Application
             // before any source can emit, so the first song of the session is captured too.
             HorizonRadio.Core.Diagnostics.MetadataTrace.RestoreFromSettings();
 
-            // Discover the source plugins by scanning the loaded plugin assemblies (rather than naming
-            // each here) before anything resolves a source from the catalog — the seam the install
-            // model rests on. SortOrder gives the picker its display order. (The tool catalog is
-            // already seeded in Program.BuildAvaloniaApp, before any source ctor probes it.)
-            SourceCatalog.Initialize(PluginDiscovery.DiscoverPlugins<ISourcePlugin>());
-
-            // Build the DI container and resolve the safe-to-own services from it instead of
-            // hand-constructing them — moving their ownership/lifetime to DI. AddHorizonCore wires
-            // Core's services (Core owns how to build them); the two UI host services are registered
-            // here directly since this is their only composition root. Built inside the desktop branch
-            // so the XAML designer (which never enters here) is unaffected.
-            var services = new ServiceCollection();
-            services.AddHorizonCore();
-            services.AddSingleton<ToolRegistry>();
-            services.AddSingleton<IPluginContext>(sp => new HostPluginContext(sp.GetRequiredService<MetadataCache>()));
-            var provider = services.BuildServiceProvider();
-
-            _store = provider.GetRequiredService<SourceConfigStore>();
+            _store = SourceConfigStore.LoadFromDisk();
 
             _pcm = new PcmPipeClient();
             _pcm.Start();
@@ -141,25 +112,17 @@ public partial class App : Application
                 return !string.IsNullOrWhiteSpace(path) && File.Exists(path) ? path : null;
             });
 
-            // Discover the metadata plugins by scanning the loaded plugin assemblies (rather than
-            // naming each here) before the config store loads — it derives fresh-install defaults + the
-            // "introduced" set from the catalog, so the catalog must be populated first. SortOrder gives
-            // the provider list its display order.
-            MetadataCatalog.Initialize(PluginDiscovery.DiscoverPlugins<IMetadataPlugin>());
-
-            _metaStore = provider.GetRequiredService<MetadataConfigStore>();
-            // Host services handed to metadata provider factories (the cache today; grows as more
-            // plugin kinds come online). Container-owned singleton, shared across pipeline builds.
-            var pluginContext = provider.GetRequiredService<IPluginContext>();
+            _metaStore = MetadataConfigStore.LoadFromDisk();
+            var cache = new MetadataCache();
             // The metadata pipeline: a shared resolver (source + ordered providers,
             // per-field policy) drives both play-time enrichment and list enrichment.
             _metaResolver = new MetadataResolver();
-            var (metaContributors, metaPolicy) = MetadataCatalog.BuildPipeline(_metaStore, pluginContext);
+            var (metaContributors, metaPolicy) = MetadataCatalog.BuildPipeline(_metaStore, cache);
             _metaResolver.Configure(metaContributors, metaPolicy);
             _enricher = new EnrichmentService(_runner, _metaResolver);
-            var metaVm = new MetadataViewModel(_metaStore, pluginContext, _metaResolver);
+            var metaVm = new MetadataViewModel(_metaStore, cache, _metaResolver);
 
-            var toolRegistry = provider.GetRequiredService<ToolRegistry>();
+            var toolRegistry = new ToolRegistry();
             var installers = ToolInstallers.CreateAll();
 
             // Optional local title-extraction model: published to the runtime holder so the
@@ -198,25 +161,25 @@ public partial class App : Application
             // poller); the telemetry listener is a second source. The
             // executor runs the user's configured action for each event.
             _ipc = new IpcClient();
-            var eventRules = provider.GetRequiredService<EventRuleStore>();
+            var eventRules = EventRuleStore.LoadFromDisk();
             _telemetry = new ForzaTelemetryListener();
 
             // Saved mixes + the single switcher all launches route through (owns
             // the "current mix" notion for Next/Previous). One-time migrate any
             // legacy profiles.json into one-entry mixes on first run.
-            var mixStore = provider.GetRequiredService<MixStore>();
+            var mixStore = MixStore.LoadFromDisk();
             MixMigration.MaybeMigrate(mixStore);
 
             // The global queue owns playback now: one engine plays straight down the
             // queue (explicit one-offs first, then the active mix as an infinite
             // tail). The switcher sets a mix as that tail; quick-play appends one-offs.
-            var contentResolver = provider.GetRequiredService<MixContentResolver>();
+            var contentResolver = new MixContentResolver(_store);
             var queuePlayback = new QueuePlayback(_runner, _store, contentResolver);
             var mixSwitcher = new MixSwitcher(mixStore, queuePlayback, _runner);
 
             // Play history: records every song the runner reports (deduped), tags freeform songs
             // it can't identify via the metadata pipeline, and persists (debounced) to history.json.
-            _historyStore = provider.GetRequiredService<PlayHistoryStore>();
+            _historyStore = PlayHistoryStore.LoadFromDisk();
             _historyService = new PlayHistoryService(_historyStore, _runner);
 
             // One dispatcher turns an EventAction into a transport/source/mix/
@@ -229,7 +192,7 @@ public partial class App : Application
 
             // Controls: global keyboard/mouse (SharpHook) + controllers (SDL),
             // mapped to the same actions through the shared dispatcher.
-            var controlsStore = provider.GetRequiredService<InputBindingStore>();
+            var controlsStore = InputBindingStore.LoadFromDisk();
             _inputService = new InputBindingService(
                 new IInputBackend[] { new SharpHookBackend(), new SdlInputBackend() },
                 controlsStore, dispatcher);
@@ -322,8 +285,6 @@ public partial class App : Application
                 if (_spotifyConnection != null) await _spotifyConnection.DisposeAsync();
                 if (_ipc != null) await _ipc.DisposeAsync();
                 if (_pcm != null) await _pcm.DisposeAsync();
-                // Dispose the container last — it owns the leaf singletons (stores + cache).
-                await provider.DisposeAsync();
             };
 
             vm.SetConnection(ConnectionState.Connecting);

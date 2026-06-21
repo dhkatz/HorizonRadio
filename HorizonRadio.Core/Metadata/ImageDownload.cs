@@ -12,7 +12,7 @@ namespace HorizonRadio.Core.Metadata;
 /// callers without their own client (the radio station-logo fetch) reuse a shared client
 /// instead of spinning up — and leaking — an <see cref="HttpClient"/> per call.
 /// </summary>
-public static class ImageDownload
+internal static class ImageDownload
 {
     public static HttpClient Shared { get; } = new() { Timeout = TimeSpan.FromSeconds(15) };
 

@@ -8,7 +8,7 @@ namespace HorizonRadio.Core.Sources;
 /// subprocess-backed <see cref="PlayableItem"/> can reuse the behavior the
 /// per-source pumps already implement inline.
 /// </summary>
-public sealed class PausingSink(
+internal sealed class PausingSink(
     IPcmSink inner,
     Func<bool> isPaused,
     ManualResetEventSlim resumeGate,

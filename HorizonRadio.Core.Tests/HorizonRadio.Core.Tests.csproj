@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -24,15 +24,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
-    <ProjectReference Include="..\Plugins\Metadata\HorizonRadio.Metadata.Apple\HorizonRadio.Metadata.Apple.csproj" />
-    <ProjectReference Include="..\Plugins\Metadata\HorizonRadio.Metadata.MusicBrainz\HorizonRadio.Metadata.MusicBrainz.csproj" />
-    <ProjectReference Include="..\Plugins\Metadata\HorizonRadio.Metadata.Spotify\HorizonRadio.Metadata.Spotify.csproj" />
-    <ProjectReference Include="..\Plugins\Metadata\HorizonRadio.Metadata.VocaDB\HorizonRadio.Metadata.VocaDB.csproj" />
-    <ProjectReference Include="..\Plugins\Sources\HorizonRadio.Source.Local\HorizonRadio.Source.Local.csproj" />
-    <ProjectReference Include="..\Plugins\Sources\HorizonRadio.Source.Radio\HorizonRadio.Source.Radio.csproj" />
-    <ProjectReference Include="..\Plugins\Sources\HorizonRadio.Source.Spotify\HorizonRadio.Source.Spotify.csproj" />
-    <ProjectReference Include="..\Plugins\Sources\HorizonRadio.Source.Test\HorizonRadio.Source.Test.csproj" />
-    <ProjectReference Include="..\Plugins\Sources\HorizonRadio.Source.YouTube\HorizonRadio.Source.YouTube.csproj" />
   </ItemGroup>
 
 </Project>

@@ -25,7 +25,7 @@ namespace HorizonRadio.Core.Metadata;
 /// art-less entry is treated as absent so the lookup re-runs. Without this, one miss would be
 /// permanent and no future fix could ever surface on a song already seen.
 /// </summary>
-public sealed class MetadataCache : IMetadataCache
+public sealed class MetadataCache
 {
     /// <summary>Bump when matching/parsing logic changes enough that previously cached results
     /// deserve a re-fetch — including a richer extraction (e.g. now capturing PV links and album
@@ -40,7 +40,16 @@ public sealed class MetadataCache : IMetadataCache
     private readonly TimeSpan _retryTtl;
     private readonly int _cacheVersion;
     private readonly Func<DateTimeOffset> _now;
-    private readonly ConcurrentDictionary<string, MetadataCacheEntry?> _memoryCache = new();
+    private readonly ConcurrentDictionary<string, Entry?> _memoryCache = new();
+
+    public sealed record Entry(
+        string? Title,
+        string? Artist,
+        string? Album,
+        byte[]? AlbumArt,
+        string? Mbid,
+        int? Year = null,
+        IReadOnlyList<PlayableRef>? Pvs = null);
 
     /// <param name="retryTtl">How long an art-less entry (miss / partial hit) is trusted before it
     /// is retried. Defaults to 14 days.</param>
@@ -72,7 +81,7 @@ public sealed class MetadataCache : IMetadataCache
     private string PathFor(string key) =>
         Path.Combine(_root, key + ".json");
 
-    public MetadataCacheEntry? TryGet(string key)
+    public Entry? TryGet(string key)
     {
         if (_memoryCache.TryGetValue(key, out var cached)) return cached;
 
@@ -85,13 +94,13 @@ public sealed class MetadataCache : IMetadataCache
 
         try
         {
-            MetadataCacheEntry entry;
+            Entry entry;
             bool versionCurrent, withinTtl;
             using (var stream = File.OpenRead(path))
             using (var doc = JsonDocument.Parse(stream))
             {
                 var r = doc.RootElement;
-                entry = new MetadataCacheEntry(
+                entry = new Entry(
                     Title: GetString(r, "title"),
                     Artist: GetString(r, "artist"),
                     Album: GetString(r, "album"),
@@ -133,7 +142,7 @@ public sealed class MetadataCache : IMetadataCache
         try { File.Delete(path); } catch { /* best-effort; a re-search will overwrite it anyway */ }
     }
 
-    public void Put(string key, MetadataCacheEntry entry)
+    public void Put(string key, Entry entry)
     {
         _memoryCache[key] = entry;
 
@@ -174,7 +183,7 @@ public sealed class MetadataCache : IMetadataCache
 
     /// <summary>Negative-cache: record that a lookup yielded nothing.
     /// Avoids re-querying MusicBrainz every time the same track plays.</summary>
-    public void PutMiss(string key) => Put(key, new MetadataCacheEntry(null, null, null, null, null));
+    public void PutMiss(string key) => Put(key, new Entry(null, null, null, null, null));
 
     private static string? GetString(JsonElement r, string name) =>
         r.TryGetProperty(name, out var p) && p.ValueKind == JsonValueKind.String

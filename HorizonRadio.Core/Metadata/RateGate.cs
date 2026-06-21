@@ -10,7 +10,7 @@ namespace HorizonRadio.Core.Metadata;
 /// limit. Shared by the metadata providers, which each hit an external API that tolerates
 /// bursts poorly (MusicBrainz asks for ~1 req/s; iTunes/VocaDB just shouldn't be hammered).
 /// </summary>
-public sealed class RateGate(TimeSpan minInterval) : IDisposable
+internal sealed class RateGate(TimeSpan minInterval) : IDisposable
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Stopwatch _sinceLast = Stopwatch.StartNew();
