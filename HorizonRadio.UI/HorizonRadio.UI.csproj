@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <OutputType>WinExe</OutputType>
         <TargetFramework>net10.0</TargetFramework>
@@ -48,25 +48,20 @@
         <AssemblyMetadata Include="Channel" Value="$(Channel)" />
     </ItemGroup>
 
-    <!--
-      Emit one [AssemblyMetadata("PluginAssembly_X", "X")] per referenced HorizonRadio assembly so
-      PluginDiscovery can load + scan them at runtime. Generated from the actual project references
-      (no hand-maintained list), and is the single-file-safe way to enumerate the bundled plugin
-      assemblies: DependencyContext.Default is null in a single-file app, and there's no API to list
-      bundle contents, but Assembly.Load by name resolves from the bundle. The distinct key per
-      assembly avoids MSBuild collapsing same-Include items; the %(…) batching only expands inside a
-      target, hence this isn't a plain ItemGroup. (Phase 2's external plugins load by path from a
-      plugins dir, a separate path that doesn't need this.) -->
-    <Target Name="EmitPluginAssemblyMetadata" BeforeTargets="GetAssemblyAttributes">
-        <ItemGroup>
-            <AssemblyMetadata Include="PluginAssembly_%(ProjectReference.Filename)"
-                              Value="%(ProjectReference.Filename)" />
-        </ItemGroup>
-    </Target>
-
     <ItemGroup>
         <Folder Include="Models\" />
         <AvaloniaResource Include="Assets\**" />
+    </ItemGroup>
+
+    <!--
+      The tool manifest (repo root) is the single source of truth for
+      pinned tool versions/URLs/hashes; embed it so the app reads it
+      offline at runtime (HorizonRadio.UI.Tools.ToolManifest). See
+      docs/tool-provisioning.md.
+    -->
+    <ItemGroup>
+        <EmbeddedResource Include="$(MSBuildThisFileDirectory)..\tools.manifest.json"
+                          Link="tools.manifest.json" />
     </ItemGroup>
 
     <ItemGroup>
@@ -79,7 +74,6 @@
             <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
         </PackageReference>
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.1" />
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
         <PackageReference Include="ShadUI" Version="0.2.3" />
         <PackageReference Include="Material.Icons.Avalonia" Version="3.0.2" />
         <PackageReference Include="LiveChartsCore.SkiaSharpView.Avalonia" Version="2.1.0-dev-570" />
@@ -87,19 +81,6 @@
 
     <ItemGroup>
       <ProjectReference Include="..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
-      <ProjectReference Include="..\Plugins\Metadata\HorizonRadio.Metadata.Apple\HorizonRadio.Metadata.Apple.csproj" />
-      <ProjectReference Include="..\Plugins\Metadata\HorizonRadio.Metadata.MusicBrainz\HorizonRadio.Metadata.MusicBrainz.csproj" />
-      <ProjectReference Include="..\Plugins\Metadata\HorizonRadio.Metadata.Spotify\HorizonRadio.Metadata.Spotify.csproj" />
-      <ProjectReference Include="..\Plugins\Metadata\HorizonRadio.Metadata.VocaDB\HorizonRadio.Metadata.VocaDB.csproj" />
-      <ProjectReference Include="..\Plugins\Sources\HorizonRadio.Source.Local\HorizonRadio.Source.Local.csproj" />
-      <ProjectReference Include="..\Plugins\Sources\HorizonRadio.Source.Radio\HorizonRadio.Source.Radio.csproj" />
-      <ProjectReference Include="..\Plugins\Sources\HorizonRadio.Source.Spotify\HorizonRadio.Source.Spotify.csproj" />
-      <ProjectReference Include="..\Plugins\Sources\HorizonRadio.Source.Test\HorizonRadio.Source.Test.csproj" />
-      <ProjectReference Include="..\Plugins\Sources\HorizonRadio.Source.YouTube\HorizonRadio.Source.YouTube.csproj" />
-      <ProjectReference Include="..\Plugins\Tools\HorizonRadio.Tools.YtDlp\HorizonRadio.Tools.YtDlp.csproj" />
-      <ProjectReference Include="..\Plugins\Tools\HorizonRadio.Tools.FFmpeg\HorizonRadio.Tools.FFmpeg.csproj" />
-      <ProjectReference Include="..\Plugins\Tools\HorizonRadio.Tools.Librespot\HorizonRadio.Tools.Librespot.csproj" />
-      <ProjectReference Include="..\Plugins\Tools\HorizonRadio.Tools.TitleModel\HorizonRadio.Tools.TitleModel.csproj" />
       <ProjectReference Include="..\HorizonRadio.TitleModel\HorizonRadio.TitleModel.csproj" />
     </ItemGroup>
 

@@ -3,7 +3,7 @@ namespace HorizonRadio.Core.Metadata;
 /// <summary>
 /// App-level holder for the optional title-extraction model, set once at startup so the
 /// parameterless, catalog-constructed sources (internet radio) can reach it without a DI seam —
-/// mirrors the Spotify/YouTube source plugins' <c>SpotifyRuntime</c> / <c>YouTubeRuntime</c> holders.
+/// mirrors <see cref="Sources.Spotify.SpotifyRuntime"/> / <see cref="Sources.YouTube.YouTubeRuntime"/>.
 ///
 /// <see cref="Current"/> is null until a model is installed and initialized, in which case
 /// sources fall back to deterministic parsing only (no behavior change). <see cref="Mode"/>

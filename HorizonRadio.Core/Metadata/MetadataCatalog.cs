@@ -1,7 +1,10 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using HorizonRadio.Plugins.Abstractions;
+using HorizonRadio.Core.Metadata.Apple;
+using HorizonRadio.Core.Metadata.MusicBrainz;
+using HorizonRadio.Core.Metadata.Spotify;
+using HorizonRadio.Core.Metadata.VocaDb;
 
 namespace HorizonRadio.Core.Metadata;
 
@@ -9,24 +12,13 @@ public static class MetadataCatalog
 {
     public const string NoneId = "none";
 
-    private static IReadOnlyList<IMetadataPlugin> _plugins = [];
-
-    /// <summary>Register the available metadata plugins. Called once by the composition root — which
-    /// references the plugin assemblies and so can name them — BEFORE any provider config is loaded
-    /// (<see cref="MetadataConfigStore"/> derives its fresh-install defaults and "introduced" set from
-    /// <see cref="All"/>, so the catalog must be populated first). Plugins are listed in display order.</summary>
-    public static void Initialize(IReadOnlyList<IMetadataPlugin> plugins)
-    {
-        _plugins = plugins;
-        All = [.. plugins.SelectMany(p => p.Providers)];
-    }
-
-    /// <summary>The registered metadata plugins, in display order.</summary>
-    public static IReadOnlyList<IMetadataPlugin> Plugins => _plugins;
-
-    /// <summary>Every provider factory the registered plugins contribute, flattened in display order.
-    /// Empty until <see cref="Initialize"/> runs.</summary>
-    public static IReadOnlyList<IMetadataProviderFactory> All { get; private set; } = [];
+    public static IReadOnlyList<IMetadataProviderFactory> All { get; } =
+    [
+        new SpotifyProviderFactory(),
+        new ItunesProviderFactory(),
+        new MusicBrainzProviderFactory(),
+        new VocaDbProviderFactory(),
+    ];
 
     /// <summary>Providers enabled out of the box (keyless, no setup), highest priority
     /// first. Spotify is excluded — it needs credentials. VocaDB is last: it fills the
@@ -45,7 +37,7 @@ public static class MetadataCatalog
     /// the providers in the user's order, and the per-field forced overrides.
     /// </summary>
     public static (IReadOnlyList<IMetadataProvider> Contributors, MetadataPolicy Policy) BuildPipeline(
-        MetadataConfigStore store, IPluginContext context)
+        MetadataConfigStore store, MetadataCache cache)
     {
         var contributors = new List<IMetadataProvider>();
         var enabledIds = new List<string>();
@@ -55,7 +47,7 @@ public static class MetadataCatalog
             try
             {
                 var values = store.Load(factory.Id, factory.Schema);
-                contributors.Add(factory.Create(values, context));
+                contributors.Add(factory.Create(values, cache));
                 enabledIds.Add(factory.Id);
             }
             catch (System.Exception ex)

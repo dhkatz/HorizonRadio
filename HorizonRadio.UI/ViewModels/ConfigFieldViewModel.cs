@@ -2,7 +2,6 @@ using System;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using HorizonRadio.Core.Sources.Config;
-using HorizonRadio.Core.Tools;
 using HorizonRadio.UI.Tools;
 
 namespace HorizonRadio.UI.ViewModels;

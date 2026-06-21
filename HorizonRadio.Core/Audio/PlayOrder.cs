@@ -22,7 +22,7 @@ namespace HorizonRadio.Core.Audio;
 /// Not thread-safe: callers mutate it from a single playback loop, matching
 /// the existing source threading model.
 /// </summary>
-public sealed class PlayOrder
+internal sealed class PlayOrder
 {
     private readonly Random _rng;
     private List<int> _order = new();

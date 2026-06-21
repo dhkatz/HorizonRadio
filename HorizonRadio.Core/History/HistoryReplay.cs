@@ -1,5 +1,8 @@
 using System;
 using HorizonRadio.Core.Models;
+using HorizonRadio.Core.Sources.Local;
+using HorizonRadio.Core.Sources.Spotify;
+using HorizonRadio.Core.Sources.YouTube;
 
 namespace HorizonRadio.Core.History;
 
@@ -18,14 +21,8 @@ namespace HorizonRadio.Core.History;
 /// </summary>
 public static class HistoryReplay
 {
-    // Source contract strings, inlined so Core stays decoupled from the source plugin assemblies
-    // (they're the sources' own stable ids / externalId formats — see the per-source notes above).
     private const string YouTubeIdPrefix = "youtube:";
     private const string SpotifyUriPrefix = "spotify:";
-    private const string LocalIdPrefix = "local:";
-    private const string SpotifyDrivenSourceId = "spotify-driven";
-    private const string YouTubeSourceId = "youtube";
-    private const string LocalSourceId = "local";
 
     /// <summary>Derive the (queueable source id, locator) that replays this song, or
     /// (null, null) when the origin can't be re-addressed from its id alone.</summary>
@@ -34,20 +31,20 @@ public static class HistoryReplay
         if (string.IsNullOrEmpty(externalId)) return (null, null);
 
         if (externalId.StartsWith(SpotifyUriPrefix, StringComparison.Ordinal))
-            return (SpotifyDrivenSourceId, externalId);
+            return (SpotifyContentSourceFactory.SourceId, externalId);
 
         if (externalId.StartsWith(YouTubeIdPrefix, StringComparison.Ordinal))
         {
             var id = externalId[YouTubeIdPrefix.Length..];
             return string.IsNullOrEmpty(id)
                 ? (null, null)
-                : (YouTubeSourceId, $"https://www.youtube.com/watch?v={id}");
+                : (YouTubeSourceFactory.SourceId, $"https://www.youtube.com/watch?v={id}");
         }
 
-        if (externalId.StartsWith(LocalIdPrefix, StringComparison.Ordinal))
+        if (externalId.StartsWith(LocalPlayableItem.ExternalIdPrefix, StringComparison.Ordinal))
         {
-            var path = externalId[LocalIdPrefix.Length..];
-            return string.IsNullOrEmpty(path) ? (null, null) : (LocalSourceId, path);
+            var path = externalId[LocalPlayableItem.ExternalIdPrefix.Length..];
+            return string.IsNullOrEmpty(path) ? (null, null) : ("local", path);
         }
 
         return (null, null);

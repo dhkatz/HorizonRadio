@@ -36,7 +36,7 @@ public sealed class MetadataCacheTests : IDisposable
             new PlayableRef("YouTube", "https://youtu.be/a"),
             new PlayableRef("Niconico", "https://www.nicovideo.jp/watch/sm1"),
         };
-        Cache(T0).Put(Key, new MetadataCacheEntry("Song", "Artist", null, new byte[] { 1 }, Mbid: null, Year: 2014, Pvs: pvs));
+        Cache(T0).Put(Key, new MetadataCache.Entry("Song", "Artist", null, new byte[] { 1 }, Mbid: null, Year: 2014, Pvs: pvs));
 
         var hit = Cache(T0).TryGet(Key); // fresh instance → reads from disk
 
@@ -49,7 +49,7 @@ public sealed class MetadataCacheTests : IDisposable
     [Fact]
     public void Art_bearing_entry_is_kept_forever_within_the_same_version()
     {
-        Cache(T0, version: 2).Put(Key, new MetadataCacheEntry("Song", "Artist", "Album",
+        Cache(T0, version: 2).Put(Key, new MetadataCache.Entry("Song", "Artist", "Album",
             new byte[] { 1, 2, 3 }, Mbid: null));
 
         // Far past the TTL but same logic version — durable art never expires.
@@ -64,7 +64,7 @@ public sealed class MetadataCacheTests : IDisposable
     {
         // An art-bearing entry from an older logic version is now invalidated, so a richer
         // extraction (PV links, album covers) can backfill onto songs already cached.
-        Cache(T0, version: 1).Put(Key, new MetadataCacheEntry("Song", "Artist", "Album",
+        Cache(T0, version: 1).Put(Key, new MetadataCache.Entry("Song", "Artist", "Album",
             new byte[] { 1, 2, 3 }, Mbid: null));
 
         Assert.Null(Cache(T0.AddHours(1), version: 2).TryGet(Key)); // version-behind → re-fetch
@@ -75,7 +75,7 @@ public sealed class MetadataCacheTests : IDisposable
     {
         // PV links are durable like art — a Niconico-only track whose thumbnail download failed must
         // not lose its replay links to the TTL.
-        Cache(T0, version: 2).Put(Key, new MetadataCacheEntry("Song", "Artist", null, null, null,
+        Cache(T0, version: 2).Put(Key, new MetadataCache.Entry("Song", "Artist", null, null, null,
             Pvs: new[] { new PlayableRef("Niconico", "https://www.nicovideo.jp/watch/sm1") }));
 
         var hit = Cache(T0.AddDays(999), version: 2).TryGet(Key);
@@ -109,7 +109,7 @@ public sealed class MetadataCacheTests : IDisposable
     public void Art_less_partial_hit_from_an_older_version_is_invalidated()
     {
         // Text but no cover (the "starry song" shape) written under version 1.
-        Cache(T0, version: 1).Put(Key, new MetadataCacheEntry("Song", "Artist", null, null, null));
+        Cache(T0, version: 1).Put(Key, new MetadataCache.Entry("Song", "Artist", null, null, null));
 
         // New logic version, well within the TTL — still invalidated because the version changed.
         Assert.Null(Cache(T0.AddHours(1), version: 2).TryGet(Key));
