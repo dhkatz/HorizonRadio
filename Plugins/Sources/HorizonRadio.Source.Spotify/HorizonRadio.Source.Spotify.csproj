@@ -12,8 +12,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
-    <ProjectReference Include="..\HorizonRadio.Tools.Librespot\HorizonRadio.Tools.Librespot.csproj" />
+    <ProjectReference Include="..\..\..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+    <ProjectReference Include="..\..\Tools\HorizonRadio.Tools.Librespot\HorizonRadio.Tools.Librespot.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -10,8 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
-    <ProjectReference Include="..\HorizonRadio.Tools.FFmpeg\HorizonRadio.Tools.FFmpeg.csproj" />
+    <ProjectReference Include="..\..\..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+    <ProjectReference Include="..\..\Tools\HorizonRadio.Tools.FFmpeg\HorizonRadio.Tools.FFmpeg.csproj" />
   </ItemGroup>
 
   <!-- RadioStreamTitle is internal; its title-parsing tests live in Core.Tests. -->
