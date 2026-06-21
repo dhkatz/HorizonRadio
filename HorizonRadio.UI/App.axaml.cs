@@ -83,12 +83,15 @@ public partial class App : Application
             // already seeded in Program.BuildAvaloniaApp, before any source ctor probes it.)
             SourceCatalog.Initialize(PluginDiscovery.DiscoverPlugins<ISourcePlugin>());
 
-            // Build the DI container for the Core engine's leaf services (the persisted config
-            // stores + the metadata cache) and resolve them from it instead of hand-constructing
-            // them — the first step of moving ownership/lifetime to DI. Built inside the desktop
-            // branch so the XAML designer (which never enters here) is unaffected.
+            // Build the DI container and resolve the safe-to-own services from it instead of
+            // hand-constructing them — moving their ownership/lifetime to DI. AddHorizonCore wires
+            // Core's services (Core owns how to build them); the two UI host services are registered
+            // here directly since this is their only composition root. Built inside the desktop branch
+            // so the XAML designer (which never enters here) is unaffected.
             var services = new ServiceCollection();
             services.AddHorizonCore();
+            services.AddSingleton<ToolRegistry>();
+            services.AddSingleton<IPluginContext>(sp => new HostPluginContext(sp.GetRequiredService<MetadataCache>()));
             var provider = services.BuildServiceProvider();
 
             _store = provider.GetRequiredService<SourceConfigStore>();
@@ -145,10 +148,9 @@ public partial class App : Application
             MetadataCatalog.Initialize(PluginDiscovery.DiscoverPlugins<IMetadataPlugin>());
 
             _metaStore = provider.GetRequiredService<MetadataConfigStore>();
-            var cache = provider.GetRequiredService<MetadataCache>();
             // Host services handed to metadata provider factories (the cache today; grows as more
-            // plugin kinds come online). Built once and shared across pipeline builds.
-            var pluginContext = new HostPluginContext(cache);
+            // plugin kinds come online). Container-owned singleton, shared across pipeline builds.
+            var pluginContext = provider.GetRequiredService<IPluginContext>();
             // The metadata pipeline: a shared resolver (source + ordered providers,
             // per-field policy) drives both play-time enrichment and list enrichment.
             _metaResolver = new MetadataResolver();
@@ -157,7 +159,7 @@ public partial class App : Application
             _enricher = new EnrichmentService(_runner, _metaResolver);
             var metaVm = new MetadataViewModel(_metaStore, pluginContext, _metaResolver);
 
-            var toolRegistry = new ToolRegistry();
+            var toolRegistry = provider.GetRequiredService<ToolRegistry>();
             var installers = ToolInstallers.CreateAll();
 
             // Optional local title-extraction model: published to the runtime holder so the
@@ -208,7 +210,7 @@ public partial class App : Application
             // The global queue owns playback now: one engine plays straight down the
             // queue (explicit one-offs first, then the active mix as an infinite
             // tail). The switcher sets a mix as that tail; quick-play appends one-offs.
-            var contentResolver = new MixContentResolver(_store);
+            var contentResolver = provider.GetRequiredService<MixContentResolver>();
             var queuePlayback = new QueuePlayback(_runner, _store, contentResolver);
             var mixSwitcher = new MixSwitcher(mixStore, queuePlayback, _runner);
 

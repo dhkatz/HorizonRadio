@@ -14,10 +14,12 @@ namespace HorizonRadio.Core;
 /// resolves these instead of hand-constructing them, so ownership and lifetime move to DI
 /// incrementally without changing behavior.
 ///
-/// For now it registers only the leaf, dependency-free singletons — the persisted config stores
-/// and the metadata cache — via the exact same <c>LoadFromDisk</c>/constructor calls the root
-/// used before, so resolution is behavior-identical. Heavier services (the resolver, source
-/// runner, queue, …) and the plugin registries move into DI in later steps.
+/// For now it registers the leaf singletons that are safe to let the container own: the persisted
+/// config stores, the metadata cache, and the mix content resolver — all non-disposable (or
+/// load-from-disk) with no hand-tuned shutdown order, via the exact same calls the root used before,
+/// so resolution is behavior-identical. The heavier engine services (source runner, queue, resolver,
+/// IPC, Spotify, …) stay App-owned for now: App disposes them in a specific order at shutdown, which
+/// container-managed disposal would not preserve. They move once that ordering is handled.
 /// </summary>
 public static class HorizonCoreServiceCollectionExtensions
 {
@@ -30,6 +32,10 @@ public static class HorizonCoreServiceCollectionExtensions
         services.AddSingleton(_ => EventRuleStore.LoadFromDisk());
         services.AddSingleton(_ => InputBindingStore.LoadFromDisk());
         services.AddSingleton(_ => new MetadataCache());
+
+        // Resolves a mix entry to playable content from the source config; non-disposable and its
+        // only dependency (the source config store) is registered above, so it's safe to own here.
+        services.AddSingleton(sp => new MixContentResolver(sp.GetRequiredService<SourceConfigStore>()));
         return services;
     }
 }
