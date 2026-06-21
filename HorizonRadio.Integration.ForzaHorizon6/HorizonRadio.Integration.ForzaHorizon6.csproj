@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Forza Horizon 6 game integration: the FH6-specific implementations the host wires to the
+       game — the IPC client + PCM pipe to the in-process mod, the UDP telemetry listener, the mod
+       installer / game detection, and the in-game station catalog. References the host (Core) for
+       the game-agnostic seams it implements (IGameEventSource, IPcmSink). Keeps the
+       HorizonRadio.Core.* namespaces so consumers' usings are unchanged (behavior-neutral split). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+  </ItemGroup>
+
+</Project>
