@@ -1,0 +1,41 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             xmlns:views="using:HorizonRadio.UI.Views"
+             mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="480"
+             x:Class="HorizonRadio.UI.Views.GameSettingsView"
+             x:DataType="vm:GameSettingsViewModel">
+
+    <Design.DataContext>
+        <vm:GameSettingsViewModel />
+    </Design.DataContext>
+
+    <ScrollViewer>
+        <StackPanel Margin="24" Spacing="16">
+            <StackPanel Spacing="4" Margin="0,0,0,4">
+                <TextBlock Text="Game" FontSize="20" FontWeight="SemiBold"/>
+                <TextBlock Text="The game Horizon Radio plays into, or none to use it as a music player."
+                           FontSize="12" Opacity="0.6" TextWrapping="Wrap"/>
+            </StackPanel>
+
+            <Border Classes="Card" Padding="20">
+                <StackPanel Spacing="12">
+                    <TextBlock FontSize="13">
+                        <Run Text="Current:" Foreground="{DynamicResource MutedForegroundColor}"/>
+                        <Run Text="{Binding CurrentName}" FontWeight="SemiBold"/>
+                    </TextBlock>
+                    <views:GameChoiceView DataContext="{Binding Choice}"/>
+                    <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Right">
+                        <TextBlock Text="Horizon Radio restarts to switch games."
+                                   FontSize="11" Opacity="0.6" VerticalAlignment="Center"
+                                   IsVisible="{Binding HasChange}"/>
+                        <Button Classes="Primary" Content="Switch and Restart"
+                                Command="{Binding SwitchCommand}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

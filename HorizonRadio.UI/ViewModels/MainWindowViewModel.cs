@@ -27,6 +27,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 {
     public NowPlayingViewModel NowPlaying { get; }
 
+    /// <summary>Settings → Game: which game Horizon Radio runs with.</summary>
+    public GameSettingsViewModel GameSettings { get; }
+
+    /// <summary>False for "No Game": there's no game connection to show.</summary>
+    public bool HasGame { get; } = true;
+
     private readonly IGameIntegration? _game;
 
     /// <summary>The active game's name: the sidebar section its pages are listed under.</summary>
@@ -82,6 +88,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         DialogManager = new DialogManager();
         Sources = new SourcesViewModel();
         NowPlaying = new NowPlayingViewModel();
+        GameSettings = new GameSettingsViewModel();
         GameName = "Game";
         Metadata = new MetadataViewModel();
         ToolsTab = new ToolsViewModel();
@@ -109,6 +116,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                                ControlsViewModel controls,
                                Core.Audio.PreviewController preview,
                                IGameIntegration game,
+                               GameSettingsViewModel gameSettings,
                                ToastManager toasts,
                                DialogManager dialogManager)
     {
@@ -116,9 +124,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         DialogManager = dialogManager;
         _game = game;
         GameName = game.DisplayName;
-        ConnectionLabel = $"Not connected to {GameName}";
+        GameSettings = gameSettings;
+        HasGame = game is not NoGameIntegration;
+        ConnectionLabel = HasGame ? $"Not connected to {GameName}" : "Playing on this PC";
         Sources = new SourcesViewModel(runner, store, registry);
-        NowPlaying = new NowPlayingViewModel(runner, store, mixStore, mixSwitcher, queue, GameName, preview, toasts, DialogManager);
+        NowPlaying = new NowPlayingViewModel(runner, store, mixStore, mixSwitcher, queue,
+            game.Output != null ? GameName : null, preview, toasts, DialogManager);
         Metadata = metadata;
         ToolsTab = new ToolsViewModel(registry, installers);
         Events = events;
@@ -184,7 +195,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private GamePageItem? FindGamePage(string? id) => GamePages.FirstOrDefault(p => p.Id == id);
 
     // 0 = Now Playing, 1 = Sources, 2 = Metadata, 5 = Tools, 7 = Console, 8 = Controls,
-    // 9 = Mixes, 10 = About, 11 = Search, 12 = History, 13 = a game page (SelectedGamePage).
+    // 9 = Mixes, 10 = About, 11 = Search, 12 = History, 13 = a game page (SelectedGamePage),
+    // 14 = Settings → Game.
     // Retired: 3, 4 (Stats, Mods: now the FH6 plugin's pages) and 6 (Events: a game page now).
     [ObservableProperty] private int selectedWorkspaceIndex;
 
@@ -201,6 +213,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public bool IsSearchWorkspace => SelectedWorkspaceIndex == 11;
     public bool IsHistoryWorkspace => SelectedWorkspaceIndex == 12;
     public bool IsGamePageWorkspace => SelectedWorkspaceIndex == GamePageWorkspace;
+    public bool IsGameSettingsWorkspace => SelectedWorkspaceIndex == 14;
 
     public string CurrentRoute => SelectedWorkspaceIndex switch
     {
@@ -214,6 +227,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         11 => "search", // no SidebarItem matches → nav shows nothing selected (intended)
         12 => "history",
         GamePageWorkspace => SelectedGamePage?.Route ?? "now-playing",
+        14 => "game-settings",
         _ => "now-playing",
     };
 
@@ -240,6 +254,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsSearchWorkspace));
         OnPropertyChanged(nameof(IsHistoryWorkspace));
         OnPropertyChanged(nameof(IsGamePageWorkspace));
+        OnPropertyChanged(nameof(IsGameSettingsWorkspace));
         OnPropertyChanged(nameof(CurrentRoute));
         UpdateGamePageSelection();
 
@@ -263,6 +278,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand] private void ShowMixes() => SelectedWorkspaceIndex = 9;
     [RelayCommand] private void ShowAbout() => SelectedWorkspaceIndex = 10;
     [RelayCommand] private void ShowHistory() => SelectedWorkspaceIndex = 12;
+    [RelayCommand] private void ShowGameSettings() => SelectedWorkspaceIndex = 14;
 
     [RelayCommand]
     private void ShowGamePage(GamePageItem? page)
@@ -289,6 +305,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     public void SetConnection(ConnectionState state)
     {
+        if (!HasGame) return; // "No Game" never connects; keep "Playing on this PC"
         Connection = state;
         ConnectionLabel = state switch
         {

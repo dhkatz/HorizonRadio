@@ -35,6 +35,11 @@ public sealed class SourceConfigStore
     /// settings, which then clears it; it's no longer written once cleared.</summary>
     public string? TargetStation { get; set; }
 
+    /// <summary>The game Horizon Radio runs with: a game plugin's id, <c>"none"</c> for no game
+    /// (a plain player), or null if the user hasn't chosen yet (first run). Takes effect on
+    /// startup.</summary>
+    public string? GameId { get; set; }
+
     /// <summary>Global shuffle preference (applies to whichever source is
     /// active). Persisted so the choice survives restarts.</summary>
     public bool Shuffle { get; set; }
@@ -107,6 +112,8 @@ public sealed class SourceConfigStore
             if (root.TryGetProperty("lastSelected", out var sel) && sel.ValueKind == JsonValueKind.String)
                 store.LastSelectedId = sel.GetString();
 
+            if (root.TryGetProperty("game", out var game) && game.ValueKind == JsonValueKind.String)
+                store.GameId = game.GetString();
             if (root.TryGetProperty("targetStation", out var tgt) && tgt.ValueKind == JsonValueKind.String)
                 store.TargetStation = tgt.GetString();
 
@@ -162,6 +169,7 @@ public sealed class SourceConfigStore
 
             writer.WriteStartObject();
             if (LastSelectedId != null) writer.WriteString("lastSelected", LastSelectedId);
+            if (GameId != null) writer.WriteString("game", GameId);
             if (TargetStation != null) writer.WriteString("targetStation", TargetStation);
             writer.WriteBoolean("shuffle", Shuffle);
             writer.WriteBoolean("previewEnabled", PreviewEnabled);
