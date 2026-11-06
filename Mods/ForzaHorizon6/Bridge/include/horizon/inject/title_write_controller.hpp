@@ -11,11 +11,30 @@ namespace horizon::inject {
 // transition logic is unit-testable; see docs/architecture.md -> "Metadata
 // path". Not thread-safe (the writer is the only caller).
 //
+// Ownership is tracked by the metadata BLOCK, not the stream instance: the game
+// re-points an instance at another station's block when the player tunes, so
+// anything done "through the instance" after a switch lands on the new
+// station. Two rules follow:
+//   * restore only while the instance still resolves to the block we wrote --
+//     otherwise the station changed and restoring would stamp the old
+//     station's title onto the new one; and
+//   * only write a block after it has stayed the resolved block for
+//     `settle_ticks` consecutive ticks, so flicking through stations (where the
+//     block can change a tick before the station name does) never writes to a
+//     station you're passing.
+//
 // Injector is duck-typed so tests can pass a fake; it must provide:
+//   const void* resolve_block(const void* instance) const;  // null if unresolvable
 //   bool read_instance_strings(const void*, std::string& title, std::string& artist) const;
 //   int  write_to_instance(const void*, std::string_view sound, title, artist);
 class TitleWriteController {
 public:
+    // The periodic writer ticks at 20 Hz: 3 ticks ~= 150 ms of stability before
+    // our title appears on a newly tuned station.
+    static constexpr int kDefaultSettleTicks = 3;
+
+    explicit TitleWriteController(int settle_ticks = kDefaultSettleTicks) noexcept : settle_ticks_(settle_ticks) {}
+
     // Tick where we have a track and an already-selected target. `active_instance`
     // is the instance the caller chose to replace (may be null when nothing
     // resolves this tick). Returns the injector's write count (0 when nothing
@@ -23,60 +42,67 @@ public:
     template <class Injector>
     int on_active(Injector& inj, const void* active_instance, std::string_view sound, std::string_view title,
                   std::string_view artist) {
-        // Switching targets: restore the game's originals on the block we were
-        // replacing -- ALWAYS, even if it has dropped out of the (cached,
-        // seconds-stale) heap scan. write_to_instance re-checks the vptr under
-        // SEH, so a block that was actually freed is a safe no-op; skipping the
-        // restore instead leaves our title frozen on the station the user tuned
-        // past, which is the "neighbor stations show our metadata" bug that
-        // showed up when switching stations quickly.
-        if (written_instance_ && written_instance_ != active_instance) {
+        const void* block = active_instance != nullptr ? inj.resolve_block(active_instance) : nullptr;
+
+        // The block we replaced is no longer the one to write: another instance
+        // was picked, or this instance now shows a different station's block.
+        // restore() itself refuses to write through a re-pointed instance.
+        if (written_block_ != nullptr && (written_instance_ != active_instance || written_block_ != block))
             restore(inj);
+
+        if (block != candidate_block_) {
+            candidate_block_ = block;
+            stable_ticks_    = 0;
+        } else if (stable_ticks_ < settle_ticks_) {
+            ++stable_ticks_;
+        }
+        if (block == nullptr || stable_ticks_ < settle_ticks_)
+            return 0;
+
+        if (written_block_ != block) {
+            // First touch of this block: snapshot the game's current
+            // title/artist as the restore value.
+            saved_valid_       = inj.read_instance_strings(active_instance, saved_title_, saved_artist_);
+            written_instance_  = active_instance;
+            written_block_     = block;
+            have_last_written_ = false;
+        } else if (have_last_written_) {
+            // Keep the restore value synced to the game's real track: the
+            // block holds what we wrote last tick UNLESS the game advanced
+            // its own track, in which case it now holds the game's new
+            // title. Comparing against our last write (not our current one)
+            // avoids mistaking our own title for the game's on the tick our
+            // song changes.
+            std::string cur_title, cur_artist;
+            if (inj.read_instance_strings(active_instance, cur_title, cur_artist) &&
+                (cur_title != last_written_title_ || cur_artist != last_written_artist_)) {
+                saved_title_  = std::move(cur_title);
+                saved_artist_ = std::move(cur_artist);
+                saved_valid_  = true;
+            }
         }
 
-        int n = 0;
-        if (active_instance) {
-            if (written_instance_ != active_instance) {
-                // First touch of this block: snapshot the game's current
-                // title/artist as the restore value.
-                saved_valid_       = inj.read_instance_strings(active_instance, saved_title_, saved_artist_);
-                written_instance_  = active_instance;
-                have_last_written_ = false;
-            } else if (have_last_written_) {
-                // Keep the restore value synced to the game's real track: the
-                // block holds what we wrote last tick UNLESS the game advanced
-                // its own track, in which case it now holds the game's new
-                // title. Comparing against our last write (not our current one)
-                // avoids mistaking our own title for the game's on the tick our
-                // song changes.
-                std::string cur_title, cur_artist;
-                if (inj.read_instance_strings(active_instance, cur_title, cur_artist) &&
-                    (cur_title != last_written_title_ || cur_artist != last_written_artist_)) {
-                    saved_title_  = std::move(cur_title);
-                    saved_artist_ = std::move(cur_artist);
-                    saved_valid_  = true;
-                }
-            }
-            n = inj.write_to_instance(active_instance, sound, title, artist);
-            if (n) {
-                last_written_title_.assign(title);
-                last_written_artist_.assign(artist);
-                have_last_written_ = true;
-            }
+        const int n = inj.write_to_instance(active_instance, sound, title, artist);
+        if (n) {
+            last_written_title_.assign(title);
+            last_written_artist_.assign(artist);
+            have_last_written_ = true;
         }
         return n;
     }
 
-    // Tick where we are not writing (no track / unresolved): put the game's
-    // original strings back if we currently own a block, so a stopped source
-    // doesn't leave our title frozen on the station.
+    // Tick where we are not writing (no track / unresolved / off target): put
+    // the game's original strings back if we still own a block, so a stopped
+    // source doesn't leave our title frozen on the station.
     template <class Injector> void on_idle(Injector& inj) {
-        if (written_instance_)
+        if (written_block_ != nullptr)
             restore(inj);
+        candidate_block_ = nullptr;
+        stable_ticks_    = 0;
     }
 
     [[nodiscard]] bool owns_block() const noexcept {
-        return written_instance_ != nullptr;
+        return written_block_ != nullptr;
     }
     [[nodiscard]] const void* written_instance() const noexcept {
         return written_instance_;
@@ -84,14 +110,24 @@ public:
 
 private:
     template <class Injector> void restore(Injector& inj) {
-        if (written_instance_ && saved_valid_)
+        // Write the originals back only through an instance that still shows
+        // the block we changed. If it was re-pointed (station switch) or freed,
+        // the block is gone from that path: restoring would hit another
+        // station's block, and writing to the old block's address directly
+        // could corrupt memory the game has since reused.
+        if (written_instance_ != nullptr && saved_valid_ && inj.resolve_block(written_instance_) == written_block_)
             inj.write_to_instance(written_instance_, "", saved_title_, saved_artist_);
         written_instance_  = nullptr;
+        written_block_     = nullptr;
         saved_valid_       = false;
         have_last_written_ = false;
     }
 
-    const void* written_instance_ = nullptr; // the block we currently replace (null = none)
+    int         settle_ticks_;
+    const void* candidate_block_  = nullptr; // block seen this tick, being settled
+    int         stable_ticks_     = 0;       // consecutive ticks candidate_block_ held
+    const void* written_instance_ = nullptr; // the instance we wrote through (null = none)
+    const void* written_block_    = nullptr; // the block we currently replace (null = none)
     std::string saved_title_;                // game's original title to restore
     std::string saved_artist_;               //   (kept in sync as the game advances tracks)
     bool        saved_valid_ = false;

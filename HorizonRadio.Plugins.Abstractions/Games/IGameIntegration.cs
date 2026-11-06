@@ -122,4 +122,8 @@ public interface INowPlayingDisplay
     /// <summary>Show <paramref name="track"/>. Best-effort; false when not connected (the next
     /// track change retries).</summary>
     bool Show(Track track);
+
+    /// <summary>Nothing is playing (e.g. the station's channel is idle): show the game's own
+    /// track info again. Best-effort; false when not connected.</summary>
+    bool Clear();
 }

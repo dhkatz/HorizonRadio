@@ -66,6 +66,10 @@ public sealed class IpcClient(string pipeName = IpcClient.DefaultPipeName) : IAs
         return SendRaw(json.ToString());
     }
 
+    /// <summary>Tell the DLL nothing is playing: it restores the game's own title in the HUD
+    /// until the next <see cref="SendTrack"/>. Best-effort.</summary>
+    public bool SendClearTrack() => SendRaw("{\"cmd\":\"clear_track\"}\n");
+
     /// <summary>Set the bridge's Events "duck" gain (0..1). Used by the
     /// Events / input-binding "set volume / duck" action. Best-effort; returns
     /// false when the pipe isn't connected. Independent of the user's master

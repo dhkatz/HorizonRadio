@@ -62,6 +62,12 @@ public:
     int write_to_instance(const void* instance, std::string_view sound_name, std::string_view display_name,
                           std::string_view artist);
 
+    // The metadata block `instance` currently points at (the chain endpoint), or
+    // null if the vptr check or any hop fails. Never writes. The game re-points an
+    // instance at another station's block when the player tunes, so callers use
+    // this to tell "same block" from "same instance".
+    [[nodiscard]] const void* resolve_block(const void* instance) const;
+
     // Read the current title/artist at the chain endpoint into std::strings.
     // Snapshots the game's originals before we overwrite them, so the caller
     // can restore them when it stops replacing a station. SEH-safe; returns

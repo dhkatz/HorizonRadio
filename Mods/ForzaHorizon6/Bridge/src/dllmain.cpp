@@ -59,6 +59,10 @@ std::atomic<const void*>       g_radio_stream_vtable{nullptr};
 std::mutex        g_track_mutex;
 TrackInfo         g_current_track;
 std::atomic<bool> g_have_track{false};
+// False after clear_track (nothing playing on the routed channel): the writer
+// puts the game's own title back instead of ours. Audio is unaffected. The next
+// set_track turns it back on.
+std::atomic<bool> g_show_title{true};
 
 // Station targeting (set_target_station / set_target_stations). on_target gates
 // DSP attach + metadata so other stations keep playing the game's own music.
@@ -634,6 +638,7 @@ void poll_game_events(void* radio_state) {
                 g_current_track.album  = album;
                 g_current_track.id     = external_id;
                 g_have_track.store(true, std::memory_order_release);
+                g_show_title.store(true, std::memory_order_release);
                 snapshot = g_current_track;
             }
             if (!source_id.empty() && source_id != g_active_source_id) {
@@ -653,6 +658,15 @@ void poll_game_events(void* radio_state) {
 
             const std::wstring wtitle(title.begin(), title.end());
             logf(L"[horizon-radio] cmd set_track: %ls\n", wtitle.c_str());
+        } else if (cmd == "clear_track") {
+            // Nothing is playing on the channel the UI routed to: stop showing
+            // our (now stale) title and restore the game's.
+            {
+                const std::scoped_lock lock(g_track_mutex);
+                g_current_track = TrackInfo{};
+            }
+            g_show_title.store(false, std::memory_order_release);
+            log_w(L"[horizon-radio] cmd clear_track\n");
         } else if (cmd == "set_gain") {
             // Events "set volume / duck" action: scale the bridge's
             // master output gain. Clamped to [0, 1].
@@ -729,7 +743,7 @@ void poll_game_events(void* radio_state) {
         if (!g_active_source_id.empty()) {
             g_ipc_server.publish_source_changed(g_active_source_id, g_active_source_display);
         }
-        if (g_have_track.load(std::memory_order_acquire)) {
+        if (g_have_track.load(std::memory_order_acquire) && g_show_title.load(std::memory_order_acquire)) {
             TrackInfo snapshot;
             {
                 const std::scoped_lock lock(g_track_mutex);
@@ -877,7 +891,11 @@ void poll_game_events(void* radio_state) {
                             }
                         }
 
-                        const int n = title_writer.on_active(*inj, active_instance, sound, t.title, t.artist);
+                        int n = 0;
+                        if (g_show_title.load(std::memory_order_acquire))
+                            n = title_writer.on_active(*inj, active_instance, sound, t.title, t.artist);
+                        else
+                            title_writer.on_idle(*inj);
 
                         // Log only on transitions (keeps DebugView readable).
                         if (n != last_write_n) {

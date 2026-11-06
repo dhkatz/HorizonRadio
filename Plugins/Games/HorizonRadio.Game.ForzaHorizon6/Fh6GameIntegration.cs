@@ -183,6 +183,8 @@ public sealed class Fh6GameIntegration : IGameIntegration, IStationTargeting, IG
 
     bool INowPlayingDisplay.Show(Track track) => _ipc.SendTrack(track);
 
+    bool INowPlayingDisplay.Clear() => _ipc.SendClearTrack();
+
     private void SetState(ConnectionState state)
     {
         if (Interlocked.Exchange(ref _state, (int)state) == (int)state) return;

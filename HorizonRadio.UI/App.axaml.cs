@@ -299,7 +299,18 @@ public partial class App : Application
             _enricher.TrackEnriched += t =>
             {
                 Dispatcher.UIThread.Post(() => vm.NowPlaying.Apply(t));
-                _game.NowPlaying?.Show(t);
+                // A lookup can finish after its track was parked (the game routed elsewhere);
+                // don't put a title back up for a channel that's no longer playing.
+                if (_runner.ActiveSource != null) _game.NowPlaying?.Show(t);
+            };
+
+            // Nothing on the runner any more (stopped, or parked as the game switched channels):
+            // the game shouldn't keep showing the last track. A channel that resumes re-announces
+            // its track when it starts playing. (ActiveSourceChanged also fires with a null
+            // factory when a channel starts, so check the runner itself.)
+            _runner.ActiveSourceChanged += _ =>
+            {
+                if (_runner.ActiveSource == null) _game.NowPlaying?.Clear();
             };
 
             desktop.ShutdownRequested += async (_, _) =>
