@@ -65,6 +65,44 @@ public abstract class PlayableItem
     /// once metadata/duration are final so the driver can publish the track.
     /// </summary>
     public abstract Task PlayAsync(PumpContext ctx, CancellationToken ct);
+
+    private readonly Lock _prepareLock = new();
+    private Task? _prepare;
+
+    /// <summary>
+    /// Run <paramref name="prepare"/> once for this item, however many callers ask at the same
+    /// time. Preparing happens from several places at once: the engine warms the next item while
+    /// the current one plays, the queue reads ahead for its list, and the item prepares itself
+    /// when it starts playing. A second caller waits for the first one's work rather than seeing
+    /// a half-prepared item (and, say, announcing the file name before the tags are read). A
+    /// cancelled attempt doesn't count: the next caller starts it again. A failed one does; an
+    /// implementation that wants a retry catches the failure and arranges it itself.
+    /// </summary>
+    protected async Task PrepareOnceAsync(Func<CancellationToken, Task> prepare, CancellationToken ct)
+    {
+        while (true)
+        {
+            Task task;
+            lock (_prepareLock)
+            {
+                // Off the caller's thread (it may be the UI thread), under the first caller's token.
+                task = _prepare ??= Task.Run(() => prepare(ct), CancellationToken.None);
+            }
+            try
+            {
+                await task.WaitAsync(ct).ConfigureAwait(false);
+                return;
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                // Whoever started it was cancelled (a skip, a list scrolled away); we still want it.
+                lock (_prepareLock)
+                {
+                    if (ReferenceEquals(_prepare, task)) _prepare = null;
+                }
+            }
+        }
+    }
 }
 
 /// <summary>

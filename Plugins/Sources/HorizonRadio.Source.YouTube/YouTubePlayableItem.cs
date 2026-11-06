@@ -22,7 +22,6 @@ public sealed class YouTubePlayableItem : PlayableItem
     private readonly string _ffmpegPath;
     private readonly bool _normalise;
 
-    private bool _prepared;
     private YtDlpClient.Resolved? _resolved;
     private volatile SubprocessPcmSource? _subproc;
 
@@ -79,11 +78,10 @@ public sealed class YouTubePlayableItem : PlayableItem
 
     private static void Log(string msg) => Debug.WriteLine($"[hzn-yt-item] {msg}");
 
-    public override async Task PrepareAsync(CancellationToken ct)
-    {
-        if (_prepared) return;
-        _prepared = true;
+    public override Task PrepareAsync(CancellationToken ct) => PrepareOnceAsync(ResolveAsync, ct);
 
+    private async Task ResolveAsync(CancellationToken ct)
+    {
         try
         {
             var resolved = await YtDlpClient.ResolveAsync(_ytDlpPath, _entry.WebpageUrl, ct)
@@ -100,8 +98,7 @@ public sealed class YouTubePlayableItem : PlayableItem
         }
         catch (OperationCanceledException)
         {
-            _prepared = false; // let a later attempt retry rather than skip silently
-            throw;
+            throw; // not a failure: the next PrepareAsync tries again
         }
         catch (Exception ex)
         {
@@ -163,7 +160,7 @@ public sealed class YouTubePlayableItem : PlayableItem
         // rows without coupling to the signed URL's expiry. Canonical track/artist
         // (when YouTube tagged it as music) give the metadata pipeline a strong query;
         // the thumbnail here is a non-square fallback the pipeline replaces with
-        // square cover art when a provider matches. Does NOT touch _resolved/_prepared,
+        // square cover art when a provider matches. Does NOT touch _resolved or the prepare,
         // so playback still does its own fresh resolve.
         var meta = await YtDlpClient.ResolveMetadataAsync(_ytDlpPath, _entry.WebpageUrl, ct)
             .ConfigureAwait(false);
