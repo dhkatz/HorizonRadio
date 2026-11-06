@@ -58,16 +58,20 @@ public sealed class MusicBrainzProvider : IMetadataProvider
         var hit = _cache.TryGet(cacheKey);
         if (hit != null) return ToContribution(hit);
 
+        // Cache only what MB actually answered: a request that failed (a 503 when MB throttles,
+        // a Cover Art Archive error) is retried next time instead of remembered as a miss.
+        using var lookup = CatalogLookup.Begin();
         var entry = queryKey.StartsWith("uri=", StringComparison.Ordinal)
             ? await EnrichBySpotifyUriAsync(query.ExternalId!, ct).ConfigureAwait(false)
             : await EnrichByTextAsync(query.Artist, query.Title, ct).ConfigureAwait(false);
 
         if (entry == null)
         {
+            if (lookup.Failed) throw lookup.Unavailable(Id);
             _cache.PutMiss(cacheKey);
             return null;
         }
-        _cache.Put(cacheKey, entry);
+        if (!lookup.Failed) _cache.Put(cacheKey, entry);
         return ToContribution(entry);
     }
 
@@ -96,6 +100,7 @@ public sealed class MusicBrainzProvider : IMetadataProvider
         if (!resp.IsSuccessStatusCode)
         {
             Log($"text search HTTP {(int)resp.StatusCode} for {artist} / {title}");
+            CatalogLookup.ReportFailure($"search HTTP {(int)resp.StatusCode}");
             return null;
         }
 
@@ -162,8 +167,11 @@ public sealed class MusicBrainzProvider : IMetadataProvider
         using var resp = await _http.GetAsync(url, ct).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode)
         {
-            // 404 = MB hasn't indexed this Spotify URL; common for new/small releases.
+            // 404 = MB hasn't indexed this Spotify URL; common for new/small releases. That's an
+            // answer; anything else is a failure.
             Log($"uri lookup HTTP {(int)resp.StatusCode} for {spotifyUri}");
+            if (resp.StatusCode != HttpStatusCode.NotFound)
+                CatalogLookup.ReportFailure($"uri lookup HTTP {(int)resp.StatusCode}");
             return null;
         }
 
@@ -189,7 +197,11 @@ public sealed class MusicBrainzProvider : IMetadataProvider
         var recUrl = $"https://musicbrainz.org/ws/2/recording/{recordingMbid}?inc=artist-credits+releases&fmt=json";
         await _rate.WaitAsync(ct).ConfigureAwait(false);
         using var resp2 = await _http.GetAsync(recUrl, ct).ConfigureAwait(false);
-        if (!resp2.IsSuccessStatusCode) return null;
+        if (!resp2.IsSuccessStatusCode)
+        {
+            CatalogLookup.ReportFailure($"recording HTTP {(int)resp2.StatusCode}");
+            return null;
+        }
 
         using var stream2 = await resp2.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
         using var doc2 = await JsonDocument.ParseAsync(stream2, default, ct).ConfigureAwait(false);

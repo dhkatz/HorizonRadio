@@ -28,6 +28,11 @@ public static class SearchTerms
     private static readonly Regex Feat = new(@"\b(feat\.?|ft\.?|featuring)\b.*$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex Whitespace = new(@"\s+", RegexOptions.Compiled);
+    // A word that marks a bracketed group as a credit for the version or who made it ("(… Remix)",
+    // "(feat. …)", "(Piano ver.)", "【カバー】"), rather than part of the song's name.
+    private static readonly Regex CreditWord = new(
+        @"\b(?:remix|rmx|mix|feat|ft|featuring|cover|covered|arrange|arranged|arr|edit|ver|version|prod|produced|remaster(?:ed)?|bootleg)\b|リミックス|カバー|アレンジ|バージョン",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex NonAlnum = new(@"[^\p{L}\p{Nd}\s]", RegexOptions.Compiled);
 
     /// <summary>Clean a title/artist for a catalog search: drop bracketed tags and "feat."
@@ -105,6 +110,16 @@ public static class SearchTerms
 
         bool titlesEqual = SquashEqual(queryTitle, resultTitle) || SameSet(qt, rt);
         double titleCover = titlesEqual ? 1.0 : Coverage(qt, rt);
+
+        // The query has to match the song's name, not only its credits: "KurageP" must not
+        // match "Perfect Seimei (Wada Takeaki (KurageP) Remix)" through the remixer's name. A
+        // query that also matches part of the name ("Endless World Wahiko Remix" against
+        // "Endless World (Wahiko Remix)") is unaffected.
+        if (!titlesEqual)
+        {
+            var name = Tokens(StripCreditGroups(resultTitle!));
+            if (name.Count > 0 && name.Count < rt.Count && Coverage(qt, name) == 0) return null;
+        }
 
         var qa = Tokens(CleanForSearch(queryArtist));
         var ra = Tokens(resultArtist);
@@ -193,6 +208,39 @@ public static class SearchTerms
         a.Count > 0 && new HashSet<string>(a).SetEquals(b);
 
     // Fraction of the QUERY tokens present in the result (directional). 0 when either is empty.
+    /// <summary>The title without its credit groups: bracketed groups (nesting allowed) that name
+    /// the version or who made it ("(Wada Takeaki (KurageP) Remix)", "(feat. GUMI)"). Other groups,
+    /// often part of the name ("(Transparent Meteor)"), are kept.</summary>
+    internal static string StripCreditGroups(string title)
+    {
+        const string open = "([（【〔〖";
+        const string close = ")]）】〕〗";
+        var sb = new System.Text.StringBuilder(title.Length);
+        int depth = 0, start = 0;
+        for (int i = 0; i < title.Length; i++)
+        {
+            char c = title[i];
+            if (open.Contains(c))
+            {
+                if (depth++ == 0) start = i;
+                continue;
+            }
+            if (close.Contains(c) && depth > 0)
+            {
+                if (--depth == 0)
+                {
+                    var group = title[start..(i + 1)];
+                    if (!CreditWord.IsMatch(group)) sb.Append(group);
+                    else sb.Append(' ');
+                }
+                continue;
+            }
+            if (depth == 0) sb.Append(c);
+        }
+        if (depth > 0) sb.Append(title[start..]); // unbalanced: keep the rest as written
+        return sb.ToString();
+    }
+
     private static double Coverage(IReadOnlyList<string> query, IReadOnlyList<string> result)
     {
         if (query.Count == 0 || result.Count == 0) return 0;

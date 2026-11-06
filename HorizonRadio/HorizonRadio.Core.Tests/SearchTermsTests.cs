@@ -8,6 +8,40 @@ namespace HorizonRadio.Core.Tests;
 /// </summary>
 public class SearchTermsTests
 {
+    [Fact]
+    public void A_title_found_only_in_a_remix_credit_does_not_match()
+    {
+        // VocaDB, artist-scoped to 和田たけあき, offered this remix for the "title" KurageP (really
+        // the producer's alias, from a three-part stream title).
+        Assert.Null(SearchTerms.MatchScore("KurageP", "和田たけあき",
+            "Perfect Seimei (Wada Takeaki (KurageP) Remix)", "和田たけあき", artistConfirmed: true));
+    }
+
+    [Fact]
+    public void A_remix_query_still_matches_its_remix()
+    {
+        Assert.NotNull(SearchTerms.MatchScore("Endless World Wahiko Remix", "Aerial Flow",
+            "Endless World (Wahiko Remix)", "Aerial Flow"));
+        Assert.NotNull(SearchTerms.MatchScore("Endless World", "Aerial Flow",
+            "Endless World (Wahiko Remix)", "Aerial Flow"));
+    }
+
+    [Fact]
+    public void A_name_in_parentheses_is_not_a_credit()
+    {
+        // "(Transparent Meteor)" is the English name, not a credit; matching it is fine.
+        Assert.NotNull(SearchTerms.MatchScore("Transparent Meteor", "Mochizuki Reku",
+            "玲瓏メテオ (Transparent Meteor)", "Mochizuki Reku"));
+    }
+
+    [Theory]
+    [InlineData("Perfect Seimei (Wada Takeaki (KurageP) Remix)", "Perfect Seimei")]
+    [InlineData("Song (feat. GUMI) [Piano ver.]", "Song")]
+    [InlineData("玲瓏メテオ (Transparent Meteor)", "玲瓏メテオ (Transparent Meteor)")]
+    [InlineData("Unbalanced (Remix", "Unbalanced (Remix")]
+    public void StripCreditGroups_removes_only_credits(string title, string expected) =>
+        Assert.Equal(expected, string.Join(' ', SearchTerms.StripCreditGroups(title).Split(' ', StringSplitOptions.RemoveEmptyEntries)));
+
     [Theory]
     [InlineData("[Megurine Luka]Sacred Secret [SEV]", "Sacred Secret")]
     [InlineData("Blinding Lights (Official Video)", "Blinding Lights")]

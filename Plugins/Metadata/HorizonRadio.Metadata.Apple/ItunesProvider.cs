@@ -62,11 +62,14 @@ public sealed class ItunesProvider : IMetadataProvider
         var hit = _cache.TryGet(cacheKey);
         if (hit != null) return ToContribution(hit);
 
+        // Cache only what iTunes actually answered; a failed request is retried next time.
+        using var lookup = CatalogLookup.Begin();
         var capture = MetadataTrace.NewCapture();
         var match = await FindBestAsync(title, artist, query.Title, query.Artist, capture, ct).ConfigureAwait(false);
         MetadataTrace.ProviderSearch(Id, string.IsNullOrEmpty(artist) ? title : $"{artist} {title}", capture);
         if (match is null)
         {
+            if (lookup.Failed) throw lookup.Unavailable(Id);
             _cache.PutMiss(cacheKey);
             return null;
         }
@@ -76,7 +79,7 @@ public sealed class ItunesProvider : IMetadataProvider
             : null;
 
         var entry = new MetadataCacheEntry(match.Title, match.Artist, match.Album, art, Mbid: null, Year: match.Year);
-        _cache.Put(cacheKey, entry);
+        if (!lookup.Failed) _cache.Put(cacheKey, entry);
         return ToContribution(entry);
     }
 
@@ -117,6 +120,7 @@ public sealed class ItunesProvider : IMetadataProvider
         if (!resp.IsSuccessStatusCode)
         {
             Log($"HTTP {(int)resp.StatusCode} ({store}) for '{term}'");
+            CatalogLookup.ReportFailure($"search HTTP {(int)resp.StatusCode}");
             return null;
         }
 

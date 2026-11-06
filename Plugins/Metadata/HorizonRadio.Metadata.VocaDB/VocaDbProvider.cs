@@ -59,6 +59,8 @@ public sealed class VocaDbProvider : IMetadataProvider
         var hit = _cache.TryGet(cacheKey);
         if (hit != null) return ToContribution(hit);
 
+        // Cache only what VocaDB actually answered; a failed request is retried next time.
+        using var lookup = CatalogLookup.Begin();
         Match? match = null;
         var capture = MetadataTrace.NewCapture();
 
@@ -77,7 +79,12 @@ public sealed class VocaDbProvider : IMetadataProvider
         match ??= await SearchSongsAsync(title, query.Title, query.Artist, artistId: null, capture, ct).ConfigureAwait(false);
 
         MetadataTrace.ProviderSearch(Id, string.IsNullOrEmpty(artist) ? title : $"{artist} {title}", capture);
-        if (match is null) { _cache.PutMiss(cacheKey); return null; }
+        if (match is null)
+        {
+            if (lookup.Failed) throw lookup.Unavailable(Id);
+            _cache.PutMiss(cacheKey);
+            return null;
+        }
 
         // Try the image URLs in order: VocaDB's urlOriginal is often a YouTube hqdefault that 404s
         // when the source video is gone, while the urlThumb/thumbUrl mirror (Niconico/Bilibili) still
@@ -94,7 +101,7 @@ public sealed class VocaDbProvider : IMetadataProvider
 
         var entry = new MetadataCacheEntry(match.Name, match.Artist, Album: null, AlbumArt: art, Mbid: null,
             Year: match.Year, Pvs: match.Pvs);
-        _cache.Put(cacheKey, entry);
+        if (!lookup.Failed) _cache.Put(cacheKey, entry);
         return ToContribution(entry);
     }
 
@@ -395,13 +402,23 @@ public sealed class VocaDbProvider : IMetadataProvider
         try
         {
             using var resp = await _http.GetAsync(url, ct).ConfigureAwait(false);
-            if (!resp.IsSuccessStatusCode) { Log($"HTTP {(int)resp.StatusCode}: {url}"); return null; }
+            if (!resp.IsSuccessStatusCode)
+            {
+                Log($"HTTP {(int)resp.StatusCode}: {url}");
+                CatalogLookup.ReportFailure($"HTTP {(int)resp.StatusCode}");
+                return null;
+            }
             using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
             using var doc = await JsonDocument.ParseAsync(stream, default, ct).ConfigureAwait(false);
             return doc.RootElement.Clone(); // outlive the disposed document
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-        catch (Exception ex) { Log($"request failed: {ex.Message}"); return null; }
+        catch (Exception ex)
+        {
+            Log($"request failed: {ex.Message}");
+            CatalogLookup.ReportFailure(ex.GetType().Name);
+            return null;
+        }
     }
 
     private static int? ParseYear(string? iso) =>

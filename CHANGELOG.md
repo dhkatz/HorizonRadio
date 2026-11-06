@@ -90,6 +90,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A metadata service being briefly unavailable no longer hides a song for weeks.** When
+  MusicBrainz throttled, a request timed out, Spotify wasn't signed in yet, or cover art
+  failed to download, the song was cached as "not found" (or as having no art) for up to
+  14 days. Failures are now retried the next time the song plays and show in the Console;
+  one service timing out also no longer throws away the others' answers.
+- **No more matches on a remix credit.** A title found only inside a credit like
+  "(… Remix)" or "(feat. …)" no longer counts as a match (e.g. "KurageP" matched a remix
+  credited to くらげP).
 - **Radio: three-part stream titles and station tags.** A title like "和田たけあき -
   Chururira Chururira Daddadda! - KurageP [1MRp]" showed the artist as "KurageP [1MRp]":
   the station's per-song tag leaked into the artist, and the "Artist - Title - Credit"

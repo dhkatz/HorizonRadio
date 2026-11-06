@@ -344,11 +344,16 @@ public sealed class MetadataResolver : IAsyncDisposable
         {
             contribution = await contributor.ContributeAsync(query, ct).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) { throw; }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
-            Log($"{contributor.Id}: {ex.GetType().Name}: {ex.Message}");
-            MetadataTrace.Provider(contributor.Id, matched: false, null, null, null, 0, elapsed.ElapsedMilliseconds);
+            // A provider that couldn't answer contributes nothing this time and cached nothing,
+            // so the next play asks again. Say so where the user can see it.
+            var reason = ex is CatalogUnavailableException ? ex.Message : $"{contributor.Id}: {ex.GetType().Name}: {ex.Message}";
+            Log(reason);
+            ProcessConsole.Append("metadata", reason);
+            MetadataTrace.Provider(contributor.Id, matched: false, null, null, null, 0, elapsed.ElapsedMilliseconds,
+                error: ex is CatalogUnavailableException ? ex.Message : $"{ex.GetType().Name}: {ex.Message}");
             return null;
         }
 
