@@ -3,7 +3,7 @@ name: Nightly
 # Daily build of main, published as a single rolling `nightly`
 # prerelease. The app zip (with its bundled version.dll) is the asset;
 # external tools resolve from the permanent blobstore (see
-# docs/tool-provisioning.md), so old nightlies keep working as long as
+# Plugins/Tools/tool-provisioning.md), so old nightlies keep working as long as
 # their tools were fetched at least once.
 on:
   schedule:
@@ -113,7 +113,7 @@ jobs:
       - name: Publish UI + create zip
         if: steps.guard.outputs.skip != 'true'
         run: >
-          dotnet publish HorizonRadio.UI/HorizonRadio.UI.csproj
+          dotnet publish HorizonRadio/HorizonRadio.UI/HorizonRadio.UI.csproj
           -c Release
           -r win-x64
           --self-contained true

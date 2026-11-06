@@ -1,7 +1,7 @@
 # Horizon Radio
 
 <p align="center">
-  <img src="docs/horizon-radio.png" alt="Horizon Radio" width="720" />
+  <img src="Assets/horizon-radio.png" alt="Horizon Radio" width="720" />
 </p>
 
 <p align="center">
@@ -11,8 +11,8 @@
 <p align="center">Play your own music through Forza Horizon 6's in-game radio.</p>
 
 <p align="center">
-  <img src="docs/horizon-radio-app.png" alt="Horizon Radio app" width="49%" />
-  <img src="docs/horizon-radio-controls.png" alt="Horizon Radio controls" width="49%" />
+  <img src="Assets/horizon-radio-app.png" alt="Horizon Radio app" width="49%" />
+  <img src="Assets/horizon-radio-controls.png" alt="Horizon Radio controls" width="49%" />
 </p>
 
 ## Features
@@ -57,7 +57,7 @@ In FH6's audio settings:
 | Build                  | Produces                 | Requires                                                |
 |------------------------|--------------------------|---------------------------------------------------------|
 | `Mods/ForzaHorizon6/`  | `version.dll` + test exe | Windows: VS 2022 Build Tools. Linux/macOS: clang + mingw-w64. CMake ≥ 3.25, Ninja. |
-| `HorizonRadio.UI.slnx` | C# UI                    | .NET 10 SDK                                             |
+| `HorizonRadio.slnx` | C# UI                    | .NET 10 SDK                                             |
 
 ```powershell
 git clone https://github.com/dhkatz/horizon-radio.git
@@ -66,13 +66,13 @@ pushd Mods/ForzaHorizon6          # the FH6 mod is its own CMake project
 cmake --preset windows-x64
 cmake --build --preset windows-x64-release
 popd
-dotnet build HorizonRadio.UI.slnx
+dotnet build HorizonRadio.slnx
 ```
 
 To produce a release zip locally:
 
 ```powershell
-dotnet publish HorizonRadio.UI/HorizonRadio.UI.csproj -c Release -r win-x64 --self-contained
+dotnet publish HorizonRadio/HorizonRadio.UI/HorizonRadio.UI.csproj -c Release -r win-x64 --self-contained
 # Output: build/release/HorizonRadio.zip
 ```
 

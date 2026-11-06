@@ -87,7 +87,7 @@ jobs:
       # build/release/HorizonRadio.zip — that zip is what we upload.
       - name: Publish UI + create zip
         run: >
-          dotnet publish HorizonRadio.UI/HorizonRadio.UI.csproj
+          dotnet publish HorizonRadio/HorizonRadio.UI/HorizonRadio.UI.csproj
           -c Release
           -r win-x64
           --self-contained true

@@ -87,20 +87,20 @@
 
     <ItemGroup>
       <ProjectReference Include="..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
-      <ProjectReference Include="..\Plugins\Metadata\HorizonRadio.Metadata.Apple\HorizonRadio.Metadata.Apple.csproj" />
-      <ProjectReference Include="..\Plugins\Metadata\HorizonRadio.Metadata.MusicBrainz\HorizonRadio.Metadata.MusicBrainz.csproj" />
-      <ProjectReference Include="..\Plugins\Metadata\HorizonRadio.Metadata.Spotify\HorizonRadio.Metadata.Spotify.csproj" />
-      <ProjectReference Include="..\Plugins\Metadata\HorizonRadio.Metadata.VocaDB\HorizonRadio.Metadata.VocaDB.csproj" />
-      <ProjectReference Include="..\Plugins\Sources\HorizonRadio.Source.Local\HorizonRadio.Source.Local.csproj" />
-      <ProjectReference Include="..\Plugins\Sources\HorizonRadio.Source.Radio\HorizonRadio.Source.Radio.csproj" />
-      <ProjectReference Include="..\Plugins\Sources\HorizonRadio.Source.Spotify\HorizonRadio.Source.Spotify.csproj" />
-      <ProjectReference Include="..\Plugins\Sources\HorizonRadio.Source.Test\HorizonRadio.Source.Test.csproj" />
-      <ProjectReference Include="..\Plugins\Sources\HorizonRadio.Source.YouTube\HorizonRadio.Source.YouTube.csproj" />
-      <ProjectReference Include="..\Plugins\Tools\HorizonRadio.Tools.YtDlp\HorizonRadio.Tools.YtDlp.csproj" />
-      <ProjectReference Include="..\Plugins\Games\HorizonRadio.Game.ForzaHorizon6\HorizonRadio.Game.ForzaHorizon6.csproj" />
-      <ProjectReference Include="..\Plugins\Tools\HorizonRadio.Tools.FFmpeg\HorizonRadio.Tools.FFmpeg.csproj" />
-      <ProjectReference Include="..\Plugins\Tools\HorizonRadio.Tools.Librespot\HorizonRadio.Tools.Librespot.csproj" />
-      <ProjectReference Include="..\Plugins\Tools\HorizonRadio.Tools.TitleModel\HorizonRadio.Tools.TitleModel.csproj" />
+      <ProjectReference Include="..\..\Plugins\Metadata\HorizonRadio.Metadata.Apple\HorizonRadio.Metadata.Apple.csproj" />
+      <ProjectReference Include="..\..\Plugins\Metadata\HorizonRadio.Metadata.MusicBrainz\HorizonRadio.Metadata.MusicBrainz.csproj" />
+      <ProjectReference Include="..\..\Plugins\Metadata\HorizonRadio.Metadata.Spotify\HorizonRadio.Metadata.Spotify.csproj" />
+      <ProjectReference Include="..\..\Plugins\Metadata\HorizonRadio.Metadata.VocaDB\HorizonRadio.Metadata.VocaDB.csproj" />
+      <ProjectReference Include="..\..\Plugins\Sources\HorizonRadio.Source.Local\HorizonRadio.Source.Local.csproj" />
+      <ProjectReference Include="..\..\Plugins\Sources\HorizonRadio.Source.Radio\HorizonRadio.Source.Radio.csproj" />
+      <ProjectReference Include="..\..\Plugins\Sources\HorizonRadio.Source.Spotify\HorizonRadio.Source.Spotify.csproj" />
+      <ProjectReference Include="..\..\Plugins\Sources\HorizonRadio.Source.Test\HorizonRadio.Source.Test.csproj" />
+      <ProjectReference Include="..\..\Plugins\Sources\HorizonRadio.Source.YouTube\HorizonRadio.Source.YouTube.csproj" />
+      <ProjectReference Include="..\..\Plugins\Tools\HorizonRadio.Tools.YtDlp\HorizonRadio.Tools.YtDlp.csproj" />
+      <ProjectReference Include="..\..\Plugins\Games\HorizonRadio.Game.ForzaHorizon6\HorizonRadio.Game.ForzaHorizon6.csproj" />
+      <ProjectReference Include="..\..\Plugins\Tools\HorizonRadio.Tools.FFmpeg\HorizonRadio.Tools.FFmpeg.csproj" />
+      <ProjectReference Include="..\..\Plugins\Tools\HorizonRadio.Tools.Librespot\HorizonRadio.Tools.Librespot.csproj" />
+      <ProjectReference Include="..\..\Plugins\Tools\HorizonRadio.Tools.TitleModel\HorizonRadio.Tools.TitleModel.csproj" />
       <ProjectReference Include="..\HorizonRadio.TitleModel\HorizonRadio.TitleModel.csproj" />
     </ItemGroup>
 
@@ -110,7 +110,7 @@
       HorizonRadio.Game.ForzaHorizon6.csproj), marked ExcludeFromSingleFile so it never lands
       inside the single-file exe. Copy it from the build output into PublishDir so the release
       zip ships it next to the exe, where the Mods page installs it from. Tools are not bundled —
-      they install on demand from the Tools tab (docs/tool-provisioning.md).
+      they install on demand from the Tools tab (Plugins/Tools/tool-provisioning.md).
     -->
     <Target Name="CopyBundledBinariesToPublish" AfterTargets="Publish"
             BeforeTargets="StripPublishPdbs">
@@ -125,18 +125,18 @@
       ensuring the release zip carries the docs the user needs.
     -->
     <ItemGroup>
-      <None Include="$(MSBuildThisFileDirectory)..\README.md"
+      <None Include="$(MSBuildThisFileDirectory)..\..\README.md"
             Link="README.md"
             CopyToOutputDirectory="Never"
             CopyToPublishDirectory="PreserveNewest"
             Visible="false"
-            Condition="Exists('$(MSBuildThisFileDirectory)..\README.md')" />
-      <None Include="$(MSBuildThisFileDirectory)..\LICENSE"
+            Condition="Exists('$(MSBuildThisFileDirectory)..\..\README.md')" />
+      <None Include="$(MSBuildThisFileDirectory)..\..\LICENSE"
             Link="LICENSE"
             CopyToOutputDirectory="Never"
             CopyToPublishDirectory="PreserveNewest"
             Visible="false"
-            Condition="Exists('$(MSBuildThisFileDirectory)..\LICENSE')" />
+            Condition="Exists('$(MSBuildThisFileDirectory)..\..\LICENSE')" />
     </ItemGroup>
 
     <!--
@@ -168,9 +168,9 @@
           ProjectDir-relative because $(SolutionDir) is *Undefined* when
           running `dotnet publish` directly on the csproj (only set
           when MSBuild is invoked via a .sln/.slnx). The repo layout
-          puts build/ a single level up from HorizonRadio.UI/.
+          puts build/ two levels up from HorizonRadio/HorizonRadio.UI/ (the repo root).
         -->
-        <ReleaseStageRoot>$([System.IO.Path]::GetFullPath('$(ProjectDir)..\build\release'))</ReleaseStageRoot>
+        <ReleaseStageRoot>$([System.IO.Path]::GetFullPath('$(ProjectDir)..\..\build\release'))</ReleaseStageRoot>
         <ReleaseZipPath>$(ReleaseStageRoot)\HorizonRadio.zip</ReleaseZipPath>
       </PropertyGroup>
       <MakeDir Directories="$(ReleaseStageRoot)" />
