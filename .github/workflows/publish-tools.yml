@@ -4,7 +4,7 @@ name: Publish tools
 # the permanent, append-only `tools` release that serves as the blob
 # store. Addressed by tool version, not by app build — so release,
 # nightly, and dev builds that pin the same rev all resolve the same
-# durable asset. See docs/tool-provisioning.md.
+# durable asset. See Plugins/Tools/tool-provisioning.md.
 #
 # Runs when the pin or the build recipe changes; also manually.
 on:
@@ -71,7 +71,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             gh release create $tag `
               --title 'Tool binaries' `
-              --notes 'Permanent, append-only store of tools Horizon Radio builds (see docs/tool-provisioning.md). Do not delete assets — shipped app builds point here by URL.' `
+              --notes 'Permanent, append-only store of tools Horizon Radio builds (see Plugins/Tools/tool-provisioning.md). Do not delete assets — shipped app builds point here by URL.' `
               --prerelease
           }
 

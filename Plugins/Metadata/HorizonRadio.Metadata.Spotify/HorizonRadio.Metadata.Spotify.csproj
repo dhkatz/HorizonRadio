@@ -17,7 +17,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+    <ProjectReference Include="..\..\..\HorizonRadio\HorizonRadio.Core\HorizonRadio.Core.csproj" />
     <ProjectReference Include="..\..\Sources\HorizonRadio.Source.Spotify\HorizonRadio.Source.Spotify.csproj" />
   </ItemGroup>
 

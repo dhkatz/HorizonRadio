@@ -105,7 +105,7 @@ public sealed class ModInstaller
     public InstallResult Install(string gamePath)
     {
         if (!HasBundledDll)
-            return InstallResult.Fail("No bundled version.dll found next to the UI. Build the C++ side first (HorizonRadio.slnx).");
+            return InstallResult.Fail("No bundled version.dll found next to the UI. Build the FH6 mod first (Mods/ForzaHorizon6).");
         if (string.IsNullOrEmpty(gamePath) || !Directory.Exists(gamePath))
             return InstallResult.Fail("Game folder doesn't exist or wasn't selected.");
 

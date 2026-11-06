@@ -39,7 +39,7 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Verify C# formatting
-        run: dotnet format HorizonRadio.UI.slnx --verify-no-changes --verbosity minimal
+        run: dotnet format HorizonRadio.slnx --verify-no-changes --verbosity minimal
 
       - name: Configure CMake
         working-directory: Mods/ForzaHorizon6
@@ -68,19 +68,19 @@ jobs:
       # C# side runs after the Release C++ output (version.dll) is on disk
       # so the UI's <None Include> item picks it up.
       - name: Build C# UI
-        run: dotnet build HorizonRadio.UI.slnx -c Debug --nologo
+        run: dotnet build HorizonRadio.slnx -c Debug --nologo
 
       # C# unit tests (HorizonRadio.Core.Tests). --no-build reuses the build
       # above so this is just the test run, not a second compile.
       - name: Run C# tests
-        run: dotnet test HorizonRadio.UI.slnx -c Debug --no-build --nologo
+        run: dotnet test HorizonRadio.slnx -c Debug --no-build --nologo
 
       # Guard the bundling itself: a regression in the csproj's path or
       # Exists() gate would otherwise silently ship a UI with no DLL.
       - name: Verify version.dll was bundled into the UI output
         shell: pwsh
         run: |
-          $dll = 'HorizonRadio.UI/bin/Debug/net10.0/version.dll'
+          $dll = 'HorizonRadio/HorizonRadio.UI/bin/Debug/net10.0/version.dll'
           if (-not (Test-Path $dll)) {
             throw "version.dll was not copied into the UI build output ($dll). " +
                   "Check HorizonRadio.Game.ForzaHorizon6.csproj's _VersionDllPath and the Release C++ build."

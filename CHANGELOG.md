@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Repository layout.** The app's projects moved under `HorizonRadio/`, the plugin
+  SDK under `Plugins/`, and README screenshots to `Assets/`; the solution is now
+  `HorizonRadio.slnx`. The root holds `Assets/`, `HorizonRadio/`, `Plugins/`, and
+  `Mods/`. Release artifacts are unchanged (`build/release/HorizonRadio.zip`).
 - **Use Horizon Radio without a game.** Pick "No Game" to use it as a plain music
   player: it plays through your speakers and hides everything game-related. New
   installs ask which game you play on first launch; existing setups keep their

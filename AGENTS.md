@@ -29,6 +29,23 @@ These rules are mandatory for every change, human or agent.
   Purely internal churn (typo fixes, refactors with no observable effect) can be
   skipped.
 
+## Repository layout
+
+```
+Assets/         README screenshots and artwork
+HorizonRadio/   the app: UI (Avalonia), Core (headless engine), Core.Tests, TitleModel
+Plugins/        everything that plugs into Horizon Radio (.NET)
+  HorizonRadio.Plugins.Abstractions/   the plugin SDK
+  Games/  Metadata/  Sources/  Tools/  one project per plugin
+Mods/           code that runs inside a game, one folder per game, any toolchain
+  ForzaHorizon6/   the version.dll mod (CMake; Bridge/ + Tests/ + docs/)
+HorizonRadio.slnx   the .NET solution (the native mod builds separately with CMake)
+```
+
+The rule: **`Plugins/` integrates with Horizon Radio; `Mods/` integrates with a game.**
+A game plugin (`Plugins/Games/HorizonRadio.Game.<Game>`) pairs with its mod
+(`Mods/<Game>`) by name.
+
 ## Architecture
 
 ```
@@ -159,7 +176,7 @@ empty `MSBuild*` env var is to blame; clear it first:
 ```powershell
 Remove-Item Env:MSBuildSDKsPath -ErrorAction SilentlyContinue
 Remove-Item Env:MSBuildAdditionalSdkResolversFolder -ErrorAction SilentlyContinue
-dotnet build HorizonRadio.UI\HorizonRadio.UI.csproj -c Release
+dotnet build HorizonRadio\HorizonRadio.UI\HorizonRadio.UI.csproj -c Release
 ```
 
 ### librespot
@@ -268,8 +285,8 @@ freed mid-scan can't crash the game.
 Managed code: `.editorconfig` + .NET analyzers.
 
 ```powershell
-dotnet format HorizonRadio.UI.slnx --verify-no-changes
-dotnet build HorizonRadio.UI.slnx /t:Rebuild
+dotnet format HorizonRadio.slnx --verify-no-changes
+dotnet build HorizonRadio.slnx /t:Rebuild
 ```
 
 Native code: `.clang-format` + `.clang-tidy` in `Mods/ForzaHorizon6/` (install LLVM).

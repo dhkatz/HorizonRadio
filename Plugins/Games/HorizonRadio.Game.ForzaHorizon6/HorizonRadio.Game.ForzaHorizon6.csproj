@@ -13,7 +13,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+    <ProjectReference Include="..\..\..\HorizonRadio\HorizonRadio.Core\HorizonRadio.Core.csproj" />
   </ItemGroup>
 
   <!-- UI for the plugin's pages. Versions must match HorizonRadio.UI's: the host and its plugins
@@ -28,7 +28,7 @@
   <!--
     Bundle the FH6 mod (Mods/ForzaHorizon6's version.dll) with the app: the Mods page installs it
     from AppContext.BaseDirectory. It's coupling-locked to the game (FMOD offsets + IPC) and can
-    never be fetched at runtime, unlike the on-demand tools (see docs/tool-provisioning.md).
+    never be fetched at runtime, unlike the on-demand tools (see Plugins/Tools/tool-provisioning.md).
 
     Always the Release build: a Debug version.dll isn't useful (FH6 doesn't reload a CRT-debug
     DLL). Gated on Exists() so a fresh checkout that hasn't built the C++ side still builds — the
