@@ -13,6 +13,10 @@ namespace HorizonRadio.Core.Metadata;
 /// raise <see cref="TrackEnriched"/> (the app pushes it to Now Playing + the HUD).
 /// The resolver is owned by the app and shared with list enrichment; this service
 /// just drives it on the playback event with single-flight cancellation.
+///
+/// When a slow provider is still working after the others matched, the early result is
+/// raised first and the full one follows if it differs, so the title doesn't wait on the
+/// slowest catalog.
 /// </summary>
 public sealed class EnrichmentService : IAsyncDisposable
 {
@@ -44,8 +48,14 @@ public sealed class EnrichmentService : IAsyncDisposable
         {
             try
             {
-                var enriched = await _resolver.ResolveAsync(t, ct).ConfigureAwait(false);
-                if (ct.IsCancellationRequested || !Changed(t, enriched)) return;
+                var shown = t;
+                var enriched = await _resolver.ResolveAsync(t, ct, ResolvePriority.Foreground, early =>
+                {
+                    if (ct.IsCancellationRequested || !Changed(shown, early)) return;
+                    shown = early;
+                    TrackEnriched?.Invoke(early);
+                }).ConfigureAwait(false);
+                if (ct.IsCancellationRequested || !Changed(shown, enriched)) return;
                 TrackEnriched?.Invoke(enriched);
             }
             catch (OperationCanceledException) { }
