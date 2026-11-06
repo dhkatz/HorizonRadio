@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Forza Horizon 6 game plugin: the Horizon Radio side of the FH6 integration (IPC + PCM pipe
+       clients for the injected version.dll, Forza Data Out telemetry, the mod installer, and the
+       station list). The in-game side is the native mod in Mods/ForzaHorizon6. Moved types keep
+       their HorizonRadio.Core.* namespaces so consumers need no using changes. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+  </ItemGroup>
+
+</Project>

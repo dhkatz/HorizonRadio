@@ -14,9 +14,6 @@ public static class StationCatalog
     /// <summary>Dropdown entry meaning "replace whatever station is active."</summary>
     public const string AnyLabel = "Any station";
 
-    /// <summary>Wire value sent to the DLL for <see cref="AnyLabel"/>.</summary>
-    public const string AnyWire = "*";
-
     /// <summary>The in-game station names, exactly as the game reports them.</summary>
     public static readonly IReadOnlyList<string> Names = new[]
     {
@@ -34,9 +31,4 @@ public static class StationCatalog
 
     /// <summary>Dropdown contents: "Any station" first, then the stations.</summary>
     public static readonly IReadOnlyList<string> All = new[] { AnyLabel }.Concat(Names).ToList();
-
-    /// <summary>Translate a dropdown selection to the DLL wire value
-    /// ("*" for Any, otherwise the station name verbatim).</summary>
-    public static string ToWire(string? selection) =>
-        string.IsNullOrEmpty(selection) || selection == AnyLabel ? AnyWire : selection;
 }

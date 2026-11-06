@@ -5,14 +5,15 @@ namespace HorizonRadio.Core.Audio;
 
 /// <summary>
 /// An <see cref="IPcmSink"/> that routes each chunk to a primary sink (the
-/// game pipe) and/or an optional, runtime-swappable preview sink (a local
+/// game's audio input, absent when the active game integration plays nothing
+/// in-game) and/or an optional, runtime-swappable preview sink (a local
 /// speaker). The output picker selects one destination at a time — the game
 /// bridge by default, or a speaker for testing — so the primary can be gated
 /// off while previewing locally. Letting <see cref="SourceRunner"/> hold one
 /// of these instead of the pipe sink directly means the destination can be
 /// switched mid-playback without restarting the source.
 /// </summary>
-public sealed class TeePcmSink(IPcmSink primary) : IPcmSink
+public sealed class TeePcmSink(IPcmSink? primary) : IPcmSink
 {
     // Swapped atomically; Send reads each once so an attach/detach or gate
     // toggle racing a chunk either includes that chunk or doesn't, never tears.
@@ -39,7 +40,7 @@ public sealed class TeePcmSink(IPcmSink primary) : IPcmSink
             try { previewSent = preview.Send(samples); } catch { /* best-effort */ }
         }
 
-        bool primarySent = _primaryEnabled && primary.Send(samples);
+        bool primarySent = _primaryEnabled && primary?.Send(samples) == true;
 
         // True if any destination accepted the chunk, so the source doesn't
         // treat a deliberately-gated primary as a stalled sink.

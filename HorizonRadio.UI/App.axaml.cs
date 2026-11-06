@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -6,9 +7,9 @@ using Avalonia.Threading;
 using HorizonRadio.Core;
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Events;
+using HorizonRadio.Core.Games;
 using HorizonRadio.Core.History;
 using HorizonRadio.Core.Input;
-using HorizonRadio.Core.Ipc;
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Metadata.Apple;
 using HorizonRadio.Core.Metadata.MusicBrainz;
@@ -25,6 +26,7 @@ using HorizonRadio.Core.Sources.Spotify;
 using HorizonRadio.Core.Sources.Test;
 using HorizonRadio.Core.Sources.YouTube;
 using HorizonRadio.Core.Tools;
+using HorizonRadio.Game.ForzaHorizon6;
 using HorizonRadio.Plugins.Abstractions;
 using HorizonRadio.TitleModel;
 using HorizonRadio.Tools.Librespot;
@@ -43,8 +45,7 @@ namespace HorizonRadio.UI;
     Justification = "Avalonia owns the Application instance; the desktop shutdown hook disposes owned services.")]
 public partial class App : Application
 {
-    private IpcClient? _ipc;
-    private PcmPipeClient? _pcm;
+    private IGameIntegration? _game;
     private PreviewController? _preview;
     private SourceRunner? _runner;
     private SourceConfigStore? _store;
@@ -57,7 +58,6 @@ public partial class App : Application
     // unrelated tool changes. Sentinel so the first call always initializes the runtime.
     private (string? Path, long WriteTicks) _titleModelStamp = ("\0uninitialized", -1);
     private EventActionExecutor? _eventExecutor;
-    private ForzaTelemetryListener? _telemetry;
     private InputBindingService? _inputService;
     private SpotifyConnection? _spotifyConnection;
     private SpotifyPlaybackService? _spotifyPlayback;
@@ -96,11 +96,18 @@ public partial class App : Application
 
             _store = provider.GetRequiredService<SourceConfigStore>();
 
-            _pcm = new PcmPipeClient();
-            _pcm.Start();
-            // Tee the pipeline so the active source can play to the game pipe
+            // The active game integration. Exactly one runs at a time; until there's a game picker,
+            // that's the first discovered game plugin (FH6 is the only one). Built here because the
+            // playback pipeline needs its audio output, but not started until the handlers below are
+            // wired, so the first Connected transition isn't missed.
+            var pluginContext = provider.GetRequiredService<IPluginContext>();
+            var gamePlugins = PluginDiscovery.DiscoverPlugins<IGamePlugin>();
+            if (gamePlugins.Count == 0) throw new InvalidOperationException("No game plugin found.");
+            _game = gamePlugins[0].Create(pluginContext);
+
+            // Tee the pipeline so the active source can play to the game
             // and (optionally) to local speakers for in-app test playback.
-            var tee = new TeePcmSink(new PcmPipeSink(_pcm));
+            var tee = new TeePcmSink(_game.Output);
             _preview = new PreviewController(tee, _store);
 
             _runner = new SourceRunner(tee) { Shuffle = _store.Shuffle };
@@ -148,9 +155,8 @@ public partial class App : Application
             MetadataCatalog.Initialize(PluginDiscovery.DiscoverPlugins<IMetadataPlugin>());
 
             _metaStore = provider.GetRequiredService<MetadataConfigStore>();
-            // Host services handed to metadata provider factories (the cache today; grows as more
-            // plugin kinds come online). Container-owned singleton, shared across pipeline builds.
-            var pluginContext = provider.GetRequiredService<IPluginContext>();
+            // pluginContext (resolved above for the game plugin) is also what metadata provider
+            // factories receive: host services shared across pipeline builds.
             // The metadata pipeline: a shared resolver (source + ordered providers,
             // per-field policy) drives both play-time enrichment and list enrichment.
             _metaResolver = new MetadataResolver();
@@ -194,12 +200,10 @@ public partial class App : Application
             ReinitTitleModel();
             toolRegistry.Changed += ReinitTitleModel;
 
-            // IPC client doubles as a game-event source (the DLL's memory
-            // poller); the telemetry listener is a second source. The
-            // executor runs the user's configured action for each event.
-            _ipc = new IpcClient();
+            // The game integration supplies the event sources (for FH6: the DLL's memory poller
+            // and the Data Out telemetry listener); the executor runs the user's configured action
+            // for each event.
             var eventRules = provider.GetRequiredService<EventRuleStore>();
-            _telemetry = new ForzaTelemetryListener();
 
             // Saved mixes + the single switcher all launches route through (owns
             // the "current mix" notion for Next/Previous). One-time migrate any
@@ -222,10 +226,12 @@ public partial class App : Application
             // One dispatcher turns an EventAction into a transport/source/mix/
             // volume call; both the Events tab (game events) and the Controls tab
             // (input bindings) feed it, so they share capability checks.
-            var dispatcher = new ActionDispatcher(_runner, _store, mixSwitcher, _ipc.SendGain);
-            _eventExecutor = new EventActionExecutor(
-                new IGameEventSource[] { _ipc, _telemetry }, eventRules, dispatcher);
-            var eventsVm = new EventsViewModel(eventRules, _eventExecutor, ForzaTelemetryListener.DefaultPort);
+            var dispatcher = new ActionDispatcher(_runner, _store, mixSwitcher,
+                _game.Volume is { } gameVolume ? gameVolume.SetDuckGain : null);
+            _eventExecutor = new EventActionExecutor(_game.EventSources, eventRules, dispatcher);
+            // TEMPORARY: the telemetry-port hint is FH6-specific; it moves into the FH6 plugin's
+            // own Events contribution when game plugins ship their own UI.
+            var eventsVm = new EventsViewModel(eventRules, _eventExecutor, Fh6GameIntegration.TelemetryPort);
 
             // Controls: global keyboard/mouse (SharpHook) + controllers (SDL),
             // mapped to the same actions through the shared dispatcher.
@@ -250,7 +256,7 @@ public partial class App : Application
             // is computed in ONE place: the active mix's override if a mix is
             // driving playback, else the global default. Every trigger — the
             // global picker changing, a mix switch, a self-driven source start,
-            // and DLL (re)connect — pushes that same effective value, so none of
+            // and game (re)connect — pushes that same effective value, so none of
             // them can clobber an active mix's override or go stale on reconnect.
             string EffectiveStation()
             {
@@ -259,51 +265,53 @@ public partial class App : Application
                 return mix?.EffectiveStation(global) ?? global;
             }
 
-            void PushStation() => _ipc?.SendTargetStation(StationCatalog.ToWire(EffectiveStation()));
+            void PushStation() => _game.Stations?.SetTarget(StationTargetViewModel.ToTarget(EffectiveStation()));
 
             vm.NowPlaying.Station.TargetStationChanged += _ => PushStation();
             mixSwitcher.Switched += _ => PushStation();
             _runner.ActiveSourceChanged += _ => PushStation();
 
             // The master volume slider doubles as an in-game pre-amp: push its
-            // tapered gain to the bridge on every change (live feedback while
+            // tapered gain to the game on every change (live feedback while
             // dragging is intentional), and re-assert on (re)connect since the
-            // DLL resets to its conservative default. Skip resends of an
+            // game side resets to its conservative default. Skip resends of an
             // unchanged value so a jiggle within one gain step — or a reconnect
             // at the same level — doesn't spam the pipe; `force` overrides the
-            // dedup on connect, where the DLL genuinely needs the value again.
+            // dedup on connect, where the game genuinely needs the value again.
             var lastSentGain = float.NaN;
             void PushGain(bool force = false)
             {
                 var gain = VolumeTaper.ToGain(vm.NowPlaying.PreviewVolume);
                 if (!force && gain.Equals(lastSentGain)) return;
-                if (_ipc?.SendMasterVolume(gain) == true) lastSentGain = gain;
+                if (_game.Volume?.SetMasterVolume(gain) == true) lastSentGain = gain;
             }
 
             vm.NowPlaying.MasterVolumeChanged += _ => PushGain();
 
-            _ipc.Connected += () =>
+            _game.StateChanged += state =>
             {
-                Dispatcher.UIThread.Post(() => vm.SetConnection(ConnectionState.Connected));
+                Dispatcher.UIThread.Post(() => vm.SetConnection(state));
+                if (state != ConnectionState.Connected) return;
                 PushStation();
                 PushGain(force: true);
             };
-            _ipc.Disconnected += () => Dispatcher.UIThread.Post(() => vm.SetConnection(ConnectionState.Disconnected));
-            _ipc.StatsUpdated += s => Dispatcher.UIThread.Post(() => vm.Stats.Apply(s));
-            _ipc.Start();
-            _telemetry.Start();
+            // TEMPORARY: bridge stats are FH6-specific; the Stats page moves into the FH6 plugin
+            // when game plugins ship their own UI.
+            if (_game is Fh6GameIntegration fh6)
+                fh6.StatsUpdated += s => Dispatcher.UIThread.Post(() => vm.Stats.Apply(s));
+            _game.Start();
             _inputService.Start();
 
             _runner.TrackChanged += t =>
             {
                 Dispatcher.UIThread.Post(() => vm.NowPlaying.Apply(t));
-                _ipc?.SendTrack(t);
+                _game.NowPlaying?.Show(t);
             };
 
             _enricher.TrackEnriched += t =>
             {
                 Dispatcher.UIThread.Post(() => vm.NowPlaying.Apply(t));
-                _ipc?.SendTrack(t);
+                _game.NowPlaying?.Show(t);
             };
 
             desktop.ShutdownRequested += async (_, _) =>
@@ -314,19 +322,16 @@ public partial class App : Application
                 mixSwitcher.Dispose();
                 queuePlayback.Dispose();
                 _preview?.Dispose();
-                _telemetry?.Dispose();
                 if (_enricher != null) await _enricher.DisposeAsync();
                 if (_metaResolver != null) await _metaResolver.DisposeAsync();
                 if (_runner != null) await _runner.DisposeAsync();
                 if (_spotifyPlayback != null) await _spotifyPlayback.DisposeAsync();
                 if (_spotifyConnection != null) await _spotifyConnection.DisposeAsync();
-                if (_ipc != null) await _ipc.DisposeAsync();
-                if (_pcm != null) await _pcm.DisposeAsync();
+                // After the runner, so nothing is still sending audio to the game.
+                if (_game != null) await _game.DisposeAsync();
                 // Dispose the container last — it owns the leaf singletons (stores + cache).
                 await provider.DisposeAsync();
             };
-
-            vm.SetConnection(ConnectionState.Connecting);
 
             // Background provisioning-freshness check: surface stale tools
             // on the sidebar badge and via a one-time launch toast. Runs on

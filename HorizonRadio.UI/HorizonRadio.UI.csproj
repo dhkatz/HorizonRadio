@@ -97,6 +97,7 @@
       <ProjectReference Include="..\Plugins\Sources\HorizonRadio.Source.Test\HorizonRadio.Source.Test.csproj" />
       <ProjectReference Include="..\Plugins\Sources\HorizonRadio.Source.YouTube\HorizonRadio.Source.YouTube.csproj" />
       <ProjectReference Include="..\Plugins\Tools\HorizonRadio.Tools.YtDlp\HorizonRadio.Tools.YtDlp.csproj" />
+      <ProjectReference Include="..\Plugins\Games\HorizonRadio.Game.ForzaHorizon6\HorizonRadio.Game.ForzaHorizon6.csproj" />
       <ProjectReference Include="..\Plugins\Tools\HorizonRadio.Tools.FFmpeg\HorizonRadio.Tools.FFmpeg.csproj" />
       <ProjectReference Include="..\Plugins\Tools\HorizonRadio.Tools.Librespot\HorizonRadio.Tools.Librespot.csproj" />
       <ProjectReference Include="..\Plugins\Tools\HorizonRadio.Tools.TitleModel\HorizonRadio.Tools.TitleModel.csproj" />

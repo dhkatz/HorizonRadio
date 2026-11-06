@@ -4,6 +4,9 @@
   <Project Path="HorizonRadio.Core.Tests/HorizonRadio.Core.Tests.csproj" />
   <Project Path="HorizonRadio.TitleModel/HorizonRadio.TitleModel.csproj" />
   <Project Path="HorizonRadio.UI/HorizonRadio.UI.csproj" />
+  <Folder Name="/Plugins/Games/">
+    <Project Path="Plugins/Games/HorizonRadio.Game.ForzaHorizon6/HorizonRadio.Game.ForzaHorizon6.csproj" />
+  </Folder>
   <Folder Name="/Plugins/Metadata/">
     <Project Path="Plugins/Metadata/HorizonRadio.Metadata.Apple/HorizonRadio.Metadata.Apple.csproj" />
     <Project Path="Plugins/Metadata/HorizonRadio.Metadata.MusicBrainz/HorizonRadio.Metadata.MusicBrainz.csproj" />
