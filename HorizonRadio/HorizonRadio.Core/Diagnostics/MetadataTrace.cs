@@ -168,6 +168,9 @@ public static class MetadataTrace
         // How long the provider took to answer, including its rate-limit wait. Null = not asked
         // (an earlier interpretation already matched, or the provider was skipped).
         public long? Ms;
+        // Why the provider couldn't answer (an HTTP error, a timeout, not signed in), when it
+        // couldn't. A failure isn't a miss: nothing was cached, and it's retried next time.
+        public string? Error;
         public string? Artist;
         public string? Title;
         public string? Album;
@@ -213,7 +216,7 @@ public static class MetadataTrace
     }
 
     public static void Provider(string id, bool matched, string? artist, string? title, string? album, int artBytes,
-                                long? elapsedMs = null)
+                                long? elapsedMs = null, string? error = null)
     {
         var s = Scope.Value;
         if (s is null) return;
@@ -229,6 +232,7 @@ public static class MetadataTrace
             rec.Album = album;
             rec.ArtBytes = artBytes;
             rec.Ms = elapsedMs;
+            rec.Error = error;
             if (matched) attempt.Matched = true;
         }
     }

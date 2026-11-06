@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -52,12 +53,20 @@ public sealed class SpotifyProvider : IMetadataProvider
         var hit = _cache.TryGet(cacheKey);
         if (hit != null) return ToContribution(hit);
 
+        // Cache only what Spotify actually answered. Not being signed in yet, a rate limit, or a
+        // server error is retried next time instead of remembered as "not on Spotify".
+        using var lookup = CatalogLookup.Begin();
         var entry = queryKey.StartsWith("uri=", StringComparison.Ordinal)
             ? await EnrichByUriAsync(query.ExternalId!, ct).ConfigureAwait(false)
             : await EnrichByTextAsync(query.Artist, query.Title, ct).ConfigureAwait(false);
 
-        if (entry == null) { _cache.PutMiss(cacheKey); return null; }
-        _cache.Put(cacheKey, entry);
+        if (entry == null)
+        {
+            if (lookup.Failed) throw lookup.Unavailable(Id);
+            _cache.PutMiss(cacheKey);
+            return null;
+        }
+        if (!lookup.Failed) _cache.Put(cacheKey, entry);
         return ToContribution(entry);
     }
 
@@ -73,7 +82,11 @@ public sealed class SpotifyProvider : IMetadataProvider
         try
         {
             var client = await _clientFactory(ct).ConfigureAwait(false);
-            if (client is null) return null;
+            if (client is null)
+            {
+                CatalogLookup.ReportFailure("not signed in");
+                return null;
+            }
             var id = spotifyUri.Substring("spotify:track:".Length);
             var track = await client.Tracks.Get(id, ct).ConfigureAwait(false);
             return await BuildEntry(track, ct).ConfigureAwait(false);
@@ -81,11 +94,16 @@ public sealed class SpotifyProvider : IMetadataProvider
         catch (APIException ex)
         {
             Log($"Tracks.Get {spotifyUri}: HTTP {(int?)ex.Response?.StatusCode}: {ex.Message}");
+            // An unknown or malformed track id is an answer; anything else is a failure.
+            if (ex.Response?.StatusCode is not (HttpStatusCode.NotFound or HttpStatusCode.BadRequest))
+                CatalogLookup.ReportFailure($"HTTP {(int?)ex.Response?.StatusCode}");
             return null;
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             Log($"Tracks.Get {spotifyUri}: {ex.GetType().Name}: {ex.Message}");
+            CatalogLookup.ReportFailure(ex.GetType().Name);
             return null;
         }
     }
@@ -95,7 +113,11 @@ public sealed class SpotifyProvider : IMetadataProvider
         try
         {
             var client = await _clientFactory(ct).ConfigureAwait(false);
-            if (client is null) return null;
+            if (client is null)
+            {
+                CatalogLookup.ReportFailure("not signed in");
+                return null;
+            }
 
             var cleanTitle = SearchTerms.CleanForSearch(title);
             if (string.IsNullOrEmpty(cleanTitle)) return null;
@@ -135,11 +157,14 @@ public sealed class SpotifyProvider : IMetadataProvider
         catch (APIException ex)
         {
             Log($"Search {artist}/{title}: HTTP {(int?)ex.Response?.StatusCode}: {ex.Message}");
+            CatalogLookup.ReportFailure($"HTTP {(int?)ex.Response?.StatusCode}");
             return null;
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             Log($"Search {artist}/{title}: {ex.GetType().Name}: {ex.Message}");
+            CatalogLookup.ReportFailure(ex.GetType().Name);
             return null;
         }
     }
