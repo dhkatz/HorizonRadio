@@ -1,6 +1,6 @@
 using Avalonia.Controls;
 
-namespace HorizonRadio.UI.Views;
+namespace HorizonRadio.Game.ForzaHorizon6.Views;
 
 public partial class StatsView : UserControl
 {

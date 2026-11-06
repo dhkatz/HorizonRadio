@@ -3,7 +3,7 @@ using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 
-namespace HorizonRadio.UI.ViewModels;
+namespace HorizonRadio.Game.ForzaHorizon6.ViewModels;
 
 /// <summary>
 /// Maps a 0..2× gain value to a 0..200px bar width. The visual midpoint

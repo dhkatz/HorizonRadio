@@ -83,7 +83,7 @@ jobs:
           $dll = 'HorizonRadio.UI/bin/Debug/net10.0/version.dll'
           if (-not (Test-Path $dll)) {
             throw "version.dll was not copied into the UI build output ($dll). " +
-                  "Check HorizonRadio.UI.csproj's _VersionDllPath and the Release C++ build."
+                  "Check HorizonRadio.Game.ForzaHorizon6.csproj's _VersionDllPath and the Release C++ build."
           }
           Write-Host "OK: $dll"
 

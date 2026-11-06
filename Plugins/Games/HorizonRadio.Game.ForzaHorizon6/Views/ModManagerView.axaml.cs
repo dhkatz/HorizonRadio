@@ -2,9 +2,9 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using HorizonRadio.Core.ModInstall;
-using HorizonRadio.UI.ViewModels;
+using HorizonRadio.Game.ForzaHorizon6.ViewModels;
 
-namespace HorizonRadio.UI.Views;
+namespace HorizonRadio.Game.ForzaHorizon6.Views;
 
 public partial class ModManagerView : UserControl
 {

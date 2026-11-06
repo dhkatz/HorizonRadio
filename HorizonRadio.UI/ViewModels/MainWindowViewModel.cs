@@ -1,9 +1,11 @@
+using System.Collections.ObjectModel;
+using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HorizonRadio.Core.Games;
 using HorizonRadio.Core.History;
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Models;
-using HorizonRadio.Core.ModInstall;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
@@ -24,8 +26,19 @@ namespace HorizonRadio.UI.ViewModels;
 public sealed partial class MainWindowViewModel : ViewModelBase
 {
     public NowPlayingViewModel NowPlaying { get; }
-    public StatsViewModel Stats { get; }
-    public ModManagerViewModel ModManager { get; } = new();
+
+    private readonly IGameIntegration? _game;
+
+    /// <summary>The active game's name: the sidebar section its pages are listed under.</summary>
+    public string GameName { get; }
+
+    /// <summary>Pages the active game integration contributes (e.g. FH6's Mods and Stats).</summary>
+    public ObservableCollection<GamePageItem> GamePages { get; } = new();
+
+    public bool HasGamePages => GamePages.Count > 0;
+
+    /// <summary>The game page shown when <see cref="IsGamePageWorkspace"/>.</summary>
+    [ObservableProperty] private GamePageItem? selectedGamePage;
 
     // Both NowPlaying (for its inline source dropdown) and Sources need
     // the runner + store; the App creates them once and passes through.
@@ -69,7 +82,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         DialogManager = new DialogManager();
         Sources = new SourcesViewModel();
         NowPlaying = new NowPlayingViewModel();
-        Stats = new StatsViewModel();
+        GameName = "Game";
         Metadata = new MetadataViewModel();
         ToolsTab = new ToolsViewModel();
         Events = new EventsViewModel();
@@ -79,7 +92,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         TopBar = new TopBarViewModel();
         Search = new SearchViewModel();
         History = new HistoryViewModel();
-        HookModBanner();
     }
 
     public MainWindowViewModel(SourceRunner runner,
@@ -96,6 +108,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                                EventsViewModel events,
                                ControlsViewModel controls,
                                Core.Audio.PreviewController preview,
+                               IGameIntegration game,
                                ToastManager toasts,
                                DialogManager dialogManager)
     {
@@ -104,7 +117,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Sources = new SourcesViewModel(runner, store, registry);
         var station = new StationTargetViewModel(store);
         NowPlaying = new NowPlayingViewModel(runner, store, mixStore, mixSwitcher, queue, station, preview, toasts, DialogManager);
-        Stats = new StatsViewModel(runner);
         Metadata = metadata;
         ToolsTab = new ToolsViewModel(registry, installers);
         Events = events;
@@ -125,7 +137,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         // full search page (the same picker), so no-locator (radio) songs stay playable.
         History = new HistoryViewModel(historyStore, queue, metaResolver, OpenSearchFor, toasts);
 
-        HookModBanner();
+        _game = game;
+        GameName = game.DisplayName;
+        foreach (var page in game.Pages) GamePages.Add(new GamePageItem(page));
+        game.NoticeChanged += () =>
+        {
+            OnPropertyChanged(nameof(ShowGameNotice));
+            OnPropertyChanged(nameof(GameNoticeTitle));
+            OnPropertyChanged(nameof(GameNoticeText));
+            OnPropertyChanged(nameof(GameNoticeAction));
+        };
     }
 
     /// <summary>Open the full search page for a query (from the top bar's submit),
@@ -145,44 +166,26 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _ = Search.RunAsync(query);
     }
 
-    private void HookModBanner()
-    {
-        ModManager.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(ModManagerViewModel.Status))
-            {
-                OnPropertyChanged(nameof(ShowModBanner));
-                OnPropertyChanged(nameof(ModBannerTitle));
-                OnPropertyChanged(nameof(ModBannerText));
-            }
-        };
-    }
+    // The game's setup notice (e.g. FH6's "Mod Not Installed"), shown as a banner on every page.
+    public bool ShowGameNotice => _game?.Notice != null;
+    public string GameNoticeTitle => _game?.Notice?.Title ?? "";
+    public string GameNoticeText => _game?.Notice?.Message ?? "";
+    public string GameNoticeAction => FindGamePage(_game?.Notice?.PageId) is { } page ? $"Open {page.Title}" : "";
 
-    public bool ShowModBanner =>
-        ModManager.Status is InstallationStatus.InstalledOther or InstallationStatus.NotInstalled;
+    [RelayCommand] private void OpenGameNotice() => ShowGamePage(FindGamePage(_game?.Notice?.PageId));
 
-    public string ModBannerTitle => ModManager.Status switch
-    {
-        InstallationStatus.InstalledOther => "Mod Update Available",
-        InstallationStatus.NotInstalled => "Mod Not Installed",
-        _ => "",
-    };
+    private GamePageItem? FindGamePage(string? id) => GamePages.FirstOrDefault(p => p.Id == id);
 
-    public string ModBannerText => ModManager.Status switch
-    {
-        InstallationStatus.InstalledOther => "A different version is installed in your game folder.",
-        InstallationStatus.NotInstalled => "Horizon Radio isn't set up in your game yet.",
-        _ => "",
-    };
-
-    // 0 = Now Playing, 1 = Sources, 2 = Metadata, 3 = Stats, 4 = Mod Manager, 5 = Tools, 6 = Events, 7 = Console, 8 = Controls, 9 = Mixes, 10 = About, 11 = Search, 12 = History
+    // 0 = Now Playing, 1 = Sources, 2 = Metadata, 5 = Tools, 6 = Events, 7 = Console, 8 = Controls,
+    // 9 = Mixes, 10 = About, 11 = Search, 12 = History, 13 = a game page (SelectedGamePage).
+    // 3 and 4 (Stats, Mod Manager) are retired: those pages now come from the FH6 game plugin.
     [ObservableProperty] private int selectedWorkspaceIndex;
+
+    private const int GamePageWorkspace = 13;
 
     public bool IsNowPlayingWorkspace => SelectedWorkspaceIndex == 0;
     public bool IsSourcesWorkspace => SelectedWorkspaceIndex == 1;
     public bool IsMetadataWorkspace => SelectedWorkspaceIndex == 2;
-    public bool IsStatsWorkspace => SelectedWorkspaceIndex == 3;
-    public bool IsModManagerWorkspace => SelectedWorkspaceIndex == 4;
     public bool IsToolsWorkspace => SelectedWorkspaceIndex == 5;
     public bool IsEventsWorkspace => SelectedWorkspaceIndex == 6;
     public bool IsConsoleWorkspace => SelectedWorkspaceIndex == 7;
@@ -191,13 +194,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public bool IsAboutWorkspace => SelectedWorkspaceIndex == 10;
     public bool IsSearchWorkspace => SelectedWorkspaceIndex == 11;
     public bool IsHistoryWorkspace => SelectedWorkspaceIndex == 12;
+    public bool IsGamePageWorkspace => SelectedWorkspaceIndex == GamePageWorkspace;
 
     public string CurrentRoute => SelectedWorkspaceIndex switch
     {
         1 => "sources",
         2 => "metadata",
-        3 => "stats",
-        4 => "mod-manager",
         5 => "tools",
         6 => "events",
         7 => "console",
@@ -206,6 +208,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         10 => "about",
         11 => "search", // no SidebarItem matches → nav shows nothing selected (intended)
         12 => "history",
+        GamePageWorkspace => SelectedGamePage?.Route ?? "now-playing",
         _ => "now-playing",
     };
 
@@ -224,8 +227,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsNowPlayingWorkspace));
         OnPropertyChanged(nameof(IsSourcesWorkspace));
         OnPropertyChanged(nameof(IsMetadataWorkspace));
-        OnPropertyChanged(nameof(IsStatsWorkspace));
-        OnPropertyChanged(nameof(IsModManagerWorkspace));
         OnPropertyChanged(nameof(IsToolsWorkspace));
         OnPropertyChanged(nameof(IsEventsWorkspace));
         OnPropertyChanged(nameof(IsConsoleWorkspace));
@@ -234,7 +235,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsAboutWorkspace));
         OnPropertyChanged(nameof(IsSearchWorkspace));
         OnPropertyChanged(nameof(IsHistoryWorkspace));
+        OnPropertyChanged(nameof(IsGamePageWorkspace));
         OnPropertyChanged(nameof(CurrentRoute));
+        UpdateGamePageSelection();
 
         // Showing History gives any rows that couldn't resolve earlier (e.g. a search source that
         // connected after startup) another chance to find art / playable sources.
@@ -250,8 +253,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand] private void ShowNowPlaying() => SelectedWorkspaceIndex = 0;
     [RelayCommand] private void ShowSources() => SelectedWorkspaceIndex = 1;
     [RelayCommand] private void ShowMetadata() => SelectedWorkspaceIndex = 2;
-    [RelayCommand] private void ShowStats() => SelectedWorkspaceIndex = 3;
-    [RelayCommand] private void ShowModManager() => SelectedWorkspaceIndex = 4;
     [RelayCommand] private void ShowTools() => SelectedWorkspaceIndex = 5;
     [RelayCommand] private void ShowEvents() => SelectedWorkspaceIndex = 6;
     [RelayCommand] private void ShowConsole() => SelectedWorkspaceIndex = 7;
@@ -259,6 +260,29 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand] private void ShowMixes() => SelectedWorkspaceIndex = 9;
     [RelayCommand] private void ShowAbout() => SelectedWorkspaceIndex = 10;
     [RelayCommand] private void ShowHistory() => SelectedWorkspaceIndex = 12;
+
+    [RelayCommand]
+    private void ShowGamePage(GamePageItem? page)
+    {
+        if (page == null) return;
+        SelectedGamePage = page;
+        // Switching between two game pages leaves the index at 13, so refresh explicitly.
+        if (SelectedWorkspaceIndex == GamePageWorkspace)
+        {
+            OnPropertyChanged(nameof(CurrentRoute));
+            UpdateGamePageSelection();
+        }
+        else
+        {
+            SelectedWorkspaceIndex = GamePageWorkspace;
+        }
+    }
+
+    private void UpdateGamePageSelection()
+    {
+        foreach (var page in GamePages)
+            page.IsSelected = SelectedWorkspaceIndex == GamePageWorkspace && ReferenceEquals(page, SelectedGamePage);
+    }
 
     public void SetConnection(ConnectionState state)
     {
@@ -271,6 +295,5 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             _ => "Unknown",
         };
         NowPlaying.SetConnectionState(state == ConnectionState.Connected);
-        Stats.SetConnectionState(state == ConnectionState.Connected);
     }
 }

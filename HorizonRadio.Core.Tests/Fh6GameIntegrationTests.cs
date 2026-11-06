@@ -36,4 +36,26 @@ public class Fh6GameIntegrationTests
         Assert.False(game.NowPlaying!.Show(new Track("Title", "Artist", null, null, "test", "Test")));
         Assert.False(game.Output!.Send([0, 0]));
     }
+
+    [Fact]
+    public async Task Contributes_Mods_and_Stats_pages_and_a_telemetry_hint()
+    {
+        await using var game = new Fh6GameIntegration("Forza Horizon 6");
+
+        Assert.Contains("127.0.0.1:9967", game.EventsHint);
+        Assert.Collection(game.Pages,
+            mods => Assert.Equal(("mods", "Mods"), (mods.Id, mods.Title)),
+            stats => Assert.Equal(("stats", "Stats"), (stats.Id, stats.Title)));
+        // Built once: the shell holds on to these view models.
+        Assert.Same(game.Pages, game.Pages);
+        // Each page view model has a view next to it, by the ViewLocator's naming convention.
+        foreach (var page in game.Pages)
+        {
+            var vm = page.ViewModel.GetType();
+            Assert.NotNull(vm.Assembly.GetType(vm.FullName!.Replace("ViewModel", "View", StringComparison.Ordinal)));
+        }
+        // A notice, when present, must point at a page that exists.
+        if (game.Notice is { } notice)
+            Assert.Contains(game.Pages, p => p.Id == notice.PageId);
+    }
 }

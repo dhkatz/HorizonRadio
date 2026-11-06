@@ -1,17 +1,57 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- Forza Horizon 6 game plugin: the Horizon Radio side of the FH6 integration (IPC + PCM pipe
-       clients for the injected version.dll, Forza Data Out telemetry, the mod installer, and the
-       station list). The in-game side is the native mod in Mods/ForzaHorizon6. Moved types keep
-       their HorizonRadio.Core.* namespaces so consumers need no using changes. -->
+       clients for the injected version.dll, Forza Data Out telemetry, the mod installer, the
+       station list) plus the pages it adds to the app (Mods, Stats). The in-game side is the
+       native mod in Mods/ForzaHorizon6. Moved types keep their HorizonRadio.Core.* namespaces so
+       consumers need no using changes. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+  </ItemGroup>
+
+  <!-- UI for the plugin's pages. Versions must match HorizonRadio.UI's: the host and its plugins
+       share one copy of each UI assembly. -->
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.0.3" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.1" />
+    <PackageReference Include="Material.Icons.Avalonia" Version="3.0.2" />
+    <PackageReference Include="LiveChartsCore.SkiaSharpView.Avalonia" Version="2.1.0-dev-570" />
+  </ItemGroup>
+
+  <!--
+    Bundle the FH6 mod (Mods/ForzaHorizon6's version.dll) with the app: the Mods page installs it
+    from AppContext.BaseDirectory. It's coupling-locked to the game (FMOD offsets + IPC) and can
+    never be fetched at runtime, unlike the on-demand tools (see docs/tool-provisioning.md).
+
+    Always the Release build: a Debug version.dll isn't useful (FH6 doesn't reload a CRT-debug
+    DLL). Gated on Exists() so a fresh checkout that hasn't built the C++ side still builds — the
+    app just won't have a DLL to install until it's present.
+
+    CopyToOutputDirectory flows the file into the referencing app's bin/ too, which the dev loop
+    (and the Mods page's staleness check) relies on. The app's publish step copies it from there
+    into the publish folder (see HorizonRadio.UI.csproj, CopyBundledBinariesToPublish).
+
+    ExcludeFromSingleFile keeps version.dll OUT of the single-file bundle. Without it the publish
+    bundles our PROXY version.dll into HorizonRadio.UI.exe, the host extracts it to %TEMP%\.net\...
+    on launch, and the loader pulls it into the app's OWN process — where its DllMain would start
+    the IPC server and the app would "connect" to itself.
+  -->
+  <PropertyGroup>
+    <_VersionDllPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\..\Mods\ForzaHorizon6\build\Release\version.dll'))</_VersionDllPath>
+  </PropertyGroup>
+  <ItemGroup Condition="Exists('$(_VersionDllPath)')">
+    <None Include="$(_VersionDllPath)"
+          Link="version.dll"
+          CopyToOutputDirectory="PreserveNewest"
+          ExcludeFromSingleFile="true"
+          Visible="false" />
   </ItemGroup>
 
 </Project>

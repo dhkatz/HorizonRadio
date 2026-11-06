@@ -22,17 +22,17 @@ public sealed partial class EventsViewModel : ViewModelBase, IDisposable
     public ObservableCollection<EventCategoryGroup> Groups { get; } = new();
     public ObservableCollection<string> Activity { get; } = new();
 
-    public int TelemetryPort { get; }
-    public string TelemetryHint =>
-        $"For richer events, enable Forza “Data Out” in-game and point it at 127.0.0.1:{TelemetryPort}.";
+    /// <summary>Setup advice from the active game (e.g. enabling its telemetry feed), or null.</summary>
+    public string? SetupHint { get; }
+    public bool HasSetupHint => !string.IsNullOrEmpty(SetupHint);
 
     // Design-time / fallback ctor.
-    public EventsViewModel() : this(new EventRuleStore(), null, ForzaTelemetryListener.DefaultPort) { }
+    public EventsViewModel() : this(new EventRuleStore(), null, null) { }
 
-    public EventsViewModel(EventRuleStore rules, EventActionExecutor? executor, int telemetryPort)
+    public EventsViewModel(EventRuleStore rules, EventActionExecutor? executor, string? setupHint)
     {
         _executor = executor;
-        TelemetryPort = telemetryPort;
+        SetupHint = setupHint;
 
         var options = BuildOptions();
         foreach (var category in GameEventKinds.Catalog.GroupBy(i => i.Category))

@@ -2,10 +2,10 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             xmlns:vm="using:HorizonRadio.Game.ForzaHorizon6.ViewModels"
              xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="480"
-             x:Class="HorizonRadio.UI.Views.ModManagerView"
+             x:Class="HorizonRadio.Game.ForzaHorizon6.Views.ModManagerView"
              x:DataType="vm:ModManagerViewModel">
 
     <Design.DataContext>

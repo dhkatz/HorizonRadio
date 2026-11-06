@@ -26,7 +26,6 @@ using HorizonRadio.Core.Sources.Spotify;
 using HorizonRadio.Core.Sources.Test;
 using HorizonRadio.Core.Sources.YouTube;
 using HorizonRadio.Core.Tools;
-using HorizonRadio.Game.ForzaHorizon6;
 using HorizonRadio.Plugins.Abstractions;
 using HorizonRadio.TitleModel;
 using HorizonRadio.Tools.Librespot;
@@ -229,9 +228,7 @@ public partial class App : Application
             var dispatcher = new ActionDispatcher(_runner, _store, mixSwitcher,
                 _game.Volume is { } gameVolume ? gameVolume.SetDuckGain : null);
             _eventExecutor = new EventActionExecutor(_game.EventSources, eventRules, dispatcher);
-            // TEMPORARY: the telemetry-port hint is FH6-specific; it moves into the FH6 plugin's
-            // own Events contribution when game plugins ship their own UI.
-            var eventsVm = new EventsViewModel(eventRules, _eventExecutor, Fh6GameIntegration.TelemetryPort);
+            var eventsVm = new EventsViewModel(eventRules, _eventExecutor, _game.EventsHint);
 
             // Controls: global keyboard/mouse (SharpHook) + controllers (SDL),
             // mapped to the same actions through the shared dispatcher.
@@ -249,7 +246,7 @@ public partial class App : Application
             dialogManager.Register<QuickPlayDialogView, QuickPlayDialogViewModel>();
             dialogManager.Register<QueueAddModeDialogView, QueueAddModeDialogViewModel>();
 
-            var vm = new MainWindowViewModel(_runner, _store, mixStore, mixSwitcher, queuePlayback, _historyStore, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, toasts, dialogManager);
+            var vm = new MainWindowViewModel(_runner, _store, mixStore, mixSwitcher, queuePlayback, _historyStore, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, _game, toasts, dialogManager);
             desktop.MainWindow = new MainWindow { DataContext = vm };
 
             // Station targeting. "Which in-game station do we replace right now?"
@@ -295,10 +292,6 @@ public partial class App : Application
                 PushStation();
                 PushGain(force: true);
             };
-            // TEMPORARY: bridge stats are FH6-specific; the Stats page moves into the FH6 plugin
-            // when game plugins ship their own UI.
-            if (_game is Fh6GameIntegration fh6)
-                fh6.StatsUpdated += s => Dispatcher.UIThread.Post(() => vm.Stats.Apply(s));
             _game.Start();
             _inputService.Start();
 

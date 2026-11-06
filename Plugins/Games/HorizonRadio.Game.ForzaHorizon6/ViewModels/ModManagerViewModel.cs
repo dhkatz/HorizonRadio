@@ -8,7 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.ModInstall;
 
-namespace HorizonRadio.UI.ViewModels;
+namespace HorizonRadio.Game.ForzaHorizon6.ViewModels;
 
 /// <summary>
 /// Mod Manager tab: install / uninstall the version.dll proxy mod into
@@ -21,7 +21,7 @@ namespace HorizonRadio.UI.ViewModels;
 /// re-checks on every Install / Uninstall and on path change so the
 /// UI never shows stale state.
 /// </summary>
-public sealed partial class ModManagerViewModel : ViewModelBase
+public sealed partial class ModManagerViewModel : ObservableObject
 {
     private readonly ModInstaller _installer = new();
 

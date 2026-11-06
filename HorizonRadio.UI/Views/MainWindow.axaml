@@ -153,17 +153,6 @@
                     </shadui:SidebarItem.Icon>
                 </shadui:SidebarItem>
 
-                <shadui:SidebarItemLabel Text="Integration" AsSeparator="True"/>
-
-                <shadui:SidebarItem Content="Mods"
-                                    Command="{Binding ShowModManagerCommand}"
-                                    IsChecked="{Binding IsModManagerWorkspace}"
-                                    Route="mod-manager">
-                    <shadui:SidebarItem.Icon>
-                        <material:MaterialIcon Kind="PuzzleOutline" Width="18" Height="18"/>
-                    </shadui:SidebarItem.Icon>
-                </shadui:SidebarItem>
-
                 <shadui:SidebarItem Content="Events"
                                     Command="{Binding ShowEventsCommand}"
                                     IsChecked="{Binding IsEventsWorkspace}"
@@ -182,16 +171,32 @@
                     </shadui:SidebarItem.Icon>
                 </shadui:SidebarItem>
 
-                <shadui:SidebarItemLabel Text="Diagnostics" AsSeparator="True"/>
+                <!-- The active game's own pages (e.g. FH6's Mods and Stats), contributed by its
+                     game plugin and listed under the game's name. -->
+                <shadui:SidebarItemLabel Text="{Binding GameName}" AsSeparator="True"
+                                         IsVisible="{Binding HasGamePages}"/>
+                <ItemsControl ItemsSource="{Binding GamePages}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Spacing="4"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:GamePageItem">
+                            <shadui:SidebarItem Content="{Binding Title}"
+                                                Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ShowGamePageCommand}"
+                                                CommandParameter="{Binding}"
+                                                IsChecked="{Binding IsSelected, Mode=OneWay}"
+                                                Route="{Binding Route}">
+                                <shadui:SidebarItem.Icon>
+                                    <material:MaterialIcon Kind="{Binding Icon}" Width="18" Height="18"/>
+                                </shadui:SidebarItem.Icon>
+                            </shadui:SidebarItem>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
 
-                <shadui:SidebarItem Content="Stats"
-                                    Command="{Binding ShowStatsCommand}"
-                                    IsChecked="{Binding IsStatsWorkspace}"
-                                    Route="stats">
-                    <shadui:SidebarItem.Icon>
-                        <material:MaterialIcon Kind="ChartBar" Width="18" Height="18"/>
-                    </shadui:SidebarItem.Icon>
-                </shadui:SidebarItem>
+                <shadui:SidebarItemLabel Text="Diagnostics" AsSeparator="True"/>
 
                 <shadui:SidebarItem Command="{Binding ShowToolsCommand}"
                                     IsChecked="{Binding IsToolsWorkspace}"
@@ -383,18 +388,6 @@
                               ToolTip.Tip="Metadata">
                     <material:MaterialIcon Kind="TagOutline" Width="18" Height="18"/>
                 </ToggleButton>
-
-                <Separator Margin="0,4"/>
-
-                <ToggleButton Command="{Binding ShowModManagerCommand}"
-                              IsChecked="{Binding IsModManagerWorkspace}"
-                              Height="40" Width="40"
-                              HorizontalContentAlignment="Center"
-                              VerticalContentAlignment="Center"
-                              Padding="0"
-                              ToolTip.Tip="Mods">
-                    <material:MaterialIcon Kind="PuzzleOutline" Width="18" Height="18"/>
-                </ToggleButton>
                 <ToggleButton Command="{Binding ShowEventsCommand}"
                               IsChecked="{Binding IsEventsWorkspace}"
                               Height="40" Width="40"
@@ -414,17 +407,27 @@
                     <material:MaterialIcon Kind="Gamepad" Width="18" Height="18"/>
                 </ToggleButton>
 
+                <Separator Margin="0,4" IsVisible="{Binding HasGamePages}"/>
+
+                <ItemsControl ItemsSource="{Binding GamePages}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:GamePageItem">
+                            <ToggleButton Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).ShowGamePageCommand}"
+                                          CommandParameter="{Binding}"
+                                          IsChecked="{Binding IsSelected, Mode=OneWay}"
+                                          Height="40" Width="40"
+                                          HorizontalContentAlignment="Center"
+                                          VerticalContentAlignment="Center"
+                                          Padding="0"
+                                          ToolTip.Tip="{Binding Title}">
+                                <material:MaterialIcon Kind="{Binding Icon}" Width="18" Height="18"/>
+                            </ToggleButton>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
                 <Separator Margin="0,4"/>
 
-                <ToggleButton Command="{Binding ShowStatsCommand}"
-                              IsChecked="{Binding IsStatsWorkspace}"
-                              Height="40" Width="40"
-                              HorizontalContentAlignment="Center"
-                              VerticalContentAlignment="Center"
-                              Padding="0"
-                              ToolTip.Tip="Stats">
-                    <material:MaterialIcon Kind="ChartBar" Width="18" Height="18"/>
-                </ToggleButton>
                 <ToggleButton Command="{Binding ShowToolsCommand}"
                               IsChecked="{Binding IsToolsWorkspace}"
                               Height="40" Width="40"
@@ -458,14 +461,14 @@
           </DockPanel>
         </Border>
 
-        <!-- Workspace content + mod-status banner -->
+        <!-- Workspace content + game setup banner -->
         <Grid Grid.Column="1" RowDefinitions="Auto,*">
 
-            <!-- Shown on every tab when the installed mod is missing or
-                 doesn't match this build. Styled as a Card to match the
+            <!-- The active game's setup notice (for FH6: the installed mod is
+                 missing or doesn't match this build), shown on every tab. Styled as a Card to match the
                  rest of the app, with a small amber accent on the icon. -->
             <Border Grid.Row="0"
-                    IsVisible="{Binding ShowModBanner}"
+                    IsVisible="{Binding ShowGameNotice}"
                     Classes="Card"
                     Margin="24,16,24,0"
                     Padding="14,12">
@@ -483,14 +486,14 @@
                                                VerticalAlignment="Center"/>
                     </Border>
                     <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding ModBannerTitle}"
+                        <TextBlock Text="{Binding GameNoticeTitle}"
                                    FontSize="13" FontWeight="SemiBold"/>
-                        <TextBlock Text="{Binding ModBannerText}"
+                        <TextBlock Text="{Binding GameNoticeText}"
                                    FontSize="12" Opacity="0.6" TextWrapping="Wrap"/>
                     </StackPanel>
                     <Button Grid.Column="2" Classes="Primary"
-                            Content="Open Mod Manager"
-                            Command="{Binding ShowModManagerCommand}"
+                            Content="{Binding GameNoticeAction}"
+                            Command="{Binding OpenGameNoticeCommand}"
                             VerticalAlignment="Center" Margin="12,0,0,0"/>
                 </Grid>
             </Border>
@@ -508,12 +511,21 @@
             <Grid IsVisible="{Binding IsMetadataWorkspace}">
                 <views:MetadataView DataContext="{Binding Metadata}"/>
             </Grid>
-            <Grid IsVisible="{Binding IsStatsWorkspace}">
-                <views:StatsView DataContext="{Binding Stats}"/>
-            </Grid>
-            <Grid IsVisible="{Binding IsModManagerWorkspace}">
-                <views:ModManagerView DataContext="{Binding ModManager}"/>
-            </Grid>
+            <!-- Game pages: one live view per page (kept alive like the built-in pages so
+                 their state survives switching); only the selected one is visible. Views
+                 resolve through the ViewLocator, from the game plugin's own assembly. -->
+            <ItemsControl ItemsSource="{Binding GamePages}" IsVisible="{Binding IsGamePageWorkspace}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <Panel/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:GamePageItem">
+                        <ContentControl Content="{Binding ViewModel}" IsVisible="{Binding IsSelected}"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
             <Grid IsVisible="{Binding IsToolsWorkspace}">
                 <views:ToolsView DataContext="{Binding ToolsTab}"/>
             </Grid>
