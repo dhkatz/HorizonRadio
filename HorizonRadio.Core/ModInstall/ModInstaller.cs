@@ -33,7 +33,7 @@ public sealed class ModInstaller
 
     public bool HasBundledDll => !string.IsNullOrEmpty(BundledDllHash);
 
-    /// <summary>Dev-only: the C++ build output (<c>build/Release/version.dll</c>)
+    /// <summary>Dev-only: the C++ build output (<c>Mods/ForzaHorizon6/build/Release/version.dll</c>)
     /// found by walking up from the app dir, or null when not running from a
     /// source tree (e.g. a published install).</summary>
     public string? BuildOutputDllPath { get; }
@@ -61,14 +61,14 @@ public sealed class ModInstaller
     private const string TargetDllName = "version.dll";
 
     /// <summary>Walk up from <paramref name="startDir"/> looking for the C++
-    /// build output at <c>build/Release/version.dll</c>. Returns null outside a
+    /// build output at <c>Mods/ForzaHorizon6/build/Release/version.dll</c>. Returns null outside a
     /// source tree. The depth cap covers bin/{Config}/{tfm} back to the repo root.</summary>
     private static string? FindBuildOutputDll(string startDir)
     {
         var dir = new DirectoryInfo(startDir);
         for (var i = 0; i < 7 && dir != null; i++, dir = dir.Parent)
         {
-            var candidate = Path.Combine(dir.FullName, "build", "Release", TargetDllName);
+            var candidate = Path.Combine(dir.FullName, "Mods", "ForzaHorizon6", "build", "Release", TargetDllName);
             if (File.Exists(candidate)) return candidate;
         }
         return null;

@@ -99,10 +99,12 @@ jobs:
 
       - name: Configure CMake
         if: steps.guard.outputs.skip != 'true'
+        working-directory: Mods/ForzaHorizon6
         run: cmake --preset windows-x64
 
       - name: Build C++ side (Release, x64)
         if: steps.guard.outputs.skip != 'true'
+        working-directory: Mods/ForzaHorizon6
         run: cmake --build --preset windows-x64-release
 
       # Self-contained publish; version.dll is bundled by the csproj.

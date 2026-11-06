@@ -64,11 +64,11 @@ Checks: >
   -readability-magic-numbers
 WarningsAsErrors: '*'
 # Matches the (absolute) header paths clang-tidy emits, e.g.
-# .../HorizonRadio/include/horizon/.... Scoped to our own include/horizon tree
-# rather than just "HorizonRadio/" so it can't accidentally lint vendored or
-# generated headers (FetchContent's _deps, build outputs) once CI checks the
-# repo out under a ...\HorizonRadio\HorizonRadio\ path. Not ^-anchored: the path
-# is absolute, so an anchor would match nothing and silently un-lint everything.
+# .../Mods/ForzaHorizon6/Bridge/include/horizon/.... Scoped to our own
+# include/horizon tree rather than a directory name so it can't accidentally
+# lint vendored or generated headers (FetchContent's _deps, build outputs).
+# Not ^-anchored: the path is absolute, so an anchor would match nothing and
+# silently un-lint everything.
 HeaderFilterRegex: '[/\\]include[/\\]horizon[/\\]'
 FormatStyle: file
 # /EHsc: parse with exceptions on. The MSVC build relies on its lenient default

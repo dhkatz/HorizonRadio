@@ -36,7 +36,7 @@ set(HORIZON_TEST_SOURCES
 )
 
 # The production TUs come straight from HORIZON_CORE_SOURCES (defined in
-# HorizonRadio/CMakeLists.txt and exported to this scope) so there's one
+# Bridge/CMakeLists.txt and exported to this scope) so there's one
 # source list, not a hand-synced copy. dllmain.cpp / version_proxy.cpp
 # are excluded there because their forwarders only make sense in a DLL.
 add_executable(horizon_radio_tests

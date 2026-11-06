@@ -24,7 +24,7 @@ set(HORIZON_HEADERS
 # the `version` target directly below and are NOT in this list.
 #
 # Single source of truth: the absolute paths are pushed to PARENT_SCOPE
-# so HorizonRadio.Tests/CMakeLists.txt compiles the exact same set into
+# so Tests/CMakeLists.txt compiles the exact same set into
 # the test exe instead of maintaining a hand-synced copy.
 set(_core_sources
   src/fmod/bridge.cpp
@@ -41,7 +41,7 @@ set(_core_sources
 )
 list(TRANSFORM _core_sources PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/")
 # Current scope (for the `version` target below) and PARENT_SCOPE (for
-# HorizonRadio.Tests, a sibling add_subdirectory) — PARENT_SCOPE alone
+# Tests/, a sibling add_subdirectory) — PARENT_SCOPE alone
 # wouldn't define it here.
 set(HORIZON_CORE_SOURCES "${_core_sources}")
 set(HORIZON_CORE_SOURCES "${_core_sources}" PARENT_SCOPE)

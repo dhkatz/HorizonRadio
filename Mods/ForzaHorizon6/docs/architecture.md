@@ -1,7 +1,7 @@
 # Horizon Radio — native (`version.dll`) internals
 
 How the injected C++ side is built and why. This is the code-level companion to
-[`AGENTS.md`](../AGENTS.md), which holds the contributor runbook (build, the FH6
+[`AGENTS.md`](../../../AGENTS.md), which holds the contributor runbook (build, the FH6
 offset table and how to re-derive it after a game update, code-quality commands).
 Read that first for the high-level architecture diagram and the offset chain;
 this document covers how the pieces fit together at runtime.
@@ -123,7 +123,7 @@ The writer picks the **one whose FMOD `System*` resolves** — i.e. the audible
 station — so the title lands where the audio is, and locks onto it
 (`preferred_instance`) to avoid ping-ponging.
 
-[`TitleWriteController`](../HorizonRadio/include/horizon/inject/title_write_controller.hpp)
+[`TitleWriteController`](../Bridge/include/horizon/inject/title_write_controller.hpp)
 owns the write/restore bookkeeping for that single instance: snapshot the game's
 original strings on first touch, write ours each tick, keep the restore value in
 sync as the game advances its own track, and write the originals back when we stop
@@ -235,7 +235,7 @@ without a path would recurse onto our own DLL. The export *mechanism* differs by
 compiler (`<winver.h>` declares the entry points `dllimport`): clang+MinGW
 re-declares them `dllexport` (a suppressible warning), MSVC uses normal linkage
 plus a `/EXPORT:` linker pragma (the dllimport→dllexport mismatch is a hard error
-there). All 17 forwarders live in `src/version_proxy.cpp`.
+there). All 17 forwarders live in `Bridge/src/version_proxy.cpp`.
 
 ## Discovery dump
 
@@ -248,6 +248,6 @@ AGENTS.md → *In-game title injection*.
 
 ## Building & cross-compiling
 
-See AGENTS.md → *Building*. In short: C++ side is CMake + Ninja (`windows-x64`
-preset, MSVC); it cross-compiles from Linux/macOS via clang + mingw-w64 + lld.
+See AGENTS.md → *Building*. In short: the mod is its own CMake + Ninja project
+rooted at `Mods/ForzaHorizon6/` (`windows-x64` preset, MSVC); it cross-compiles from Linux/macOS via clang + mingw-w64 + lld.
 The C# and C++ builds are intentionally decoupled.
