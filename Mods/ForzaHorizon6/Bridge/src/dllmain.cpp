@@ -876,6 +876,53 @@ void poll_game_events(void* radio_state) {
                             auto* rs = const_cast<std::byte*>(static_cast<const std::byte*>(inst) + 0x10);
                             return horizon::fmod::resolve_fmod_system_from_stream(game_image, rs) != nullptr;
                         };
+                        // Diagnostic (Console tag "titles"): the tuned station vs. the
+                        // station each audible block belongs to (its event id), logged on
+                        // change with a timestamp. Maps event-id station codes to stations
+                        // and shows the tuning lag. Read-only.
+                        {
+                            static const auto  t0 = std::chrono::steady_clock::now();
+                            static std::string last_diag;
+                            std::string        tuned;
+                            {
+                                const std::scoped_lock lock(g_target_mutex);
+                                tuned = g_current_station;
+                            }
+                            std::string line = "tuned=";
+                            line += tuned.empty() ? std::string("?") : tuned;
+                            line += on_target ? " (ours)" : " (game)";
+                            line += " audible=";
+                            bool any = false;
+                            for (const void* inst : instances) {
+                                if (!fmod_resolves(inst))
+                                    continue;
+                                std::string id;
+                                if (!inj->read_event_id(inst, id))
+                                    id = "?";
+                                char where[64];
+                                std::snprintf(where, sizeof(where), "@%p->%p", inst, inj->resolve_block(inst));
+                                line += any ? ", " : "";
+                                line += id;
+                                line += where;
+                                any = true;
+                            }
+                            if (!any)
+                                line += "none";
+                            if (line != last_diag) {
+                                last_diag                 = line;
+                                const auto        ms      = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                                                std::chrono::steady_clock::now() - t0)
+                                                                .count();
+                                const std::string stamped = "[+" + std::to_string(ms) + " ms] " + line;
+                                g_ipc_server.publish_debug("titles", stamped);
+                                std::wstring wide(L"[horizon-radio] titles: ");
+                                for (const char c : stamped)
+                                    wide.push_back(static_cast<wchar_t>(static_cast<unsigned char>(c)));
+                                wide.push_back(L'\n');
+                                OutputDebugStringW(wide.c_str());
+                            }
+                        }
+
                         const void* active_instance = nullptr;
                         if (on_target) {
                             if (preferred_instance && fmod_resolves(preferred_instance)) {

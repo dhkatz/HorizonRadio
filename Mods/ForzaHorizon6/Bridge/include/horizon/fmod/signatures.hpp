@@ -73,6 +73,7 @@ inline const MetadataInjectorConfig kFh6Metadata = {
     // Block holds std::strings at +0x10 (internal event id, left alone -- not a
     // valid FMOD event name), +0x30 (title), +0x50 (artist).
     .sound_name_offset   = std::nullopt,
+    .event_id_offset     = 0x10,
     .display_name_offset = 0x30,
     .artist_offset       = 0x50,
 
