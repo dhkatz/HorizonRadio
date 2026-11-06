@@ -112,6 +112,71 @@ public class PlaybackRouterTests
         await WaitUntilAsync(() => h.Position >= leftAt - TimeSpan.FromSeconds(0.2), timeoutMs: 250);
     }
 
+    // A sink that remembers the most recent sample value it saw.
+    private sealed class LastSampleSink : IPcmSink
+    {
+        private int _last = -1;
+        public int Last => Volatile.Read(ref _last);
+
+        public bool Send(ReadOnlySpan<short> samples)
+        {
+            if (samples.Length > 0) Volatile.Write(ref _last, samples[0]);
+            return true;
+        }
+    }
+
+    // A 44.1 kHz stereo WAV whose sample value encodes the playback time: it steps up by 100
+    // every 0.1 s (sample = 100 * tenths), so the audio itself says where playback is.
+    private static void WriteStaircaseWav(string path, double seconds)
+    {
+        var fmt = new NAudio.Wave.WaveFormat(44100, 16, 2);
+        using var w = new NAudio.Wave.WaveFileWriter(path, fmt);
+        var frames = (int)(seconds * 44100);
+        var buf = new byte[frames * 4];
+        for (var f = 0; f < frames; f++)
+        {
+            var value = (short)(100 * (f / 4410));
+            BitConverter.TryWriteBytes(buf.AsSpan(f * 4), value);
+            BitConverter.TryWriteBytes(buf.AsSpan(f * 4 + 2), value);
+        }
+        w.Write(buf, 0, buf.Length);
+    }
+
+    // Seconds of audio the last sample came from (the staircase's value / 100 tenths).
+    private static double AudioSeconds(LastSampleSink sink) => Math.Round(sink.Last / 100.0) / 10.0;
+
+    // Regression: the reported position resumed, but the AUDIO restarted from the top.
+    [Fact]
+    public async Task Resume_continues_the_audio_itself_not_just_the_position()
+    {
+        var sink = new LastSampleSink();
+        var config = new SourceConfigStore();
+        var resolver = new MixContentResolver(config);
+        await using var runner = new SourceRunner(sink);
+        using var player = new QueuePlayback(runner, config, resolver);
+        var mixes = new MixStore();
+        await using var router = new PlaybackRouter(runner, player, mixes, resolver);
+
+        using var dir = TempDir.Create();
+        WriteStaircaseWav(Path.Combine(dir.Path, "stairs.wav"), seconds: 6);
+        using var other = TempDir.Create();
+        other.WriteSilentWav("other.wav", 4);
+        mixes.AddOrUpdate(new Mix("other", "Other", [new ContentRef("local", other.Path)]));
+
+        await player.EnqueueLocatorAsync(SourceCatalog.Find("local")!, dir.Path);
+        await WaitUntilAsync(() => AudioSeconds(sink) >= 1.5);
+        var leftAt = AudioSeconds(sink);
+
+        await router.RouteAsync(PlaybackRoute.Mix("other"));
+        await Task.Delay(300);
+        await router.RouteAsync(PlaybackRoute.Player);
+
+        // The first audio after resuming must come from near where we left, not from 0.
+        await WaitUntilAsync(() => sink.Last > 0 && AudioSeconds(sink) < 5.9, timeoutMs: 3000);
+        await Task.Delay(150);
+        Assert.True(AudioSeconds(sink) >= leftAt - 0.3, $"audio resumed at {AudioSeconds(sink)} s, left at {leftAt} s");
+    }
+
     [Fact]
     public async Task Restart_starts_the_mix_fresh()
     {

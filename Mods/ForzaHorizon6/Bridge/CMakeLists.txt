@@ -6,6 +6,7 @@ set(HORIZON_HEADERS
   include/horizon/fmod/signatures.hpp
   include/horizon/fmod/system_resolver.hpp
   include/horizon/fmod/types.hpp
+  include/horizon/game/station_codes.hpp
   include/horizon/game/station_targets.hpp
   include/horizon/inject/game_resolver.hpp
   include/horizon/inject/heap_scan.hpp

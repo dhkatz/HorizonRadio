@@ -14,23 +14,35 @@ namespace horizon::inject {
 // Ownership is tracked by the metadata BLOCK, not the stream instance: the game
 // re-points an instance at another station's block when the player tunes, so
 // anything done "through the instance" after a switch lands on the new
-// station. Two rules follow:
+// station. And while tuning, the station name changes 50-100 ms BEFORE the
+// instance is re-pointed, so for a moment the tuned station and the block
+// disagree. The rules:
+//   * the caller says whether the block belongs to the tuned station
+//     (BlockIdentity, from the block's event id): a match is written at once,
+//     a mismatch never, and on a mismatch we hand back a block we own while
+//     the instance still shows it (we're tuning away from it);
 //   * restore only while the instance still resolves to the block we wrote --
 //     otherwise the station changed and restoring would stamp the old
 //     station's title onto the new one; and
-//   * only write a block after it has stayed the resolved block for
-//     `settle_ticks` consecutive ticks, so flicking through stations (where the
-//     block can change a tick before the station name does) never writes to a
-//     station you're passing.
+//   * when identity is unknown (a block without a station code), only write
+//     after the block has stayed resolved for `settle_ticks` consecutive ticks,
+//     so flicking through stations never writes to one you're passing.
 //
 // Injector is duck-typed so tests can pass a fake; it must provide:
 //   const void* resolve_block(const void* instance) const;  // null if unresolvable
 //   bool read_instance_strings(const void*, std::string& title, std::string& artist) const;
 //   int  write_to_instance(const void*, std::string_view sound, title, artist);
+// Whether the block about to be written belongs to the station tuned in.
+enum class BlockIdentity {
+    Unknown,  // no station code: fall back to waiting for the block to settle
+    Match,    // it's the tuned station's block: write now
+    Mismatch, // it's another station's (mid-tune): don't write
+};
+
 class TitleWriteController {
 public:
     // The periodic writer ticks at 20 Hz: 3 ticks ~= 150 ms of stability before
-    // our title appears on a newly tuned station.
+    // our title appears on a newly tuned station whose block identity is unknown.
     static constexpr int kDefaultSettleTicks = 3;
 
     explicit TitleWriteController(int settle_ticks = kDefaultSettleTicks) noexcept : settle_ticks_(settle_ticks) {}
@@ -41,22 +53,29 @@ public:
     // was written).
     template <class Injector>
     int on_active(Injector& inj, const void* active_instance, std::string_view sound, std::string_view title,
-                  std::string_view artist) {
+                  std::string_view artist, BlockIdentity identity = BlockIdentity::Unknown) {
         const void* block = active_instance != nullptr ? inj.resolve_block(active_instance) : nullptr;
 
         // The block we replaced is no longer the one to write: another instance
-        // was picked, or this instance now shows a different station's block.
+        // was picked, this instance now shows a different station's block, or
+        // the tuned station moved on while the instance still shows ours.
         // restore() itself refuses to write through a re-pointed instance.
-        if (written_block_ != nullptr && (written_instance_ != active_instance || written_block_ != block))
+        if (written_block_ != nullptr &&
+            (written_instance_ != active_instance || written_block_ != block || identity == BlockIdentity::Mismatch))
             restore(inj);
 
+        if (identity == BlockIdentity::Mismatch || block == nullptr) {
+            candidate_block_ = block;
+            stable_ticks_    = 0;
+            return 0;
+        }
         if (block != candidate_block_) {
             candidate_block_ = block;
             stable_ticks_    = 0;
         } else if (stable_ticks_ < settle_ticks_) {
             ++stable_ticks_;
         }
-        if (block == nullptr || stable_ticks_ < settle_ticks_)
+        if (identity != BlockIdentity::Match && stable_ticks_ < settle_ticks_)
             return 0;
 
         if (written_block_ != block) {

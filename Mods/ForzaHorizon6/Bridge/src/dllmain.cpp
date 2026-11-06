@@ -16,6 +16,7 @@
 #include <horizon/fmod/resolver.hpp>
 #include <horizon/fmod/signatures.hpp>
 #include <horizon/fmod/system_resolver.hpp>
+#include <horizon/game/station_codes.hpp>
 #include <horizon/game/station_targets.hpp>
 #include <horizon/inject/game_resolver.hpp>
 #include <horizon/inject/metadata_injector.hpp>
@@ -385,6 +386,32 @@ std::string bring_up_status() {
     out += " radio_state=";
     out += g_radio_state_global.load(std::memory_order_acquire) != nullptr ? "ok" : "MISSING";
     return out;
+}
+
+// Does `instance`'s current metadata block belong to the station tuned in? Its
+// event id names the station ("HZ6_R6_..." -> Gacha City Radio). While tuning,
+// the station name changes 50-100 ms before the instance is re-pointed, so a
+// mismatch means "mid-tune: this is still the previous station's block".
+// Unknown when either side has no code (e.g. Streamer Mode), which makes the
+// title writer fall back to waiting for the block to settle.
+horizon::inject::BlockIdentity block_identity(const MetadataInjector& inj, const void* instance) {
+    using horizon::inject::BlockIdentity;
+    if (instance == nullptr)
+        return BlockIdentity::Unknown;
+    std::string tuned;
+    {
+        const std::scoped_lock lock(g_target_mutex);
+        tuned = g_current_station;
+    }
+    if (!horizon::game::station_has_code(tuned))
+        return BlockIdentity::Unknown;
+    std::string event_id;
+    if (!inj.read_event_id(instance, event_id))
+        return BlockIdentity::Unknown;
+    const auto owner = horizon::game::station_for_event_id(event_id);
+    if (owner.empty())
+        return BlockIdentity::Unknown;
+    return owner == tuned ? BlockIdentity::Match : BlockIdentity::Mismatch;
 }
 
 // Follow radio_state -> +chain0 -> +chain1 -> the station sub-object and
@@ -940,7 +967,8 @@ void poll_game_events(void* radio_state) {
 
                         int n = 0;
                         if (g_show_title.load(std::memory_order_acquire))
-                            n = title_writer.on_active(*inj, active_instance, sound, t.title, t.artist);
+                            n = title_writer.on_active(*inj, active_instance, sound, t.title, t.artist,
+                                                       block_identity(*inj, active_instance));
                         else
                             title_writer.on_idle(*inj);
 

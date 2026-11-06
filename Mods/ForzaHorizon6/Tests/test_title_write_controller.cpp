@@ -246,3 +246,57 @@ TEST_CASE("TitleWriteController: a block that stays put is still restored") {
 
     CHECK(inj.blocks[kBlockA] == Strings{"GameTitle", "GameArtist"});
 }
+
+using horizon::inject::BlockIdentity;
+
+TEST_CASE("TitleWriteController: a block known to be the tuned station's is written at once") {
+    FakeInjector inj;
+    inj.blocks[kInst1] = {"GameTitle", "GameArtist"};
+    TitleWriteController c{3};
+
+    CHECK(c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist", BlockIdentity::Match) == 1);
+    CHECK(inj.blocks[kInst1] == Strings{"OurTitle", "OurArtist"});
+}
+
+TEST_CASE("TitleWriteController: another station's block is never written") {
+    FakeInjector inj;
+    inj.blocks[kInst1] = {"NeighbourTitle", "NeighbourArtist"};
+    TitleWriteController c{0};
+
+    for (int i = 0; i < 5; ++i)
+        CHECK(c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist", BlockIdentity::Mismatch) == 0);
+    CHECK(inj.writes == 0);
+}
+
+// Tuning from one of our stations to another: the name changes first, so for a
+// tick the instance still shows the block we own while the tuned station is
+// already the next one. Hand our block back then, while the restore can reach it.
+TEST_CASE("TitleWriteController: a mismatch on our own block restores it before the re-point") {
+    FakeInjector inj;
+    inj.chain[kInst1]   = kBlockA;
+    inj.blocks[kBlockA] = {"OurStationTitle", "OurStationArtist"};
+    inj.blocks[kBlockB] = {"NextTitle", "NextArtist"};
+    TitleWriteController c{3};
+
+    c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist", BlockIdentity::Match);
+    REQUIRE(inj.blocks[kBlockA] == Strings{"OurTitle", "OurArtist"});
+
+    c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist", BlockIdentity::Mismatch);
+    CHECK(inj.blocks[kBlockA] == Strings{"OurStationTitle", "OurStationArtist"});
+    CHECK_FALSE(c.owns_block());
+
+    // The instance catches up: the next station's block, which is ours too.
+    inj.chain[kInst1] = kBlockB;
+    CHECK(c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist", BlockIdentity::Match) == 1);
+    CHECK(inj.blocks[kBlockB] == Strings{"OurTitle", "OurArtist"});
+}
+
+TEST_CASE("TitleWriteController: unknown identity still waits for the block to settle") {
+    FakeInjector inj;
+    inj.blocks[kInst1] = {"GameTitle", "GameArtist"};
+    TitleWriteController c{2};
+
+    CHECK(c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist", BlockIdentity::Unknown) == 0);
+    CHECK(c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist", BlockIdentity::Unknown) == 0);
+    CHECK(c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist", BlockIdentity::Unknown) == 1);
+}

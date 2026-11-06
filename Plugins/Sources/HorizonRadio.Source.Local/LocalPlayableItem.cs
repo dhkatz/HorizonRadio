@@ -137,6 +137,7 @@ public sealed class LocalPlayableItem : PlayableItem
 
         var stopwatch = Stopwatch.StartNew();
         var nextChunk = TimeSpan.Zero;
+        var primed = false; // has the reader decoded anything yet (see the seek below)
 
         while (!ct.IsCancellationRequested)
         {
@@ -153,6 +154,16 @@ public sealed class LocalPlayableItem : PlayableItem
             var seek = Interlocked.Exchange(ref _pendingSeekTicks, -1);
             if (seek >= 0)
             {
+                // Media Foundation-backed formats (FLAC, M4A, …) silently ignore a seek made
+                // before the first read: CurrentTime reports the target but decoding starts
+                // from the top. A resumed station seeks right after opening, so read (and
+                // drop) one frame first.
+                if (!primed)
+                {
+                    var frame = new float[reader.WaveFormat.Channels];
+                    try { _ = reader.Read(frame, 0, frame.Length); } catch { /* the seek below still runs */ }
+                    primed = true;
+                }
                 try { reader.CurrentTime = new TimeSpan(seek); }
                 catch (Exception ex) { Log($"seek failed: {ex.Message}"); }
                 stopwatch.Restart();
@@ -160,6 +171,7 @@ public sealed class LocalPlayableItem : PlayableItem
             }
 
             int read = samples.Read(floatBuf, 0, floatBuf.Length);
+            primed = true;
             if (read == 0) return; // natural end of file
 
             Interlocked.Exchange(ref _positionTicks, reader.CurrentTime.Ticks);
