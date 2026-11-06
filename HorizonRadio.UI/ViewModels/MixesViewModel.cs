@@ -8,6 +8,7 @@ using System.Windows.Input;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HorizonRadio.Core.Games;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
@@ -24,8 +25,6 @@ namespace HorizonRadio.UI.ViewModels;
 /// </summary>
 public sealed partial class MixesViewModel : ViewModelBase
 {
-    /// <summary>Station-override sentinel meaning "inherit the global target".</summary>
-    public const string UseGlobalDefault = "Use global default";
 
     private readonly MixStore _store;
     private readonly MixSwitcher _switcher;
@@ -47,16 +46,25 @@ public sealed partial class MixesViewModel : ViewModelBase
     /// hold a self-driven source like Spotify Connect).</summary>
     public IReadOnlyList<IAudioSourceFactory> EntrySources { get; }
 
-    /// <summary>Station-override choices: "use global default" (inherit) + the
-    /// specific FH6 stations. "Any station" is deliberately omitted — it's the
-    /// global default's job; a per-mix override pins the mix to one station.</summary>
-    public ObservableCollection<string> StationOptions { get; }
-
     public ObservableCollection<MixEntryEditRow> EditEntries { get; } = new();
 
     [ObservableProperty] private bool isEditing;
     [ObservableProperty] private string editingName = "";
-    [ObservableProperty] private string editingStation = UseGlobalDefault;
+    // The active game's per-mix settings (FH6: a station override). The game supplies the editor
+    // section and the list label; we only store its settings with the mix under the game's id.
+    private readonly IGameMixSettings? _gameMixSettings;
+    private readonly string? _gameId;
+
+    /// <summary>The game's section of the editor for the mix being edited, or null.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GameMixEditorViewModel))]
+    [NotifyPropertyChangedFor(nameof(HasGameMixEditor))]
+    private IGameMixEditor? gameMixEditor;
+
+    /// <summary>The editor section's view model (rendered by convention via the ViewLocator).</summary>
+    public object? GameMixEditorViewModel => GameMixEditor?.ViewModel;
+
+    public bool HasGameMixEditor => GameMixEditor != null;
     [ObservableProperty] private string statusMessage = "";
     [ObservableProperty] private bool hasError;
     public bool HasMixes => Mixes.Count > 0;
@@ -65,14 +73,16 @@ public sealed partial class MixesViewModel : ViewModelBase
     private string? _editingId;
 
     public MixesViewModel(MixStore store, MixSwitcher switcher,
-                          DialogManager? dialogs = null, MixContentResolver? content = null)
+                          DialogManager? dialogs = null, MixContentResolver? content = null,
+                          IGameIntegration? game = null, string? gameId = null)
     {
         _store = store;
         _switcher = switcher;
         _dialogs = dialogs;
         _content = content;
+        _gameMixSettings = gameId != null ? game?.MixSettings : null;
+        _gameId = gameId;
         EntrySources = SourceCatalog.All.Where(f => f is IContentSourceFactory).ToList();
-        StationOptions = new ObservableCollection<string>(new[] { UseGlobalDefault }.Concat(StationCatalog.Names));
 
         _store.Changed += OnStoreChanged;
         RefreshList();
@@ -109,8 +119,8 @@ public sealed partial class MixesViewModel : ViewModelBase
     private MixRow ToRow(Mix m)
     {
         var id = m.Id;
-        var station = m.Station == null ? "" : $"Station: {m.Station}";
-        var row = new MixRow(id, m.Name, BuildSummary(m), station)
+        var gameSummary = _gameId != null ? _gameMixSettings?.Describe(m.SettingsFor(_gameId)) ?? "" : "";
+        var row = new MixRow(id, m.Name, BuildSummary(m), gameSummary)
         {
             PlayCommand = new RelayCommand(() => PlayMix(id)),
             EditCommand = new RelayCommand(() => EditMix(id)),
@@ -169,7 +179,7 @@ public sealed partial class MixesViewModel : ViewModelBase
     {
         _editingId = null;
         EditingName = "";
-        EditingStation = UseGlobalDefault;
+        GameMixEditor = _gameMixSettings?.CreateEditor(null);
         StatusMessage = "";
         HasError = false;
         EditEntries.Clear();
@@ -219,9 +229,13 @@ public sealed partial class MixesViewModel : ViewModelBase
         }
         if (entries.Count == 0) { Fail("Add at least one entry (a source and a URL/folder)."); return; }
 
-        var station = EditingStation == UseGlobalDefault ? null : EditingStation;
         var id = _editingId ?? Guid.NewGuid().ToString("n");
-        _store.AddOrUpdate(new Mix(id, EditingName.Trim(), entries, station));
+        // Keep settings other games stored on this mix; replace only the active game's.
+        var existingGames = _editingId != null ? _store.Get(_editingId)?.Games : null;
+        var mix = new Mix(id, EditingName.Trim(), entries, existingGames);
+        if (_gameId != null && GameMixEditor != null)
+            mix = mix.WithSettingsFor(_gameId, GameMixEditor.Settings);
+        _store.AddOrUpdate(mix);
         _store.SaveToDisk();
 
         IsEditing = false;
@@ -237,7 +251,7 @@ public sealed partial class MixesViewModel : ViewModelBase
 
         _editingId = mix.Id;
         EditingName = mix.Name;
-        EditingStation = mix.Station ?? UseGlobalDefault;
+        GameMixEditor = _gameId != null ? _gameMixSettings?.CreateEditor(mix.SettingsFor(_gameId)) : null;
         StatusMessage = "";
         HasError = false;
 
@@ -309,8 +323,9 @@ public sealed partial class MixRow : ViewModelBase
 {
     public string Id { get; }
     public string Name { get; }
-    public string Station { get; }
-    public bool HasStation => !string.IsNullOrEmpty(Station);
+    /// <summary>The active game's label for this mix's settings (e.g. "Station: Horizon XS").</summary>
+    public string GameSummary { get; }
+    public bool HasGameSummary => !string.IsNullOrEmpty(GameSummary);
 
     [ObservableProperty] private string summary;
 
@@ -318,12 +333,12 @@ public sealed partial class MixRow : ViewModelBase
     public required ICommand EditCommand { get; init; }
     public required ICommand DeleteCommand { get; init; }
 
-    public MixRow(string id, string name, string summary, string station)
+    public MixRow(string id, string name, string summary, string gameSummary)
     {
         Id = id;
         Name = name;
         this.summary = summary;
-        Station = station;
+        GameSummary = gameSummary;
     }
 }
 

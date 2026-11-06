@@ -2,6 +2,7 @@ using HorizonRadio.Core.Events;
 using HorizonRadio.Core.History;
 using HorizonRadio.Core.Input;
 using HorizonRadio.Core.Metadata;
+using HorizonRadio.Core.Plugins;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,6 +33,7 @@ public static class HorizonCoreServiceCollectionExtensions
         services.AddSingleton(_ => EventRuleStore.LoadFromDisk());
         services.AddSingleton(_ => InputBindingStore.LoadFromDisk());
         services.AddSingleton(_ => new MetadataCache());
+        services.AddSingleton(_ => PluginSettingsStore.LoadFromDisk());
 
         // Resolves a mix entry to playable content from the source config; non-disposable and its
         // only dependency (the source config store) is registered above, so it's safe to own here.

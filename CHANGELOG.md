@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Station targeting belongs to the game plugin.** The FH6 plugin now owns the
+  default station, each mix's station override, and keeping the game in sync on
+  reconnect; the app only reports which mix is active. Settings migrate
+  automatically on first launch: the default station moves from `sources.json`
+  (`targetStation`) to the new `plugin-settings.json`, and a mix's `station`
+  becomes `games.fh6.station` in `mixes.json`. Builds from before this change
+  won't see the moved default station.
 - **Sidebar: game pages live under the game's name.** The Mods and Stats pages
   now come from the Forza Horizon 6 plugin and are listed under a "Forza Horizon
   6" section. Events and Controls moved to Settings, since they aren't specific

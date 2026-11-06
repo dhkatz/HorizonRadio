@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HorizonRadio.Core.Sources.Mixes;
 
@@ -13,16 +14,29 @@ namespace HorizonRadio.Core.Sources.Mixes;
 /// what a content-addressable profile used to be. Self-driven sources (Spotify
 /// Connect, the test tone) aren't mixable — they have no <see cref="ContentRef"/>.
 /// </summary>
+/// <param name="Games">Per-game settings for this mix (e.g. FH6's station override), keyed by game
+/// plugin id. The host stores them but never interprets them; the game plugin edits and applies them
+/// (see <c>IGameMixSettings</c>).</param>
 public sealed record Mix(
     string Id,
     string Name,
     IReadOnlyList<ContentRef> Entries,
-    string? Station = null)
+    IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? Games = null)
 {
-    /// <summary>
-    /// Which in-game station this mix replaces: its own override if set,
-    /// otherwise the app-wide default. Null means "replace whatever's active"
-    /// (the same meaning the global default carries).
-    /// </summary>
-    public string? EffectiveStation(string? globalDefault) => Station ?? globalDefault;
+    /// <summary>This mix's settings for the game plugin <paramref name="gameId"/>, or
+    /// <see langword="null"/> if it has none.</summary>
+    public IReadOnlyDictionary<string, string>? SettingsFor(string gameId) =>
+        Games != null && Games.TryGetValue(gameId, out var settings) ? settings : null;
+
+    /// <summary>A copy with <paramref name="gameId"/>'s settings replaced (removed when
+    /// <see langword="null"/> or empty); other games' settings are kept.</summary>
+    public Mix WithSettingsFor(string gameId, IReadOnlyDictionary<string, string>? settings)
+    {
+        var games = (Games ?? new Dictionary<string, IReadOnlyDictionary<string, string>>())
+            .Where(g => g.Key != gameId)
+            .ToDictionary(g => g.Key, g => g.Value, StringComparer.Ordinal);
+        if (settings is { Count: > 0 })
+            games[gameId] = settings;
+        return this with { Games = games.Count > 0 ? games : null };
+    }
 }

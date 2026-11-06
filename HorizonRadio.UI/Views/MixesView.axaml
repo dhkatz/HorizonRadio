@@ -45,8 +45,8 @@
                                             <Border Padding="8,2" CornerRadius="999"
                                                     Background="{DynamicResource SecondaryColor}"
                                                     VerticalAlignment="Center"
-                                                    IsVisible="{Binding HasStation}">
-                                                <TextBlock Text="{Binding Station}"
+                                                    IsVisible="{Binding HasGameSummary}">
+                                                <TextBlock Text="{Binding GameSummary}"
                                                            FontSize="10" FontWeight="Medium"/>
                                             </Border>
                                         </StackPanel>
@@ -82,14 +82,10 @@
                                  PlaceholderText="e.g. Drive"/>
                     </StackPanel>
 
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="Replace station" FontSize="12" FontWeight="Medium"/>
-                        <ComboBox ItemsSource="{Binding StationOptions}"
-                                  SelectedItem="{Binding EditingStation, Mode=TwoWay}"
-                                  HorizontalAlignment="Stretch"/>
-                        <TextBlock Text="Override which in-game station this mix replaces, or use the global default set in the player bar."
-                                   FontSize="11" Opacity="0.55" TextWrapping="Wrap"/>
-                    </StackPanel>
+                    <!-- The active game's per-mix settings (FH6: which station to replace), supplied
+                         by the game plugin and rendered through the ViewLocator. -->
+                    <ContentControl Content="{Binding GameMixEditorViewModel}"
+                                    IsVisible="{Binding HasGameMixEditor}"/>
 
                     <StackPanel Spacing="6">
                         <TextBlock Text="Entries" FontSize="12" FontWeight="Medium"/>

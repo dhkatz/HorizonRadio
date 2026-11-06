@@ -15,4 +15,8 @@ public interface IPluginContext
 {
     /// <summary>The shared on-disk metadata cache (see <see cref="IMetadataCache"/>).</summary>
     IMetadataCache Cache { get; }
+
+    /// <summary>The persisted settings belonging to the plugin with id <paramref name="pluginId"/>
+    /// (pass your own <see cref="IPlugin.Id"/>).</summary>
+    IPluginSettings GetSettings(string pluginId);
 }

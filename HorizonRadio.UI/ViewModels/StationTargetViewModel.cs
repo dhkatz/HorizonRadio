@@ -1,60 +1,59 @@
 using System;
 using System.Collections.ObjectModel;
-using System.Linq;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
-using HorizonRadio.Core.Sources;
-using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Core.Games;
 
 namespace HorizonRadio.UI.ViewModels;
 
 /// <summary>
-/// App-level "which in-game station Horizon Radio replaces" state. The target
-/// station is global — it isn't a per-source or per-mix setting (a mix may
-/// later carry its own override; see the mixes work) — so it lives in its own
-/// small view model surfaced in the player bar, rather than buried in the
-/// Sources tab. Persisted in <see cref="SourceConfigStore.TargetStation"/>;
-/// App wires <see cref="TargetStationChanged"/> to push the choice to the DLL.
+/// The player bar's "which in-game station Horizon Radio replaces" picker: a thin view over the
+/// active game's <see cref="IStationTargeting"/>. The game owns the choice: it persists the default
+/// station, layers the active mix's override on top, and keeps the game in sync. Picking here sets
+/// the game's default.
 /// </summary>
 public sealed partial class StationTargetViewModel : ViewModelBase
 {
-    private readonly SourceConfigStore _store;
+    /// <summary>Picker entry meaning "replace whatever station is active".</summary>
+    public const string AnyLabel = "Any station";
 
-    /// <summary>"Any station" + the fixed FH6 list.</summary>
-    public ObservableCollection<string> Stations { get; } = new(StationCatalog.All);
+    private readonly IStationTargeting? _targeting;
 
-    /// <summary>Raised when the user picks a different station to replace; App
-    /// pushes it to the DLL over IPC.</summary>
-    public event Action<string>? TargetStationChanged;
+    /// <summary>"Any station" + the game's stations.</summary>
+    public ObservableCollection<string> Stations { get; }
+
+    /// <summary>False when the active game has no stations to pick from.</summary>
+    public bool IsAvailable => _targeting != null;
 
     [ObservableProperty] private string selectedStation;
 
-    public StationTargetViewModel(SourceConfigStore store)
+    public StationTargetViewModel(IStationTargeting? targeting)
     {
-        _store = store;
+        _targeting = targeting;
+        Stations = new ObservableCollection<string> { AnyLabel };
+        if (targeting != null)
+        {
+            foreach (var station in targeting.Stations) Stations.Add(station);
+            // Mirror changes made elsewhere (raised on any thread).
+            targeting.Changed += () => Dispatcher.UIThread.Post(SyncFromGame);
+        }
 
-        // Assign the backing field directly so seeding the saved choice doesn't
-        // fire OnSelectedStationChanged (which would re-persist and push before
-        // App has wired TargetStationChanged).
-        var saved = store.TargetStation;
-        selectedStation = !string.IsNullOrEmpty(saved) && StationCatalog.All.Contains(saved)
-            ? saved!
-            : StationCatalog.AnyLabel;
+        // Backing field, so seeding doesn't write the value straight back to the game.
+        selectedStation = targeting?.DefaultStation ?? AnyLabel;
     }
 
-    /// <summary>Map a picker selection to a game station target: <see langword="null"/>
-    /// (replace whatever is active) for "Any station" or no selection, else the
-    /// station name verbatim.</summary>
-    public static string? ToTarget(string? selection) =>
-        string.IsNullOrEmpty(selection) || selection == StationCatalog.AnyLabel ? null : selection;
-
     /// <summary>Designer-only ctor (so the Avalonia previewer can construct the
-    /// player bar without a real store).</summary>
-    public StationTargetViewModel() : this(new SourceConfigStore()) { }
+    /// player bar without a game).</summary>
+    public StationTargetViewModel() : this(null) { }
+
+    private void SyncFromGame()
+    {
+        var current = _targeting?.DefaultStation ?? AnyLabel;
+        if (current != SelectedStation) SelectedStation = current;
+    }
 
     partial void OnSelectedStationChanged(string value)
     {
-        _store.TargetStation = value;
-        _store.SaveToDisk();
-        TargetStationChanged?.Invoke(value);
+        if (_targeting != null) _targeting.DefaultStation = value == AnyLabel ? null : value;
     }
 }

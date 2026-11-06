@@ -108,8 +108,17 @@ public sealed class MixStore
                 writer.WriteStartObject();
                 writer.WriteString("id", m.Id);
                 writer.WriteString("name", m.Name);
-                if (m.Station != null) writer.WriteString("station", m.Station);
-                else writer.WriteNull("station");
+                if (m.Games is { Count: > 0 })
+                {
+                    writer.WriteStartObject("games");
+                    foreach (var (gameId, settings) in m.Games)
+                    {
+                        writer.WriteStartObject(gameId);
+                        foreach (var (key, value) in settings) writer.WriteString(key, value);
+                        writer.WriteEndObject();
+                    }
+                    writer.WriteEndObject();
+                }
 
                 writer.WriteStartArray("entries");
                 foreach (var e in m.Entries)
@@ -141,7 +150,7 @@ public sealed class MixStore
         var name = ReadString(item, "name");
         if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(name)) return null;
 
-        var station = ReadString(item, "station"); // null/absent = inherit global
+        var games = ReadGames(item);
 
         var entries = new List<ContentRef>();
         if (item.TryGetProperty("entries", out var arr) && arr.ValueKind == JsonValueKind.Array)
@@ -156,7 +165,35 @@ public sealed class MixStore
             }
         }
 
-        return new Mix(id!, name!, entries, station);
+        return new Mix(id!, name!, entries, games);
+    }
+
+    /// <summary>The game id a pre-plugin mix's top-level <c>"station"</c> belonged to: the station
+    /// override was FH6-only before games became plugins, so it migrates to FH6's settings.</summary>
+    internal const string LegacyStationGameId = "fh6";
+
+    private static Dictionary<string, IReadOnlyDictionary<string, string>>? ReadGames(JsonElement item)
+    {
+        var games = new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal);
+        if (item.TryGetProperty("games", out var obj) && obj.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var game in obj.EnumerateObject())
+            {
+                if (game.Value.ValueKind != JsonValueKind.Object) continue;
+                var settings = new Dictionary<string, string>(StringComparer.Ordinal);
+                foreach (var kv in game.Value.EnumerateObject())
+                {
+                    if (kv.Value.ValueKind == JsonValueKind.String) settings[kv.Name] = kv.Value.GetString()!;
+                }
+                if (settings.Count > 0) games[game.Name] = settings;
+            }
+        }
+
+        // Legacy: { "station": "Horizon XS" } (null/absent meant "inherit the global default").
+        if (ReadString(item, "station") is { } station && !games.ContainsKey(LegacyStationGameId))
+            games[LegacyStationGameId] = new Dictionary<string, string>(StringComparer.Ordinal) { ["station"] = station };
+
+        return games.Count > 0 ? games : null;
     }
 
     private static string? ReadString(JsonElement e, string key)

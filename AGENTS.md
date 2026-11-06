@@ -58,6 +58,13 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
     finds its view by naming convention (`…ViewModels.FooViewModel` →
     `…Views.FooView`) in the plugin's own assembly. FH6 contributes Mods and
     Stats. Plugin UI packages must match the UI project's versions.
+  - A game owns its game-specific settings. Station targeting lives entirely in
+    the FH6 plugin: its default station persists in the plugin's own settings
+    (`IPluginContext.GetSettings(id)` → `plugin-settings.json`), and a mix's
+    override is per-game mix data (`Mix.Games["fh6"]`) that the plugin edits
+    (`IGameMixSettings.CreateEditor`, rendered in the mix editor) and applies
+    (`ApplyMix`, called by the app whenever the active mix may have changed).
+    The app never interprets either.
   - The FH6 plugin also bundles its mod: its csproj flows
     `Mods/ForzaHorizon6/build/Release/version.dll` into the app's build output
     (`ExcludeFromSingleFile`), and the UI's publish step copies it next to the exe.

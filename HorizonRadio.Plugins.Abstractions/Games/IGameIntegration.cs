@@ -37,8 +37,13 @@ public interface IGameIntegration : IAsyncDisposable
     /// to <see cref="StateChanged"/> and the event sources.</summary>
     void Start();
 
-    /// <summary>Choose which in-game station to replace, or <see langword="null"/>.</summary>
+    /// <summary>Which in-game station we replace, or <see langword="null"/> for a game without
+    /// stations.</summary>
     IStationTargeting? Stations { get; }
+
+    /// <summary>Per-mix settings for this game (e.g. a station override), or <see langword="null"/>
+    /// if the game has none.</summary>
+    IGameMixSettings? MixSettings { get; }
 
     /// <summary>In-game volume control, or <see langword="null"/>.</summary>
     IGameVolume? Volume { get; }
@@ -83,16 +88,57 @@ public sealed record GamePage(string Id, string Title, string Icon, object ViewM
 /// <param name="PageId">The <see cref="GamePage.Id"/> the banner's button opens.</param>
 public sealed record GameNotice(string Title, string Message, string PageId);
 
-/// <summary>A game with several radio stations, where the user picks the one we replace.</summary>
+/// <summary>
+/// A game with several radio stations, where the user picks the one we replace. The game owns the
+/// whole decision: it persists the default, applies the active mix's override (see
+/// <see cref="IGameMixSettings"/>), and keeps the game side in sync across reconnects.
+/// </summary>
 public interface IStationTargeting
 {
     /// <summary>The game's station names, exactly as the game reports them.</summary>
     IReadOnlyList<string> Stations { get; }
 
-    /// <summary>Replace <paramref name="station"/> (one of <see cref="Stations"/>), or whatever
-    /// station is active when <see langword="null"/>. Best-effort: returns false when the game
-    /// isn't connected; the host re-sends on reconnect.</summary>
-    bool SetTarget(string? station);
+    /// <summary>The station replaced when the active mix doesn't override it, or
+    /// <see langword="null"/> for whatever station is active. Persisted by the game.</summary>
+    string? DefaultStation { get; set; }
+
+    /// <summary>The station replaced right now (the active mix's override, else
+    /// <see cref="DefaultStation"/>); <see langword="null"/> means whatever is active.</summary>
+    string? EffectiveStation { get; }
+
+    /// <summary>Raised when <see cref="DefaultStation"/> or <see cref="EffectiveStation"/>
+    /// changes. May fire on any thread.</summary>
+    event Action? Changed;
+}
+
+/// <summary>
+/// Settings a game keeps per mix (e.g. FH6's station override). The host stores them with the mix,
+/// under the game plugin's id, as flat string pairs it never interprets; the game edits, describes,
+/// and applies them.
+/// </summary>
+public interface IGameMixSettings
+{
+    /// <summary>The active mix changed: its settings for this game, or <see langword="null"/>
+    /// when no mix is playing or the mix has none. Called on any thread.</summary>
+    void ApplyMix(IReadOnlyDictionary<string, string>? settings);
+
+    /// <summary>An editor for one mix's settings, shown in the mix editor. The host renders
+    /// <see cref="IGameMixEditor.ViewModel"/> by convention (see <see cref="GamePage"/>).</summary>
+    IGameMixEditor CreateEditor(IReadOnlyDictionary<string, string>? settings);
+
+    /// <summary>A short label for the mix list (e.g. "Station: Horizon XS"), or
+    /// <see langword="null"/> when there's nothing worth showing.</summary>
+    string? Describe(IReadOnlyDictionary<string, string>? settings);
+}
+
+/// <summary>An in-progress edit of one mix's game settings.</summary>
+public interface IGameMixEditor
+{
+    /// <summary>The editor's view model.</summary>
+    object ViewModel { get; }
+
+    /// <summary>The edited settings to save with the mix, or <see langword="null"/> for none.</summary>
+    IReadOnlyDictionary<string, string>? Settings { get; }
 }
 
 /// <summary>Volume applied to our audio inside the game.</summary>
