@@ -26,7 +26,7 @@ namespace HorizonRadio.UI.ViewModels;
 /// context ("next from: …"). The + button adds a one-off via the same quick-play
 /// dialog the player bar uses; rows carry their own play-now/remove/reorder commands.
 /// </summary>
-public sealed partial class QueueViewModel : ViewModelBase
+public sealed partial class QueueViewModel : ViewModelBase, IDisposable
 {
     private readonly QueuePlayback? _queue;
     private readonly DialogManager? _dialogs;
@@ -53,20 +53,23 @@ public sealed partial class QueueViewModel : ViewModelBase
     [ObservableProperty] private bool hasNowPlaying;
     [ObservableProperty] private Bitmap? nowPlayingArt;
 
-    // Cache the decoded now-playing art so the frequent Changed/rebuilds don't
-    // re-decode the same bytes; keyed by queue-item id (art may arrive on a later
-    // rebuild once the track prepares, so re-decode while the cached art is null).
-    private string? _artCacheId;
+    // Cache the decoded now-playing seed art so the frequent Changed/rebuilds don't
+    // re-decode the same bytes. Keyed by the bytes themselves, not the queue item: a radio
+    // station is one item across every song, and each song can bring its own art.
+    private byte[]? _artCacheBytes;
     private Bitmap? _artCacheBmp;
 
     // Now-playing enrichment state, keyed by a per-track signature rather than the
     // queue-item id — a radio station is ONE queue item reused across every song, so
     // its id never changes but its metadata does. `_nowSig` gates re-running the
-    // resolve; the sticky `_nowEnrichedArt` (for `_nowEnrichedArtSig`) survives the
-    // frequent rebuilds, which would otherwise reset the tile to the item's seed art
-    // (the station icon).
+    // resolve (and `_nowCts` cancels the lookup for the previous signature); the enriched
+    // text and art (for `_nowEnrichedSig`) survive the frequent rebuilds, which would
+    // otherwise reset the tile to the item's raw title and seed art (the station icon).
     private string? _nowSig;
-    private string? _nowEnrichedArtSig;
+    private CancellationTokenSource? _nowCts;
+    private string? _nowEnrichedSig;
+    private string? _nowEnrichedTitle;
+    private string? _nowEnrichedArtist;
     private Bitmap? _nowEnrichedArt;
 
     /// <summary>The explicit "next in queue" zone (user one-offs).</summary>
@@ -112,19 +115,28 @@ public sealed partial class QueueViewModel : ViewModelBase
 
     private void OnModelChanged() => Dispatcher.UIThread.Post(Rebuild);
 
+    public void Dispose()
+    {
+        if (_queue != null) _queue.Model.Changed -= OnModelChanged;
+        _nowCts?.Cancel();
+        _nowCts?.Dispose();
+        _nowCts = null;
+    }
+
     private void Rebuild()
     {
         if (_queue == null) return;
         var snap = _queue.Model.Snapshot();
 
         HasNowPlaying = snap.Current != null;
-        NowPlayingTitle = snap.Current?.Metadata.Title is { Length: > 0 } t ? t : "";
-        NowPlayingSubtitle = snap.Current?.Metadata.Artist ?? "";
-        // Prefer art enriched for this exact track; otherwise the item's own seed art
-        // (e.g. the station logo before a song is identified, or an iTunes miss).
+        // Prefer what was enriched for this exact track; otherwise the item's own seed
+        // (e.g. the raw stream title and station logo before a song is identified).
+        var enriched = snap.Current is { } playing && NowSig(playing) == _nowEnrichedSig;
+        NowPlayingTitle = enriched && _nowEnrichedTitle is { Length: > 0 } et ? et
+            : snap.Current?.Metadata.Title is { Length: > 0 } t ? t : "";
+        NowPlayingSubtitle = (enriched ? _nowEnrichedArtist : null) ?? snap.Current?.Metadata.Artist ?? "";
         NowPlayingArt = snap.Current is { } cur
-            ? (NowSig(cur) == _nowEnrichedArtSig ? _nowEnrichedArt : null)
-              ?? DecodeArtCached(cur.Id, cur.Metadata.AlbumArt)
+            ? (enriched ? _nowEnrichedArt : null) ?? DecodeArtCached(cur.Metadata.AlbumArt)
             : null;
 
         SyncUpcoming(snap.Explicit);
@@ -164,15 +176,24 @@ public sealed partial class QueueViewModel : ViewModelBase
         var sig = NowSig(current);
         if (_nowSig == sig) return; // already enriched / in flight for this exact track
         _nowSig = sig;
+
+        // Leave the previous track's lookup, so it stops if nobody else wants it. Disposing
+        // right after cancelling is safe: its token stays cancelled for the task still using it.
+        _nowCts?.Cancel();
+        _nowCts?.Dispose();
+        _nowCts = new CancellationTokenSource();
+        var ct = _nowCts.Token;
+        var seed = current.Metadata;
         _ = Task.Run(async () =>
         {
             try
             {
                 // Show the early result (a slow provider still working) right away, then the full one.
-                var enriched = await _resolver.ResolveAsync(current.Metadata, CancellationToken.None,
+                var enriched = await _resolver.ResolveAsync(seed, ct,
                     ResolvePriority.Foreground, early => ShowNowEnriched(early, sig)).ConfigureAwait(false);
                 ShowNowEnriched(enriched, sig);
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex) { Debug.WriteLine($"[hzn-queue-vm] enrich current: {ex.Message}"); }
         });
     }
@@ -185,21 +206,32 @@ public sealed partial class QueueViewModel : ViewModelBase
             // Still the same track playing? (compare the signature, not the item —
             // a radio item stays referentially equal across songs).
             if (_queue?.Model.Current is not { } c || NowSig(c) != sig) return;
+            // Sticky, so the next rebuild keeps it. The full result can lack art the early one
+            // had only if a provider changed its mind, so keep earlier art rather than drop it.
+            if (_nowEnrichedSig != sig) _nowEnrichedArt = null;
+            _nowEnrichedSig = sig;
+            _nowEnrichedTitle = enriched.Title;
+            _nowEnrichedArtist = enriched.Artist;
+            if (art != null) _nowEnrichedArt = art;
+
             if (!string.IsNullOrWhiteSpace(enriched.Title)) NowPlayingTitle = enriched.Title;
             NowPlayingSubtitle = enriched.Artist;
-            if (art != null)
-            {
-                _nowEnrichedArt = art;
-                _nowEnrichedArtSig = sig; // sticky, so the next rebuild keeps it
-                NowPlayingArt = art;
-            }
+            if (_nowEnrichedArt != null) NowPlayingArt = _nowEnrichedArt;
         });
     }
 
-    // Identifies a specific track within a queue item: id + the metadata that drives a
-    // lookup. A radio station keeps one id but changes title/artist as songs roll over.
-    private static string NowSig(QueueItem item) =>
-        $"{item.Id}|{item.Metadata.Title}|{item.Metadata.Artist}";
+    // Identifies a specific track within a queue item: id + everything the lookup searches
+    // with. A radio station keeps one id but changes title/artist as songs roll over, and a
+    // song can be republished with new interpretations (the title model refining a messy
+    // stream title) without its primary title or artist changing.
+    private static string NowSig(QueueItem item)
+    {
+        var m = item.Metadata;
+        var sig = $"{item.Id}|{m.Title}|{m.Artist}|{m.ExternalId}";
+        if (m.Candidates is { Count: > 0 } candidates)
+            sig += "|" + string.Join("|", candidates.Select(c => $"{c.Artist}/{c.Title}"));
+        return sig;
+    }
 
     // In-place sync by id so a track change (which doesn't touch the explicit zone)
     // doesn't tear down and rebuild every row.
@@ -271,10 +303,11 @@ public sealed partial class QueueViewModel : ViewModelBase
         finally { MetaGate.Release(); }
     }
 
-    private Bitmap? DecodeArtCached(string id, byte[]? bytes)
+    private Bitmap? DecodeArtCached(byte[]? bytes)
     {
-        if (_artCacheId == id && _artCacheBmp != null) return _artCacheBmp;
-        _artCacheId = id;
+        if (bytes is null) return null;
+        if (ReferenceEquals(_artCacheBytes, bytes) && _artCacheBmp != null) return _artCacheBmp;
+        _artCacheBytes = bytes;
         _artCacheBmp = DecodeArt(bytes);
         return _artCacheBmp;
     }
