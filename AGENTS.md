@@ -62,9 +62,12 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   yt-dlp/ffmpeg), metadata enrichment, and the dashboard. Tool-specific details
   stay encapsulated in each source class; they are not leaked into shared code.
 - **Lyrics (`Plugins/Lyrics/`, `Core/Lyrics/`)** — each `ILyricsPlugin` contributes
-  one `ILyricsProvider` (Unison, LRCLIB). `LyricsService` asks them all at once and
-  keeps the first synced answer in `SortOrder`, else the first unsynced one; a lookup
-  where a provider failed isn't remembered. The query carries the playing audio's
+  one `ILyricsProvider` (Unison, LRCLIB, and VocaDB, whose metadata plugin is also a
+  lyrics plugin). `LyricsService` asks them all at once and keeps the first synced
+  answer in `SortOrder`, else the first unsynced one with variants (romanized,
+  translated), else any; a lookup where a provider failed isn't remembered. Karaoke
+  fill is laid out by `Karaoke.Words` (word-timed syllables grouped into words; a
+  line-timed line spread over its characters) and drawn by `KaraokeText`. The query carries the playing audio's
   length (`IPlaybackProgress.Duration`): synced lyrics are only accepted when timed to
   that length (±2 s on LRCLIB), because a file timed to another cut drifts. Live radio
   has no length or song position, so its lyrics show as text (`LyricsViewModel`
