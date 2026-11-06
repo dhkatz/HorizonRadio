@@ -124,12 +124,26 @@ station — so the title lands where the audio is, and locks onto it
 (`preferred_instance`) to avoid ping-ponging.
 
 [`TitleWriteController`](../Bridge/include/horizon/inject/title_write_controller.hpp)
-owns the write/restore bookkeeping for that single instance: snapshot the game's
-original strings on first touch, write ours each tick, keep the restore value in
-sync as the game advances its own track, and write the originals back when we stop
-replacing the station (source stopped, or tuned away). It's extracted from the
-writer thread and unit-tested with a fake injector. Its header comment documents
-the per-tick contract.
+owns the write/restore bookkeeping: snapshot the game's original strings on first
+touch, write ours each tick, keep the restore value in sync as the game advances
+its own track, and write the originals back when we stop replacing the station
+(source stopped, `clear_track`, or tuned away). It's extracted from the writer
+thread and unit-tested with a fake injector; its header documents the per-tick
+contract.
+
+**Ownership is per metadata block, not per instance.** Observed live: a single
+`RadioStreamFmod` instance serves every station, and the game *re-points* it at
+each station's block when the player tunes. The station *name* changes 50–100 ms
+before that re-point. So the writer checks each block's identity before touching
+it: the block's event id at `+0x10` (never written by us) names its station
+(`HZ6_R6_…` → Gacha City Radio; table in
+[`station_codes.hpp`](../Bridge/include/horizon/game/station_codes.hpp)).
+A block that is the tuned station's is written at once; another station's
+(mid-tune) never is, and a block we own is handed back while the instance still
+shows it. Restores only go through an instance that still resolves to the block we
+wrote. Stations without a code (Streamer Mode, whose royalty-free tracks appear
+to carry another station's code) fall back to writing once the block has been
+stable for 3 ticks (~150 ms).
 
 ### Station targeting
 

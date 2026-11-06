@@ -217,6 +217,11 @@ To re-derive them:
 4. Update `kFh6Metadata.chain_offsets` and the field offsets; rebuild; redeploy.
 5. Once titles and audio work again, add the new build's `.text` size (from the
    `bridge` Console line) to `kFh6KnownBuilds` in `signatures.hpp`.
+6. Check the station codes: with something playing, tune through every station
+   and read the Console's `titles` lines (`tuned=<station> audible=<event id>@…`).
+   Each event id's `HZ6_R<n>_` code must match `kFh6StationCodes` in
+   `station_codes.hpp`; if they've moved, titles go quiet (a mismatch never
+   writes), so update the table.
 
 Cross-reference: [matkhl/FH6-Spotify-Radio](https://github.com/matkhl/FH6-Spotify-Radio)
 (GPL-3.0, archived) resolves the same structures. Its FMOD and RadioState

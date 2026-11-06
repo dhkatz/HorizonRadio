@@ -78,6 +78,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   metadata lookup succeeding, and it now refuses ambiguous or out-of-module
   signature matches instead of trusting the first hit.
 
+- **Changing stations no longer copies our title onto other stations.** Flicking
+  past a station could leave the playing song's title on it (and on its
+  neighbours). The mod now checks which station each title block belongs to (the
+  game's own track id) before writing or restoring, so titles land only on our
+  stations and appear immediately on tune-in. A station playing nothing of ours
+  also stops showing a stale title from another station.
 - **Internet-radio tracks no longer attach a wrong same-titled cover.** A romaji
   broadcast artist (e.g. "HachiojiP") could match an unrelated Japanese-named
   artist's same-titled song (e.g. くろくも's "KiLLER LADY") through the cross-script
