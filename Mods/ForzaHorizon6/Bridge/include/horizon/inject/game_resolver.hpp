@@ -1,10 +1,40 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <horizon/inject/sigscan.hpp>
+#include <span>
 #include <string_view>
 #include <vector>
 
 namespace horizon::game {
+
+// Outcome of resolving a global through a RIP-relative load. Every failure
+// mode is distinct so a game update that breaks the signature is diagnosable
+// from the log alone.
+struct GlobalResolution {
+    enum class Status {
+        ok,
+        empty_pattern,
+        not_found,              // pattern matched nowhere in .text
+        ambiguous,              // pattern matched more than once; refuse to guess
+        unexpected_instruction, // match found, but no `48 8B 1D` at the offset
+        target_outside_image,   // decoded address isn't inside the game module
+    };
+
+    Status      status      = Status::empty_pattern;
+    std::size_t match_count = 0; // capped at 2 (enough to flag ambiguity)
+    void*       address     = nullptr;
+};
+
+// Pure decode step, separated from PeImage so it can be unit-tested on a
+// synthetic buffer: find `pattern` in `text` (it must match exactly once),
+// decode the `48 8B 1D <disp32>` (`mov rbx, [rip+disp32]`) at
+// `mov_offset_in_match`, and require the loaded-from address to fall inside
+// [image_lo, image_hi) -- a global always lives in the module's own data.
+[[nodiscard]] GlobalResolution resolve_rip_load_global(std::span<const std::byte> text, const inject::Pattern& pattern,
+                                                       std::ptrdiff_t mov_offset_in_match, std::uintptr_t image_lo,
+                                                       std::uintptr_t image_hi);
 
 // Resolves game-side globals (e.g. RadioState*) by sigscanning .text and
 // decoding the matched function's `mov reg, [rip+disp32]`.
@@ -12,12 +42,10 @@ class GameResolver {
 public:
     explicit GameResolver(const inject::PeImage& image);
 
-    // Sigscan `pattern` in .text, locate the `48 8B 1D <disp32>`
-    // instruction at `mov_offset_in_match` within the match, decode
-    // the RIP-relative displacement, and return the address of the
-    // global it loads from. Returns nullptr if the pattern is missing
-    // or the MOV bytes don't match the expected `48 8B 1D` prefix.
-    [[nodiscard]] void* resolve_global_via_rip_load(std::string_view pattern, std::ptrdiff_t mov_offset_in_match) const;
+    // resolve_rip_load_global over the game image's .text, with the module's
+    // own address range as the valid target range.
+    [[nodiscard]] GlobalResolution resolve_global_via_rip_load(std::string_view pattern,
+                                                               std::ptrdiff_t   mov_offset_in_match) const;
 
 private:
     const inject::PeImage& image_;

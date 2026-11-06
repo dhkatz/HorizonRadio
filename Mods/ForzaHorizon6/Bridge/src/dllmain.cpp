@@ -2,6 +2,7 @@
 
 // version.dll proxy forwarders live in src/version_proxy.cpp.
 
+#include <algorithm>
 #include <atomic>
 #include <charconv>
 #include <chrono>
@@ -10,7 +11,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <cwchar>
-#include <system_error>
 #include <filesystem>
 #include <horizon/fmod/bridge.hpp>
 #include <horizon/fmod/resolver.hpp>
@@ -27,6 +27,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <system_error>
 #include <thread>
 
 namespace {
@@ -71,6 +72,11 @@ horizon::ipc::PcmPipeServer g_pcm_pipe;   // UI writes s16 stereo frames here
 std::string g_active_source_id;
 std::string g_active_source_display;
 
+// One-line game-build fingerprint (.text size, PE timestamp, known/unknown).
+// Written once by the init thread BEFORE the IPC server starts, read-only
+// after, so the IPC thread's snapshot callback can read it without a lock.
+std::string g_build_summary;
+
 void log_w(const wchar_t* s) {
     OutputDebugStringW(s);
 }
@@ -99,10 +105,15 @@ void publish_track_ipc(const TrackInfo& t, std::string_view source_id, std::stri
 }
 
 // Construct the bridge if the required entry points resolve (else nullptr). It
-// stays dormant until the periodic writer hands it a target.
-std::unique_ptr<FmodBridge> bring_up_fmod(const PeImage& game_image) {
+// stays dormant until the periodic writer hands it a target. `verbose` emits the
+// per-signature diagnostics; retries pass false so a slow unpack doesn't flood
+// the log with the same dump every attempt.
+std::unique_ptr<FmodBridge> bring_up_fmod(const PeImage& game_image, bool verbose) {
     FmodResolver resolver(game_image, horizon::fmod::signatures::kFh6);
     auto         hooks = resolver.resolve();
+
+    if (!verbose && !resolver.report().ready())
+        return nullptr;
 
     logf(L"[horizon-radio] resolver: createDsp=%d addDsp=%d removeDsp=%d "
          L"dspRelease=%d setMode=%d handleOpen=%d handleUnlock=%d\n",
@@ -226,17 +237,21 @@ std::unique_ptr<FmodBridge> bring_up_fmod(const PeImage& game_image) {
 // Returns a resolved MetadataInjector if kFh6Metadata.class_mangled_name
 // matches a class in the loaded module; nullptr otherwise. A null
 // return is the expected state until offsets are filled in.
-std::unique_ptr<MetadataInjector> bring_up_metadata(const PeImage& game_image) {
+std::unique_ptr<MetadataInjector> bring_up_metadata(const PeImage& game_image, bool verbose) {
     if (horizon::inject::signatures::kFh6Metadata.class_mangled_name.empty()) {
-        log_w(L"[horizon-radio] metadata injector dormant: kFh6Metadata.class_mangled_name "
-              L"is empty (no offsets configured yet).\n");
+        if (verbose) {
+            log_w(L"[horizon-radio] metadata injector dormant: kFh6Metadata.class_mangled_name "
+                  L"is empty (no offsets configured yet).\n");
+        }
         return nullptr;
     }
 
     auto inj = std::make_unique<MetadataInjector>(game_image, horizon::inject::signatures::kFh6Metadata);
     if (!inj->resolve()) {
-        log_w(L"[horizon-radio] metadata injector: RTTI lookup failed for configured class; "
-              L"verify kFh6Metadata.class_mangled_name against the live game.\n");
+        if (verbose) {
+            log_w(L"[horizon-radio] metadata injector: RTTI lookup failed for configured class; "
+                  L"verify kFh6Metadata.class_mangled_name against the live game.\n");
+        }
         return nullptr;
     }
     log_w(L"[horizon-radio] MetadataInjector resolved; on_track will update game HUD\n");
@@ -252,17 +267,41 @@ void* safe_deref_slot(void** slot) noexcept {
     return reinterpret_cast<void*>(horizon::inject::safe_read_qword(static_cast<const void*>(slot)));
 }
 
+// Human-readable reason for a failed RadioState lookup (for the log).
+const wchar_t* describe(horizon::game::GlobalResolution::Status status) {
+    using S = horizon::game::GlobalResolution::Status;
+    switch (status) {
+    case S::ok:
+        return L"ok";
+    case S::empty_pattern:
+        return L"no pattern configured";
+    case S::not_found:
+        return L"pattern not found in .text";
+    case S::ambiguous:
+        return L"pattern matched more than once";
+    case S::unexpected_instruction:
+        return L"no `mov rbx, [rip+disp32]` at the configured offset";
+    case S::target_outside_image:
+        return L"decoded address is outside the game module";
+    }
+    return L"?";
+}
+
 // Sigscan-based RadioState global resolution. Returns the address of
 // the RadioState global slot (the QWORD that holds RadioState*), or
-// nullptr if the pattern is missing / drift in the FH6 build.
-void* resolve_radiostate_global(const PeImage& game_image) {
-    log_w(L"[horizon-radio] game-resolver: scanning for radio_set_station_by_name...\n");
+// nullptr if the pattern is missing / ambiguous / drifted in the FH6 build.
+void* resolve_radiostate_global(const PeImage& game_image, bool verbose) {
     const horizon::game::GameResolver resolver(game_image);
     const auto&                       sig = horizon::game::signatures::kFh6Game;
-    void* slot = resolver.resolve_global_via_rip_load(sig.radio_set_station_by_name, sig.mov_rbx_offset_in_match);
+    const auto res  = resolver.resolve_global_via_rip_load(sig.radio_state_loader, sig.mov_rbx_offset_in_match);
+    void*      slot = res.address;
     if (slot == nullptr) {
-        log_w(L"[horizon-radio] game-resolver: radio_set_station_by_name pattern "
-              L"didn't match; RadioState global unresolved\n");
+        if (verbose) {
+            const wchar_t* why = describe(res.status);
+            logf(L"[horizon-radio] game-resolver: radio_state_loader %ls (matches=%zu); "
+                 L"RadioState global unresolved\n",
+                 why, res.match_count);
+        }
         return nullptr;
     }
     logf(L"[horizon-radio] game-resolver: RadioState global slot at %p\n", slot);
@@ -275,6 +314,62 @@ void* resolve_radiostate_global(const PeImage& game_image) {
          L"(may be null until game initializes RadioState)\n",
          probe);
     return slot;
+}
+
+// The three independently-resolved pieces of the in-game integration. Owned by
+// the init thread; each piece is published to its atomic the moment it
+// resolves, so the writer / discovery / PCM threads pick it up without
+// restarting. See docs/architecture.md -> "Signature resolution".
+struct BringUp {
+    std::unique_ptr<FmodBridge>       bridge;
+    std::unique_ptr<MetadataInjector> injector;
+    bool                              radio_state = false;
+
+    [[nodiscard]] bool complete() const noexcept {
+        return bridge && injector && radio_state;
+    }
+};
+
+// Resolve whatever is still missing. Safe to call repeatedly: resolved pieces
+// are skipped. The packed game image decrypts its code at load, so a scan that
+// runs before that finishes misses signatures that resolve fine moments later;
+// retrying covers that without needing a game restart.
+void try_bring_up(const PeImage& game_image, BringUp& s, bool verbose) {
+    if (!s.bridge) {
+        s.bridge = bring_up_fmod(game_image, verbose);
+        // The bridge has no targets yet, so install() would fail; publish it
+        // anyway so push_pcm() buffers PCM for when targets arrive.
+        if (s.bridge)
+            g_bridge_for_push.store(s.bridge.get(), std::memory_order_release);
+    }
+    if (!s.injector) {
+        s.injector = bring_up_metadata(game_image, verbose);
+        if (s.injector) {
+            // Cache the resolved vtable for the heap-arena instance scan, then
+            // publish the injector (vtable first: readers gate on the injector).
+            if (auto vt = s.injector->vtable())
+                g_radio_stream_vtable.store(vt->address, std::memory_order_release);
+            g_metadata_injector.store(s.injector.get(), std::memory_order_release);
+        }
+    }
+    if (!s.radio_state) {
+        // Independent of the injector: event detection only needs RadioState.
+        if (void* slot = resolve_radiostate_global(game_image, verbose)) {
+            g_radio_state_global.store(static_cast<void**>(slot), std::memory_order_release);
+            s.radio_state = true;
+        }
+    }
+}
+
+// Live bring-up status, readable from any thread (derived from the atomics).
+std::string bring_up_status() {
+    std::string out = "fmod=";
+    out += g_bridge_for_push.load(std::memory_order_acquire) != nullptr ? "ok" : "MISSING";
+    out += " metadata=";
+    out += g_metadata_injector.load(std::memory_order_acquire) != nullptr ? "ok" : "MISSING";
+    out += " radio_state=";
+    out += g_radio_state_global.load(std::memory_order_acquire) != nullptr ? "ok" : "MISSING";
+    return out;
 }
 
 // Follow radio_state -> +chain0 -> +chain1 -> the station sub-object and
@@ -496,9 +591,9 @@ void poll_game_events(void* radio_state) {
         // from_chars, not strtod: locale-independent. The UI sends '.' as the
         // decimal separator (InvariantCulture); strtod honors LC_NUMERIC, so on
         // a comma-locale host it would stop at the '.' and read 0 -> silence.
-        const char* first = line.c_str() + pos;
-        const char* last  = line.c_str() + line.size();
-        double      v     = 0.0;
+        const char* first    = line.c_str() + pos;
+        const char* last     = line.c_str() + line.size();
+        double      v        = 0.0;
         const auto [ptr, ec] = std::from_chars(first, last, v);
         if (ptr == first || ec != std::errc())
             return false;
@@ -590,6 +685,26 @@ void poll_game_events(void* radio_state) {
         }
     });
 
+    // Function-local statics outlive the thread function and tie their
+    // lifetime to the process. The init thread blocks forever once
+    // setup is done, so the bring-up state is effectively global for
+    // the life of the DLL. PE headers are never packed, so the image
+    // parses (and fingerprints) fine even before the game's code decrypts.
+    static PeImage game_image(GetModuleHandleW(nullptr));
+    static BringUp state;
+
+    if (game_image.valid()) {
+        const auto             text_size = game_image.text().size();
+        const auto             label     = horizon::game::signatures::known_build_label(text_size);
+        const std::string_view shown     = label.empty() ? std::string_view{"UNKNOWN build, not yet verified"} : label;
+        char                   buf[256];
+        const int n = std::snprintf(buf, sizeof(buf), "game build: .text=0x%zX timestamp=0x%08X (%.*s)", text_size,
+                                    game_image.timestamp(), static_cast<int>(shown.size()), shown.data());
+        g_build_summary.assign(buf, n > 0 ? static_cast<std::size_t>(n) : 0);
+    } else {
+        g_build_summary = "game build: failed to parse game PE";
+    }
+
     g_ipc_server.set_snapshot_callback([] {
         if (!g_active_source_id.empty()) {
             g_ipc_server.publish_source_changed(g_active_source_id, g_active_source_display);
@@ -602,48 +717,29 @@ void poll_game_events(void* radio_state) {
             }
             publish_track_ipc(snapshot, g_active_source_id, g_active_source_display);
         }
+        // Surface the build fingerprint + what resolved in the UI Console on
+        // every (re)connect: after a game update this is the first place to
+        // look, and it needs no debugger.
+        g_ipc_server.publish_debug("bridge", g_build_summary);
+        g_ipc_server.publish_debug("bridge", bring_up_status());
     });
     g_ipc_server.start();
-
-    // Function-local statics outlive the thread function and tie their
-    // lifetime to the process. The init thread blocks forever once
-    // setup is done, so the bridge/injector are effectively global for
-    // the life of the DLL.
-    static PeImage                           game_image(GetModuleHandleW(nullptr));
-    static std::unique_ptr<FmodBridge>       bridge;
-    static std::unique_ptr<MetadataInjector> injector;
 
     if (!game_image.valid()) {
         log_w(L"[horizon-radio] failed to parse game PE; FMOD bridge + metadata dormant\n");
     } else {
-        logf(L"[horizon-radio] game image: base=%p size=%zu .text=%zu .rdata=%zu .data=%zu\n",
+        logf(L"[horizon-radio] game image: base=%p size=%zu .text=%zu (0x%zX) .rdata=%zu .data=%zu "
+             L"timestamp=0x%08X\n",
              reinterpret_cast<void*>(game_image.base()), game_image.image_size(), game_image.text().size(),
-             game_image.rdata().size(), game_image.data().size());
-
-        bridge   = bring_up_fmod(game_image);
-        injector = bring_up_metadata(game_image);
-        if (injector && injector->resolved()) {
-            // Cache the resolved vtable for the fast RadioState scan.
-            auto vt = injector->vtable();
-            if (vt) {
-                g_radio_stream_vtable.store(vt->address, std::memory_order_release);
-            }
-            // Resolve the RadioState global -- this is the prize that
-            // lets us skip the heap scan entirely.
-            void* slot = resolve_radiostate_global(game_image);
-            g_radio_state_global.store(static_cast<void**>(slot), std::memory_order_release);
+             game_image.text().size(), game_image.rdata().size(), game_image.data().size(), game_image.timestamp());
+        if (horizon::game::signatures::known_build_label(game_image.text().size()).empty()) {
+            log_w(L"[horizon-radio] WARNING: unknown FH6 build (.text size not in kFh6KnownBuilds). "
+                  L"If titles/audio don't work, re-verify signatures with the discovery dump.\n");
         }
-    }
 
-    if (bridge) {
-        // Publish for the source thread to push into. The bridge has
-        // no targets yet so install() would fail; we set the pointer
-        // anyway so push_pcm() at least buffers PCM for when targets
-        // do arrive.
-        g_bridge_for_push.store(bridge.get(), std::memory_order_release);
-    }
-    if (injector) {
-        g_metadata_injector.store(injector.get(), std::memory_order_release);
+        try_bring_up(game_image, state, /*verbose=*/true);
+        if (!state.complete())
+            log_w(L"[horizon-radio] bring-up incomplete; retrying with backoff (the game may still be unpacking)\n");
 
         const auto& cfg = horizon::inject::signatures::kFh6Metadata;
         const bool  offsets_configured =
@@ -910,13 +1006,49 @@ void poll_game_events(void* radio_state) {
     // Periodic loop: ticks at 2 Hz for IPC stats publishing (the UI
     // expects roughly this cadence), with a separate 30 s throttle on
     // the DebugView log lines so they don't drown the developer view.
+    // It also retries an incomplete bring-up on a doubling backoff
+    // (5 s -> 60 s), giving up after ~10 min: by then the game has long
+    // finished unpacking, so whatever is still missing has drifted.
     std::uint64_t last_br_in = 0, last_br_out = 0, last_br_under = 0;
     std::uint64_t last_md_writes = 0;
     auto          next_debug_log = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+
+    constexpr auto kRetryMaxDelay   = std::chrono::seconds(60);
+    constexpr auto kRetryGiveUp     = std::chrono::minutes(10);
+    const auto     bring_up_started = std::chrono::steady_clock::now();
+    auto           retry_delay      = std::chrono::seconds(5);
+    auto           next_retry       = bring_up_started + retry_delay;
+    int            retry            = 0;
+    bool           retrying         = game_image.valid() && !state.complete();
+
     while (true) {
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
-        if (bridge) {
+        if (retrying && std::chrono::steady_clock::now() >= next_retry) {
+            try_bring_up(game_image, state, /*verbose=*/false);
+            ++retry;
+            const auto status = bring_up_status();
+            logf(L"[horizon-radio] bring-up retry #%d: %hs\n", retry, status.c_str());
+            if (state.complete()) {
+                log_w(L"[horizon-radio] bring-up complete\n");
+                g_ipc_server.publish_debug("bridge", "bring-up complete after retry: " + status);
+                retrying = false;
+            } else if (std::chrono::steady_clock::now() - bring_up_started >= kRetryGiveUp) {
+                // One last verbose pass so the log holds the per-signature
+                // diagnostics for whatever is still missing.
+                try_bring_up(game_image, state, /*verbose=*/true);
+                log_w(L"[horizon-radio] bring-up: giving up on retries; the missing signatures have likely "
+                      L"drifted with a game update (see AGENTS.md -> In-game title injection)\n");
+                g_ipc_server.publish_debug("bridge", "bring-up gave up: " + bring_up_status() +
+                                                         " -- signatures likely drifted with a game update");
+                retrying = false;
+            } else {
+                retry_delay = std::min(retry_delay * 2, kRetryMaxDelay);
+                next_retry  = std::chrono::steady_clock::now() + retry_delay;
+            }
+        }
+
+        if (const auto& bridge = state.bridge) {
             const auto fi = bridge->total_frames_in();
             const auto fo = bridge->total_frames_out();
             const auto un = bridge->underrun_count();
@@ -944,7 +1076,7 @@ void poll_game_events(void* radio_state) {
                 next_debug_log = now + std::chrono::seconds(30);
             }
         }
-        if (injector) {
+        if (const auto& injector = state.injector) {
             const auto w = injector->total_writes();
             if (w != last_md_writes && std::chrono::steady_clock::now() >= next_debug_log) {
                 logf(L"[horizon-radio] metadata: total_writes=%llu\n", static_cast<unsigned long long>(w));

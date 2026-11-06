@@ -27,6 +27,12 @@ public:
     [[nodiscard]] std::size_t image_size() const noexcept {
         return image_size_;
     }
+    // IMAGE_FILE_HEADER::TimeDateStamp. PE headers are never packed, so this is
+    // readable at load time; logged alongside the .text size to fingerprint a
+    // game build.
+    [[nodiscard]] std::uint32_t timestamp() const noexcept {
+        return timestamp_;
+    }
 
     [[nodiscard]] std::span<const std::byte> text() const noexcept {
         return text_;
@@ -51,6 +57,7 @@ public:
 private:
     std::byte*                        base_       = nullptr;
     std::size_t                       image_size_ = 0;
+    std::uint32_t                     timestamp_  = 0;
     std::span<const std::byte>        text_;
     std::span<const std::byte>        rdata_;
     std::span<const std::byte>        data_;
@@ -76,6 +83,17 @@ const std::byte* find_pattern(std::span<const std::byte> haystack, const Pattern
 inline const std::byte* find_pattern(std::span<const std::byte> haystack, std::string_view ida_style) {
     return find_pattern(haystack, compile_pattern(ida_style));
 }
+
+// First match plus a match count, stopping once `limit` matches are seen.
+// The default limit of 2 is all a caller needs to tell "unique" from
+// "ambiguous": a signature that matches twice after a game update must be
+// rejected, not silently resolved to whichever hit comes first.
+struct PatternMatches {
+    const std::byte* first = nullptr;
+    std::size_t      count = 0;
+};
+
+PatternMatches find_pattern_matches(std::span<const std::byte> haystack, const Pattern& p, std::size_t limit = 2);
 
 // A union of alternative patterns. Used for function prologues that
 // vary across builds (FMOD shipped at least four x64 MSVC prologues

@@ -171,7 +171,11 @@ block's original strings, and restore them when we stop replacing the station
 MSVC `std::string` (32-byte SSO/heap header).
 
 **These offsets shift when Forza updates.** Symptom: titles stop appearing (the
-periodic writer's write count stays 0). To re-derive them:
+periodic writer's write count stays 0). First, check the UI **Console** tab
+(tag `bridge`). On every connect the DLL reports the game build (`.text` size,
+known or UNKNOWN) and which pieces resolved (`fmod=… metadata=… radio_state=…`).
+Anything `MISSING` after the ~10 min retry window is a signature that drifted.
+To re-derive them:
 
 1. With the DLL deployed and a song playing on the target station, create an
    empty file `horizon-radio.discover` next to `version.dll`.
@@ -182,6 +186,14 @@ periodic writer's write count stays 0). To re-derive them:
    `…/TrackLFE`), follow it to the block whose string slots hold the song's
    real title/artist, and read off the chain + field offsets.
 4. Update `kFh6Metadata.chain_offsets` and the field offsets; rebuild; redeploy.
+5. Once titles and audio work again, add the new build's `.text` size (from the
+   `bridge` Console line) to `kFh6KnownBuilds` in `signatures.hpp`.
+
+Cross-reference: [matkhl/FH6-Spotify-Radio](https://github.com/matkhl/FH6-Spotify-Radio)
+(GPL-3.0, archived) resolves the same structures. Its FMOD and RadioState
+signatures match ours byte for byte as of its June 2026 release. Its metadata
+chain differs (`+0x58 → +0x18` vs our `+0x50 → +0x08`) and may be another route
+to the same block, so if ours breaks, try theirs in the discovery dump.
 
 The discovery dump is the only viable tool here: **the FH6 binary is packed**
 (its `.text` only decrypts in memory at load), so static Ghidra decompilation

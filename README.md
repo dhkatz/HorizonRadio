@@ -99,6 +99,7 @@ _References_
 
 - [Spotify Radio](https://www.nexusmods.com/forzahorizon6/mods/95?tab=description) - Original inspiration (closed source)
 - [fh6-universal-radio](https://github.com/g0ldyy/fh6-universal-radio) - Cross-referenced for FH6's FMOD function signatures and RadioStreamFmod chain offsets, and adapted its lazy-resolve createDSP technique.
+- [FH6-Spotify-Radio](https://github.com/matkhl/FH6-Spotify-Radio) by matkhl - Cross-referenced for FH6's FMOD and RadioState signatures and the known-build fingerprints; inspired the retry-until-unpacked bring-up and unique-match signature checks.
 
 </details>
 
