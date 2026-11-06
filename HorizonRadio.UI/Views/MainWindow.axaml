@@ -153,15 +153,6 @@
                     </shadui:SidebarItem.Icon>
                 </shadui:SidebarItem>
 
-                <shadui:SidebarItem Content="Events"
-                                    Command="{Binding ShowEventsCommand}"
-                                    IsChecked="{Binding IsEventsWorkspace}"
-                                    Route="events">
-                    <shadui:SidebarItem.Icon>
-                        <material:MaterialIcon Kind="FlashOutline" Width="18" Height="18"/>
-                    </shadui:SidebarItem.Icon>
-                </shadui:SidebarItem>
-
                 <shadui:SidebarItem Content="Controls"
                                     Command="{Binding ShowControlsCommand}"
                                     IsChecked="{Binding IsControlsWorkspace}"
@@ -388,15 +379,6 @@
                               ToolTip.Tip="Metadata">
                     <material:MaterialIcon Kind="TagOutline" Width="18" Height="18"/>
                 </ToggleButton>
-                <ToggleButton Command="{Binding ShowEventsCommand}"
-                              IsChecked="{Binding IsEventsWorkspace}"
-                              Height="40" Width="40"
-                              HorizontalContentAlignment="Center"
-                              VerticalContentAlignment="Center"
-                              Padding="0"
-                              ToolTip.Tip="Events">
-                    <material:MaterialIcon Kind="FlashOutline" Width="18" Height="18"/>
-                </ToggleButton>
                 <ToggleButton Command="{Binding ShowControlsCommand}"
                               IsChecked="{Binding IsControlsWorkspace}"
                               Height="40" Width="40"
@@ -528,9 +510,6 @@
             </ItemsControl>
             <Grid IsVisible="{Binding IsToolsWorkspace}">
                 <views:ToolsView DataContext="{Binding ToolsTab}"/>
-            </Grid>
-            <Grid IsVisible="{Binding IsEventsWorkspace}">
-                <views:EventsView DataContext="{Binding Events}"/>
             </Grid>
             <Grid IsVisible="{Binding IsControlsWorkspace}">
                 <views:ControlsView DataContext="{Binding Controls}"/>

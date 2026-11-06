@@ -114,8 +114,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         ToastManager = toasts;
         DialogManager = dialogManager;
+        _game = game;
+        GameName = game.DisplayName;
+        ConnectionLabel = $"Not connected to {GameName}";
         Sources = new SourcesViewModel(runner, store, registry);
-        NowPlaying = new NowPlayingViewModel(runner, store, mixStore, mixSwitcher, queue, preview, toasts, DialogManager);
+        NowPlaying = new NowPlayingViewModel(runner, store, mixStore, mixSwitcher, queue, GameName, preview, toasts, DialogManager);
         Metadata = metadata;
         ToolsTab = new ToolsViewModel(registry, installers);
         Events = events;
@@ -136,9 +139,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         // full search page (the same picker), so no-locator (radio) songs stay playable.
         History = new HistoryViewModel(historyStore, queue, metaResolver, OpenSearchFor, toasts);
 
-        _game = game;
-        GameName = game.DisplayName;
-        foreach (var page in game.Pages) GamePages.Add(new GamePageItem(page));
+        // The game's own pages plus the host's game-related ones (Events, when the game reports
+        // any), under the game's name in the sidebar.
+        var pages = game.Pages.ToList();
+        if (game.EventCatalog.Count > 0)
+            pages.Add(new GamePage("host-events", "Events", "FlashOutline", Events, GamePage.EventsOrder));
+        foreach (var page in pages.OrderBy(p => p.Order)) GamePages.Add(new GamePageItem(page));
+
+        NowPlaying.GameChip = new GameChipViewModel(GameName, game.Stations, id => ShowGamePage(FindGamePage(id)));
         game.NoticeChanged += () =>
         {
             OnPropertyChanged(nameof(ShowGameNotice));
@@ -175,9 +183,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     private GamePageItem? FindGamePage(string? id) => GamePages.FirstOrDefault(p => p.Id == id);
 
-    // 0 = Now Playing, 1 = Sources, 2 = Metadata, 5 = Tools, 6 = Events, 7 = Console, 8 = Controls,
+    // 0 = Now Playing, 1 = Sources, 2 = Metadata, 5 = Tools, 7 = Console, 8 = Controls,
     // 9 = Mixes, 10 = About, 11 = Search, 12 = History, 13 = a game page (SelectedGamePage).
-    // 3 and 4 (Stats, Mod Manager) are retired: those pages now come from the FH6 game plugin.
+    // Retired: 3, 4 (Stats, Mods: now the FH6 plugin's pages) and 6 (Events: a game page now).
     [ObservableProperty] private int selectedWorkspaceIndex;
 
     private const int GamePageWorkspace = 13;
@@ -186,7 +194,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public bool IsSourcesWorkspace => SelectedWorkspaceIndex == 1;
     public bool IsMetadataWorkspace => SelectedWorkspaceIndex == 2;
     public bool IsToolsWorkspace => SelectedWorkspaceIndex == 5;
-    public bool IsEventsWorkspace => SelectedWorkspaceIndex == 6;
     public bool IsConsoleWorkspace => SelectedWorkspaceIndex == 7;
     public bool IsControlsWorkspace => SelectedWorkspaceIndex == 8;
     public bool IsMixesWorkspace => SelectedWorkspaceIndex == 9;
@@ -200,7 +207,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         1 => "sources",
         2 => "metadata",
         5 => "tools",
-        6 => "events",
         7 => "console",
         8 => "controls",
         9 => "mixes",
@@ -219,7 +225,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private bool isQueueVisible;
 
     [ObservableProperty] private ConnectionState connection = ConnectionState.Disconnected;
-    [ObservableProperty] private string connectionLabel = "Not connected to Forza Horizon 6";
+    [ObservableProperty] private string connectionLabel = "Not connected";
 
     partial void OnSelectedWorkspaceIndexChanged(int value)
     {
@@ -227,7 +233,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsSourcesWorkspace));
         OnPropertyChanged(nameof(IsMetadataWorkspace));
         OnPropertyChanged(nameof(IsToolsWorkspace));
-        OnPropertyChanged(nameof(IsEventsWorkspace));
         OnPropertyChanged(nameof(IsConsoleWorkspace));
         OnPropertyChanged(nameof(IsControlsWorkspace));
         OnPropertyChanged(nameof(IsMixesWorkspace));
@@ -253,7 +258,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand] private void ShowSources() => SelectedWorkspaceIndex = 1;
     [RelayCommand] private void ShowMetadata() => SelectedWorkspaceIndex = 2;
     [RelayCommand] private void ShowTools() => SelectedWorkspaceIndex = 5;
-    [RelayCommand] private void ShowEvents() => SelectedWorkspaceIndex = 6;
     [RelayCommand] private void ShowConsole() => SelectedWorkspaceIndex = 7;
     [RelayCommand] private void ShowControls() => SelectedWorkspaceIndex = 8;
     [RelayCommand] private void ShowMixes() => SelectedWorkspaceIndex = 9;
@@ -294,5 +298,6 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             _ => "Unknown",
         };
         NowPlaying.SetConnectionState(state == ConnectionState.Connected);
+        NowPlaying.GameChip.IsConnected = state == ConnectionState.Connected;
     }
 }

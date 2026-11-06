@@ -60,6 +60,10 @@ public sealed class Fh6GameIntegration : IGameIntegration, IStationTargeting, IG
 
     public event Action<ConnectionState>? StateChanged;
 
+    // Race start/finish, pause/resume, station changes: what the DLL's memory poller and the
+    // Data Out telemetry report.
+    public IReadOnlyList<GameEventInfo> EventCatalog => GameEventKinds.Catalog;
+
     public string EventsHint =>
         $"For richer events, enable Forza “Data Out” in-game and point it at 127.0.0.1:{ForzaTelemetryListener.DefaultPort}.";
 
@@ -127,9 +131,10 @@ public sealed class Fh6GameIntegration : IGameIntegration, IStationTargeting, IG
 
         return
         [
-            new GamePage(ModsPageId, "Mods", "PuzzleOutline", _modManager),
-            new GamePage(StationsPageId, "Stations", "RadioTower", stations),
-            new GamePage("stats", "Stats", "ChartBar", stats),
+            new GamePage(ModsPageId, "Mods", "PuzzleOutline", _modManager, Order: 10),
+            new GamePage(StationsPageId, "Stations", "RadioTower", stations, Order: 20),
+            // The host's Events page sits between these (GamePage.EventsOrder).
+            new GamePage("stats", "Stats", "ChartBar", stats, Order: 40),
         ];
     }
 
@@ -144,6 +149,18 @@ public sealed class Fh6GameIntegration : IGameIntegration, IStationTargeting, IG
     IReadOnlyList<string> IStationTargeting.Stations => StationCatalog.Names;
 
     public string? CurrentStation => _currentStation;
+
+    public string? CurrentAssignment => _currentStation is { } station ? Describe(Map.Get(station)) : null;
+
+    string? IStationTargeting.PageId => StationsPageId;
+
+    /// <summary>A short label for what a station plays (the chip, the Stations page).</summary>
+    public string Describe(StationAssignment assignment) => assignment.Kind switch
+    {
+        StationAssignmentKind.Player => "Horizon Radio player",
+        StationAssignmentKind.Mix => Mixes.FirstOrDefault(m => m.Id == assignment.MixId)?.Name ?? "Mix",
+        _ => "Game audio",
+    };
 
     public event Action? Changed;
 
@@ -168,6 +185,7 @@ public sealed class Fh6GameIntegration : IGameIntegration, IStationTargeting, IG
     {
         Map.ForgetMissingMixes([.. Mixes.Select(m => m.Id)]);
         MixesChanged?.Invoke();
+        Changed?.Invoke(); // a renamed mix changes CurrentAssignment's label
     }
 
     // Play what the tuned station is assigned (the player when the game isn't connected).

@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Game chip in the player bar.** Shows the station Forza is tuned to and what it
+  plays there (e.g. "Gacha City Radio · Horizon Radio player"); click it to set up
+  stations. Replaces the old station picker.
+- **Events moved under Forza Horizon 6** in the sidebar (Mods, Stations, Events,
+  Stats), and lists the events the game reports. Labels like the output picker and
+  the connection status use the game's name.
 - **Each FH6 station can play something different.** A new Stations page (under
   Forza Horizon 6) sets every in-game station to the game's own music (the
   default), the Horizon Radio player, or one of your mixes; tuning the in-game

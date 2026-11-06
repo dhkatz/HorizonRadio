@@ -80,6 +80,10 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     /// single picker so it sits naturally beside the source dropdown — an
     /// output preference, not a per-source setting.</summary>
     public ObservableCollection<OutputTarget> OutputTargets { get; } = new();
+
+    /// <summary>The player bar's game chip (tuned station + what it plays); set by the shell
+    /// once the game is known.</summary>
+    [ObservableProperty] private GameChipViewModel gameChip = new();
     [ObservableProperty] private OutputTarget? selectedOutput;
 
     /// <summary>Master volume slider <em>position</em> (0..1). Governs both
@@ -131,6 +135,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
 
     public NowPlayingViewModel(SourceRunner runner, SourceConfigStore store,
         MixStore mixes, MixSwitcher switcher, QueuePlayback queue,
+        string gameName,
         PreviewController? preview = null, ToastManager? toasts = null,
         DialogManager? dialogs = null)
     {
@@ -160,7 +165,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         // choice doesn't fire the OnChanged handlers back into the controller.
         if (_preview != null)
         {
-            OutputTargets.Add(OutputTarget.Bridge);
+            OutputTargets.Add(OutputTarget.Game(gameName));
             foreach (var d in PreviewController.Devices)
                 OutputTargets.Add(new OutputTarget(false, d.Id, d.Name));
 
@@ -440,7 +445,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         }
         else
         {
-            _toasts.CreateToast($"{OutputTarget.Bridge.Name} isn't running")
+            _toasts.CreateToast($"{SelectedOutput?.Name ?? "The game"} isn't running")
                 .WithContent("Playback paused. Launch the game with the mod installed, or choose a local output device to test.")
                 .WithDelay(6)
                 .DismissOnClick()

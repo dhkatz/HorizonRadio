@@ -25,6 +25,11 @@ public interface IGameIntegration : IAsyncDisposable
     /// integration's lifetime; may be empty.</summary>
     IReadOnlyList<IGameEventSource> EventSources { get; }
 
+    /// <summary>The events this game reports, as the Events page lists them (grouped by
+    /// <see cref="GameEventInfo.Category"/>, in this order). Empty if the game reports none, in
+    /// which case the host shows no Events page.</summary>
+    IReadOnlyList<GameEventInfo> EventCatalog { get; }
+
     /// <summary>Current link to the game.</summary>
     ConnectionState State { get; }
 
@@ -77,7 +82,13 @@ public interface IGameIntegration : IAsyncDisposable
 /// <param name="Icon">Material Design icon name (e.g. <c>PuzzleOutline</c>); unknown names fall
 /// back to a generic icon.</param>
 /// <param name="ViewModel">The page's view model.</param>
-public sealed record GamePage(string Id, string Title, string Icon, object ViewModel);
+/// <param name="Order">Position among the game's pages in the sidebar, ascending. The host adds
+/// its own game-related pages at fixed positions: Events at <see cref="EventsOrder"/>.</param>
+public sealed record GamePage(string Id, string Title, string Icon, object ViewModel, int Order = 0)
+{
+    /// <summary>Where the host's Events page sits among a game's pages.</summary>
+    public const int EventsOrder = 30;
+}
 
 /// <summary>A setup problem surfaced as a banner, with a shortcut to the page that fixes it.</summary>
 /// <param name="Title">Short headline.</param>
@@ -98,6 +109,14 @@ public interface IStationTargeting
     /// <summary>The station tuned in right now, or <see langword="null"/> when unknown (e.g. the
     /// game isn't connected).</summary>
     string? CurrentStation { get; }
+
+    /// <summary>What <see cref="CurrentStation"/> plays, as a short label (e.g. "Horizon Radio
+    /// player", a mix's name, "Game audio"), or <see langword="null"/> when no station is tuned.</summary>
+    string? CurrentAssignment { get; }
+
+    /// <summary>The <see cref="GamePage.Id"/> of the page where stations are set up, if any (the
+    /// player bar's game chip opens it).</summary>
+    string? PageId { get; }
 
     /// <summary>Raised when <see cref="CurrentStation"/> or a station's assignment changes. May
     /// fire on any thread.</summary>
