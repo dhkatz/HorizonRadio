@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Games are plugins now.** The plugin SDK gains `IGamePlugin` /
+  `IGameIntegration`: a game integration supplies the audio output, game
+  events, connection state, and optional capabilities (station targeting,
+  in-game volume, now-playing display), and the app talks to the game only
+  through that interface. Forza Horizon 6 support moved out of Core into the
+  `HorizonRadio.Game.ForzaHorizon6` plugin. No user-visible change yet; this is
+  the groundwork for other games and a game-free "just a player" mode.
 - **The FH6 mod moved to `Mods/ForzaHorizon6/`.** The native `version.dll`
   project (formerly the root `HorizonRadio/` + `HorizonRadio.Tests/` dirs,
   root CMake files, and `.clang-*` configs) is now a self-contained CMake

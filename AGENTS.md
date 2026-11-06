@@ -44,6 +44,14 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
 - **HorizonRadio.UI / HorizonRadio.Core (C#)** — sources (librespot, local files,
   yt-dlp/ffmpeg), metadata enrichment, and the dashboard. Tool-specific details
   stay encapsulated in each source class; they are not leaked into shared code.
+- **Game plugins (`Plugins/Games/`)** — the Horizon Radio side of a game
+  integration. An `IGamePlugin` (SDK) builds one `IGameIntegration`: the game's
+  audio output, its event sources, connection state, and optional capabilities
+  (station targeting, in-game volume, now-playing display). The app talks to the
+  active game only through that interface, and exactly one runs at a time.
+  `HorizonRadio.Game.ForzaHorizon6` wraps the IPC/PCM pipe clients, Forza Data
+  Out telemetry, the mod installer, and the station list. Code that runs *inside*
+  a game lives in `Mods/<Game>/` instead.
 - **version.dll (C++)** — a `version.dll` proxy injected into FH6. It hosts an
   FMOD DSP that mixes our PCM into the game's radio channel, writes the current
   track's title/artist into the game's HUD, and exposes a named pipe to the UI.

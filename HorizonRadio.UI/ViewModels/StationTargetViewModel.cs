@@ -41,6 +41,12 @@ public sealed partial class StationTargetViewModel : ViewModelBase
             : StationCatalog.AnyLabel;
     }
 
+    /// <summary>Map a picker selection to a game station target: <see langword="null"/>
+    /// (replace whatever is active) for "Any station" or no selection, else the
+    /// station name verbatim.</summary>
+    public static string? ToTarget(string? selection) =>
+        string.IsNullOrEmpty(selection) || selection == StationCatalog.AnyLabel ? null : selection;
+
     /// <summary>Designer-only ctor (so the Avalonia previewer can construct the
     /// player bar without a real store).</summary>
     public StationTargetViewModel() : this(new SourceConfigStore()) { }
