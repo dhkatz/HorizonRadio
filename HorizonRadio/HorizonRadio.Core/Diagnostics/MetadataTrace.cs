@@ -165,6 +165,9 @@ public static class MetadataTrace
     {
         public string Id = "";
         public bool Matched;
+        // How long the provider took to answer, including its rate-limit wait. Null = not asked
+        // (an earlier interpretation already matched, or the provider was skipped).
+        public long? Ms;
         public string? Artist;
         public string? Title;
         public string? Album;
@@ -196,24 +199,38 @@ public static class MetadataTrace
         };
     }
 
-    public static void BeginAttempt(string? interpArtist, string interpTitle)
+    /// <summary>Start recording one interpretation. <paramref name="providerIds"/> lists the
+    /// providers about to be asked, in priority order, so the record reads in that order even
+    /// though they answer in parallel.</summary>
+    public static void BeginAttempt(string? interpArtist, string interpTitle, IEnumerable<string>? providerIds = null)
     {
         var s = Scope.Value;
-        s?.Attempts.Add(new AttemptRec { InterpArtist = interpArtist, InterpTitle = interpTitle });
+        if (s is null) return;
+        var attempt = new AttemptRec { InterpArtist = interpArtist, InterpTitle = interpTitle };
+        if (providerIds != null)
+            foreach (var id in providerIds) attempt.Providers.Add(new ProviderRec { Id = id });
+        lock (s) s.Attempts.Add(attempt);
     }
 
-    public static void Provider(string id, bool matched, string? artist, string? title, string? album, int artBytes)
+    public static void Provider(string id, bool matched, string? artist, string? title, string? album, int artBytes,
+                                long? elapsedMs = null)
     {
         var s = Scope.Value;
-        if (s is null || s.Attempts.Count == 0) return;
-        var attempt = s.Attempts[^1];
-        var rec = GetOrAddProvider(attempt, id);
-        rec.Matched = matched;
-        rec.Artist = artist;
-        rec.Title = title;
-        rec.Album = album;
-        rec.ArtBytes = artBytes;
-        if (matched) attempt.Matched = true;
+        if (s is null) return;
+        // Providers answer in parallel, so records are written from several threads.
+        lock (s)
+        {
+            if (s.Attempts.Count == 0) return;
+            var attempt = s.Attempts[^1];
+            var rec = GetOrAddProvider(attempt, id);
+            rec.Matched = matched;
+            rec.Artist = artist;
+            rec.Title = title;
+            rec.Album = album;
+            rec.ArtBytes = artBytes;
+            rec.Ms = elapsedMs;
+            if (matched) attempt.Matched = true;
+        }
     }
 
     /// <summary>A capture list for a provider's considered results, or null when not capturing — so a
@@ -230,12 +247,16 @@ public static class MetadataTrace
     {
         if (considered is null) return;
         var s = Scope.Value;
-        if (s is null || s.Attempts.Count == 0) return;
-        var rec = GetOrAddProvider(s.Attempts[^1], id);
-        rec.Query = query;
-        rec.Considered = considered.Count == 0
-            ? null
-            : considered.Select(c => (object)new { c.Title, c.Artist, c.Album, score = c.Score }).ToList();
+        if (s is null) return;
+        lock (s)
+        {
+            if (s.Attempts.Count == 0) return;
+            var rec = GetOrAddProvider(s.Attempts[^1], id);
+            rec.Query = query;
+            rec.Considered = considered.Count == 0
+                ? null
+                : considered.Select(c => (object)new { c.Title, c.Artist, c.Album, score = c.Score }).ToList();
+        }
     }
 
     // One provider record per id within an attempt: the resolver's Provider(...) and the provider's
@@ -249,7 +270,8 @@ public static class MetadataTrace
         return rec;
     }
 
-    public static void EndResolve(Track final)
+    /// <param name="elapsedMs">How long the whole resolve took, every interpretation included.</param>
+    public static void EndResolve(Track final, long? elapsedMs = null)
     {
         var s = Scope.Value;
         Scope.Value = null;
@@ -258,6 +280,7 @@ public static class MetadataTrace
         {
             t = "resolve",
             ts = Now(),
+            ms = elapsedMs,
             externalId = s.ExternalId,
             seed = new { artist = s.SeedArtist, title = s.SeedTitle },
             candidates = Cands(s.Candidates),
@@ -271,7 +294,8 @@ public static class MetadataTrace
             },
         });
         ProcessConsole.Append(ConsoleTag,
-            $"resolved: {final.Artist} / {final.Title} · {final.Album ?? "(no album)"} · art {(final.AlbumArt?.Length ?? 0)}B");
+            $"resolved: {final.Artist} / {final.Title} · {final.Album ?? "(no album)"} · art {(final.AlbumArt?.Length ?? 0)}B" +
+            (elapsedMs is { } ms ? $" · {ms} ms" : ""));
     }
 
     // -- helpers --

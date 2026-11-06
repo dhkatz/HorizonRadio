@@ -138,27 +138,14 @@ public sealed class MusicBrainzProvider : IMetadataProvider
             return new MetadataCacheEntry(canonicalTitle, canonicalArtist, null, null, null);
 
         // MB doesn't indicate which release has art; probe the first few via CAA.
-        int maxTries = Math.Min(3, releases.GetArrayLength());
-        for (int i = 0; i < maxTries; ++i)
+        if (await FirstReleaseWithArtAsync(releases, ct).ConfigureAwait(false) is { } found)
         {
-            var rel = releases[i];
-            if (!rel.TryGetProperty("id", out var mbidEl) ||
-                !rel.TryGetProperty("title", out var albumEl)) continue;
-
-            var mbid = mbidEl.GetString();
-            var album = albumEl.GetString();
-            if (string.IsNullOrEmpty(mbid)) continue;
-
-            var art = await FetchCoverArtAsync(mbid, ct).ConfigureAwait(false);
-            if (art != null)
-            {
-                return new MetadataCacheEntry(
-                    Title: canonicalTitle,
-                    Artist: canonicalArtist,
-                    Album: album,
-                    AlbumArt: art,
-                    Mbid: mbid);
-            }
+            return new MetadataCacheEntry(
+                Title: canonicalTitle,
+                Artist: canonicalArtist,
+                Album: found.Album,
+                AlbumArt: found.Art,
+                Mbid: found.Mbid);
         }
 
         return new MetadataCacheEntry(canonicalTitle, canonicalArtist, null, null, null);
@@ -216,23 +203,37 @@ public sealed class MusicBrainzProvider : IMetadataProvider
         if (!rroot.TryGetProperty("releases", out var releases) ||
             releases.ValueKind != JsonValueKind.Array) return null;
 
-        int maxTries = Math.Min(3, releases.GetArrayLength());
-        for (int i = 0; i < maxTries; ++i)
+        if (await FirstReleaseWithArtAsync(releases, ct).ConfigureAwait(false) is { } found)
+            return new MetadataCacheEntry(canonicalTitle, canonicalArtist, found.Album, found.Art, found.Mbid);
+
+        return new MetadataCacheEntry(canonicalTitle, canonicalArtist, null, null, null);
+    }
+
+    private sealed record ReleaseArt(string Mbid, string? Album, byte[] Art);
+
+    // The first of a recording's first few releases (in MB's order) that has cover art. The
+    // Cover Art Archive answers in 2–6 s per image (it redirects twice, to archive.org), so the
+    // releases are probed at once rather than one after another; the pick is the same. CAA is
+    // a separate service from the MB API, so the MB rate limit doesn't apply to it.
+    private async Task<ReleaseArt?> FirstReleaseWithArtAsync(JsonElement releases, CancellationToken ct)
+    {
+        var probes = new List<(string Mbid, string? Album, Task<byte[]?> Art)>();
+        for (int i = 0; i < Math.Min(3, releases.GetArrayLength()); ++i)
         {
             var rel = releases[i];
             if (!rel.TryGetProperty("id", out var mbidEl) ||
                 !rel.TryGetProperty("title", out var albumEl)) continue;
 
             var mbid = mbidEl.GetString();
-            var album = albumEl.GetString();
             if (string.IsNullOrEmpty(mbid)) continue;
-
-            var art = await FetchCoverArtAsync(mbid, ct).ConfigureAwait(false);
-            if (art != null)
-                return new MetadataCacheEntry(canonicalTitle, canonicalArtist, album, art, mbid);
+            probes.Add((mbid, albumEl.GetString(), FetchCoverArtAsync(mbid, ct)));
         }
 
-        return new MetadataCacheEntry(canonicalTitle, canonicalArtist, null, null, null);
+        // In release order: an earlier release with art wins, even if a later one answered first.
+        foreach (var (mbid, album, art) in probes)
+            if (await art.ConfigureAwait(false) is { } bytes)
+                return new ReleaseArt(mbid, album, bytes);
+        return null;
     }
 
     // CAA front-500 is the right size for the 180×180 HUD tile; 404 (no art) → null.

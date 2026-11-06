@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Song details show up much sooner.** A new song's title and cover art used to take
+  several seconds, often 30+ while a queue or mix was filling in. Now they usually take
+  under a second. Each song is looked up once instead of three times, the metadata
+  providers are asked at the same time instead of one after another, the playing song
+  goes ahead of queue, mix, and History lookups, and a slow provider (MusicBrainz's cover
+  art can take 2–6 s an image) no longer holds the others' answers back. The metadata
+  trace now records how long each provider took.
 - **Repository layout.** The app's projects moved under `HorizonRadio/`, the plugin
   SDK under `Plugins/`, and README screenshots to `Assets/`; the solution is now
   `HorizonRadio.slnx`. The root holds `Assets/`, `HorizonRadio/`, `Plugins/`, and

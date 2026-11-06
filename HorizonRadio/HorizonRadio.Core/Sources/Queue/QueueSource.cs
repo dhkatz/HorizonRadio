@@ -392,11 +392,13 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
         if (context != null)
         {
             // Show a placeholder while the first/next context entry resolves (a
-            // YouTube enumerate takes a beat) so the HUD isn't blank.
+            // YouTube enumerate takes a beat) so the HUD isn't blank. It isn't a song, so
+            // it's never looked up.
             if (_current == null)
                 TrackChanged?.Invoke(new Track(
                     Title: "Loading…", Artist: context.DisplayName, Album: null, AlbumArt: null,
-                    SourceId: Id, SourceDisplay: context.DisplayName, ExternalId: null));
+                    SourceId: Id, SourceDisplay: context.DisplayName, ExternalId: null,
+                    Resolvable: false));
 
             var item = await context.NextAsync(ct).ConfigureAwait(false);
             if (item != null)
