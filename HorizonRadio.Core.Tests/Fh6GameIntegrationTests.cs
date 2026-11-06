@@ -4,7 +4,6 @@ using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Plugins;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Game.ForzaHorizon6;
-using HorizonRadio.Game.ForzaHorizon6.ViewModels;
 using HorizonRadio.Plugins.Abstractions;
 
 namespace HorizonRadio.Core.Tests;
@@ -18,8 +17,6 @@ public class Fh6GameIntegrationTests
 
         public IPluginSettings GetSettings(string pluginId) => settings.For(pluginId);
     }
-
-    private static Dictionary<string, string> StationSetting(string station) => new() { ["station"] = station };
 
     [Fact]
     public async Task Plugin_builds_an_integration_with_every_FH6_capability()
@@ -36,71 +33,7 @@ public class Fh6GameIntegrationTests
         // The DLL's memory poller + Forza Data Out telemetry.
         Assert.Equal(2, game.EventSources.Count);
         Assert.Equal(StationCatalog.Names, game.Stations!.Stations);
-        Assert.NotNull(game.MixSettings);
-    }
-
-    [Fact]
-    public async Task Default_station_persists_in_the_plugin_settings()
-    {
-        var store = PluginSettingsStore.CreateInMemory();
-        var plugin = new Fh6GamePlugin();
-
-        await using (var game = plugin.Create(new TestContext(store)))
-            game.Stations!.DefaultStation = "Horizon XS";
-        Assert.Equal("Horizon XS", store.For("fh6").GetValue("station"));
-
-        await using (var reloaded = plugin.Create(new TestContext(store)))
-            Assert.Equal("Horizon XS", reloaded.Stations!.DefaultStation);
-
-        // An unknown name (stale config, renamed station) means "whatever is active".
-        store.For("fh6").SetValue("station", "Not A Station");
-        await using (var stale = plugin.Create(new TestContext(store)))
-            Assert.Null(stale.Stations!.DefaultStation);
-    }
-
-    [Fact]
-    public async Task Active_mix_override_wins_over_the_default()
-    {
-        await using var game = new Fh6GameIntegration("Forza Horizon 6");
-        var stations = game.Stations!;
-        var mixes = game.MixSettings!;
-        var changes = 0;
-        stations.Changed += () => changes++;
-
-        stations.DefaultStation = "Horizon XS";
-        Assert.Equal("Horizon XS", stations.EffectiveStation);
-
-        mixes.ApplyMix(StationSetting("Horizon Pulse"));
-        Assert.Equal("Horizon Pulse", stations.EffectiveStation);
-        Assert.Equal("Horizon XS", stations.DefaultStation); // the default is untouched
-
-        // A mix without an override (or no mix at all) falls back to the default.
-        mixes.ApplyMix(null);
-        Assert.Equal("Horizon XS", stations.EffectiveStation);
-
-        // Re-applying the same state isn't a change.
-        mixes.ApplyMix(null);
-        stations.DefaultStation = "Horizon XS";
-        Assert.Equal(3, changes);
-    }
-
-    [Fact]
-    public async Task Mix_editor_round_trips_the_station_override()
-    {
-        await using var game = new Fh6GameIntegration("Forza Horizon 6");
-        var mixes = game.MixSettings!;
-
-        var editor = mixes.CreateEditor(StationSetting("Horizon Wave"));
-        var vm = Assert.IsType<MixSettingsViewModel>(editor.ViewModel);
-        Assert.Equal("Horizon Wave", vm.SelectedStation);
-        Assert.Equal("Horizon Wave", editor.Settings!["station"]);
-
-        vm.SelectedStation = MixSettingsViewModel.UseDefault;
-        Assert.Null(editor.Settings);
-
-        Assert.Equal(MixSettingsViewModel.UseDefault, Assert.IsType<MixSettingsViewModel>(mixes.CreateEditor(null).ViewModel).SelectedStation);
-        Assert.Equal("Station: Horizon Wave", mixes.Describe(StationSetting("Horizon Wave")));
-        Assert.Null(mixes.Describe(null));
+        Assert.Null(game.Stations.CurrentStation); // not connected
     }
 
     [Fact]
@@ -109,22 +42,19 @@ public class Fh6GameIntegrationTests
         await using var game = new Fh6GameIntegration("Forza Horizon 6");
         Assert.Equal(ConnectionState.Disconnected, game.State);
 
-        // No DLL to talk to: best-effort commands report false (or no-op) instead of throwing.
-        game.Stations!.DefaultStation = "Horizon XS";
+        // No DLL to talk to: best-effort commands report false instead of throwing.
         Assert.False(game.Volume!.SetMasterVolume(0.5f));
         Assert.False(game.NowPlaying!.Show(new Track("Title", "Artist", null, null, "test", "Test")));
         Assert.False(game.Output!.Send([0, 0]));
     }
 
     [Fact]
-    public async Task Contributes_Mods_and_Stats_pages_and_a_telemetry_hint()
+    public async Task Contributes_Mods_Stations_and_Stats_pages_and_a_telemetry_hint()
     {
         await using var game = new Fh6GameIntegration("Forza Horizon 6");
 
         Assert.Contains("127.0.0.1:9967", game.EventsHint);
-        Assert.Collection(game.Pages,
-            mods => Assert.Equal(("mods", "Mods"), (mods.Id, mods.Title)),
-            stats => Assert.Equal(("stats", "Stats"), (stats.Id, stats.Title)));
+        Assert.Equal(["mods", "stations", "stats"], game.Pages.Select(p => p.Id));
         // Built once: the shell holds on to these view models.
         Assert.Same(game.Pages, game.Pages);
         // Each page view model has a view next to it, by the ViewLocator's naming convention.
@@ -136,5 +66,81 @@ public class Fh6GameIntegrationTests
         // A notice, when present, must point at a page that exists.
         if (game.Notice is { } notice)
             Assert.Contains(game.Pages, p => p.Id == notice.PageId);
+    }
+
+    [Fact]
+    public void Stations_play_the_game_by_default_and_route_by_assignment()
+    {
+        var map = new StationMap(null);
+        Assert.False(map.HasAssignments);
+        Assert.Empty(map.TargetStations);
+
+        // Unknown station (not connected): plain player playback.
+        Assert.Equal(PlaybackRoute.Player, map.RouteFor(null));
+        // Unassigned station: the game's own music.
+        Assert.Equal(PlaybackRoute.Silent, map.RouteFor("Horizon XS"));
+
+        map.Set("Horizon XS", StationAssignment.Player);
+        map.Set("Horizon Pulse", StationAssignment.ForMix("drive"));
+        Assert.Equal(PlaybackRoute.Player, map.RouteFor("Horizon XS"));
+        Assert.Equal(PlaybackRoute.Mix("drive", StationSwitchMode.Resume), map.RouteFor("Horizon Pulse"));
+        Assert.Equal(["Horizon Pulse", "Horizon XS"], map.TargetStations);
+
+        map.Mode = StationSwitchMode.Live;
+        Assert.Equal(PlaybackRoute.Mix("drive", StationSwitchMode.Live), map.RouteFor("Horizon Pulse"));
+    }
+
+    [Fact]
+    public void Only_one_station_plays_the_player()
+    {
+        var map = new StationMap(null);
+        map.Set("Horizon XS", StationAssignment.Player);
+        map.Set("Horizon Wave", StationAssignment.Player);
+
+        Assert.Equal(StationAssignment.Game, map.Get("Horizon XS"));
+        Assert.Equal(StationAssignment.Player, map.Get("Horizon Wave"));
+    }
+
+    [Fact]
+    public void Assignments_and_mode_persist_and_ignore_unknown_stations()
+    {
+        var store = PluginSettingsStore.CreateInMemory();
+        var settings = store.For("fh6");
+        var map = new StationMap(settings);
+        map.Set("Horizon XS", StationAssignment.ForMix("drive"));
+        map.Mode = StationSwitchMode.Restart;
+        map.Set("Not A Station", StationAssignment.Player); // ignored
+
+        var reloaded = new StationMap(settings);
+        Assert.Equal(StationAssignment.ForMix("drive"), reloaded.Get("Horizon XS"));
+        Assert.Equal(StationSwitchMode.Restart, reloaded.Mode);
+        Assert.Equal(["Horizon XS"], reloaded.TargetStations);
+    }
+
+    [Fact]
+    public void Stations_playing_a_deleted_mix_go_back_to_the_game()
+    {
+        var map = new StationMap(null);
+        map.Set("Horizon XS", StationAssignment.ForMix("gone"));
+        map.Set("Horizon Pulse", StationAssignment.ForMix("kept"));
+        var changes = 0;
+        map.Changed += () => changes++;
+
+        map.ForgetMissingMixes(["kept"]);
+
+        Assert.Equal(StationAssignment.Game, map.Get("Horizon XS"));
+        Assert.Equal(StationAssignment.ForMix("kept"), map.Get("Horizon Pulse"));
+        Assert.Equal(1, changes);
+    }
+
+    [Fact]
+    public async Task Integration_reads_its_station_map_from_the_plugin_settings()
+    {
+        var store = PluginSettingsStore.CreateInMemory();
+        new StationMap(store.For("fh6")).Set("Horizon XS", StationAssignment.Player);
+
+        await using var game = new Fh6GamePlugin().Create(new TestContext(store));
+        var fh6 = Assert.IsType<Fh6GameIntegration>(game);
+        Assert.Equal(StationAssignment.Player, fh6.Map.Get("Horizon XS"));
     }
 }

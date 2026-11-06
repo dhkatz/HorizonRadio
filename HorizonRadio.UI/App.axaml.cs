@@ -16,6 +16,7 @@ using HorizonRadio.Core.Metadata.MusicBrainz;
 using HorizonRadio.Core.Metadata.Spotify;
 using HorizonRadio.Core.Metadata.VocaDb;
 using HorizonRadio.Core.Models;
+using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Plugins;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
@@ -104,9 +105,12 @@ public partial class App : Application
             var gamePlugins = PluginDiscovery.DiscoverPlugins<IGamePlugin>();
             if (gamePlugins.Count == 0) throw new InvalidOperationException("No game plugin found.");
             // Before the game is built: its settings must already hold anything migrated into them.
-            if (LegacySettingsMigration.MoveTargetStation(_store, provider.GetRequiredService<PluginSettingsStore>()))
-                _store.SaveToDisk();
-            var gameId = gamePlugins[0].Id;
+            // Saving drops the legacy fields so the migration can't re-apply later.
+            var migratedMixes = provider.GetRequiredService<MixStore>();
+            var migrated = LegacySettingsMigration.MigrateStations(
+                _store, migratedMixes, provider.GetRequiredService<PluginSettingsStore>());
+            if (migrated.ConfigChanged) _store.SaveToDisk();
+            if (migrated.MixesChanged) migratedMixes.SaveToDisk();
             _game = gamePlugins[0].Create(pluginContext);
 
             // Tee the pipeline so the active source can play to the game
@@ -251,22 +255,13 @@ public partial class App : Application
             dialogManager.Register<QuickPlayDialogView, QuickPlayDialogViewModel>();
             dialogManager.Register<QueueAddModeDialogView, QueueAddModeDialogViewModel>();
 
-            var vm = new MainWindowViewModel(_runner, _store, mixStore, mixSwitcher, queuePlayback, _historyStore, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, _game, gameId, toasts, dialogManager);
+            var vm = new MainWindowViewModel(_runner, _store, mixStore, mixSwitcher, queuePlayback, _historyStore, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, _game, toasts, dialogManager);
             desktop.MainWindow = new MainWindow { DataContext = vm };
 
-            // Per-mix game settings (for FH6, a station override). The game decides what they mean;
-            // the host only reports which mix is driving playback (and its settings for this game)
-            // whenever that may have changed: a mix switch, a self-driven source start (no mix),
-            // or the active mix being edited.
-            void ApplyActiveMix()
-            {
-                var mix = mixSwitcher.CurrentMixId is { } id ? mixStore.Get(id) : null;
-                _game.MixSettings?.ApplyMix(mix?.SettingsFor(gameId));
-            }
-
-            mixSwitcher.Switched += _ => ApplyActiveMix();
-            _runner.ActiveSourceChanged += _ => ApplyActiveMix();
-            mixStore.Changed += ApplyActiveMix;
+            // The game steers playback between channels: the app's player, one channel per mix, or
+            // nothing (for FH6: whatever the tuned station is set to play). Without a game it stays
+            // on the player, which is plain app playback.
+            var router = new PlaybackRouter(_runner, queuePlayback, mixStore, contentResolver);
 
             // The master volume slider doubles as an in-game pre-amp: push its
             // tapered gain to the game on every change (live feedback while
@@ -292,7 +287,7 @@ public partial class App : Application
                 if (state != ConnectionState.Connected) return;
                 PushGain(force: true);
             };
-            _game.Start();
+            _game.Start(new GameHost(router));
             _inputService.Start();
 
             _runner.TrackChanged += t =>
@@ -317,6 +312,7 @@ public partial class App : Application
                 _preview?.Dispose();
                 if (_enricher != null) await _enricher.DisposeAsync();
                 if (_metaResolver != null) await _metaResolver.DisposeAsync();
+                await router.DisposeAsync(); // parked channels; the runner disposes the active one
                 if (_runner != null) await _runner.DisposeAsync();
                 if (_spotifyPlayback != null) await _spotifyPlayback.DisposeAsync();
                 if (_spotifyConnection != null) await _spotifyConnection.DisposeAsync();

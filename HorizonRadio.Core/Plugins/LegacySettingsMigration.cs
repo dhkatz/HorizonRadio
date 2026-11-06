@@ -1,4 +1,5 @@
 using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Core.Sources.Mixes;
 
 namespace HorizonRadio.Core.Plugins;
 
@@ -10,23 +11,52 @@ public static class LegacySettingsMigration
     /// <summary>The game plugin that owned station targeting before games were plugins.</summary>
     public const string LegacyStationGameId = "fh6";
 
+    // FH6's station assignments (its Stations page): "station:<name>" → "player" | "mix:<id>".
+    // Mirrors the FH6 plugin's own keys; HorizonRadio.Core.Tests checks the plugin reads them.
+    private const string StationKeyPrefix = "station:";
+    private const string PlayerAssignment = "player";
+    private const string MixAssignmentPrefix = "mix:";
+
     // The old player-bar picker persisted its "replace whatever's active" choice as this label.
     private const string LegacyAnyStationLabel = "Any station";
 
-    /// <summary>
-    /// Move the default target station from the app config (<c>targetStation</c>) into the FH6
-    /// plugin's settings, unless the plugin already has one, then drop it from the app config.
-    /// Returns true if the app config changed (the caller saves it).
-    /// </summary>
-    public static bool MoveTargetStation(SourceConfigStore config, PluginSettingsStore plugins)
+    /// <summary>What a migration changed, so the caller saves the right files.</summary>
+    public readonly record struct Result(bool ConfigChanged, bool MixesChanged)
     {
-        if (config.TargetStation is not { } legacy) return false;
+        public bool Any => ConfigChanged || MixesChanged;
+    }
 
+    /// <summary>
+    /// Move pre-plugin station settings into the FH6 plugin's station assignments: the default
+    /// target station (<c>sources.json</c> <c>targetStation</c>) now plays the app's player, and a
+    /// mix's old station override now plays that mix. A station already assigned keeps its
+    /// assignment, and "Any station" has no equivalent (every station keeps the game's music until
+    /// the user assigns one). The caller saves the changed stores, which drops the legacy fields so
+    /// this can't re-apply later.
+    /// </summary>
+    public static Result MigrateStations(SourceConfigStore config, MixStore mixes, PluginSettingsStore plugins)
+    {
         var settings = plugins.For(LegacyStationGameId);
-        if (settings.GetValue("station") == null && legacy != LegacyAnyStationLabel)
-            settings.SetValue("station", legacy);
 
-        config.TargetStation = null;
-        return true;
+        void Assign(string station, string assignment)
+        {
+            if (settings.GetValue(StationKeyPrefix + station) == null)
+                settings.SetValue(StationKeyPrefix + station, assignment);
+        }
+
+        var configChanged = false;
+        if (config.TargetStation is { } target)
+        {
+            if (target != LegacyAnyStationLabel) Assign(target, PlayerAssignment);
+            config.TargetStation = null;
+            configChanged = true;
+        }
+
+        foreach (var (mixId, station) in mixes.LegacyStations)
+        {
+            if (mixes.Get(mixId) != null) Assign(station, MixAssignmentPrefix + mixId);
+        }
+
+        return new Result(configChanged, mixes.LegacyStations.Count > 0);
     }
 }

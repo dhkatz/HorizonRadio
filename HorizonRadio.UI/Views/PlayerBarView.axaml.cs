@@ -50,8 +50,6 @@ public partial class PlayerBarView : UserControl
 
     private void OnOutputTapped(object? sender, TappedEventArgs e) => HideFlyout("OutputButton");
 
-    private void OnStationTapped(object? sender, TappedEventArgs e) => HideFlyout("StationButton");
-
     private void OnMixTapped(object? sender, TappedEventArgs e) => HideFlyout("MixButton");
 
     private void HideFlyout(string buttonName) =>

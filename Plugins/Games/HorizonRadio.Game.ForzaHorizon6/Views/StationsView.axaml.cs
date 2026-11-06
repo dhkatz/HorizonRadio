@@ -2,9 +2,9 @@ using Avalonia.Controls;
 
 namespace HorizonRadio.Game.ForzaHorizon6.Views;
 
-public partial class MixSettingsView : UserControl
+public partial class StationsView : UserControl
 {
-    public MixSettingsView()
+    public StationsView()
     {
         InitializeComponent();
     }

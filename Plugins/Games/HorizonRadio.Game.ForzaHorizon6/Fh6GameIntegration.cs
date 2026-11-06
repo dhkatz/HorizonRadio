@@ -15,12 +15,12 @@ namespace HorizonRadio.Game.ForzaHorizon6;
 /// The FH6 integration: the injected DLL's two named pipes (JSON control channel + PCM audio)
 /// plus the optional Forza "Data Out" UDP telemetry feed as a second event source.
 ///
-/// It owns station targeting end to end: the default station (persisted in the plugin's
-/// settings), the active mix's override (from the mix's FH6 settings), the effective station, and
-/// re-sending it to the DLL whenever it changes or the DLL (re)connects.
+/// It owns the radio end to end. Each station plays the game's own music, the app's player, or a
+/// mix (<see cref="StationMap"/>, edited on the Stations page). The DLL reports the tuned station;
+/// we route the app's playback to match (<see cref="IPlaybackRouter"/>) and tell the DLL which
+/// stations to replace, re-asserting both on every (re)connect.
 /// </summary>
-public sealed class Fh6GameIntegration
-    : IGameIntegration, IStationTargeting, IGameMixSettings, IGameVolume, INowPlayingDisplay
+public sealed class Fh6GameIntegration : IGameIntegration, IStationTargeting, IGameVolume, INowPlayingDisplay
 {
     private readonly IpcClient _ipc = new();
     private readonly PcmPipeClient _pcm = new();
@@ -29,29 +29,28 @@ public sealed class Fh6GameIntegration
     private IReadOnlyList<GamePage>? _pages;
     private ModManagerViewModel? _modManager;
 
-    // Station state. _defaultStation persists in plugin settings; _mixStation is the active mix's
-    // override. null means "whatever station is active" for both.
-    private const string DefaultStationKey = "station";
-    private readonly IPluginSettings? _settings;
-    private readonly Lock _stationLock = new();
-    private string? _defaultStation;
-    private string? _mixStation;
+    private IGameHost? _host;
+    private volatile string? _currentStation;
 
     /// <param name="displayName">The game's name.</param>
-    /// <param name="settings">Where the default station persists; <see langword="null"/> keeps it
+    /// <param name="settings">Where station assignments persist; <see langword="null"/> keeps them
     /// in memory only (tests).</param>
     public Fh6GameIntegration(string displayName, IPluginSettings? settings = null)
     {
         DisplayName = displayName;
-        _settings = settings;
-        _defaultStation = ValidStation(settings?.GetValue(DefaultStationKey));
+        Map = new StationMap(settings);
+        Map.Changed += OnMapChanged;
         Output = new PcmPipeSink(_pcm);
         EventSources = [_ipc, _telemetry];
         _ipc.Connected += () => SetState(ConnectionState.Connected);
         _ipc.Disconnected += () => SetState(ConnectionState.Disconnected);
+        _ipc.StationChanged += OnStationChanged;
     }
 
     public string DisplayName { get; }
+
+    /// <summary>Which station plays what (the Stations page edits this).</summary>
+    public StationMap Map { get; }
 
     public IPcmSink Output { get; }
 
@@ -64,11 +63,39 @@ public sealed class Fh6GameIntegration
     public string EventsHint =>
         $"For richer events, enable Forza “Data Out” in-game and point it at 127.0.0.1:{ForzaTelemetryListener.DefaultPort}.";
 
+    public IStationTargeting Stations => this;
+
+    public IGameVolume Volume => this;
+
+    public INowPlayingDisplay NowPlaying => this;
+
+    public void Start(IGameHost host)
+    {
+        _host = host;
+        host.Playback.MixesChanged += OnMixesChanged;
+        OnMixesChanged(); // drop assignments to mixes deleted while we weren't running
+        SetState(ConnectionState.Connecting);
+        _pcm.Start();
+        _ipc.Start();
+        _telemetry.Start();
+    }
+
+    /// <summary>The user's mixes (empty until <see cref="Start"/>).</summary>
+    public IReadOnlyList<MixInfo> Mixes => _host?.Playback.Mixes ?? [];
+
+    /// <summary>Raised when <see cref="Mixes"/> changes. May fire on any thread.</summary>
+    public event Action? MixesChanged;
+
+    // -- Pages + notice --
+
     public event Action? NoticeChanged;
 
-    /// <summary>The Mods page (install / update the version.dll mod) and the Stats page (live
-    /// audio-bridge telemetry). Built lazily: the mod manager scans for game installs and hashes
-    /// the bundled DLL, and both need the UI thread.</summary>
+    private const string ModsPageId = "mods";
+    private const string StationsPageId = "stations";
+
+    /// <summary>The Mods page (install / update the version.dll mod), the Stations page (what each
+    /// station plays), and the Stats page (live audio-bridge telemetry). Built lazily: the mod
+    /// manager scans for game installs and hashes the bundled DLL, and all need the UI thread.</summary>
     public IReadOnlyList<GamePage> Pages => _pages ??= BuildPages();
 
     public GameNotice? Notice => _modManager?.Status switch
@@ -77,15 +104,19 @@ public sealed class Fh6GameIntegration
             "Mod Update Available", "A different version is installed in your game folder.", ModsPageId),
         InstallationStatus.NotInstalled => new GameNotice(
             "Mod Not Installed", "Horizon Radio isn't set up in your game yet.", ModsPageId),
+        _ when _modManager != null && !Map.HasAssignments => new GameNotice(
+            "No Station Plays Horizon Radio",
+            "Every station plays the game's own music. Pick a station for your player or a mix.",
+            StationsPageId),
         _ => null,
     };
-
-    private const string ModsPageId = "mods";
 
     private IReadOnlyList<GamePage> BuildPages()
     {
         _modManager = new ModManagerViewModel();
         _modManager.PropertyChanged += OnModManagerChanged;
+
+        var stations = new StationsViewModel(this);
 
         var stats = new StatsViewModel();
         // IPC events arrive on the pipe reader thread; the page binds on the UI thread.
@@ -97,6 +128,7 @@ public sealed class Fh6GameIntegration
         return
         [
             new GamePage(ModsPageId, "Mods", "PuzzleOutline", _modManager),
+            new GamePage(StationsPageId, "Stations", "RadioTower", stations),
             new GamePage("stats", "Stats", "ChartBar", stats),
         ];
     }
@@ -107,86 +139,43 @@ public sealed class Fh6GameIntegration
             NoticeChanged?.Invoke();
     }
 
-    public IStationTargeting Stations => this;
-
-    public IGameMixSettings MixSettings => this;
-
-    public IGameVolume Volume => this;
-
-    public INowPlayingDisplay NowPlaying => this;
-
-    public void Start()
-    {
-        SetState(ConnectionState.Connecting);
-        _pcm.Start();
-        _ipc.Start();
-        _telemetry.Start();
-    }
+    // -- Stations --
 
     IReadOnlyList<string> IStationTargeting.Stations => StationCatalog.Names;
 
+    public string? CurrentStation => _currentStation;
+
     public event Action? Changed;
 
-    public string? DefaultStation
+    private void OnStationChanged(string station)
     {
-        get { lock (_stationLock) return _defaultStation; }
-        set
-        {
-            var station = ValidStation(value);
-            UpdateStations(() =>
-            {
-                if (_defaultStation == station) return false;
-                _defaultStation = station;
-                return true;
-            });
-            _settings?.SetValue(DefaultStationKey, station);
-        }
-    }
-
-    public string? EffectiveStation
-    {
-        get { lock (_stationLock) return _mixStation ?? _defaultStation; }
-    }
-
-    void IGameMixSettings.ApplyMix(IReadOnlyDictionary<string, string>? settings)
-    {
-        var station = ValidStation(settings?.GetValueOrDefault(MixSettingsViewModel.StationKey));
-        UpdateStations(() =>
-        {
-            if (_mixStation == station) return false;
-            _mixStation = station;
-            return true;
-        });
-    }
-
-    IGameMixEditor IGameMixSettings.CreateEditor(IReadOnlyDictionary<string, string>? settings) =>
-        new MixSettingsViewModel(StationCatalog.Names, settings);
-
-    string? IGameMixSettings.Describe(IReadOnlyDictionary<string, string>? settings) =>
-        ValidStation(settings?.GetValueOrDefault(MixSettingsViewModel.StationKey)) is { } station
-            ? $"Station: {station}"
-            : null;
-
-    // Apply a station-state change under the lock; if it changed anything, notify and push the
-    // (possibly new) effective station to the DLL. Pushing is best-effort: when the DLL isn't
-    // connected it's re-sent on connect (see SetState).
-    private void UpdateStations(Func<bool> change)
-    {
-        lock (_stationLock)
-        {
-            if (!change()) return;
-        }
+        if (!StationCatalog.Names.Contains(station)) return; // a station we don't know: ignore
+        _currentStation = station;
         Changed?.Invoke();
-        PushStation();
+        Reroute();
     }
 
-    // The DLL's wire value for "any station" is "*"; IpcClient maps null to it.
-    private void PushStation() => _ipc.SendTargetStation(EffectiveStation);
+    private void OnMapChanged()
+    {
+        PushTargets();
+        Reroute();
+        Changed?.Invoke();
+        // The "no station" notice depends on the map; notices are raised on the UI thread.
+        Dispatcher.UIThread.Post(() => NoticeChanged?.Invoke());
+    }
 
-    // Only names from the station list are valid targets; anything else (stale config, a station
-    // renamed by a game update) means "whatever is active".
-    private static string? ValidStation(string? station) =>
-        station != null && StationCatalog.Names.Contains(station) ? station : null;
+    private void OnMixesChanged()
+    {
+        Map.ForgetMissingMixes([.. Mixes.Select(m => m.Id)]);
+        MixesChanged?.Invoke();
+    }
+
+    // Play what the tuned station is assigned (the player when the game isn't connected).
+    private void Reroute() => _host?.Playback.Route(Map.RouteFor(_currentStation));
+
+    private void PushTargets() => _ipc.SendTargetStations(Map.TargetStations);
+
+    // -- Volume / now playing --
 
     bool IGameVolume.SetMasterVolume(float gain) => _ipc.SendMasterVolume(gain);
 
@@ -197,8 +186,19 @@ public sealed class Fh6GameIntegration
     private void SetState(ConnectionState state)
     {
         if (Interlocked.Exchange(ref _state, (int)state) == (int)state) return;
-        // The DLL starts with no target (it replaces any station), so re-assert ours on every connect.
-        if (state == ConnectionState.Connected) PushStation();
+        if (state == ConnectionState.Connected)
+        {
+            // The DLL starts out replacing any station; tell it ours. It reports the tuned
+            // station right after connecting, which routes playback.
+            PushTargets();
+        }
+        else if (_currentStation != null)
+        {
+            // Lost the game: forget the station and fall back to plain player playback.
+            _currentStation = null;
+            Changed?.Invoke();
+            Reroute();
+        }
         StateChanged?.Invoke(state);
     }
 
@@ -207,6 +207,7 @@ public sealed class Fh6GameIntegration
     // writing PCM when the pipe closes.
     public async ValueTask DisposeAsync()
     {
+        if (_host != null) _host.Playback.MixesChanged -= OnMixesChanged;
         _telemetry.Dispose();
         await _ipc.DisposeAsync().ConfigureAwait(false);
         await _pcm.DisposeAsync().ConfigureAwait(false);

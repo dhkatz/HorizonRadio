@@ -42,6 +42,10 @@ public sealed class IpcClient(string pipeName = IpcClient.DefaultPipeName) : IAs
     public event Action<SourceInfo>? SourceChanged;
     public event Action<GameEvent>? GameEventReceived;
 
+    /// <summary>The station tuned in right now (the DLL's <c>station</c> state event: sent on
+    /// every change and on connect). Raised on the pipe reader thread.</summary>
+    public event Action<string>? StationChanged;
+
     /// <summary>Push a track change to the DLL so the metadata
     /// injector can write it into the game's HUD. Best-effort; returns
     /// false when the pipe isn't connected (the DLL isn't running or
@@ -96,6 +100,18 @@ public sealed class IpcClient(string pipeName = IpcClient.DefaultPipeName) : IAs
         var json = new StringBuilder(96);
         json.Append("{\"cmd\":\"set_target_station\"");
         AppendJsonField(json, "station", s);
+        json.Append("}\n");
+        return SendRaw(json.ToString());
+    }
+
+    /// <summary>Tell the DLL which in-game stations to replace (all others keep the game's own
+    /// music); empty replaces none. Sent newline-separated in one string field, which the DLL's
+    /// flat parser can read (station names never contain newlines).</summary>
+    public bool SendTargetStations(IEnumerable<string> stations)
+    {
+        var json = new StringBuilder(128);
+        json.Append("{\"cmd\":\"set_target_stations\"");
+        AppendJsonField(json, "stations", string.Join('\n', stations));
         json.Append("}\n");
         return SendRaw(json.ToString());
     }
@@ -220,6 +236,9 @@ public sealed class IpcClient(string pipeName = IpcClient.DefaultPipeName) : IAs
                 case "stats": DispatchStats(doc.RootElement); break;
                 case "source_changed": DispatchSourceChanged(doc.RootElement); break;
                 case "game_event": DispatchGameEvent(doc.RootElement); break;
+                case "station":
+                    if (GetString(doc.RootElement, "name") is { Length: > 0 } station) StationChanged?.Invoke(station);
+                    break;
                 case "debug":
                     {
                         var tag = GetString(doc.RootElement, "tag") ?? "dll";

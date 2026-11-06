@@ -82,11 +82,6 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     public ObservableCollection<OutputTarget> OutputTargets { get; } = new();
     [ObservableProperty] private OutputTarget? selectedOutput;
 
-    /// <summary>Global target-station picker, surfaced in the player bar
-    /// alongside the source/output pickers. App-level state (not per-source);
-    /// owned here only so the player bar — bound to this VM — can reach it.</summary>
-    public StationTargetViewModel Station { get; }
-
     /// <summary>Master volume slider <em>position</em> (0..1). Governs both
     /// outputs: it's tapered to a perceptual gain and applied to the local
     /// monitor (<see cref="PreviewController"/>) and, as a pre-amp, to the
@@ -136,7 +131,6 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
 
     public NowPlayingViewModel(SourceRunner runner, SourceConfigStore store,
         MixStore mixes, MixSwitcher switcher, QueuePlayback queue,
-        StationTargetViewModel station,
         PreviewController? preview = null, ToastManager? toasts = null,
         DialogManager? dialogs = null)
     {
@@ -148,7 +142,6 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         _preview = preview;
         _toasts = toasts;
         _dialogs = dialogs;
-        Station = station;
         // Self-driven sources (Spotify Connect, the test tone) start directly;
         // content sources open a quick-play dialog when picked (see
         // OnSelectedFactoryChanged) — both live in this one picker.
@@ -496,7 +489,6 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     public NowPlayingViewModel()
     {
         AvailableSources = SourceCatalog.All;
-        Station = new StationTargetViewModel();
     }
 
     partial void OnSelectedFactoryChanged(IAudioSourceFactory? value)

@@ -133,10 +133,13 @@ the per-tick contract.
 
 ### Station targeting
 
-`set_target_station` gates both the DSP attach and the metadata write: we only
-replace the station the user chose (empty / `*` = whatever's active). Off-target,
+The target set (`StationTargets`: the stations the UI's Stations page assigned to
+the player or a mix) gates both the DSP attach and the metadata write. Off-target,
 the DSP detaches and the game's own station plays untouched. The gate
-(`g_on_target_station`) is recomputed each event poll from the live station name.
+(`g_on_target_station`) is recomputed each event poll from the live station name,
+which is also reported to the UI (`station` event) so it can switch what it plays
+to match the station. Before any UI command the set is "any station", so an older
+UI that only sends `set_target_station` behaves as it always did.
 
 ## Signature resolution
 
@@ -229,6 +232,7 @@ single connection (the UI is the only client). PCM rides a separate pipe
          "underruns":N,"normalizer_gain":1.0,"limiter_gain":1.0}
 {"event":"source_changed","id":"spotify","display":"Spotify Connect"}
 {"event":"game_event","kind":"race_start"}
+{"event":"station","name":"Horizon Pulse"}   // tuned station: on change + on connect
 ```
 
 **UI → DLL commands** (`"cmd"` field):
@@ -237,8 +241,12 @@ single connection (the UI is the only client). PCM rides a separate pipe
 {"cmd":"set_track","title":"...","artist":"...","album":"...",
         "source_id":"...","source_display":"...","external_id":"..."}
 {"cmd":"set_gain","gain":0.3}
-{"cmd":"set_target_station","station":"Horizon Pulse"}   // "" or "*" = any
+{"cmd":"set_target_station","station":"Horizon Pulse"}   // legacy: "" or "*" = any
+{"cmd":"set_target_stations","stations":"Horizon XS\nHorizon Pulse"}  // "" = none
 ```
+
+`set_target_stations` carries the station list newline-separated in one string,
+so the flat key scanner can read it (station names never contain newlines).
 
 `set_track` is the main path: it routes C#-decoded metadata into the game HUD via
 the injector and resets the normalizer. The DLL only scans for the keys it needs
@@ -247,9 +255,9 @@ BMP `\u` sequences.
 
 Threading: `publish_*` are callable from any thread and serialize on a mutex so
 JSON lines can't interleave; they short-circuit when no client is connected. A
-**snapshot callback** fires on every (re)connect and re-publishes current track +
-source, so the UI doesn't sit on its placeholder when the user attaches
-mid-playback.
+**snapshot callback** fires on every (re)connect and re-publishes current track,
+source, and tuned station, so the UI doesn't sit on its placeholder when the user
+attaches mid-playback.
 
 ## version.dll proxy
 

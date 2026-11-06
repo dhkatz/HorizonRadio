@@ -109,20 +109,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                                ControlsViewModel controls,
                                Core.Audio.PreviewController preview,
                                IGameIntegration game,
-                               string gameId,
                                ToastManager toasts,
                                DialogManager dialogManager)
     {
         ToastManager = toasts;
         DialogManager = dialogManager;
         Sources = new SourcesViewModel(runner, store, registry);
-        var station = new StationTargetViewModel(game.Stations);
-        NowPlaying = new NowPlayingViewModel(runner, store, mixStore, mixSwitcher, queue, station, preview, toasts, DialogManager);
+        NowPlaying = new NowPlayingViewModel(runner, store, mixStore, mixSwitcher, queue, preview, toasts, DialogManager);
         Metadata = metadata;
         ToolsTab = new ToolsViewModel(registry, installers);
         Events = events;
         Controls = controls;
-        Mixes = new MixesViewModel(mixStore, mixSwitcher, DialogManager, contentResolver, game, gameId);
+        Mixes = new MixesViewModel(mixStore, mixSwitcher, DialogManager, contentResolver);
         Queue = new QueueViewModel(queue, DialogManager, metaResolver);
 
         // Unified search: both the top-bar dropdown and the search page enqueue through
