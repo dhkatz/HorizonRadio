@@ -59,6 +59,14 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
     // Signaled when the queue gains work while the engine is parked idle.
     private readonly ManualResetEventSlim _workGate = new(initialState: false);
 
+    // Park / resume (station channels): the track interrupted by a park, and where in it to
+    // pick up when the next StartAsync replays it.
+    private QueueItem? _parkedItem;
+    private TimeSpan _parkedPosition;
+    private volatile PlayableItem? _resumeItem;
+    private TimeSpan _resumeAt;
+    private volatile bool _pauseLocked;
+
     // The item currently playing — read by the UI progress poll — plus the cached
     // transport capabilities the UI reads (recomputed on the engine thread).
     private volatile PlayableItem? _activeItem;
@@ -87,9 +95,16 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
 
     // -- IAudioSource --
 
+    /// <summary>True once disposed; a disposed source can't be started again.</summary>
+    public bool IsDisposed { get; private set; }
+
     public Task StartAsync(IPcmSink sink, CancellationToken ct)
     {
         if (_runLoop != null) return Task.CompletedTask;
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
+        // StopAsync opens the pause gate so a stopped pump can exit; close it again if we're
+        // coming back paused.
+        if (_paused) _resumeGate.Reset();
         _stopCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         _runLoop = Task.Run(() => RunAsync(sink, _stopCts.Token), _stopCts.Token);
         return Task.CompletedTask;
@@ -117,6 +132,8 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
 
     public async ValueTask DisposeAsync()
     {
+        if (IsDisposed) return;
+        IsDisposed = true;
         _model.WorkAvailable -= OnWorkAvailable;
         _model.InterruptRequested -= OnInterrupt;
         await StopAsync().ConfigureAwait(false);
@@ -126,7 +143,7 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
 
     // -- ITransportControls --
 
-    public bool CanPause => true;
+    public bool CanPause => !_pauseLocked;
     public bool CanSkipNext => _canNext;
     public bool CanSkipPrevious => _canPrev;
     public bool IsPaused => _paused;
@@ -140,8 +157,25 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
         return Task.CompletedTask;
     }
 
-    public Task TogglePauseAsync()
+    /// <summary>
+    /// Disable manual pause (a "live radio" station keeps going no matter what). Locking while
+    /// paused resumes playback.
+    /// </summary>
+    public bool PauseLocked
     {
+        get => _pauseLocked;
+        set
+        {
+            _pauseLocked = value;
+            if (value && _paused) _ = TogglePauseAsync(force: true);
+        }
+    }
+
+    public Task TogglePauseAsync() => TogglePauseAsync(force: false);
+
+    private Task TogglePauseAsync(bool force)
+    {
+        if (_pauseLocked && !force && !_paused) return Task.CompletedTask;
         _paused = !_paused;
         if (_paused) _resumeGate.Reset();
         else _resumeGate.Set();
@@ -182,6 +216,39 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
         return Task.CompletedTask;
     }
 
+    // -- Park / resume --
+
+    /// <summary>
+    /// Remember the playing track and position, ahead of the owner parking this source
+    /// (<see cref="SourceRunner.ParkAsync"/>). Call while it's still running.
+    /// </summary>
+    public void MarkParked()
+    {
+        _parkedItem = _current;
+        _parkedPosition = _activeItem?.Position ?? TimeSpan.Zero;
+    }
+
+    /// <summary>
+    /// Before restarting a parked source: continue the interrupted track instead of moving on,
+    /// at its parked position plus <paramref name="advanceBy"/> ("live radio": time kept passing
+    /// while we were away). If that lands past the track's known end, the source moves on to the
+    /// next track instead. Items that can't seek restart the track from its beginning.
+    /// </summary>
+    public void ResumeFromPark(TimeSpan advanceBy)
+    {
+        var parked = _parkedItem;
+        _parkedItem = null;
+        if (parked == null) return;
+
+        var target = _parkedPosition + (advanceBy > TimeSpan.Zero ? advanceBy : TimeSpan.Zero);
+        if (parked.Item.Duration is { } duration && target >= duration)
+            return; // finished while away: the forward pick moves on to the next track
+
+        _replay = parked;
+        _resumeItem = parked.Item;
+        _resumeAt = target;
+    }
+
     // -- Run loop --
 
     private async Task RunAsync(IPcmSink sink, CancellationToken ct)
@@ -191,6 +258,13 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
             Sink = sink,
             IsPaused = () => _paused,
             ResumeGate = _resumeGate,
+            StartPosition = item =>
+            {
+                // Only the replayed, parked track resumes mid-way; and only once.
+                if (!ReferenceEquals(_resumeItem, item)) return TimeSpan.Zero;
+                _resumeItem = null;
+                return _resumeAt;
+            },
             OnStarted = item =>
             {
                 _activeItem = item;

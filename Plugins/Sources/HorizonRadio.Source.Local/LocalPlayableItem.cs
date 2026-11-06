@@ -129,6 +129,8 @@ public sealed class LocalPlayableItem : PlayableItem
         if (Duration is null && reader.TotalTime.Ticks > 0) Duration = reader.TotalTime;
         Interlocked.Exchange(ref _positionTicks, 0);
         Interlocked.Exchange(ref _pendingSeekTicks, -1);
+        // Resuming mid-track: the pump applies it as a seek before the first chunk.
+        if (ctx.StartPosition?.Invoke(this) is { Ticks: > 0 } start) Seek(start);
 
         var floatBuf = new float[chunkFrames * AudioFormat.Channels];
         var shortBuf = new short[chunkFrames * AudioFormat.Channels];

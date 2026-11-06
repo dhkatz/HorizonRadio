@@ -93,4 +93,10 @@ public sealed class PumpContext
     /// item. The driver republishes the HUD track (and re-runs enrichment) here. Most
     /// items never call this; fixed-track items fire <see cref="OnStarted"/> once instead.</summary>
     public Action<PlayableItem>? OnMetadataUpdated { get; init; }
+
+    /// <summary>Where in the item to begin (e.g. resuming a parked station channel);
+    /// <see cref="TimeSpan.Zero"/> or <see langword="null"/> means from the top. Items that
+    /// <see cref="PlayableItem.CanSeek"/> call it once per play, as soon as they can seek, and
+    /// start there; others ignore it.</summary>
+    public Func<PlayableItem, TimeSpan>? StartPosition { get; init; }
 }
