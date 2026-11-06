@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Lyrics on the Dashboard.** The playing song's lyrics show under its title. When the
+  song plays from your files, YouTube, or Spotify, they follow along: the line being sung
+  is highlighted and kept in view, and clicking a line jumps there in songs you can seek.
+  Lyrics come from [Unison](https://unison.boidu.dev) (often synced word by word) and
+  [LRCLIB](https://lrclib.net), and synced lyrics are only used when they were timed to a
+  recording of the same length, so they don't drift ahead of the singer. Internet radio
+  shows the lyrics as text for now, since it can't yet tell where in the song it is.
+  Lyrics providers are plugins (`ILyricsPlugin`, under `Plugins/Lyrics/`).
+
 - **VocaDB now supplies real album art and playable links.** A matched VocaDB song
   contributes its linked album's square cover (preferred over the 16:9 video
   thumbnail) and its promotion-video (PV) links — the official/reprint uploads on

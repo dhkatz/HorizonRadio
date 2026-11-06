@@ -11,6 +11,7 @@ using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Games;
 using HorizonRadio.Core.History;
 using HorizonRadio.Core.Input;
+using HorizonRadio.Core.Lyrics;
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Metadata.Apple;
 using HorizonRadio.Core.Metadata.MusicBrainz;
@@ -204,6 +205,11 @@ public partial class App : Application
                 _enricher = new EnrichmentService(_runner, _metaResolver);
                 var metaVm = new MetadataViewModel(_metaStore, pluginContext, _metaResolver);
 
+                // Lyrics for the Now Playing page, from every lyrics plugin (Unison, LRCLIB), in
+                // their SortOrder: the service prefers synced lyrics, then the earlier provider.
+                var lyrics = new LyricsService([.. PluginDiscovery.DiscoverPlugins<ILyricsPlugin>()
+                    .Select(p => p.CreateLyricsProvider(pluginContext))]);
+
                 var toolRegistry = provider.GetRequiredService<ToolRegistry>();
                 var installers = ToolInstallers.CreateAll();
 
@@ -288,7 +294,7 @@ public partial class App : Application
 
                 var gameSettings = new GameSettingsViewModel(gamePlugins, _store, chosenGameId);
                 gameSettings.RestartRequested += () => Restart(desktop);
-                var vm = new MainWindowViewModel(_runner, _store, mixStore, mixSwitcher, queuePlayback, _historyStore, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, _game, gameSettings, toasts, dialogManager);
+                var vm = new MainWindowViewModel(_runner, _store, mixStore, mixSwitcher, queuePlayback, _historyStore, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, _game, gameSettings, toasts, dialogManager, lyrics);
                 var mainWindow = new MainWindow { DataContext = vm };
                 desktop.MainWindow = mainWindow;
                 // Composed after startup (the first-run picker), so show it ourselves.
@@ -358,6 +364,7 @@ public partial class App : Application
                     queuePlayback.Dispose();
                     _preview?.Dispose();
                     if (_enricher != null) await _enricher.DisposeAsync();
+                    await lyrics.DisposeAsync();
                     if (_metaResolver != null) await _metaResolver.DisposeAsync();
                     await router.DisposeAsync(); // parked channels; the runner disposes the active one
                     if (_runner != null) await _runner.DisposeAsync();

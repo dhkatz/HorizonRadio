@@ -11,6 +11,10 @@
   <Folder Name="/Plugins/Games/">
     <Project Path="Plugins/Games/HorizonRadio.Game.ForzaHorizon6/HorizonRadio.Game.ForzaHorizon6.csproj" />
   </Folder>
+  <Folder Name="/Plugins/Lyrics/">
+    <Project Path="Plugins/Lyrics/HorizonRadio.Lyrics.Lrclib/HorizonRadio.Lyrics.Lrclib.csproj" />
+    <Project Path="Plugins/Lyrics/HorizonRadio.Lyrics.Unison/HorizonRadio.Lyrics.Unison.csproj" />
+  </Folder>
   <Folder Name="/Plugins/Metadata/">
     <Project Path="Plugins/Metadata/HorizonRadio.Metadata.Apple/HorizonRadio.Metadata.Apple.csproj" />
     <Project Path="Plugins/Metadata/HorizonRadio.Metadata.MusicBrainz/HorizonRadio.Metadata.MusicBrainz.csproj" />
