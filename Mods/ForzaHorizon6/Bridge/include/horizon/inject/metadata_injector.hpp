@@ -24,6 +24,9 @@ struct MetadataInjectorConfig {
 
     // Field offsets in the endpoint struct; nullopt = field absent in this build.
     std::optional<std::ptrdiff_t> sound_name_offset;
+    // The game's own event id (e.g. "HZ6_R9_<artist>_<track>"): read-only, never
+    // written, so it identifies which station a block belongs to.
+    std::optional<std::ptrdiff_t> event_id_offset;
     std::optional<std::ptrdiff_t> display_name_offset;
     std::optional<std::ptrdiff_t> artist_offset;
 
@@ -61,6 +64,16 @@ public:
     // Returns 1 on success, 0 on validation failure / null chain.
     int write_to_instance(const void* instance, std::string_view sound_name, std::string_view display_name,
                           std::string_view artist);
+
+    // The metadata block `instance` currently points at (the chain endpoint), or
+    // null if the vptr check or any hop fails. Never writes. The game re-points an
+    // instance at another station's block when the player tunes, so callers use
+    // this to tell "same block" from "same instance".
+    [[nodiscard]] const void* resolve_block(const void* instance) const;
+
+    // Read the block's event id (config.event_id_offset) into `out`. False if
+    // the chain doesn't resolve or the field isn't a plausible string.
+    bool read_event_id(const void* instance, std::string& out) const;
 
     // Read the current title/artist at the chain endpoint into std::strings.
     // Snapshots the game's originals before we overwrite them, so the caller

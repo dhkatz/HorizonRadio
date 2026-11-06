@@ -12,5 +12,6 @@ public sealed class Fh6GamePlugin : IGamePlugin
 
     public int SortOrder => 10;
 
-    public IGameIntegration Create(IPluginContext context) => new Fh6GameIntegration(DisplayName);
+    public IGameIntegration Create(IPluginContext context) =>
+        new Fh6GameIntegration(DisplayName, context.GetSettings(Id));
 }

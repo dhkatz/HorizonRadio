@@ -29,15 +29,17 @@ public interface IGameIntegration : IAsyncDisposable
     ConnectionState State { get; }
 
     /// <summary>Raised when <see cref="State"/> changes. May fire on a background thread. On a
-    /// transition to <see cref="ConnectionState.Connected"/> the host re-sends its state (target
-    /// station, volume), since the game side may have restarted.</summary>
+    /// transition to <see cref="ConnectionState.Connected"/> the host re-sends its own state
+    /// (volume), since the game side may have restarted; the game re-asserts its own.</summary>
     event Action<ConnectionState>? StateChanged;
 
     /// <summary>Start connecting (and any listeners). Called once, after the host has subscribed
-    /// to <see cref="StateChanged"/> and the event sources.</summary>
-    void Start();
+    /// to <see cref="StateChanged"/> and the event sources. <paramref name="host"/> lets the game
+    /// steer playback (e.g. as the player tunes its radio).</summary>
+    void Start(IGameHost host);
 
-    /// <summary>Choose which in-game station to replace, or <see langword="null"/>.</summary>
+    /// <summary>The game's radio stations and which is tuned in, or <see langword="null"/> for a
+    /// game without stations. Which station plays what is the game's own setting.</summary>
     IStationTargeting? Stations { get; }
 
     /// <summary>In-game volume control, or <see langword="null"/>.</summary>
@@ -83,16 +85,23 @@ public sealed record GamePage(string Id, string Title, string Icon, object ViewM
 /// <param name="PageId">The <see cref="GamePage.Id"/> the banner's button opens.</param>
 public sealed record GameNotice(string Title, string Message, string PageId);
 
-/// <summary>A game with several radio stations, where the user picks the one we replace.</summary>
+/// <summary>
+/// A game with radio stations. The game decides what each station plays (its own music, the app's
+/// player, or a mix) and routes playback as the player tunes; the host only reads this to show
+/// where the player is.
+/// </summary>
 public interface IStationTargeting
 {
     /// <summary>The game's station names, exactly as the game reports them.</summary>
     IReadOnlyList<string> Stations { get; }
 
-    /// <summary>Replace <paramref name="station"/> (one of <see cref="Stations"/>), or whatever
-    /// station is active when <see langword="null"/>. Best-effort: returns false when the game
-    /// isn't connected; the host re-sends on reconnect.</summary>
-    bool SetTarget(string? station);
+    /// <summary>The station tuned in right now, or <see langword="null"/> when unknown (e.g. the
+    /// game isn't connected).</summary>
+    string? CurrentStation { get; }
+
+    /// <summary>Raised when <see cref="CurrentStation"/> or a station's assignment changes. May
+    /// fire on any thread.</summary>
+    event Action? Changed;
 }
 
 /// <summary>Volume applied to our audio inside the game.</summary>
@@ -113,4 +122,8 @@ public interface INowPlayingDisplay
     /// <summary>Show <paramref name="track"/>. Best-effort; false when not connected (the next
     /// track change retries).</summary>
     bool Show(Track track);
+
+    /// <summary>Nothing is playing (e.g. the station's channel is idle): show the game's own
+    /// track info again. Best-effort; false when not connected.</summary>
+    bool Clear();
 }

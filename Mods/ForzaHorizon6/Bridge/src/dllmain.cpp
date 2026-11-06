@@ -16,6 +16,8 @@
 #include <horizon/fmod/resolver.hpp>
 #include <horizon/fmod/signatures.hpp>
 #include <horizon/fmod/system_resolver.hpp>
+#include <horizon/game/station_codes.hpp>
+#include <horizon/game/station_targets.hpp>
 #include <horizon/inject/game_resolver.hpp>
 #include <horizon/inject/metadata_injector.hpp>
 #include <horizon/inject/msvc_string.hpp>
@@ -58,12 +60,19 @@ std::atomic<const void*>       g_radio_stream_vtable{nullptr};
 std::mutex        g_track_mutex;
 TrackInfo         g_current_track;
 std::atomic<bool> g_have_track{false};
+// False after clear_track (nothing playing on the routed channel): the writer
+// puts the game's own title back instead of ours. Audio is unaffected. The next
+// set_track turns it back on.
+std::atomic<bool> g_show_title{true};
 
-// Station targeting (set_target_station). on_target gates DSP attach + metadata
-// so other stations keep playing the game's own music; empty target = any.
-std::mutex        g_target_mutex;
-std::string       g_target_station;          // empty = any
-std::atomic<bool> g_on_target_station{true}; // default: replace active
+// Station targeting (set_target_station / set_target_stations). on_target gates
+// DSP attach + metadata so other stations keep playing the game's own music.
+// g_current_station is the tuned station's name (empty until first read),
+// re-published to a reconnecting UI.
+std::mutex                    g_target_mutex;
+horizon::game::StationTargets g_targets; // default: any station
+std::string                   g_current_station;
+std::atomic<bool>             g_on_target_station{true}; // default: replace active
 
 horizon::ipc::IpcServer     g_ipc_server; // lives for the DLL's lifetime; stop() on detach
 horizon::ipc::PcmPipeServer g_pcm_pipe;   // UI writes s16 stereo frames here
@@ -379,6 +388,32 @@ std::string bring_up_status() {
     return out;
 }
 
+// Does `instance`'s current metadata block belong to the station tuned in? Its
+// event id names the station ("HZ6_R6_..." -> Gacha City Radio). While tuning,
+// the station name changes 50-100 ms before the instance is re-pointed, so a
+// mismatch means "mid-tune: this is still the previous station's block".
+// Unknown when either side has no code (e.g. Streamer Mode), which makes the
+// title writer fall back to waiting for the block to settle.
+horizon::inject::BlockIdentity block_identity(const MetadataInjector& inj, const void* instance) {
+    using horizon::inject::BlockIdentity;
+    if (instance == nullptr)
+        return BlockIdentity::Unknown;
+    std::string tuned;
+    {
+        const std::scoped_lock lock(g_target_mutex);
+        tuned = g_current_station;
+    }
+    if (!horizon::game::station_has_code(tuned))
+        return BlockIdentity::Unknown;
+    std::string event_id;
+    if (!inj.read_event_id(instance, event_id))
+        return BlockIdentity::Unknown;
+    const auto owner = horizon::game::station_for_event_id(event_id);
+    if (owner.empty())
+        return BlockIdentity::Unknown;
+    return owner == tuned ? BlockIdentity::Match : BlockIdentity::Mismatch;
+}
+
 // Follow radio_state -> +chain0 -> +chain1 -> the station sub-object and
 // read the station NAME (MSVC std::string @ +name_off). It lives two
 // pointer-hops away, which is why it never showed up watching RadioState
@@ -443,31 +478,31 @@ void poll_game_events(void* radio_state) {
         g_ipc_server.publish_game_event(active ? "race_start" : "race_finish");
     }
 
-    // Which station is tuned in. Drives station_changed and the targeting
-    // gate (only replace the station the user chose; empty target = any).
+    // Which station is tuned in. Drives station_changed / the station state
+    // event and the targeting gate (only replace the stations the UI chose).
     // The name changes on station switching but NOT on radio power off,
     // which is why on/off isn't a supported event (see notes in git log).
     std::string name;
     if (!read_station_state(base, name) || name.empty())
         return;
 
+    bool changed = false;
+    bool first   = false;
     {
-        std::string target;
-        {
-            const std::scoped_lock lock(g_target_mutex);
-            target = g_target_station;
+        const std::scoped_lock lock(g_target_mutex);
+        g_on_target_station.store(g_targets.targets(name), std::memory_order_release);
+        changed = name != g_current_station;
+        if (changed) {
+            first             = g_current_station.empty();
+            g_current_station = name;
         }
-        g_on_target_station.store(target.empty() || name == target, std::memory_order_release);
     }
-
-    static bool        s_st_init = false;
-    static std::string s_station;
-    if (!s_st_init) {
-        s_st_init = true;
-        s_station = name;
-    } else if (name != s_station) {
-        s_station = name;
-        g_ipc_server.publish_game_event("station_changed");
+    // Publish outside the lock (the IPC server takes its own).
+    if (changed) {
+        g_ipc_server.publish_station(name);
+        // The first read isn't a change the player made; don't fire the event.
+        if (!first)
+            g_ipc_server.publish_game_event("station_changed");
     }
 }
 
@@ -630,6 +665,7 @@ void poll_game_events(void* radio_state) {
                 g_current_track.album  = album;
                 g_current_track.id     = external_id;
                 g_have_track.store(true, std::memory_order_release);
+                g_show_title.store(true, std::memory_order_release);
                 snapshot = g_current_track;
             }
             if (!source_id.empty() && source_id != g_active_source_id) {
@@ -649,6 +685,15 @@ void poll_game_events(void* radio_state) {
 
             const std::wstring wtitle(title.begin(), title.end());
             logf(L"[horizon-radio] cmd set_track: %ls\n", wtitle.c_str());
+        } else if (cmd == "clear_track") {
+            // Nothing is playing on the channel the UI routed to: stop showing
+            // our (now stale) title and restore the game's.
+            {
+                const std::scoped_lock lock(g_track_mutex);
+                g_current_track = TrackInfo{};
+            }
+            g_show_title.store(false, std::memory_order_release);
+            log_w(L"[horizon-radio] cmd clear_track\n");
         } else if (cmd == "set_gain") {
             // Events "set volume / duck" action: scale the bridge's
             // master output gain. Clamped to [0, 1].
@@ -677,18 +722,27 @@ void poll_game_events(void* radio_state) {
                 logf(L"[horizon-radio] cmd set_master_volume: %.3f\n", volume);
             }
         } else if (cmd == "set_target_station") {
-            // Which in-game station Horizon Radio replaces. Empty string
-            // (or "*") = replace whatever station is active.
+            // Legacy: one station to replace, or "" / "*" for whatever is active.
             std::string station;
             json_extract_string(line, "station", station);
-            if (station == "*")
-                station.clear();
             {
                 const std::scoped_lock lock(g_target_mutex);
-                g_target_station = station;
+                g_targets.set_single(station);
             }
             const std::wstring ws(station.begin(), station.end());
             logf(L"[horizon-radio] cmd set_target_station: '%ls'\n", ws.c_str());
+        } else if (cmd == "set_target_stations") {
+            // The stations to replace, newline-separated; empty = none (every
+            // station plays the game's own music).
+            std::string stations;
+            json_extract_string(line, "stations", stations);
+            std::size_t count = 0;
+            {
+                const std::scoped_lock lock(g_target_mutex);
+                g_targets.set_list(stations);
+                count = g_targets.stations().size();
+            }
+            logf(L"[horizon-radio] cmd set_target_stations: %zu station(s)\n", count);
         }
     });
 
@@ -716,7 +770,7 @@ void poll_game_events(void* radio_state) {
         if (!g_active_source_id.empty()) {
             g_ipc_server.publish_source_changed(g_active_source_id, g_active_source_display);
         }
-        if (g_have_track.load(std::memory_order_acquire)) {
+        if (g_have_track.load(std::memory_order_acquire) && g_show_title.load(std::memory_order_acquire)) {
             TrackInfo snapshot;
             {
                 const std::scoped_lock lock(g_track_mutex);
@@ -724,6 +778,13 @@ void poll_game_events(void* radio_state) {
             }
             publish_track_ipc(snapshot, g_active_source_id, g_active_source_display);
         }
+        std::string station;
+        {
+            const std::scoped_lock lock(g_target_mutex);
+            station = g_current_station;
+        }
+        if (!station.empty())
+            g_ipc_server.publish_station(station);
         // Surface the build fingerprint + what resolved in the UI Console on
         // every (re)connect: after a game update this is the first place to
         // look, and it needs no debugger.
@@ -842,6 +903,53 @@ void poll_game_events(void* radio_state) {
                             auto* rs = const_cast<std::byte*>(static_cast<const std::byte*>(inst) + 0x10);
                             return horizon::fmod::resolve_fmod_system_from_stream(game_image, rs) != nullptr;
                         };
+                        // Diagnostic (Console tag "titles"): the tuned station vs. the
+                        // station each audible block belongs to (its event id), logged on
+                        // change with a timestamp. Maps event-id station codes to stations
+                        // and shows the tuning lag. Read-only.
+                        {
+                            static const auto  t0 = std::chrono::steady_clock::now();
+                            static std::string last_diag;
+                            std::string        tuned;
+                            {
+                                const std::scoped_lock lock(g_target_mutex);
+                                tuned = g_current_station;
+                            }
+                            std::string line = "tuned=";
+                            line += tuned.empty() ? std::string("?") : tuned;
+                            line += on_target ? " (ours)" : " (game)";
+                            line += " audible=";
+                            bool any = false;
+                            for (const void* inst : instances) {
+                                if (!fmod_resolves(inst))
+                                    continue;
+                                std::string id;
+                                if (!inj->read_event_id(inst, id))
+                                    id = "?";
+                                char where[64];
+                                std::snprintf(where, sizeof(where), "@%p->%p", inst, inj->resolve_block(inst));
+                                line += any ? ", " : "";
+                                line += id;
+                                line += where;
+                                any = true;
+                            }
+                            if (!any)
+                                line += "none";
+                            if (line != last_diag) {
+                                last_diag                 = line;
+                                const auto        ms      = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                                                std::chrono::steady_clock::now() - t0)
+                                                                .count();
+                                const std::string stamped = "[+" + std::to_string(ms) + " ms] " + line;
+                                g_ipc_server.publish_debug("titles", stamped);
+                                std::wstring wide(L"[horizon-radio] titles: ");
+                                for (const char c : stamped)
+                                    wide.push_back(static_cast<wchar_t>(static_cast<unsigned char>(c)));
+                                wide.push_back(L'\n');
+                                OutputDebugStringW(wide.c_str());
+                            }
+                        }
+
                         const void* active_instance = nullptr;
                         if (on_target) {
                             if (preferred_instance && fmod_resolves(preferred_instance)) {
@@ -857,7 +965,12 @@ void poll_game_events(void* radio_state) {
                             }
                         }
 
-                        const int n = title_writer.on_active(*inj, active_instance, sound, t.title, t.artist);
+                        int n = 0;
+                        if (g_show_title.load(std::memory_order_acquire))
+                            n = title_writer.on_active(*inj, active_instance, sound, t.title, t.artist,
+                                                       block_identity(*inj, active_instance));
+                        else
+                            title_writer.on_idle(*inj);
 
                         // Log only on transitions (keeps DebugView readable).
                         if (n != last_write_n) {

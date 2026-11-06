@@ -349,6 +349,15 @@ void IpcServer::publish_game_event(const std::string_view kind) {
     send_line_locked(os.str());
 }
 
+void IpcServer::publish_station(const std::string_view name) {
+    if (!client_connected_.load(std::memory_order_acquire))
+        return;
+    std::ostringstream os;
+    os << R"({"event":"station","name":)" << json_escape(name) << "}\n";
+    const std::scoped_lock lock(pipe_mutex_);
+    send_line_locked(os.str());
+}
+
 void IpcServer::publish_debug(const std::string_view tag, const std::string_view text) {
     if (!client_connected_.load(std::memory_order_acquire))
         return;

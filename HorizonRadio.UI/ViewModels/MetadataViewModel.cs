@@ -48,7 +48,7 @@ public sealed partial class MetadataViewModel : ViewModelBase
     public MetadataViewModel()
     {
         _store = new MetadataConfigStore();
-        _context = new HostPluginContext(new MetadataCache());
+        _context = new HostPluginContext(new MetadataCache(), Core.Plugins.PluginSettingsStore.CreateInMemory());
         _resolver = null!;
         BuildProviders();
         BuildFields();

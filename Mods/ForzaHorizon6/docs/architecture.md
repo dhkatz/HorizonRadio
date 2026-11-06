@@ -124,19 +124,36 @@ station — so the title lands where the audio is, and locks onto it
 (`preferred_instance`) to avoid ping-ponging.
 
 [`TitleWriteController`](../Bridge/include/horizon/inject/title_write_controller.hpp)
-owns the write/restore bookkeeping for that single instance: snapshot the game's
-original strings on first touch, write ours each tick, keep the restore value in
-sync as the game advances its own track, and write the originals back when we stop
-replacing the station (source stopped, or tuned away). It's extracted from the
-writer thread and unit-tested with a fake injector. Its header comment documents
-the per-tick contract.
+owns the write/restore bookkeeping: snapshot the game's original strings on first
+touch, write ours each tick, keep the restore value in sync as the game advances
+its own track, and write the originals back when we stop replacing the station
+(source stopped, `clear_track`, or tuned away). It's extracted from the writer
+thread and unit-tested with a fake injector; its header documents the per-tick
+contract.
+
+**Ownership is per metadata block, not per instance.** Observed live: a single
+`RadioStreamFmod` instance serves every station, and the game *re-points* it at
+each station's block when the player tunes. The station *name* changes 50–100 ms
+before that re-point. So the writer checks each block's identity before touching
+it: the block's event id at `+0x10` (never written by us) names its station
+(`HZ6_R6_…` → Gacha City Radio; table in
+[`station_codes.hpp`](../Bridge/include/horizon/game/station_codes.hpp)).
+A block that is the tuned station's is written at once; another station's
+(mid-tune) never is, and a block we own is handed back while the instance still
+shows it. Restores only go through an instance that still resolves to the block we
+wrote. Stations without a code (Streamer Mode, whose royalty-free tracks appear
+to carry another station's code) fall back to writing once the block has been
+stable for 3 ticks (~150 ms).
 
 ### Station targeting
 
-`set_target_station` gates both the DSP attach and the metadata write: we only
-replace the station the user chose (empty / `*` = whatever's active). Off-target,
+The target set (`StationTargets`: the stations the UI's Stations page assigned to
+the player or a mix) gates both the DSP attach and the metadata write. Off-target,
 the DSP detaches and the game's own station plays untouched. The gate
-(`g_on_target_station`) is recomputed each event poll from the live station name.
+(`g_on_target_station`) is recomputed each event poll from the live station name,
+which is also reported to the UI (`station` event) so it can switch what it plays
+to match the station. Before any UI command the set is "any station", so an older
+UI that only sends `set_target_station` behaves as it always did.
 
 ## Signature resolution
 
@@ -229,6 +246,7 @@ single connection (the UI is the only client). PCM rides a separate pipe
          "underruns":N,"normalizer_gain":1.0,"limiter_gain":1.0}
 {"event":"source_changed","id":"spotify","display":"Spotify Connect"}
 {"event":"game_event","kind":"race_start"}
+{"event":"station","name":"Horizon Pulse"}   // tuned station: on change + on connect
 ```
 
 **UI → DLL commands** (`"cmd"` field):
@@ -237,8 +255,12 @@ single connection (the UI is the only client). PCM rides a separate pipe
 {"cmd":"set_track","title":"...","artist":"...","album":"...",
         "source_id":"...","source_display":"...","external_id":"..."}
 {"cmd":"set_gain","gain":0.3}
-{"cmd":"set_target_station","station":"Horizon Pulse"}   // "" or "*" = any
+{"cmd":"set_target_station","station":"Horizon Pulse"}   // legacy: "" or "*" = any
+{"cmd":"set_target_stations","stations":"Horizon XS\nHorizon Pulse"}  // "" = none
 ```
+
+`set_target_stations` carries the station list newline-separated in one string,
+so the flat key scanner can read it (station names never contain newlines).
 
 `set_track` is the main path: it routes C#-decoded metadata into the game HUD via
 the injector and resets the normalizer. The DLL only scans for the keys it needs
@@ -247,9 +269,9 @@ BMP `\u` sequences.
 
 Threading: `publish_*` are callable from any thread and serialize on a mutex so
 JSON lines can't interleave; they short-circuit when no client is connected. A
-**snapshot callback** fires on every (re)connect and re-publishes current track +
-source, so the UI doesn't sit on its placeholder when the user attaches
-mid-playback.
+**snapshot callback** fires on every (re)connect and re-publishes current track,
+source, and tuned station, so the UI doesn't sit on its placeholder when the user
+attaches mid-playback.
 
 ## version.dll proxy
 

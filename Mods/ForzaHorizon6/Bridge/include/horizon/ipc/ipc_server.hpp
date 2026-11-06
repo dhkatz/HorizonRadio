@@ -70,6 +70,10 @@ public:
     // maps to a user-configured action.
     void publish_game_event(std::string_view kind);
 
+    // The station tuned in right now ({"event":"station","name":...}). State, not an
+    // event: sent on every change and on (re)connect, so the UI always knows it.
+    void publish_station(std::string_view name);
+
     // Free-form debug line surfaced in the UI Console under `tag`.
     void publish_debug(std::string_view tag, std::string_view text);
 

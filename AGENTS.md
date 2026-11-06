@@ -58,6 +58,18 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
     finds its view by naming convention (`…ViewModels.FooViewModel` →
     `…Views.FooView`) in the plugin's own assembly. FH6 contributes Mods and
     Stats. Plugin UI packages must match the UI project's versions.
+  - A game owns its game-specific settings, persisted per plugin
+    (`IPluginContext.GetSettings(id)` → `plugin-settings.json`). FH6's Stations
+    page assigns each station the game's music, the app's player, or a mix
+    (`StationMap`); as the player tunes, the plugin routes the app's playback
+    through `IGameHost.Playback` (`PlaybackRouter`). Mixes stay game-agnostic.
+  - **Playback routing:** one engine (`SourceRunner`), several channels — the
+    player's queue and one `QueueSource` per mix. Leaving a channel parks it
+    (`SourceRunner.ParkAsync`, `QueueSource.MarkParked`); returning resumes per
+    the mode: Resume (same track, mid-track where the item can seek, via
+    `PumpContext.StartPosition`), Restart, or Live (fast-forward by elapsed time,
+    manual pause locked). While a mix station is on, player additions queue but
+    don't take the engine (`QueuePlayback.CanActivate`).
   - The FH6 plugin also bundles its mod: its csproj flows
     `Mods/ForzaHorizon6/build/Release/version.dll` into the app's build output
     (`ExcludeFromSingleFile`), and the UI's publish step copies it next to the exe.
@@ -205,6 +217,11 @@ To re-derive them:
 4. Update `kFh6Metadata.chain_offsets` and the field offsets; rebuild; redeploy.
 5. Once titles and audio work again, add the new build's `.text` size (from the
    `bridge` Console line) to `kFh6KnownBuilds` in `signatures.hpp`.
+6. Check the station codes: with something playing, tune through every station
+   and read the Console's `titles` lines (`tuned=<station> audible=<event id>@…`).
+   Each event id's `HZ6_R<n>_` code must match `kFh6StationCodes` in
+   `station_codes.hpp`; if they've moved, titles go quiet (a mismatch never
+   writes), so update the table.
 
 Cross-reference: [matkhl/FH6-Spotify-Radio](https://github.com/matkhl/FH6-Spotify-Radio)
 (GPL-3.0, archived) resolves the same structures. Its FMOD and RadioState

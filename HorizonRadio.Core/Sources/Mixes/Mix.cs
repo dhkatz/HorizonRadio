@@ -12,17 +12,11 @@ namespace HorizonRadio.Core.Sources.Mixes;
 /// A mix supersedes the old single-source "profile": a one-entry mix is exactly
 /// what a content-addressable profile used to be. Self-driven sources (Spotify
 /// Connect, the test tone) aren't mixable — they have no <see cref="ContentRef"/>.
+///
+/// A mix is just music: which station (if any) plays it is a game's setting (FH6's Stations page),
+/// not part of the mix.
 /// </summary>
 public sealed record Mix(
     string Id,
     string Name,
-    IReadOnlyList<ContentRef> Entries,
-    string? Station = null)
-{
-    /// <summary>
-    /// Which in-game station this mix replaces: its own override if set,
-    /// otherwise the app-wide default. Null means "replace whatever's active"
-    /// (the same meaning the global default carries).
-    /// </summary>
-    public string? EffectiveStation(string? globalDefault) => Station ?? globalDefault;
-}
+    IReadOnlyList<ContentRef> Entries);

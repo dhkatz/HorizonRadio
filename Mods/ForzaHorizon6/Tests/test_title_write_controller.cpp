@@ -10,19 +10,27 @@ using horizon::inject::TitleWriteController;
 namespace {
 
 // Stand-in for MetadataInjector: models each game metadata block as a
-// (title, artist) pair keyed by instance pointer. Lets the FSM tests assert
-// exactly what was written/restored without RTTI, MSVC-string layout, or the
-// game process. Satisfies the duck-typed surface TitleWriteController needs.
+// (title, artist) pair, reached from an instance through `chain` (instance ->
+// block; an instance with no entry is its own block, which is all most tests
+// need). Re-pointing `chain` models the game switching an instance to another
+// station's block. Lets the FSM tests assert exactly what was written/restored
+// without RTTI, MSVC-string layout, or the game process.
 struct FakeInjector {
     int  writes    = 0;
     bool fail_read = false; // chain "doesn't resolve" for reads
 
+    std::map<const void*, const void*>                         chain;
     std::map<const void*, std::pair<std::string, std::string>> blocks;
+
+    [[nodiscard]] const void* resolve_block(const void* inst) const {
+        auto it = chain.find(inst);
+        return it == chain.end() ? inst : it->second;
+    }
 
     bool read_instance_strings(const void* inst, std::string& title, std::string& artist) const {
         if (fail_read)
             return false;
-        auto it = blocks.find(inst);
+        auto it = blocks.find(resolve_block(inst));
         if (it == blocks.end())
             return false;
         title  = it->second.first;
@@ -32,7 +40,7 @@ struct FakeInjector {
 
     int write_to_instance(const void* inst, std::string_view /*sound*/, std::string_view title,
                           std::string_view artist) {
-        blocks[inst] = {std::string(title), std::string(artist)};
+        blocks[resolve_block(inst)] = {std::string(title), std::string(artist)};
         ++writes;
         return 1;
     }
@@ -42,16 +50,22 @@ struct FakeInjector {
 // controller only compares pointers and forwards them to the injector.
 int g_a;
 int g_b;
+int g_block_a;
+int g_block_b;
 
-const void* const kInst1 = &g_a;
-const void* const kInst2 = &g_b;
+const void* const kInst1  = &g_a;
+const void* const kInst2  = &g_b;
+const void* const kBlockA = &g_block_a; // e.g. our station's metadata block
+const void* const kBlockB = &g_block_b; // a neighbouring station's block
+
+using Strings = std::pair<std::string, std::string>;
 
 } // namespace
 
 TEST_CASE("TitleWriteController: first touch snapshots originals, writes ours, restores on idle") {
     FakeInjector inj;
     inj.blocks[kInst1] = {"GameTitle", "GameArtist"};
-    TitleWriteController c;
+    TitleWriteController c{0};
 
     const int n = c.on_active(inj, kInst1, "sound", "OurTitle", "OurArtist");
 
@@ -68,7 +82,7 @@ TEST_CASE("TitleWriteController: first touch snapshots originals, writes ours, r
 
 TEST_CASE("TitleWriteController: on_idle without an owned block is a no-op") {
     FakeInjector         inj;
-    TitleWriteController c;
+    TitleWriteController c{0};
 
     c.on_idle(inj);
 
@@ -80,7 +94,7 @@ TEST_CASE("TitleWriteController: switching to a still-live instance restores the
     FakeInjector inj;
     inj.blocks[kInst1] = {"Title1", "Artist1"};
     inj.blocks[kInst2] = {"Title2", "Artist2"};
-    TitleWriteController c;
+    TitleWriteController c{0};
 
     c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist");
     // Selection moves to inst2.
@@ -96,7 +110,7 @@ TEST_CASE("TitleWriteController: switching away restores the old block even if i
     FakeInjector inj;
     inj.blocks[kInst1] = {"Title1", "Artist1"};
     inj.blocks[kInst2] = {"Title2", "Artist2"};
-    TitleWriteController c;
+    TitleWriteController c{0};
 
     c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist");
     // inst1 has dropped out of the (stale) heap scan, but the restore must
@@ -113,7 +127,7 @@ TEST_CASE("TitleWriteController: switching away restores the old block even if i
 TEST_CASE("TitleWriteController: restore value resyncs when the game advances its own track") {
     FakeInjector inj;
     inj.blocks[kInst1] = {"GameA", "ArtistA"};
-    TitleWriteController c;
+    TitleWriteController c{0};
 
     // Tick 1: snapshot GameA, write ours.
     c.on_active(inj, kInst1, "s", "Ours", "OursArtist");
@@ -130,7 +144,7 @@ TEST_CASE("TitleWriteController: restore value resyncs when the game advances it
 TEST_CASE("TitleWriteController: a null active instance restores the previously written block") {
     FakeInjector inj;
     inj.blocks[kInst1] = {"Title1", "Artist1"};
-    TitleWriteController c;
+    TitleWriteController c{0};
 
     c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist");
     const int n = c.on_active(inj, nullptr, "s", "OurTitle", "OurArtist");
@@ -144,7 +158,7 @@ TEST_CASE("TitleWriteController: no original is restored when the first-touch re
     FakeInjector inj;
     inj.fail_read      = true; // chain never resolves for reads
     inj.blocks[kInst1] = {"GameTitle", "GameArtist"};
-    TitleWriteController c;
+    TitleWriteController c{0};
 
     c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist");
     CHECK(inj.blocks[kInst1] == std::pair<std::string, std::string>{"OurTitle", "OurArtist"});
@@ -153,4 +167,136 @@ TEST_CASE("TitleWriteController: no original is restored when the first-touch re
 
     // saved_valid was false, so idle must not write a (bogus) restore value.
     CHECK(inj.blocks[kInst1] == std::pair<std::string, std::string>{"OurTitle", "OurArtist"});
+}
+
+TEST_CASE("TitleWriteController: waits for the block to settle before writing") {
+    FakeInjector inj;
+    inj.blocks[kInst1] = {"GameTitle", "GameArtist"};
+    TitleWriteController c{3};
+
+    for (int i = 0; i < 3; ++i)
+        CHECK(c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist") == 0);
+    CHECK(inj.writes == 0);
+
+    CHECK(c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist") == 1);
+    CHECK(inj.blocks[kInst1] == Strings{"OurTitle", "OurArtist"});
+}
+
+TEST_CASE("TitleWriteController: idle resets the settle count") {
+    FakeInjector inj;
+    inj.blocks[kInst1] = {"GameTitle", "GameArtist"};
+    TitleWriteController c{2};
+
+    c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist");
+    c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist");
+    c.on_idle(inj);
+    CHECK(c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist") == 0);
+    CHECK(inj.writes == 0);
+}
+
+// Tuning away: the game re-points our instance at the next station's block. The
+// restore must not land there, and our title must not be written there while
+// the station name still lags behind.
+TEST_CASE("TitleWriteController: a re-pointed instance is neither restored into nor written to") {
+    FakeInjector inj;
+    inj.chain[kInst1]   = kBlockA;
+    inj.blocks[kBlockA] = {"OurStationTitle", "OurStationArtist"};
+    inj.blocks[kBlockB] = {"NeighbourTitle", "NeighbourArtist"};
+    TitleWriteController c{3};
+
+    for (int i = 0; i < 4; ++i)
+        c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist");
+    REQUIRE(inj.blocks[kBlockA] == Strings{"OurTitle", "OurArtist"});
+
+    // Station switched: same instance, neighbour's block. A few lagging ticks
+    // still think we're on target...
+    inj.chain[kInst1] = kBlockB;
+    for (int i = 0; i < 3; ++i)
+        CHECK(c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist") == 0);
+    // ...then the station name catches up and we go idle.
+    c.on_idle(inj);
+
+    CHECK(inj.blocks[kBlockB] == Strings{"NeighbourTitle", "NeighbourArtist"});
+    CHECK_FALSE(c.owns_block());
+}
+
+TEST_CASE("TitleWriteController: off target after a switch leaves the new station alone") {
+    FakeInjector inj;
+    inj.chain[kInst1]   = kBlockA;
+    inj.blocks[kBlockA] = {"OurStationTitle", "OurStationArtist"};
+    inj.blocks[kBlockB] = {"NeighbourTitle", "NeighbourArtist"};
+    TitleWriteController c{0};
+
+    c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist");
+    inj.chain[kInst1] = kBlockB;
+    c.on_active(inj, nullptr, "s", "OurTitle", "OurArtist"); // off target: no instance
+
+    CHECK(inj.blocks[kBlockB] == Strings{"NeighbourTitle", "NeighbourArtist"});
+    CHECK_FALSE(c.owns_block());
+}
+
+TEST_CASE("TitleWriteController: a block that stays put is still restored") {
+    FakeInjector inj;
+    inj.chain[kInst1]   = kBlockA;
+    inj.blocks[kBlockA] = {"GameTitle", "GameArtist"};
+    TitleWriteController c{0};
+
+    c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist");
+    c.on_idle(inj);
+
+    CHECK(inj.blocks[kBlockA] == Strings{"GameTitle", "GameArtist"});
+}
+
+using horizon::inject::BlockIdentity;
+
+TEST_CASE("TitleWriteController: a block known to be the tuned station's is written at once") {
+    FakeInjector inj;
+    inj.blocks[kInst1] = {"GameTitle", "GameArtist"};
+    TitleWriteController c{3};
+
+    CHECK(c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist", BlockIdentity::Match) == 1);
+    CHECK(inj.blocks[kInst1] == Strings{"OurTitle", "OurArtist"});
+}
+
+TEST_CASE("TitleWriteController: another station's block is never written") {
+    FakeInjector inj;
+    inj.blocks[kInst1] = {"NeighbourTitle", "NeighbourArtist"};
+    TitleWriteController c{0};
+
+    for (int i = 0; i < 5; ++i)
+        CHECK(c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist", BlockIdentity::Mismatch) == 0);
+    CHECK(inj.writes == 0);
+}
+
+// Tuning from one of our stations to another: the name changes first, so for a
+// tick the instance still shows the block we own while the tuned station is
+// already the next one. Hand our block back then, while the restore can reach it.
+TEST_CASE("TitleWriteController: a mismatch on our own block restores it before the re-point") {
+    FakeInjector inj;
+    inj.chain[kInst1]   = kBlockA;
+    inj.blocks[kBlockA] = {"OurStationTitle", "OurStationArtist"};
+    inj.blocks[kBlockB] = {"NextTitle", "NextArtist"};
+    TitleWriteController c{3};
+
+    c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist", BlockIdentity::Match);
+    REQUIRE(inj.blocks[kBlockA] == Strings{"OurTitle", "OurArtist"});
+
+    c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist", BlockIdentity::Mismatch);
+    CHECK(inj.blocks[kBlockA] == Strings{"OurStationTitle", "OurStationArtist"});
+    CHECK_FALSE(c.owns_block());
+
+    // The instance catches up: the next station's block, which is ours too.
+    inj.chain[kInst1] = kBlockB;
+    CHECK(c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist", BlockIdentity::Match) == 1);
+    CHECK(inj.blocks[kBlockB] == Strings{"OurTitle", "OurArtist"});
+}
+
+TEST_CASE("TitleWriteController: unknown identity still waits for the block to settle") {
+    FakeInjector inj;
+    inj.blocks[kInst1] = {"GameTitle", "GameArtist"};
+    TitleWriteController c{2};
+
+    CHECK(c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist", BlockIdentity::Unknown) == 0);
+    CHECK(c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist", BlockIdentity::Unknown) == 0);
+    CHECK(c.on_active(inj, kInst1, "s", "OurTitle", "OurArtist", BlockIdentity::Unknown) == 1);
 }

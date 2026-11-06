@@ -24,8 +24,6 @@ namespace HorizonRadio.UI.ViewModels;
 /// </summary>
 public sealed partial class MixesViewModel : ViewModelBase
 {
-    /// <summary>Station-override sentinel meaning "inherit the global target".</summary>
-    public const string UseGlobalDefault = "Use global default";
 
     private readonly MixStore _store;
     private readonly MixSwitcher _switcher;
@@ -47,16 +45,10 @@ public sealed partial class MixesViewModel : ViewModelBase
     /// hold a self-driven source like Spotify Connect).</summary>
     public IReadOnlyList<IAudioSourceFactory> EntrySources { get; }
 
-    /// <summary>Station-override choices: "use global default" (inherit) + the
-    /// specific FH6 stations. "Any station" is deliberately omitted — it's the
-    /// global default's job; a per-mix override pins the mix to one station.</summary>
-    public ObservableCollection<string> StationOptions { get; }
-
     public ObservableCollection<MixEntryEditRow> EditEntries { get; } = new();
 
     [ObservableProperty] private bool isEditing;
     [ObservableProperty] private string editingName = "";
-    [ObservableProperty] private string editingStation = UseGlobalDefault;
     [ObservableProperty] private string statusMessage = "";
     [ObservableProperty] private bool hasError;
     public bool HasMixes => Mixes.Count > 0;
@@ -72,7 +64,6 @@ public sealed partial class MixesViewModel : ViewModelBase
         _dialogs = dialogs;
         _content = content;
         EntrySources = SourceCatalog.All.Where(f => f is IContentSourceFactory).ToList();
-        StationOptions = new ObservableCollection<string>(new[] { UseGlobalDefault }.Concat(StationCatalog.Names));
 
         _store.Changed += OnStoreChanged;
         RefreshList();
@@ -109,8 +100,7 @@ public sealed partial class MixesViewModel : ViewModelBase
     private MixRow ToRow(Mix m)
     {
         var id = m.Id;
-        var station = m.Station == null ? "" : $"Station: {m.Station}";
-        var row = new MixRow(id, m.Name, BuildSummary(m), station)
+        var row = new MixRow(id, m.Name, BuildSummary(m))
         {
             PlayCommand = new RelayCommand(() => PlayMix(id)),
             EditCommand = new RelayCommand(() => EditMix(id)),
@@ -169,7 +159,6 @@ public sealed partial class MixesViewModel : ViewModelBase
     {
         _editingId = null;
         EditingName = "";
-        EditingStation = UseGlobalDefault;
         StatusMessage = "";
         HasError = false;
         EditEntries.Clear();
@@ -219,9 +208,8 @@ public sealed partial class MixesViewModel : ViewModelBase
         }
         if (entries.Count == 0) { Fail("Add at least one entry (a source and a URL/folder)."); return; }
 
-        var station = EditingStation == UseGlobalDefault ? null : EditingStation;
         var id = _editingId ?? Guid.NewGuid().ToString("n");
-        _store.AddOrUpdate(new Mix(id, EditingName.Trim(), entries, station));
+        _store.AddOrUpdate(new Mix(id, EditingName.Trim(), entries));
         _store.SaveToDisk();
 
         IsEditing = false;
@@ -237,7 +225,6 @@ public sealed partial class MixesViewModel : ViewModelBase
 
         _editingId = mix.Id;
         EditingName = mix.Name;
-        EditingStation = mix.Station ?? UseGlobalDefault;
         StatusMessage = "";
         HasError = false;
 
@@ -309,8 +296,6 @@ public sealed partial class MixRow : ViewModelBase
 {
     public string Id { get; }
     public string Name { get; }
-    public string Station { get; }
-    public bool HasStation => !string.IsNullOrEmpty(Station);
 
     [ObservableProperty] private string summary;
 
@@ -318,12 +303,11 @@ public sealed partial class MixRow : ViewModelBase
     public required ICommand EditCommand { get; init; }
     public required ICommand DeleteCommand { get; init; }
 
-    public MixRow(string id, string name, string summary, string station)
+    public MixRow(string id, string name, string summary)
     {
         Id = id;
         Name = name;
         this.summary = summary;
-        Station = station;
     }
 }
 

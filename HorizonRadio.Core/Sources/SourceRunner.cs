@@ -65,14 +65,26 @@ public sealed class SourceRunner(IPcmSink sink) : IAsyncDisposable
         }
     }
 
-    public async Task StopAsync()
+    public async Task StopAsync() => await StopActiveAsync(dispose: true).ConfigureAwait(false);
+
+    /// <summary>
+    /// Stop the active source <em>without disposing it</em> and hand it back, so its owner can
+    /// start it again later with its state intact (a station channel resuming where it left
+    /// off). The caller now owns the returned source's lifetime. Null if nothing was running.
+    /// </summary>
+    public async Task<IAudioSource?> ParkAsync() => await StopActiveAsync(dispose: false).ConfigureAwait(false);
+
+    private async Task<IAudioSource?> StopActiveAsync(bool dispose)
     {
         var src = _active;
-        if (src == null) return;
+        if (src == null) return null;
 
         try { _cts?.Cancel(); } catch { }
         try { await src.StopAsync().ConfigureAwait(false); } catch (Exception) { }
-        try { await src.DisposeAsync().ConfigureAwait(false); } catch { }
+        if (dispose)
+        {
+            try { await src.DisposeAsync().ConfigureAwait(false); } catch { }
+        }
 
         src.TrackChanged -= OnTrackChanged;
         _active = null;
@@ -80,6 +92,7 @@ public sealed class SourceRunner(IPcmSink sink) : IAsyncDisposable
         _cts?.Dispose();
         _cts = null;
         ActiveSourceChanged?.Invoke(null);
+        return dispose ? null : src;
     }
 
     private void OnTrackChanged(Track t) => TrackChanged?.Invoke(t);

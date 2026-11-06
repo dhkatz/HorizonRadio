@@ -86,6 +86,11 @@ public sealed class SpotifyPlayableItem : PlayableItem
         // audio, not the laggy play command), publishing the now-final metadata.
         await _playback.PlayTrackAsync(
             _info.Uri, _info.Duration, ctx,
-            onPlaying: () => ctx.OnStarted?.Invoke(this), ct).ConfigureAwait(false);
+            onPlaying: () =>
+            {
+                ctx.OnStarted?.Invoke(this);
+                // Resuming mid-track: seek once librespot is streaming this track.
+                if (ctx.StartPosition?.Invoke(this) is { Ticks: > 0 } start) Seek(start);
+            }, ct).ConfigureAwait(false);
     }
 }

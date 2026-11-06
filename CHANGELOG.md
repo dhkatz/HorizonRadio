@@ -25,6 +25,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Each FH6 station can play something different.** A new Stations page (under
+  Forza Horizon 6) sets every in-game station to the game's own music (the
+  default), the Horizon Radio player, or one of your mixes; tuning the in-game
+  radio switches what Horizon Radio plays to match. Choose how mix stations
+  behave while you're tuned elsewhere: pause and resume (default), start fresh,
+  or "live radio" (they keep playing; manual pause is off). Requires the updated
+  mod (`version.dll`). Mixes no longer carry a station override. Existing
+  settings migrate on first launch: your default target station becomes the
+  player's station, and a mix's station override becomes that station playing
+  the mix (moved to the new `plugin-settings.json`).
 - **Sidebar: game pages live under the game's name.** The Mods and Stats pages
   now come from the Forza Horizon 6 plugin and are listed under a "Forza Horizon
   6" section. Events and Controls moved to Settings, since they aren't specific
@@ -68,6 +78,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   metadata lookup succeeding, and it now refuses ambiguous or out-of-module
   signature matches instead of trusting the first hit.
 
+- **Changing stations no longer copies our title onto other stations.** Flicking
+  past a station could leave the playing song's title on it (and on its
+  neighbours). The mod now checks which station each title block belongs to (the
+  game's own track id) before writing or restoring, so titles land only on our
+  stations and appear immediately on tune-in. A station playing nothing of ours
+  also stops showing a stale title from another station.
 - **Internet-radio tracks no longer attach a wrong same-titled cover.** A romaji
   broadcast artist (e.g. "HachiojiP") could match an unrelated Japanese-named
   artist's same-titled song (e.g. くろくも's "KiLLER LADY") through the cross-script

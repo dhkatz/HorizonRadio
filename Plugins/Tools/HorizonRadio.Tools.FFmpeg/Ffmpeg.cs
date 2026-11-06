@@ -21,7 +21,10 @@ public static class Ffmpeg
     /// Decode a network URL to canonical PCM. Includes reconnect flags for flaky CDN streams and
     /// optional EBU R128 loudness normalisation. Used by the YouTube source.
     /// </summary>
-    public static string[] BuildUrlDecodeArgs(string url, bool normalise)
+    /// <param name="start">Where to begin decoding (resuming mid-track); zero = from the top.
+    /// Applied as an input seek (<c>-ss</c> before <c>-i</c>), which on an HTTP stream jumps
+    /// there with a range request instead of decoding everything before it.</param>
+    public static string[] BuildUrlDecodeArgs(string url, bool normalise, TimeSpan start = default)
     {
         var args = new List<string>
         {
@@ -30,8 +33,14 @@ public static class Ffmpeg
             "-reconnect", "1",
             "-reconnect_streamed", "1",
             "-reconnect_delay_max", "5",
-            "-i", url,
         };
+        if (start > TimeSpan.Zero)
+        {
+            args.Add("-ss");
+            args.Add(start.TotalSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        args.Add("-i");
+        args.Add(url);
         AppendPcmOutput(args, normalise);
         return args.ToArray();
     }

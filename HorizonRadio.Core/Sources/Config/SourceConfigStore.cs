@@ -30,8 +30,9 @@ public sealed class SourceConfigStore
 {
     public string? LastSelectedId { get; set; }
 
-    /// <summary>Which in-game radio station Horizon Radio replaces (null/Any
-    /// = whatever's active). Persisted so the choice survives restarts.</summary>
+    /// <summary>LEGACY: the default target station from before games were plugins. Read only so
+    /// <c>LegacySettingsMigration.MoveTargetStation</c> can move it into the FH6 plugin's
+    /// settings, which then clears it; it's no longer written once cleared.</summary>
     public string? TargetStation { get; set; }
 
     /// <summary>Global shuffle preference (applies to whichever source is

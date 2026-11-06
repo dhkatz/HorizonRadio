@@ -28,6 +28,18 @@ public sealed class QueuePlayback : IDisposable
 
     public QueueModel Model { get; } = new();
 
+    // The player's engine. Long-lived so a game's playback router can park it (tuning to a mix
+    // station) and resume it later with its history and place intact; recreated only after it
+    // was disposed (e.g. a self-driven source like Spotify Connect took the runner).
+    private QueueSource? _source;
+
+    /// <summary>
+    /// Whether the player may take the runner. False while a game routes playback to another
+    /// channel (see <c>PlaybackRouter</c>): additions still land in the queue, they just aren't
+    /// heard until the game routes back to the player.
+    /// </summary>
+    internal Func<bool> CanActivate { get; set; } = static () => true;
+
     public QueuePlayback(SourceRunner runner, SourceConfigStore config, MixContentResolver resolver)
     {
         _runner = runner;
@@ -37,15 +49,43 @@ public sealed class QueuePlayback : IDisposable
 
     /// <summary>True when the queue engine is the source currently on the runner
     /// (as opposed to a self-driven source like Spotify, or nothing).</summary>
-    public bool IsActive => _runner.ActiveSource is QueueSource;
+    public bool IsActive => _source != null && ReferenceEquals(_runner.ActiveSource, _source);
 
     /// <summary>Ensure the queue engine is the active source, recreating it if a
     /// self-driven source had taken over. The model (and so the queue's contents
-    /// and context) is preserved across the swap.</summary>
+    /// and context) is preserved across the swap. No-op while a game routes playback
+    /// elsewhere (<see cref="CanActivate"/>).</summary>
     public async Task EnsureActiveAsync()
     {
-        if (_runner.ActiveSource is QueueSource) return;
-        await _runner.StartSourceAsync(new QueueSource(Model)).ConfigureAwait(false);
+        if (!CanActivate() || IsActive) return;
+        if (_source is not { IsDisposed: false }) _source = new QueueSource(Model);
+        await _runner.StartSourceAsync(_source).ConfigureAwait(false);
+    }
+
+    /// <summary>The player's engine, for the playback router to park; null if never started.</summary>
+    internal QueueSource? Source => _source;
+
+    /// <summary>
+    /// Bring the player back after the router parked it: continue the interrupted track, or
+    /// start the queue if it has something to play. Called by the router once it has routed
+    /// back to the player.
+    /// </summary>
+    internal async Task ResumeAsync()
+    {
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (_source is { IsDisposed: false } parked)
+            {
+                parked.ResumeFromPark(TimeSpan.Zero);
+                if (!IsActive) await _runner.StartSourceAsync(parked).ConfigureAwait(false);
+            }
+            else if (Model.HasWork)
+            {
+                await EnsureActiveAsync().ConfigureAwait(false);
+            }
+        }
+        finally { _gate.Release(); }
     }
 
     /// <summary>Resolve a one-off locator and append it to the explicit queue,

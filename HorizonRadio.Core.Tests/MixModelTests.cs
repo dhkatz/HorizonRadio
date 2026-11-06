@@ -6,24 +6,13 @@ using HorizonRadio.Core.Sources.Mixes;
 namespace HorizonRadio.Core.Tests;
 
 /// <summary>
-/// The mix data layer: the per-mix station override, JSON persistence of the
-/// cross-source entry list, and resolving a ref to the engine that plays it.
+/// The mix data layer: JSON persistence of the cross-source entry list (and reading the
+/// legacy per-mix station field), and resolving a ref to the engine that plays it.
 /// </summary>
 public class MixModelTests
 {
     [Fact]
-    public void EffectiveStation_prefers_override_then_global()
-    {
-        var withOverride = new Mix("1", "A", [], Station: "Horizon Wave");
-        var noOverride = new Mix("2", "B", [], Station: null);
-
-        Assert.Equal("Horizon Wave", withOverride.EffectiveStation("Horizon XS"));
-        Assert.Equal("Horizon XS", noOverride.EffectiveStation("Horizon XS"));
-        Assert.Null(noOverride.EffectiveStation(null));
-    }
-
-    [Fact]
-    public void MixStore_round_trips_entries_and_station()
+    public void MixStore_round_trips_entries()
     {
         using var dir = TempDir.Create();
         var path = Path.Combine(dir.Path, "mixes.json");
@@ -33,7 +22,7 @@ public class MixModelTests
         [
             new ContentRef("youtube", "https://youtu.be/abc", "Synthwave"),
             new ContentRef("local", @"C:\Music", null),
-        ], Station: "Horizon Pulse"));
+        ]));
         save.AddOrUpdate(new Mix("chill", "Chill", [new ContentRef("local", @"C:\Calm")]));
         save.SaveToDisk(path);
 
@@ -42,12 +31,34 @@ public class MixModelTests
         Assert.Equal(2, load.All.Count);
         var drive = load.Get("drive")!;
         Assert.Equal("Drive", drive.Name);
-        Assert.Equal("Horizon Pulse", drive.Station);
         Assert.Equal(2, drive.Entries.Count);
         Assert.Equal("youtube", drive.Entries[0].SourceId);
         Assert.Equal("https://youtu.be/abc", drive.Entries[0].Locator);
         Assert.Equal("Synthwave", drive.Entries[0].DisplayName);
-        Assert.Null(load.Get("chill")!.Station);
+        Assert.Empty(load.LegacyStations);
+    }
+
+    // Before games were plugins, a mix stored its (FH6-only) station override. The store only reads
+    // it, for the migration into FH6's station assignments, and never writes it back.
+    [Fact]
+    public void MixStore_reads_but_drops_legacy_station_overrides()
+    {
+        using var dir = TempDir.Create();
+        var path = Path.Combine(dir.Path, "mixes.json");
+        File.WriteAllText(path, """
+            { "mixes": [
+              { "id": "a", "name": "A", "station": "Horizon XS", "entries": [] },
+              { "id": "b", "name": "B", "station": null, "entries": [] }
+            ] }
+            """);
+
+        var load = MixStore.LoadFromDisk(path);
+        Assert.Equal(new Dictionary<string, string> { ["a"] = "Horizon XS" }, load.LegacyStations);
+
+        load.SaveToDisk(path);
+        using (var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path)))
+            Assert.False(doc.RootElement.GetProperty("mixes")[0].TryGetProperty("station", out _));
+        Assert.Empty(MixStore.LoadFromDisk(path).LegacyStations);
     }
 
     [Fact]

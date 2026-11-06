@@ -19,7 +19,7 @@ namespace HorizonRadio.Core.Sources.Mixes;
 /// {
 ///   "mixes": [
 ///     {
-///       "id": "…", "name": "Drive", "station": null,
+///       "id": "…", "name": "Drive",
 ///       "entries": [
 ///         { "source": "youtube", "locator": "https://…", "name": "Synthwave mix" },
 ///         { "source": "local",   "locator": "C:\\Music\\foo.flac" }
@@ -37,6 +37,15 @@ public sealed class MixStore
     public event Action? Changed;
 
     public IReadOnlyList<Mix> All => _mixes;
+
+    private readonly Dictionary<string, string> _legacyStations = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// LEGACY: mix id → the in-game station a mix used to override, read from pre-plugin files
+    /// (<c>"station"</c> on a mix). No longer written; <c>LegacySettingsMigration</c> moves these
+    /// into the FH6 plugin's station assignments.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> LegacyStations => _legacyStations;
 
     public Mix? Get(string id) => _mixes.FirstOrDefault(m => m.Id == id);
 
@@ -80,7 +89,10 @@ public sealed class MixStore
                 foreach (var item in arr.EnumerateArray())
                 {
                     var mix = TryReadMix(item);
-                    if (mix != null) store._mixes.Add(mix);
+                    if (mix == null) continue;
+                    store._mixes.Add(mix);
+                    if (ReadString(item, "station") is { Length: > 0 } station)
+                        store._legacyStations[mix.Id] = station;
                 }
             }
         }
@@ -108,8 +120,6 @@ public sealed class MixStore
                 writer.WriteStartObject();
                 writer.WriteString("id", m.Id);
                 writer.WriteString("name", m.Name);
-                if (m.Station != null) writer.WriteString("station", m.Station);
-                else writer.WriteNull("station");
 
                 writer.WriteStartArray("entries");
                 foreach (var e in m.Entries)
@@ -141,7 +151,6 @@ public sealed class MixStore
         var name = ReadString(item, "name");
         if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(name)) return null;
 
-        var station = ReadString(item, "station"); // null/absent = inherit global
 
         var entries = new List<ContentRef>();
         if (item.TryGetProperty("entries", out var arr) && arr.ValueKind == JsonValueKind.Array)
@@ -156,7 +165,7 @@ public sealed class MixStore
             }
         }
 
-        return new Mix(id!, name!, entries, station);
+        return new Mix(id!, name!, entries);
     }
 
     private static string? ReadString(JsonElement e, string key)

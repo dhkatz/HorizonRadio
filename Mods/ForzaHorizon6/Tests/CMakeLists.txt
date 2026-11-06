@@ -33,6 +33,8 @@ set(HORIZON_TEST_SOURCES
   test_normalizer.cpp
   test_ring_buffer.cpp
   test_sigscan.cpp
+  test_station_codes.cpp
+  test_station_targets.cpp
   test_title_write_controller.cpp
 )
 

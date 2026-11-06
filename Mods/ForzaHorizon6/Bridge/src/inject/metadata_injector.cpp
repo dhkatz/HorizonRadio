@@ -148,6 +148,65 @@ int process_one_instance(const void* instance, std::uintptr_t vt_addr, const Met
     }
 }
 
+// SEH-guarded walk to the chain endpoint, mirroring process_one_instance but
+// without touching the block.
+const void* resolve_block_one(const void* instance, std::uintptr_t vt_addr, const std::ptrdiff_t* chain_ptr,
+                              std::size_t chain_size) {
+    __try {
+        const auto vptr = *static_cast<const std::uintptr_t*>(instance);
+        if (vptr != vt_addr)
+            return nullptr;
+
+        auto current = reinterpret_cast<std::uintptr_t>(instance);
+        for (std::size_t i = 0; i < chain_size; ++i) {
+            current = *reinterpret_cast<const std::uintptr_t*>(current + static_cast<std::uintptr_t>(chain_ptr[i]));
+            if (current == 0)
+                return nullptr;
+        }
+        return reinterpret_cast<const void*>(current);
+    } __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION ? EXCEPTION_EXECUTE_HANDLER
+                                                                 : EXCEPTION_CONTINUE_SEARCH) {
+        return nullptr;
+    }
+}
+
+// POD copy of one endpoint string, so it can cross the SEH boundary (C2712).
+struct ShortString {
+    char        text[256];
+    std::size_t len;
+    bool        ok;
+};
+
+// SEH-guarded read of the MSVC std::string at `offset` in the chain endpoint.
+void read_string_at_one(const void* instance, std::uintptr_t vt_addr, const std::ptrdiff_t* chain_ptr,
+                        std::size_t chain_size, std::ptrdiff_t offset, ShortString* out) {
+    out->ok  = false;
+    out->len = 0;
+    __try {
+        const auto vptr = *static_cast<const std::uintptr_t*>(instance);
+        if (vptr != vt_addr)
+            return;
+        auto current = reinterpret_cast<std::uintptr_t>(instance);
+        for (std::size_t i = 0; i < chain_size; ++i) {
+            current = *reinterpret_cast<const std::uintptr_t*>(current + static_cast<std::uintptr_t>(chain_ptr[i]));
+            if (current == 0)
+                return;
+        }
+        const auto* s = reinterpret_cast<const MsvcString*>(current + offset);
+        if (!plausible_msvc_string(s))
+            return;
+        const std::size_t len = s->size < sizeof(out->text) ? s->size : sizeof(out->text);
+        const char*       src = data(*s);
+        for (std::size_t i = 0; i < len; ++i)
+            out->text[i] = src[i];
+        out->len = len;
+        out->ok  = true;
+    } __except (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION ? EXCEPTION_EXECUTE_HANDLER
+                                                                 : EXCEPTION_CONTINUE_SEARCH) {
+        out->ok = false;
+    }
+}
+
 // POD snapshot of the endpoint strings, so it can cross the SEH boundary (C2712).
 struct StringSnapshot {
     char        title[512];
@@ -539,6 +598,26 @@ int MetadataInjector::write_to_instance(const void* instance, std::string_view s
                                               config_.chain_offsets.size(), sound_name, display_name, artist);
     total_writes_.fetch_add(static_cast<std::uint64_t>(n), std::memory_order_relaxed);
     return n;
+}
+
+const void* MetadataInjector::resolve_block(const void* instance) const {
+    if (!vt_ || instance == nullptr)
+        return nullptr;
+    const auto vt_addr = reinterpret_cast<std::uintptr_t>(vt_->address);
+    return resolve_block_one(instance, vt_addr, config_.chain_offsets.data(), config_.chain_offsets.size());
+}
+
+bool MetadataInjector::read_event_id(const void* instance, std::string& out) const {
+    if (!vt_ || instance == nullptr || !config_.event_id_offset)
+        return false;
+    const auto  vt_addr = reinterpret_cast<std::uintptr_t>(vt_->address);
+    ShortString s{};
+    read_string_at_one(instance, vt_addr, config_.chain_offsets.data(), config_.chain_offsets.size(),
+                       *config_.event_id_offset, &s);
+    if (!s.ok)
+        return false;
+    out.assign(s.text, s.len);
+    return true;
 }
 
 bool MetadataInjector::read_instance_strings(const void* instance, std::string& out_title,

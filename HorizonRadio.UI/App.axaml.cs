@@ -16,6 +16,8 @@ using HorizonRadio.Core.Metadata.MusicBrainz;
 using HorizonRadio.Core.Metadata.Spotify;
 using HorizonRadio.Core.Metadata.VocaDb;
 using HorizonRadio.Core.Models;
+using HorizonRadio.Core.Playback;
+using HorizonRadio.Core.Plugins;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Local;
@@ -90,7 +92,7 @@ public partial class App : Application
             var services = new ServiceCollection();
             services.AddHorizonCore();
             services.AddSingleton<ToolRegistry>();
-            services.AddSingleton<IPluginContext>(sp => new HostPluginContext(sp.GetRequiredService<MetadataCache>()));
+            services.AddSingleton<IPluginContext>(sp => new HostPluginContext(sp.GetRequiredService<MetadataCache>(), sp.GetRequiredService<PluginSettingsStore>()));
             var provider = services.BuildServiceProvider();
 
             _store = provider.GetRequiredService<SourceConfigStore>();
@@ -102,6 +104,13 @@ public partial class App : Application
             var pluginContext = provider.GetRequiredService<IPluginContext>();
             var gamePlugins = PluginDiscovery.DiscoverPlugins<IGamePlugin>();
             if (gamePlugins.Count == 0) throw new InvalidOperationException("No game plugin found.");
+            // Before the game is built: its settings must already hold anything migrated into them.
+            // Saving drops the legacy fields so the migration can't re-apply later.
+            var migratedMixes = provider.GetRequiredService<MixStore>();
+            var migrated = LegacySettingsMigration.MigrateStations(
+                _store, migratedMixes, provider.GetRequiredService<PluginSettingsStore>());
+            if (migrated.ConfigChanged) _store.SaveToDisk();
+            if (migrated.MixesChanged) migratedMixes.SaveToDisk();
             _game = gamePlugins[0].Create(pluginContext);
 
             // Tee the pipeline so the active source can play to the game
@@ -249,24 +258,10 @@ public partial class App : Application
             var vm = new MainWindowViewModel(_runner, _store, mixStore, mixSwitcher, queuePlayback, _historyStore, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, _game, toasts, dialogManager);
             desktop.MainWindow = new MainWindow { DataContext = vm };
 
-            // Station targeting. "Which in-game station do we replace right now?"
-            // is computed in ONE place: the active mix's override if a mix is
-            // driving playback, else the global default. Every trigger — the
-            // global picker changing, a mix switch, a self-driven source start,
-            // and game (re)connect — pushes that same effective value, so none of
-            // them can clobber an active mix's override or go stale on reconnect.
-            string EffectiveStation()
-            {
-                var global = vm.NowPlaying.Station.SelectedStation;
-                var mix = mixSwitcher.CurrentMixId is { } id ? mixStore.Get(id) : null;
-                return mix?.EffectiveStation(global) ?? global;
-            }
-
-            void PushStation() => _game.Stations?.SetTarget(StationTargetViewModel.ToTarget(EffectiveStation()));
-
-            vm.NowPlaying.Station.TargetStationChanged += _ => PushStation();
-            mixSwitcher.Switched += _ => PushStation();
-            _runner.ActiveSourceChanged += _ => PushStation();
+            // The game steers playback between channels: the app's player, one channel per mix, or
+            // nothing (for FH6: whatever the tuned station is set to play). Without a game it stays
+            // on the player, which is plain app playback.
+            var router = new PlaybackRouter(_runner, queuePlayback, mixStore, contentResolver);
 
             // The master volume slider doubles as an in-game pre-amp: push its
             // tapered gain to the game on every change (live feedback while
@@ -288,11 +283,11 @@ public partial class App : Application
             _game.StateChanged += state =>
             {
                 Dispatcher.UIThread.Post(() => vm.SetConnection(state));
+                // The game re-asserts its own station target on connect; volume is ours to re-send.
                 if (state != ConnectionState.Connected) return;
-                PushStation();
                 PushGain(force: true);
             };
-            _game.Start();
+            _game.Start(new GameHost(router));
             _inputService.Start();
 
             _runner.TrackChanged += t =>
@@ -304,7 +299,18 @@ public partial class App : Application
             _enricher.TrackEnriched += t =>
             {
                 Dispatcher.UIThread.Post(() => vm.NowPlaying.Apply(t));
-                _game.NowPlaying?.Show(t);
+                // A lookup can finish after its track was parked (the game routed elsewhere);
+                // don't put a title back up for a channel that's no longer playing.
+                if (_runner.ActiveSource != null) _game.NowPlaying?.Show(t);
+            };
+
+            // Nothing on the runner any more (stopped, or parked as the game switched channels):
+            // the game shouldn't keep showing the last track. A channel that resumes re-announces
+            // its track when it starts playing. (ActiveSourceChanged also fires with a null
+            // factory when a channel starts, so check the runner itself.)
+            _runner.ActiveSourceChanged += _ =>
+            {
+                if (_runner.ActiveSource == null) _game.NowPlaying?.Clear();
             };
 
             desktop.ShutdownRequested += async (_, _) =>
@@ -317,6 +323,7 @@ public partial class App : Application
                 _preview?.Dispose();
                 if (_enricher != null) await _enricher.DisposeAsync();
                 if (_metaResolver != null) await _metaResolver.DisposeAsync();
+                await router.DisposeAsync(); // parked channels; the runner disposes the active one
                 if (_runner != null) await _runner.DisposeAsync();
                 if (_spotifyPlayback != null) await _spotifyPlayback.DisposeAsync();
                 if (_spotifyConnection != null) await _spotifyConnection.DisposeAsync();
