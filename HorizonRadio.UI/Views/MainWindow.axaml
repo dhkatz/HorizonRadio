@@ -162,6 +162,15 @@
                     </shadui:SidebarItem.Icon>
                 </shadui:SidebarItem>
 
+                <shadui:SidebarItem Content="Game"
+                                    Command="{Binding ShowGameSettingsCommand}"
+                                    IsChecked="{Binding IsGameSettingsWorkspace}"
+                                    Route="game-settings">
+                    <shadui:SidebarItem.Icon>
+                        <material:MaterialIcon Kind="CarSports" Width="18" Height="18"/>
+                    </shadui:SidebarItem.Icon>
+                </shadui:SidebarItem>
+
                 <!-- The active game's own pages (e.g. FH6's Mods and Stats), contributed by its
                      game plugin and listed under the game's name. -->
                 <shadui:SidebarItemLabel Text="{Binding GameName}" AsSeparator="True"
@@ -388,6 +397,15 @@
                               ToolTip.Tip="Controls">
                     <material:MaterialIcon Kind="Gamepad" Width="18" Height="18"/>
                 </ToggleButton>
+                <ToggleButton Command="{Binding ShowGameSettingsCommand}"
+                              IsChecked="{Binding IsGameSettingsWorkspace}"
+                              Height="40" Width="40"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              Padding="0"
+                              ToolTip.Tip="Game">
+                    <material:MaterialIcon Kind="CarSports" Width="18" Height="18"/>
+                </ToggleButton>
 
                 <Separator Margin="0,4" IsVisible="{Binding HasGamePages}"/>
 
@@ -522,6 +540,9 @@
             </Grid>
             <Grid IsVisible="{Binding IsSearchWorkspace}">
                 <views:SearchView DataContext="{Binding Search}"/>
+            </Grid>
+            <Grid IsVisible="{Binding IsGameSettingsWorkspace}">
+                <views:GameSettingsView DataContext="{Binding GameSettings}"/>
             </Grid>
             <Grid IsVisible="{Binding IsHistoryWorkspace}">
                 <views:HistoryView DataContext="{Binding History}"/>

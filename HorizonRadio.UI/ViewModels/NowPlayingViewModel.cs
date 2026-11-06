@@ -135,7 +135,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
 
     public NowPlayingViewModel(SourceRunner runner, SourceConfigStore store,
         MixStore mixes, MixSwitcher switcher, QueuePlayback queue,
-        string gameName,
+        string? gameOutputName,
         PreviewController? preview = null, ToastManager? toasts = null,
         DialogManager? dialogs = null)
     {
@@ -165,9 +165,12 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         // choice doesn't fire the OnChanged handlers back into the controller.
         if (_preview != null)
         {
-            OutputTargets.Add(OutputTarget.Game(gameName));
+            // The game's output first, if the game has one ("No Game" doesn't: local speakers
+            // are the only destination then, so make sure they're on).
+            if (gameOutputName != null) OutputTargets.Add(OutputTarget.Game(gameOutputName));
             foreach (var d in PreviewController.Devices)
                 OutputTargets.Add(new OutputTarget(false, d.Id, d.Name));
+            if (gameOutputName == null && !_preview.Enabled) _preview.SetEnabled(true);
 
             // When enabled, reflect the controller's actual destination. If the
             // saved device is gone, the controller falls back to the default

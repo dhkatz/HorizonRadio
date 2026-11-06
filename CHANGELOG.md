@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Use Horizon Radio without a game.** Pick "No Game" to use it as a plain music
+  player: it plays through your speakers and hides everything game-related. New
+  installs ask which game you play on first launch; existing setups keep their
+  game. Switch any time in **Settings → Game** (Horizon Radio restarts to apply).
 - **Game chip in the player bar.** Shows the station Forza is tuned to and what it
   plays there (e.g. "Gacha City Radio · Horizon Radio player"); click it to set up
   stations. Replaces the old station picker.

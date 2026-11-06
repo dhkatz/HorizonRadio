@@ -49,6 +49,13 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   audio output, its event sources, connection state, and optional capabilities
   (station targeting, in-game volume, now-playing display). The app talks to the
   active game only through that interface, and exactly one runs at a time.
+  The active game is a user setting (`sources.json` `"game"`: a plugin id or
+  `"none"`). `NoGameIntegration` (Core) is the built-in "No Game": no output (local
+  speakers become the only destination), no events, pages, or capabilities.
+  `GameSelection.Resolve` picks the startup game: the saved one, else a game the
+  user already has settings for, else the first-run picker, which runs before
+  anything game-related is composed. Switching games saves and relaunches, since
+  the audio pipeline, events, and pages are wired once at startup.
   `HorizonRadio.Game.ForzaHorizon6` wraps the IPC/PCM pipe clients, Forza Data
   Out telemetry, the mod installer, and the station list. Code that runs *inside*
   a game lives in `Mods/<Game>/` instead.

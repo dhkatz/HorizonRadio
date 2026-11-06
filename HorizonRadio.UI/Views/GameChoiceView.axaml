@@ -1,0 +1,27 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="480"
+             x:Class="HorizonRadio.UI.Views.GameChoiceView"
+             x:DataType="vm:GameChoiceViewModel">
+
+    <Design.DataContext>
+        <vm:GameChoiceViewModel />
+    </Design.DataContext>
+
+    <!-- One card per option; the selected one is highlighted by the ListBox. -->
+    <ListBox ItemsSource="{Binding Options}"
+             SelectedItem="{Binding Selected, Mode=TwoWay}"
+             Background="Transparent">
+        <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:GameOption">
+                <StackPanel Spacing="2" Margin="4,6">
+                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding Description}" FontSize="12" Opacity="0.6" TextWrapping="Wrap"/>
+                </StackPanel>
+            </DataTemplate>
+        </ListBox.ItemTemplate>
+    </ListBox>
+</UserControl>

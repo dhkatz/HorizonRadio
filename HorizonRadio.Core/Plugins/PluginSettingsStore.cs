@@ -65,6 +65,12 @@ public sealed class PluginSettingsStore
     /// <summary>A store that never touches disk (designer, tests).</summary>
     public static PluginSettingsStore CreateInMemory() => new(null, new(StringComparer.Ordinal));
 
+    /// <summary>True if the plugin with <paramref name="pluginId"/> has stored any setting.</summary>
+    public bool HasSettings(string pluginId)
+    {
+        lock (_lock) return _plugins.TryGetValue(pluginId, out var values) && values.Count > 0;
+    }
+
     /// <summary>The settings view for one plugin.</summary>
     public IPluginSettings For(string pluginId) => new PluginSettings(this, pluginId);
 
