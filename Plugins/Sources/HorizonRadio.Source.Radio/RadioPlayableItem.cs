@@ -309,9 +309,10 @@ public sealed class RadioPlayableItem : PlayableItem
     /// (display title, display artist, fallback candidates) to publish. <see
     /// cref="TitleModelMode.Always"/> promotes the model's top hypothesis to the display and keeps
     /// the deterministic split as a catalog-validated fallback behind it; <see
-    /// cref="TitleModelMode.Escalate"/> keeps the deterministic primary on display and appends the
-    /// model's hypotheses as fallbacks. <paramref name="model"/> is assumed non-empty and already
-    /// bracket-stripped.</summary>
+    /// cref="TitleModelMode.Escalate"/> keeps the deterministic primary on display and tries the
+    /// model's hypotheses next, ahead of the parser's other guesses: the model only runs when the
+    /// parse was shaky, which is exactly when its reading should beat them. <paramref
+    /// name="model"/> is assumed non-empty and already bracket-stripped.</summary>
     internal static (string Title, string? Artist, List<TitleCandidate> Candidates) ComposeWithModel(
         TitleModelMode mode, IReadOnlyList<TitleCandidate> model,
         TitleCandidate deterministicPrimary, IReadOnlyList<TitleCandidate> deterministicAlts)
@@ -324,7 +325,7 @@ public sealed class RadioPlayableItem : PlayableItem
         }
 
         return (deterministicPrimary.Title, deterministicPrimary.Artist,
-            MergeCandidates(deterministicPrimary, [.. deterministicAlts, .. model]));
+            MergeCandidates(deterministicPrimary, [.. model, .. deterministicAlts]));
     }
 
     /// <summary>De-duplicated candidate list excluding <paramref name="primary"/> (the displayed

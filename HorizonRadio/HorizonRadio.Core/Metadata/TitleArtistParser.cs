@@ -110,9 +110,11 @@ public static partial class TitleArtistParser
     private static string StripNoise(string s)
     {
         var stripped = NoiseRegex().Replace(s, " ");
+        var removedNoise = !string.Equals(stripped, s, StringComparison.Ordinal);
         stripped = WhitespaceRegex().Replace(stripped, " ").Trim();
-        // Trim dangling separators/punctuation left behind by noise removal.
-        stripped = stripped.Trim('-', '–', '—', '|', '~', '·', ' ');
+        // Trim dangling separators/punctuation left behind by noise removal. Only then: a title
+        // can end in its own dash ("Remind of you -S.S. Mix-").
+        if (removedNoise) stripped = stripped.Trim('-', '–', '—', '|', '~', '·', ' ');
         return stripped.Length == 0 ? s.Trim() : stripped;
     }
 
