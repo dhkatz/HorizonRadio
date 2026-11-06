@@ -12,8 +12,10 @@ namespace HorizonRadio.Core.Sources.Radio;
 /// interpretations the metadata resolver can validate against the catalogs.
 ///
 /// Stream titles are freeform: "Artist - Title", channel-prefixed "Channel - Artist - Title"
-/// ("ExGrooveCh - Heavenz - テロメアの産声"), reversed "Title／Artist", with fullwidth separators
-/// (／｜). A single guess can't be right for all of them, so <see cref="ParseCandidates"/>
+/// ("ExGrooveCh - Heavenz - テロメアの産声"), credit-suffixed "Artist - Title - Credit"
+/// ("和田たけあき - Chururira Chururira Daddadda! - KurageP"), reversed "Title／Artist", with
+/// fullwidth separators (／｜), and often a per-song station tag ("[1MRp]") at the end. A single
+/// guess can't be right for all of them, so <see cref="ParseCandidates"/>
 /// returns a best-guess primary plus a few alternative splits/orders; the resolver keeps
 /// whichever one a catalog confirms (a wrong guess can't surface — the providers' match guard
 /// rejects it). Radio-specific on purpose: the shared <see cref="TitleArtistParser"/> is also
@@ -33,7 +35,7 @@ internal static class RadioStreamTitle
     /// gates whether the optional title-extraction model should escalate.</summary>
     public static (string? Artist, string Title, ParseConfidence Confidence) Parse(string raw)
     {
-        var parsed = TitleArtistParser.Parse(raw);
+        var parsed = TitleArtistParser.Parse(StripStationTags(raw));
         var artist = parsed.Artist;
         var title = parsed.Title;
 
@@ -54,14 +56,22 @@ internal static class RadioStreamTitle
     /// to the alternatives when it doesn't match, so clean titles cost nothing extra.</summary>
     public static (TitleCandidate Primary, IReadOnlyList<TitleCandidate> Alternatives, ParseConfidence Confidence) ParseCandidates(string raw)
     {
-        var (pArtist, pTitle, confidence) = Parse(raw);
+        // The station's per-song tag belongs to no field. Split without it, or it rides along on
+        // whichever segment ends the title ("KurageP [1MRp]" as an artist, "DYE [vz]" reversed).
+        var text = StripStationTags(raw);
+        var (pArtist, pTitle, confidence) = Parse(text);
         var primary = new TitleCandidate(pArtist, pTitle);
 
         var alts = new List<TitleCandidate>();
-        var segs = SegSplit.Split(raw).Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+        var segs = SegSplit.Split(text).Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
         if (segs.Count >= 2)
         {
             AddAlt(alts, primary, new TitleCandidate(segs[^2], segs[^1]));                        // forward last-two
+            // "Artist - Title - Credit". Not "Producer - Vocalist - Title" (parts 1+3): catalogs
+            // already accept the vocalist-as-artist primary for those, and a credit in the title
+            // slot ("KurageP") false-matched a remix that names it.
+            if (segs.Count >= 3)
+                AddAlt(alts, primary, new TitleCandidate(segs[0], segs[1]));
             AddAlt(alts, primary, new TitleCandidate(segs[0], string.Join(" - ", segs.Skip(1)))); // first-split
             AddAlt(alts, primary, new TitleCandidate(segs[^1], segs[^2]));                         // reversed order
         }
@@ -135,6 +145,16 @@ internal static class RadioStreamTitle
     // artist is harmless: the catalog guard just rejects a wrong candidate.
     private static bool LooksLikeStationTag(string s) =>
         s.Length <= 5 && s.All(c => c < 128 && char.IsLetterOrDigit(c));
+
+    private static readonly Regex Spaces = new(@"\s+", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    // The title with station tags removed (vocalist/circle tags stay; they can be real artists).
+    private static string StripStationTags(string raw)
+    {
+        var stripped = BracketContent.Replace(raw, m => LooksLikeStationTag(m.Groups["inner"].Value.Trim()) ? " " : m.Value);
+        stripped = Spaces.Replace(stripped, " ").Trim();
+        return stripped.Length == 0 ? raw.Trim() : stripped;
+    }
 
     // A trailing parenthetical (ASCII or fullwidth) in an artist credit, e.g. "Itachima-p (いたちま)".
     private static readonly Regex ParenName =

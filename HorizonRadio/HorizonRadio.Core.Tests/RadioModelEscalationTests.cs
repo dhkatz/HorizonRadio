@@ -71,6 +71,28 @@ public class RadioModelEscalationTests
     }
 
     [Fact]
+    public void Escalate_tries_the_model_before_the_parsers_other_guesses()
+    {
+        // The model only runs on a shaky parse, so its reading should be tried right after the
+        // primary, not after every heuristic guess (one of which matched first and won).
+        var detPrimary = new TitleCandidate("Chururira Chururira Daddadda!", "KurageP");
+        var detAlts = new List<TitleCandidate>
+        {
+            new("和田たけあき", "Chururira Chururira Daddadda! - KurageP"),
+            new("KurageP", "Chururira Chururira Daddadda!"),
+        };
+        var model = new List<TitleCandidate> { new("和田たけあき", "Chururira Chururira Daddadda!") };
+
+        var (title, artist, candidates) =
+            RadioPlayableItem.ComposeWithModel(TitleModelMode.Escalate, model, detPrimary, detAlts);
+
+        Assert.Equal("KurageP", title);                       // display unchanged
+        Assert.Equal("Chururira Chururira Daddadda!", artist);
+        Assert.Equal(model[0], candidates[0]);                // model first among the fallbacks
+        Assert.Equal(detAlts, candidates.Skip(1));            // then the parser's, in their order
+    }
+
+    [Fact]
     public void Always_promotes_the_model_and_keeps_deterministic_as_fallback()
     {
         var detPrimary = new TitleCandidate("ChannelGuess", "Heavenz - テロメアの産声");

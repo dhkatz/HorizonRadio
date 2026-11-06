@@ -83,6 +83,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Radio: three-part stream titles and station tags.** A title like "和田たけあき -
+  Chururira Chururira Daddadda! - KurageP [1MRp]" showed the artist as "KurageP [1MRp]":
+  the station's per-song tag leaked into the artist, and the "Artist - Title - Credit"
+  reading wasn't tried. Station tags are now dropped before the title is split, that
+  reading is tried, and the optional title model's answer is tried right after the
+  parser's best guess instead of last. A title ending in its own dash ("-S.S. Mix-") keeps it.
 - **The in-game bridge no longer stays dormant when it starts too early.**
   FH6 decrypts its code at load, and the DLL used to scan for its FMOD and
   radio signatures exactly once. If that scan raced the unpack, audio, titles
