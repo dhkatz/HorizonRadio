@@ -66,16 +66,19 @@ jobs:
           "semver=$semver"    >> $env:GITHUB_OUTPUT
 
       - name: Configure CMake
+        working-directory: Mods/ForzaHorizon6
         run: cmake --preset windows-x64
 
-      # Builds version.dll into build/Release/. The HorizonRadio.UI
+      # Builds version.dll into Mods/ForzaHorizon6/build/Release/. The HorizonRadio.UI
       # csproj's <None Include> item picks it up automatically and copies
       # it into the UI's publish output. Tools (incl. librespot) are not
       # bundled — they install on demand from the Tools tab.
       - name: Build C++ side (Release, x64)
+        working-directory: Mods/ForzaHorizon6
         run: cmake --build --preset windows-x64-release
 
       - name: Run C++ tests
+        working-directory: Mods/ForzaHorizon6
         run: ctest --preset windows-x64-release
 
       # Self-contained publish so end users don't need a separate
@@ -117,4 +120,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload '${{ steps.release.outputs.tag }}' 'build/Release/version.dll' --clobber
+          gh release upload '${{ steps.release.outputs.tag }}' 'Mods/ForzaHorizon6/build/Release/version.dll' --clobber

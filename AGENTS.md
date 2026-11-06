@@ -53,20 +53,24 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
 
 For the code-level internals of the native side — thread model, audio/metadata
 data flow, signature resolution, the SEH strategy, and the full IPC wire
-protocol — see [`docs/architecture.md`](docs/architecture.md).
+protocol — see [`Mods/ForzaHorizon6/docs/architecture.md`](Mods/ForzaHorizon6/docs/architecture.md).
 
 ## Building
 
-The C++ side builds with CMake (`CMakeLists.txt`) via the `windows-x64`
-preset; the C# side builds with `dotnet`. They are intentionally
-decoupled so a CMake / .NET resolver mishap on one side can't take down
-the other.
+Code that runs inside a game lives under `Mods/<Game>/`, each with its own
+toolchain; everything that plugs into Horizon Radio itself is .NET. The FH6
+mod (`version.dll`) is a self-contained CMake project in `Mods/ForzaHorizon6/`
+(`Bridge/` = the DLL, `Tests/` = the doctest exe) built via the `windows-x64`
+preset; the C# side builds with `dotnet` from the repo root. They are
+intentionally decoupled so a CMake / .NET resolver mishap on one side can't
+take down the other.
 
-C++ DLL + tests:
+C++ DLL + tests (run from `Mods/ForzaHorizon6`):
 
 ```powershell
+cd Mods/ForzaHorizon6
 cmake --preset windows-x64
-cmake --build --preset windows-x64-release      # → build/Release/version.dll
+cmake --build --preset windows-x64-release      # → Mods/ForzaHorizon6/build/Release/version.dll
 ctest --preset windows-x64-release
 ```
 
@@ -91,23 +95,23 @@ brew install llvm lld mingw-w64 ninja
 # Linux (Debian/Ubuntu)
 apt install clang lld mingw-w64 ninja-build
 
-# Configure + build
+# Configure + build (from Mods/ForzaHorizon6)
 cmake --preset macos-cross-x64                  # or linux-cross-x64
-cmake --build --preset macos-cross-x64-release  # → build/Release/version.dll
+cmake --build --preset macos-cross-x64-release  # → Mods/ForzaHorizon6/build/Release/version.dll
 ```
 
 The toolchain requires lld specifically (not mingw-w64's bundled BFD
 ld): clang+gcc-libstdc++ produces RTTI section size mismatches that
 BFD ld refuses but lld merges cleanly. clang+mingw also drops the C++
 stdlib include search paths and SEH support — the toolchain file
-(`cmake/toolchain-clang-mingw.cmake`) wires those back up.
+(`Mods/ForzaHorizon6/cmake/toolchain-clang-mingw.cmake`) wires those back up.
 
 Tests build under the cross preset too, but the resulting
 `HorizonRadio.Tests.exe` is a Windows binary — running `ctest` from a
 non-Windows host won't work without Wine. The Windows CI flow is the
 authoritative test runner.
 
-The 17 `version.dll` exports come from `src/version_proxy.cpp` —
+The 17 `version.dll` exports come from `Bridge/src/version_proxy.cpp` —
 plain `__declspec(dllexport)` trampolines that lazy-load
 `C:\Windows\System32\version.dll`. They compile identically under
 MSVC and clang+MinGW; if you add or remove a forwarded export, edit
@@ -153,7 +157,8 @@ $env:FH6_DIR = "C:\...\ForzaHorizon6"   # once
 ## In-game title injection — and re-deriving it after a game update
 
 The DLL writes our title/artist into the game's now-playing metadata block. The
-chain and offsets live in `kFh6Metadata` (`include/horizon/fmod/signatures.hpp`):
+chain and offsets live in `kFh6Metadata`
+(`Mods/ForzaHorizon6/Bridge/include/horizon/fmod/signatures.hpp`):
 
 ```
 RadioStreamFmod instance  +0x50 ─► track list  +0x08 ─► metadata block
@@ -214,10 +219,11 @@ dotnet format HorizonRadio.UI.slnx --verify-no-changes
 dotnet build HorizonRadio.UI.slnx /t:Rebuild
 ```
 
-Native code: `.clang-format` + `.clang-tidy` (install LLVM).
+Native code: `.clang-format` + `.clang-tidy` in `Mods/ForzaHorizon6/` (install LLVM).
 
 ```powershell
-clang-format -i (rg --files HorizonRadio HorizonRadio.Tests -g '*.cpp' -g '*.hpp')
+cd Mods/ForzaHorizon6
+clang-format -i (rg --files Bridge Tests -g '*.cpp' -g '*.hpp')
 cmake --preset windows-x64-analysis
 cmake --build --preset windows-x64-analysis-debug
 ```

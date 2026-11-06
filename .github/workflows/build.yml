@@ -42,22 +42,27 @@ jobs:
         run: dotnet format HorizonRadio.UI.slnx --verify-no-changes --verbosity minimal
 
       - name: Configure CMake
+        working-directory: Mods/ForzaHorizon6
         run: cmake --preset windows-x64
 
       # Tests run against the Debug build (asserts on). version.dll itself
       # isn't exercised here — the test exe links the production TUs
-      # directly (see HorizonRadio.Tests/CMakeLists.txt).
+      # directly (see Mods/ForzaHorizon6/Tests/CMakeLists.txt).
       - name: Build C++ side (Debug, x64)
+        working-directory: Mods/ForzaHorizon6
         run: cmake --build --preset windows-x64-debug
 
       - name: Run C++ tests
+        working-directory: Mods/ForzaHorizon6
         run: ctest --preset windows-x64-debug
 
-      # The C# UI's <None Include> picks up version.dll from build/Release/
+      # The C# UI's <None Include> picks up version.dll from
+      # Mods/ForzaHorizon6/build/Release/
       # specifically (a Debug version.dll is useless to FH6 — see the
       # csproj comment), so we must build the Release DLL for the bundle
       # step to have anything to copy. This is also the artifact we ship.
       - name: Build C++ side (Release, x64)
+        working-directory: Mods/ForzaHorizon6
         run: cmake --build --preset windows-x64-release
 
       # C# side runs after the Release C++ output (version.dll) is on disk
@@ -86,12 +91,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: version-dll
-          path: build/Release/version.dll
+          path: Mods/ForzaHorizon6/build/Release/version.dll
           if-no-files-found: error
 
   # Lints the production C++ (version.dll TUs) with clang-tidy via the
   # windows-x64-analysis preset, which flips on CMAKE_CXX_CLANG_TIDY. The
-  # checks and `WarningsAsErrors: '*'` live in .clang-tidy, so any finding
+  # checks and `WarningsAsErrors: '*'` live in Mods/ForzaHorizon6/.clang-tidy, so any finding
   # fails the build. Only the `version` target is built: the test exe has
   # clang-tidy disabled (doctest + deliberately invalid inputs trip false
   # positives), and version_proxy.cpp is SKIP_LINTING (its forwarders
@@ -123,12 +128,14 @@ jobs:
           python -c "import clang_tidy, os; print(os.path.join(os.path.dirname(clang_tidy.__file__),'data','bin'))" >> $env:GITHUB_PATH
 
       - name: Configure CMake (analysis preset)
+        working-directory: Mods/ForzaHorizon6
         run: cmake --preset windows-x64-analysis
 
       # Build only the version.dll target: it compiles every production TU,
       # so clang-tidy runs over all shipping code. ~3x slower than a plain
       # build because every TU is linted during compile.
       - name: Run clang-tidy (production TUs)
+        working-directory: Mods/ForzaHorizon6
         run: cmake --build --preset windows-x64-analysis-debug --target version
 
   # Exercises the clang + mingw-w64 cross-compile path (the migration's
@@ -169,17 +176,20 @@ jobs:
         run: echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
 
       - name: Configure CMake
+        working-directory: Mods/ForzaHorizon6
         run: cmake --preset ${{ matrix.preset }}
 
       - name: Build version.dll (Release)
+        working-directory: Mods/ForzaHorizon6
         run: cmake --build --preset ${{ matrix.preset }}-release
 
       - name: Verify version.dll was produced
+        working-directory: Mods/ForzaHorizon6
         run: test -f build/Release/version.dll
 
       - name: Upload cross-built version.dll
         uses: actions/upload-artifact@v4
         with:
           name: version-dll-${{ matrix.preset }}
-          path: build/Release/version.dll
+          path: Mods/ForzaHorizon6/build/Release/version.dll
           if-no-files-found: error

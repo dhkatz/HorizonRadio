@@ -114,13 +114,13 @@
 
       version.dll has separate Debug / Release build outputs; we always
       copy from Release because Debug version.dll isn't useful (FH6 doesn't
-      reload a CRT-debug-DLL). CMake produces it from CMakeLists.txt at the
-      repo root. Gated on Exists() so a fresh checkout that hasn't built
-      the C++ side still produces a buildable UI — the user just won't get
-      a bundled DLL until it's present.
+      reload a CRT-debug-DLL). CMake produces it from the FH6 mod project
+      (Mods/ForzaHorizon6). Gated on Exists() so a fresh checkout that hasn't
+      built the C++ side still produces a buildable UI — the user just won't
+      get a bundled DLL until it's present.
     -->
     <PropertyGroup>
-      <_VersionDllPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\build\Release\version.dll'))</_VersionDllPath>
+      <_VersionDllPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\Mods\ForzaHorizon6\build\Release\version.dll'))</_VersionDllPath>
     </PropertyGroup>
 
     <!--

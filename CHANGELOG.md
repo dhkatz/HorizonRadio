@@ -19,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The FH6 mod moved to `Mods/ForzaHorizon6/`.** The native `version.dll`
+  project (formerly the root `HorizonRadio/` + `HorizonRadio.Tests/` dirs,
+  root CMake files, and `.clang-*` configs) is now a self-contained CMake
+  project under `Mods/ForzaHorizon6/` (`Bridge/` + `Tests/`), with its
+  internals doc alongside. Run CMake from that directory; the DLL now lands in
+  `Mods/ForzaHorizon6/build/Release/`. First step toward the game-integration
+  plugin layout: game-side code under `Mods/<Game>/`, Horizon Radio-side code
+  under `Plugins/`.
 - **C++ side modernized; clang-tidy now enforced in CI.** Extracted the in-game
   title write/restore state machine out of the periodic-writer thread into a
   unit-tested `TitleWriteController`, then swept the native `version.dll` sources

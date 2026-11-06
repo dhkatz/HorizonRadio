@@ -56,14 +56,16 @@ In FH6's audio settings:
 
 | Build                  | Produces                 | Requires                                                |
 |------------------------|--------------------------|---------------------------------------------------------|
-| `CMakeLists.txt`       | `version.dll` + test exe | Windows: VS 2022 Build Tools. Linux/macOS: clang + mingw-w64. CMake ≥ 3.25, Ninja. |
+| `Mods/ForzaHorizon6/`  | `version.dll` + test exe | Windows: VS 2022 Build Tools. Linux/macOS: clang + mingw-w64. CMake ≥ 3.25, Ninja. |
 | `HorizonRadio.UI.slnx` | C# UI                    | .NET 10 SDK                                             |
 
 ```powershell
 git clone https://github.com/dhkatz/horizon-radio.git
 cd horizon-radio
+pushd Mods/ForzaHorizon6          # the FH6 mod is its own CMake project
 cmake --preset windows-x64
 cmake --build --preset windows-x64-release
+popd
 dotnet build HorizonRadio.UI.slnx
 ```
 
