@@ -11,23 +11,35 @@ namespace HorizonRadio.Core.Metadata;
 
 /// <summary>
 /// The metadata pipeline: given a seed <see cref="Track"/> (the source's own best
-/// effort), it asks each enabled contributor — in the user's priority order — what
-/// it knows, then merges the contributions per the <see cref="MetadataPolicy"/>
+/// effort), it asks each enabled contributor what it knows, then merges the
+/// contributions in the user's priority order per the <see cref="MetadataPolicy"/>
 /// (per-field, honoring forced overrides). The source is contributor #0.
 ///
-/// Each contributor sees a working query improved by earlier ones (a blank artist
-/// filled in upstream means a downstream text search can actually find the track).
-/// Contributors own their own caching, so resolving the same track again is cheap —
-/// which is what makes the list (queue / mixes) enrichment affordable.
+/// Contributors are asked at the same time when the seed has an artist. With a blank
+/// artist they're asked in priority order instead, so an artist an earlier one fills in
+/// lets a later text search find the track. The merge is by priority either way, so the
+/// answer doesn't depend on who replied first.
+///
+/// Identical lookups share one run: when a song starts, Now Playing, the queue's tile,
+/// and History all ask about it at once, and each provider should be asked once.
+///
+/// One slow provider shouldn't hold the song's title back either (MusicBrainz waits 2–6 s
+/// per Cover Art Archive image). A caller that passes an early-result callback gets the
+/// merge of the answers so far once a catalog has matched and the rest are still busy after
+/// a short grace period, then the full result when they finish.
+/// Contributors also own their own caching, so resolving the same track again later is
+/// cheap, which is what makes the list (queue / mixes / History) enrichment affordable.
 ///
 /// This is also directly callable by view models for list enrichment, not just by
-/// <see cref="EnrichmentService"/> at play time.
+/// <see cref="EnrichmentService"/> at play time. Lists pass
+/// <see cref="ResolvePriority.Background"/> so the song playing now goes first.
 /// </summary>
 public sealed class MetadataResolver : IAsyncDisposable
 {
     private readonly object _lock = new();
     private IReadOnlyList<IMetadataProvider> _contributors = [];
     private MetadataPolicy _policy = MetadataPolicy.Empty;
+    private int _generation;
 
     // Every contributor we've ever been handed, disposed only on our own dispose.
     // We deliberately do NOT dispose on reconfigure: the resolver is shared and a
@@ -35,6 +47,13 @@ public sealed class MetadataResolver : IAsyncDisposable
     // swapped-out provider mid-resolve would tear its HttpClient/semaphore out from
     // under it. The count is bounded by how often the user clicks Apply.
     private readonly List<IMetadataProvider> _owned = new();
+
+    // Lookups in flight, by what they search for. Guarded by _lock.
+    private readonly Dictionary<string, Flight> _flights = new(StringComparer.Ordinal);
+
+    // After the first catalog match, how long to wait for the other providers before showing
+    // what we have. Long enough that a fast set of providers gives one update, not two.
+    private static readonly TimeSpan EarlyGrace = TimeSpan.FromMilliseconds(400);
 
     private static void Log(string msg) => Debug.WriteLine($"[hzn-resolve] {msg}");
 
@@ -45,6 +64,7 @@ public sealed class MetadataResolver : IAsyncDisposable
         {
             _contributors = contributors;
             _policy = policy;
+            _generation++; // a lookup started under the old set isn't shared with new callers
             foreach (var c in contributors)
                 if (!_owned.Contains(c)) _owned.Add(c);
         }
@@ -54,8 +74,15 @@ public sealed class MetadataResolver : IAsyncDisposable
     /// alone needs no resolve pass).</summary>
     public bool HasContributors { get { lock (_lock) return _contributors.Count > 0; } }
 
-    public async Task<Track> ResolveAsync(Track seed, CancellationToken ct) =>
-        (await ResolveDetailedAsync(seed, ct).ConfigureAwait(false)).Track;
+    /// <param name="onEarlyResult">Called at most once, before this returns, with the merge of
+    /// the answers so far when a catalog has matched but slower providers are still working.
+    /// The returned track is the full result, which may differ (e.g. art from a
+    /// higher-priority provider that answered later).</param>
+    public async Task<Track> ResolveAsync(
+        Track seed, CancellationToken ct, ResolvePriority priority = ResolvePriority.Foreground,
+        Action<Track>? onEarlyResult = null) =>
+        (await ResolveDetailedAsync(seed, ct, priority,
+            onEarlyResult is null ? null : early => onEarlyResult(early.Track)).ConfigureAwait(false)).Track;
 
     /// <summary>
     /// Like <see cref="ResolveAsync"/>, but also reports whether a catalog actually confirmed
@@ -64,7 +91,9 @@ public sealed class MetadataResolver : IAsyncDisposable
     /// freeform (radio) songs we couldn't identify, separately from the merged metadata it
     /// shows. A non-resolvable placeholder or a no-contributor setup reports <c>false</c>.
     /// </summary>
-    public async Task<MetadataResult> ResolveDetailedAsync(Track seed, CancellationToken ct)
+    public async Task<MetadataResult> ResolveDetailedAsync(
+        Track seed, CancellationToken ct, ResolvePriority priority = ResolvePriority.Foreground,
+        Action<MetadataResult>? onEarlyResult = null)
     {
         // Non-song placeholders (e.g. a radio station card before the first track) must not be
         // searched — the station name false-matches unrelated catalog entries. Keep the source's
@@ -73,114 +102,294 @@ public sealed class MetadataResolver : IAsyncDisposable
 
         IReadOnlyList<IMetadataProvider> contributors;
         MetadataPolicy policy;
-        lock (_lock) { contributors = _contributors; policy = _policy; }
+        int generation;
+        lock (_lock) { contributors = _contributors; policy = _policy; generation = _generation; }
         if (contributors.Count == 0) return new MetadataResult(WithArtFallback(seed), false, []);
 
-        // Ambiguous source titles attach alternative (artist, title) interpretations; try the
-        // primary first, then candidates, keeping the one a catalog confirms.
-        MetadataTrace.BeginResolve(seed);
-        var result = seed.Candidates is { Count: > 0 }
-            ? await ResolveBestAsync(seed, contributors, policy, ct).ConfigureAwait(false)
-            : await ResolveOneAsync(seed, contributors, policy, ct).ConfigureAwait(false);
-        MetadataTrace.EndResolve(result.Track);
-        return result;
+        Action<Lookup>? early = onEarlyResult is null ? null : l => onEarlyResult(Finish(seed, l, policy));
+        var lookup = await JoinAsync(seed, contributors, policy, generation, priority, early, ct).ConfigureAwait(false);
+        return Finish(seed, lookup, policy);
     }
 
-    // Resolve the primary interpretation and the candidates, returning the first that a catalog
+    // -- Shared lookups --
+
+    // What one run found: the interpretation a catalog confirmed (or the primary when none
+    // did) and what each network contributor said about it. Holds no seed art, so callers
+    // with different seeds for the same text can share it; each merges with its own seed.
+    private sealed record Lookup(Interpretation Interp, IReadOnlyDictionary<string, MetadataContribution> Network);
+
+    private readonly record struct Interpretation(string Title, string Artist, string? ExternalId);
+
+    // Waiters, Finished, and every use of Cts are guarded by the resolver's _lock, so a waiter
+    // giving up can never cancel a source the run already disposed.
+    private sealed class Flight(PriorityTicket ticket) : IDisposable
+    {
+        public readonly PriorityTicket Ticket = ticket;
+        public readonly CancellationTokenSource Cts = new();
+        public Task<Lookup> Task = null!;
+        public int Waiters;
+        public bool Finished;
+
+        // The answers so far, once a catalog has matched; replaced as each answer arrives.
+        private volatile Lookup? _latest;
+        public readonly TaskCompletionSource Matched = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Lookup? Latest => _latest;
+
+        public void Report(Lookup soFar)
+        {
+            _latest = soFar;
+            Matched.TrySetResult();
+        }
+
+        // Stop the run unless it already finished. Call under _lock.
+        public void CancelIfRunning()
+        {
+            if (!Finished) Cts.Cancel();
+        }
+
+        public void Dispose() => Cts.Dispose();
+    }
+
+    // Join the run already searching for this seed's text, or start one. The run is
+    // cancelled only when everyone waiting on it has given up (a song skipped before its
+    // lookup finished), so one caller cancelling doesn't fail the others.
+    private async Task<Lookup> JoinAsync(
+        Track seed, IReadOnlyList<IMetadataProvider> contributors, MetadataPolicy policy,
+        int generation, ResolvePriority priority, Action<Lookup>? early, CancellationToken ct)
+    {
+        var key = FlightKey(seed, generation);
+        Flight flight;
+        lock (_lock)
+        {
+            if (_flights.TryGetValue(key, out var existing))
+            {
+                flight = existing;
+                if (priority == ResolvePriority.Foreground) flight.Ticket.Promote();
+            }
+            else
+            {
+                flight = new Flight(new PriorityTicket(priority));
+                var started = flight;
+                // Off this thread so the run never starts inside the lock.
+                flight.Task = Task.Run(() => RunAsync(started, key, seed, contributors, policy));
+                _flights[key] = flight;
+            }
+            flight.Waiters++;
+        }
+
+        try
+        {
+            if (early != null) await OfferEarlyAsync(flight, early, ct).ConfigureAwait(false);
+            return await flight.Task.WaitAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            lock (_lock)
+            {
+                if (--flight.Waiters == 0 && !flight.Finished)
+                {
+                    flight.CancelIfRunning();
+                    // A later caller for the same song starts fresh instead of joining a dead run.
+                    if (_flights.TryGetValue(key, out var current) && current == flight) _flights.Remove(key);
+                }
+            }
+        }
+    }
+
+    // Once a catalog has matched, give the other providers a short grace period; if they're
+    // still working after it, hand over the answers so far.
+    private static async Task OfferEarlyAsync(Flight flight, Action<Lookup> early, CancellationToken ct)
+    {
+        if (await Task.WhenAny(flight.Matched.Task, flight.Task).WaitAsync(ct).ConfigureAwait(false) == flight.Task)
+            return;
+        var grace = Task.Delay(EarlyGrace, ct);
+        if (await Task.WhenAny(flight.Task, grace).ConfigureAwait(false) == flight.Task) return;
+        ct.ThrowIfCancellationRequested();
+        if (flight.Latest is { } soFar) early(soFar);
+    }
+
+    private async Task<Lookup> RunAsync(
+        Flight flight, string key, Track seed, IReadOnlyList<IMetadataProvider> contributors, MetadataPolicy policy)
+    {
+        // Every RateGate this run queues in reads the priority from here.
+        MetadataPriority.Current = flight.Ticket;
+        var ct = flight.Cts.Token;
+        var elapsed = Stopwatch.StartNew();
+        MetadataTrace.BeginResolve(seed);
+        try
+        {
+            // Ambiguous source titles attach alternative (artist, title) interpretations; try the
+            // primary first, then candidates, keeping the one a catalog confirms.
+            var lookup = seed.Candidates is { Count: > 0 }
+                ? await LookupBestAsync(seed, contributors, policy, flight.Report, ct).ConfigureAwait(false)
+                : await LookupOneAsync(Primary(seed), seed, contributors, policy, flight.Report, ct).ConfigureAwait(false);
+            MetadataTrace.EndResolve(Finish(seed, lookup, policy).Track, elapsed.ElapsedMilliseconds);
+            return lookup;
+        }
+        finally
+        {
+            lock (_lock)
+            {
+                if (_flights.TryGetValue(key, out var current) && current == flight) _flights.Remove(key);
+                flight.Finished = true;
+                flight.Dispose();
+            }
+        }
+    }
+
+    // Everything the lookup searches with. Two seeds with the same key ask the providers
+    // the same questions, so they can share the answers.
+    private static string FlightKey(Track seed, int generation)
+    {
+        const char sep = '\u001f';
+        var key = $"{generation}{sep}{seed.SourceId}{sep}{seed.ExternalId}{sep}{seed.Title}{sep}{seed.Artist}{sep}{seed.Album}";
+        if (seed.Candidates is { Count: > 0 } candidates)
+            key += sep + string.Join(sep, candidates.Select(c => $"{c.Artist}{sep}{c.Title}"));
+        return key;
+    }
+
+    // -- Interpretations --
+
+    private static Interpretation Primary(Track seed) => new(seed.Title, seed.Artist, seed.ExternalId);
+
+    // Try the primary interpretation and the candidates, returning the first that a catalog
     // confirms. Interpretations that carry an artist are tried first: a title-only match (empty
     // artist) is unreliable — it can latch onto a cover/remix of the same title — so it must not
     // win ahead of an artist-corroborated one. A clean "Artist - Title" still short-circuits on
-    // its first (primary) resolve. If nothing matches, the primary's resolution stands (display =
+    // its first (primary) lookup. If nothing matches, the primary's lookup stands (display =
     // primary parse + station-logo fallback).
-    private static async Task<MetadataResult> ResolveBestAsync(
-        Track seed, IReadOnlyList<IMetadataProvider> contributors, MetadataPolicy policy, CancellationToken ct)
+    private static async Task<Lookup> LookupBestAsync(
+        Track seed, IReadOnlyList<IMetadataProvider> contributors, MetadataPolicy policy,
+        Action<Lookup> progress, CancellationToken ct)
     {
-        var primary = seed with { Candidates = null };
-        var all = new List<Track> { primary };
+        var primary = Primary(seed);
+        var all = new List<Interpretation> { primary };
         foreach (var c in seed.Candidates!)
             if (!string.IsNullOrWhiteSpace(c.Title))
-                all.Add(primary with { Title = c.Title, Artist = c.Artist ?? "", ExternalId = null });
+                all.Add(new Interpretation(c.Title, c.Artist ?? "", null));
 
-        var ordered = all.Where(t => !string.IsNullOrWhiteSpace(t.Artist))
-                         .Concat(all.Where(t => string.IsNullOrWhiteSpace(t.Artist)));
+        var ordered = all.Where(i => !string.IsNullOrWhiteSpace(i.Artist))
+                         .Concat(all.Where(i => string.IsNullOrWhiteSpace(i.Artist)));
 
-        MetadataResult? primaryResult = null;
-        foreach (var s in ordered)
+        Lookup? primaryLookup = null;
+        foreach (var interp in ordered)
         {
-            var result = await ResolveOneAsync(s, contributors, policy, ct).ConfigureAwait(false);
-            if (ReferenceEquals(s, primary)) primaryResult = result;
-            if (result.Matched) return result; // the confirmed interpretation, with its PV links
+            // The first interpretation with any match is the one kept, so reporting its answers
+            // early never shows an interpretation the full result then drops.
+            var lookup = await LookupOneAsync(interp, seed, contributors, policy, progress, ct).ConfigureAwait(false);
+            if (interp == primary) primaryLookup = lookup;
+            if (lookup.Network.Count > 0) return lookup; // the confirmed interpretation
         }
 
-        // Nothing matched: the primary interpretation's resolution stands (display = primary
-        // parse + station-logo fallback), and we report no catalog confirmation.
-        return primaryResult ?? await ResolveOneAsync(primary, contributors, policy, ct).ConfigureAwait(false);
+        return primaryLookup ?? await LookupOneAsync(primary, seed, contributors, policy, progress, ct).ConfigureAwait(false);
     }
 
-    // Run one seed through the contributor chain. Matched = a network contributor produced a
-    // non-empty contribution (they only do so when their own match guard passed) — i.e. a
-    // catalog confirmed this interpretation.
-    private static async Task<MetadataResult> ResolveOneAsync(
-        Track seed, IReadOnlyList<IMetadataProvider> contributors, MetadataPolicy policy, CancellationToken ct)
+    // Ask the contributors about one interpretation. Only non-empty contributions are kept:
+    // contributors return one only when their own match guard passed, so any entry means a
+    // catalog confirmed this interpretation. Each match is reported to progress with the
+    // answers so far.
+    private static async Task<Lookup> LookupOneAsync(
+        Interpretation interp, Track seed, IReadOnlyList<IMetadataProvider> contributors,
+        MetadataPolicy policy, Action<Lookup> progress, CancellationToken ct)
     {
-        var byId = new Dictionary<string, MetadataContribution>(StringComparer.Ordinal)
+        var ordered = policy.Order
+            .Where(id => id != MetadataPolicy.SourceId)
+            .Select(id => contributors.FirstOrDefault(c => c.Id == id))
+            .OfType<IMetadataProvider>()
+            .ToList();
+
+        MetadataTrace.BeginAttempt(interp.Artist, interp.Title, ordered.Select(c => c.Id));
+        var network = new Dictionary<string, MetadataContribution>(StringComparer.Ordinal);
+
+        if (!string.IsNullOrEmpty(interp.Artist))
         {
-            [MetadataPolicy.SourceId] = SourceContribution(seed),
-        };
+            // Everyone searches the same query, so ask them all at once.
+            var query = new MetadataQuery(seed.SourceId, interp.Title, interp.Artist, seed.Album, interp.ExternalId);
+            await Task.WhenAll(ordered.Select(async contributor =>
+            {
+                if (await AskAsync(contributor, query, ct).ConfigureAwait(false) is not { } contribution) return;
+                lock (network)
+                {
+                    network[contributor.Id] = contribution;
+                    progress(new Lookup(interp, new Dictionary<string, MetadataContribution>(network, StringComparer.Ordinal)));
+                }
+            })).ConfigureAwait(false);
+            return new Lookup(interp, network);
+        }
 
-        // Working query: the source's fields, with blanks filled by earlier
-        // contributors so later lookups search against something usable.
-        string title = seed.Title;
-        string artist = seed.Artist;
-        string? album = seed.Album;
-
-        MetadataTrace.BeginAttempt(artist, title);
-
-        foreach (var id in policy.Order)
+        // No artist: ask in priority order, filling the working query's blanks from earlier
+        // answers so later text searches have something to search with.
+        var artist = interp.Artist;
+        var album = seed.Album;
+        foreach (var contributor in ordered)
         {
-            if (id == MetadataPolicy.SourceId) continue;
-            var contributor = contributors.FirstOrDefault(x => x.Id == id);
-            if (contributor == null) continue;
-
-            MetadataContribution? contribution;
-            try
-            {
-                contribution = await contributor
-                    .ContributeAsync(new MetadataQuery(seed.SourceId, title, artist, album, seed.ExternalId), ct)
-                    .ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) { throw; }
-            catch (Exception ex)
-            {
-                Log($"{id}: {ex.GetType().Name}: {ex.Message}");
-                MetadataTrace.Provider(id, matched: false, null, null, null, 0);
-                continue;
-            }
-
-            if (contribution is null || contribution.IsEmpty)
-            {
-                MetadataTrace.Provider(id, matched: false,
-                    contribution?.Artist, contribution?.Title, contribution?.Album, contribution?.Art?.Length ?? 0);
-                continue;
-            }
-            byId[id] = contribution;
-            MetadataTrace.Provider(id, matched: true,
-                contribution.Artist, contribution.Title, contribution.Album, contribution.Art?.Length ?? 0);
-
+            var query = new MetadataQuery(seed.SourceId, interp.Title, artist, album, interp.ExternalId);
+            if (await AskAsync(contributor, query, ct).ConfigureAwait(false) is not { } contribution) continue;
+            network[contributor.Id] = contribution;
+            progress(new Lookup(interp, new Dictionary<string, MetadataContribution>(network, StringComparer.Ordinal)));
             if (string.IsNullOrEmpty(artist) && !string.IsNullOrEmpty(contribution.Artist)) artist = contribution.Artist!;
             if (string.IsNullOrEmpty(album) && !string.IsNullOrEmpty(contribution.Album)) album = contribution.Album;
         }
+        return new Lookup(interp, network);
+    }
+
+    // One contributor's answer, or null when it had nothing (or failed). Timed for the trace.
+    private static async Task<MetadataContribution?> AskAsync(
+        IMetadataProvider contributor, MetadataQuery query, CancellationToken ct)
+    {
+        var elapsed = Stopwatch.StartNew();
+        MetadataContribution? contribution;
+        try
+        {
+            contribution = await contributor.ContributeAsync(query, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            Log($"{contributor.Id}: {ex.GetType().Name}: {ex.Message}");
+            MetadataTrace.Provider(contributor.Id, matched: false, null, null, null, 0, elapsed.ElapsedMilliseconds);
+            return null;
+        }
+
+        var matched = contribution is { IsEmpty: false };
+        MetadataTrace.Provider(contributor.Id, matched,
+            contribution?.Artist, contribution?.Title, contribution?.Album, contribution?.Art?.Length ?? 0,
+            elapsed.ElapsedMilliseconds);
+        return matched ? contribution : null;
+    }
+
+    // -- Merge --
+
+    // Turn a (possibly shared) lookup into this caller's result: its seed, re-pointed at the
+    // interpretation the lookup settled on, merged with what the providers said.
+    private static MetadataResult Finish(Track seed, Lookup lookup, MetadataPolicy policy)
+    {
+        var interp = seed with
+        {
+            Title = lookup.Interp.Title,
+            Artist = lookup.Interp.Artist,
+            ExternalId = lookup.Interp.ExternalId,
+            Candidates = null,
+        };
+
+        var byId = new Dictionary<string, MetadataContribution>(lookup.Network, StringComparer.Ordinal)
+        {
+            [MetadataPolicy.SourceId] = SourceContribution(interp),
+        };
 
         // Playable links any contributor learned (VocaDB PVs today), deduped by service+url, in
-        // contributor order — carried alongside the merged metadata for play history to replay from.
-        var playables = byId.Values
+        // priority order — carried alongside the merged metadata for play history to replay from.
+        var playables = policy.Order
+            .Where(lookup.Network.ContainsKey)
+            .Select(id => lookup.Network[id])
             .Where(c => c.Playables is { Count: > 0 })
             .SelectMany(c => c.Playables!)
             .DistinctBy(p => (p.Service, p.Url))
             .ToList();
 
-        // More than just the source contributed → a catalog matched this interpretation.
-        return new MetadataResult(Merge(seed, byId, policy) with { Candidates = null }, byId.Count > 1, playables);
+        // A network contributor answered → a catalog matched this interpretation.
+        return new MetadataResult(Merge(interp, byId, policy), lookup.Network.Count > 0, playables);
     }
 
     private static MetadataContribution SourceContribution(Track t) => new(
@@ -232,7 +441,15 @@ public sealed class MetadataResolver : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         List<IMetadataProvider> owned;
-        lock (_lock) { owned = new List<IMetadataProvider>(_owned); _owned.Clear(); _contributors = []; }
+        lock (_lock)
+        {
+            owned = new List<IMetadataProvider>(_owned);
+            _owned.Clear();
+            _contributors = [];
+            // Each run disposes its own flight when it unwinds.
+            foreach (var f in _flights.Values) f.CancelIfRunning();
+            _flights.Clear();
+        }
         foreach (var c in owned) await DisposeQuietlyAsync(c).ConfigureAwait(false);
     }
 }

@@ -132,7 +132,8 @@ public sealed partial class HistoryViewModel : ViewModelBase
             var entry = row.Entry;
             var seed = BuildSeed(entry);
             var resolved = _resolver is { HasContributors: true }
-                ? await _resolver.ResolveDetailedAsync(seed, CancellationToken.None).ConfigureAwait(false)
+                // Background: the song playing now goes ahead of History rows at every provider.
+                ? await _resolver.ResolveDetailedAsync(seed, CancellationToken.None, ResolvePriority.Background).ConfigureAwait(false)
                 : new MetadataResult(seed, false, []);
             var final = resolved.Track;
             var art = final.AlbumArt is { Length: > 0 } ? DecodeArt(final.AlbumArt) : null;

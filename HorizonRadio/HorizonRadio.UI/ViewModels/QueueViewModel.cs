@@ -11,6 +11,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Metadata;
+using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Queue;
 using ShadUI;
@@ -167,24 +168,31 @@ public sealed partial class QueueViewModel : ViewModelBase
         {
             try
             {
-                var enriched = await _resolver.ResolveAsync(current.Metadata, CancellationToken.None).ConfigureAwait(false);
-                var art = enriched.AlbumArt is { Length: > 0 } ? DecodeArt(enriched.AlbumArt) : null;
-                Dispatcher.UIThread.Post(() =>
-                {
-                    // Still the same track playing? (compare the signature, not the item —
-                    // a radio item stays referentially equal across songs).
-                    if (_queue?.Model.Current is not { } c || NowSig(c) != sig) return;
-                    if (!string.IsNullOrWhiteSpace(enriched.Title)) NowPlayingTitle = enriched.Title;
-                    NowPlayingSubtitle = enriched.Artist;
-                    if (art != null)
-                    {
-                        _nowEnrichedArt = art;
-                        _nowEnrichedArtSig = sig; // sticky, so the next rebuild keeps it
-                        NowPlayingArt = art;
-                    }
-                });
+                // Show the early result (a slow provider still working) right away, then the full one.
+                var enriched = await _resolver.ResolveAsync(current.Metadata, CancellationToken.None,
+                    ResolvePriority.Foreground, early => ShowNowEnriched(early, sig)).ConfigureAwait(false);
+                ShowNowEnriched(enriched, sig);
             }
             catch (Exception ex) { Debug.WriteLine($"[hzn-queue-vm] enrich current: {ex.Message}"); }
+        });
+    }
+
+    private void ShowNowEnriched(Track enriched, string sig)
+    {
+        var art = enriched.AlbumArt is { Length: > 0 } ? DecodeArt(enriched.AlbumArt) : null;
+        Dispatcher.UIThread.Post(() =>
+        {
+            // Still the same track playing? (compare the signature, not the item —
+            // a radio item stays referentially equal across songs).
+            if (_queue?.Model.Current is not { } c || NowSig(c) != sig) return;
+            if (!string.IsNullOrWhiteSpace(enriched.Title)) NowPlayingTitle = enriched.Title;
+            NowPlayingSubtitle = enriched.Artist;
+            if (art != null)
+            {
+                _nowEnrichedArt = art;
+                _nowEnrichedArtSig = sig; // sticky, so the next rebuild keeps it
+                NowPlayingArt = art;
+            }
         });
     }
 
@@ -246,8 +254,9 @@ public sealed partial class QueueViewModel : ViewModelBase
             }
             catch (Exception ex) { Debug.WriteLine($"[hzn-queue-vm] meta-ahead: {ex.Message}"); }
 
+            // Background: the song playing now goes ahead of upcoming rows at every provider.
             var final = _resolver is { HasContributors: true }
-                ? await _resolver.ResolveAsync(seed, CancellationToken.None).ConfigureAwait(false)
+                ? await _resolver.ResolveAsync(seed, CancellationToken.None, ResolvePriority.Background).ConfigureAwait(false)
                 : seed;
 
             var art = final.AlbumArt is { Length: > 0 } ? DecodeArt(final.AlbumArt) : null;
