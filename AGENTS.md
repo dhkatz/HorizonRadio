@@ -52,6 +52,15 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   `HorizonRadio.Game.ForzaHorizon6` wraps the IPC/PCM pipe clients, Forza Data
   Out telemetry, the mod installer, and the station list. Code that runs *inside*
   a game lives in `Mods/<Game>/` instead.
+  - A game plugin can add **pages** (`IGameIntegration.Pages`), listed in the
+    sidebar under the game's name, and a setup **notice** shown as a banner. The
+    SDK stays UI-free: a page is just a view model, and the shell's `ViewLocator`
+    finds its view by naming convention (`…ViewModels.FooViewModel` →
+    `…Views.FooView`) in the plugin's own assembly. FH6 contributes Mods and
+    Stats. Plugin UI packages must match the UI project's versions.
+  - The FH6 plugin also bundles its mod: its csproj flows
+    `Mods/ForzaHorizon6/build/Release/version.dll` into the app's build output
+    (`ExcludeFromSingleFile`), and the UI's publish step copies it next to the exe.
 - **version.dll (C++)** — a `version.dll` proxy injected into FH6. It hosts an
   FMOD DSP that mixes our PCM into the game's radio channel, writes the current
   track's title/artist into the game's HUD, and exposes a named pipe to the UI.

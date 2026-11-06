@@ -45,7 +45,43 @@ public interface IGameIntegration : IAsyncDisposable
 
     /// <summary>Show the current track inside the game, or <see langword="null"/>.</summary>
     INowPlayingDisplay? NowPlaying { get; }
+
+    /// <summary>Pages this game adds to the app, listed in the sidebar under the game's name (e.g.
+    /// a mod installer, bridge diagnostics). Built on first access, on the UI thread; may be
+    /// empty.</summary>
+    IReadOnlyList<GamePage> Pages { get; }
+
+    /// <summary>A setup problem the user should act on (e.g. the in-game mod is missing), shown as
+    /// a banner on every page, or <see langword="null"/> when all is well. Only meaningful once
+    /// <see cref="Pages"/> has been built (pages usually own the state it describes).</summary>
+    GameNotice? Notice { get; }
+
+    /// <summary>Raised when <see cref="Notice"/> changes. Raised on the UI thread.</summary>
+    event Action? NoticeChanged;
+
+    /// <summary>One line of setup advice for the Events page (e.g. how to enable the game's
+    /// telemetry feed), or <see langword="null"/>.</summary>
+    string? EventsHint { get; }
 }
+
+/// <summary>
+/// A page a game integration contributes. The host renders <see cref="ViewModel"/> by convention:
+/// the view is the type in the view model's assembly whose full name is the view model's with
+/// "ViewModel" replaced by "View" (e.g. <c>Foo.ViewModels.StatsViewModel</c> →
+/// <c>Foo.Views.StatsView</c>), so the SDK stays UI-framework-free.
+/// </summary>
+/// <param name="Id">Stable, lowercase id, unique within the game.</param>
+/// <param name="Title">Sidebar label.</param>
+/// <param name="Icon">Material Design icon name (e.g. <c>PuzzleOutline</c>); unknown names fall
+/// back to a generic icon.</param>
+/// <param name="ViewModel">The page's view model.</param>
+public sealed record GamePage(string Id, string Title, string Icon, object ViewModel);
+
+/// <summary>A setup problem surfaced as a banner, with a shortcut to the page that fixes it.</summary>
+/// <param name="Title">Short headline.</param>
+/// <param name="Message">One-sentence explanation.</param>
+/// <param name="PageId">The <see cref="GamePage.Id"/> the banner's button opens.</param>
+public sealed record GameNotice(string Title, string Message, string PageId);
 
 /// <summary>A game with several radio stations, where the user picks the one we replace.</summary>
 public interface IStationTargeting

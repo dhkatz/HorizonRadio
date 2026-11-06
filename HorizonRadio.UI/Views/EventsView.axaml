@@ -22,11 +22,11 @@
             </StackPanel>
 
             <!-- Telemetry hint -->
-            <Border Classes="Card" Padding="12,10">
+            <Border Classes="Card" Padding="12,10" IsVisible="{Binding HasSetupHint}">
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                     <materialIcons:MaterialIcon Kind="AccessPoint" Width="16" Height="16"
                                                 Opacity="0.7" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding TelemetryHint}"
+                    <TextBlock Text="{Binding SetupHint}"
                                FontSize="12" Opacity="0.75"
                                TextWrapping="Wrap" VerticalAlignment="Center"/>
                 </StackPanel>

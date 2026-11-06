@@ -1,16 +1,14 @@
 using System;
 using System.Collections.ObjectModel;
-using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using HorizonRadio.Core.Models;
-using HorizonRadio.Core.Sources;
 using LiveChartsCore;
 using LiveChartsCore.Defaults;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
 using SkiaSharp;
 
-namespace HorizonRadio.UI.ViewModels;
+namespace HorizonRadio.Game.ForzaHorizon6.ViewModels;
 
 /// <summary>
 /// FMOD bridge + normalizer telemetry. Updated on each
@@ -23,7 +21,7 @@ namespace HorizonRadio.UI.ViewModels;
 /// changed events, so trimming the head + adding to the tail produces
 /// smooth scrolling without rebinding the chart on every tick.
 /// </summary>
-public sealed partial class StatsViewModel : ViewModelBase
+public sealed partial class StatsViewModel : ObservableObject
 {
     /// <summary>Number of samples retained in the rolling charts.
     /// At the DLL's 2 Hz publish rate this is 30 seconds of history,
@@ -81,7 +79,7 @@ public sealed partial class StatsViewModel : ViewModelBase
     private DateTime _previousTimestamp = DateTime.MinValue;
     private DateTime? _installedSince;
 
-    public StatsViewModel(SourceRunner? runner = null)
+    public StatsViewModel()
     {
         // AnimationsSpeed = TimeSpan.Zero on every series: in a rolling-
         // window chart LiveCharts tweens each point's vertical position
@@ -156,13 +154,12 @@ public sealed partial class StatsViewModel : ViewModelBase
             FramesOutHistory.Add(0);
             UnderrunSparkline.Add(0);
         }
-
-        if (runner != null)
-        {
-            runner.ActiveSourceChanged += f => Dispatcher.UIThread.Post(() =>
-                SourceDisplay = f?.DisplayName ?? "No source");
-        }
     }
+
+    /// <summary>The source the bridge reports it is playing (the DLL's
+    /// <c>source_changed</c> event), or <see langword="null"/> for none.</summary>
+    public void SetSource(string? displayName) =>
+        SourceDisplay = string.IsNullOrEmpty(displayName) ? "No source" : displayName;
 
     public void Apply(BridgeStats stats)
     {
@@ -216,6 +213,7 @@ public sealed partial class StatsViewModel : ViewModelBase
         IsConnected = connected;
         if (!connected)
         {
+            SourceDisplay = "No source";
             BridgeInstalled = false;
             FramesIn = FramesOut = Underruns = 0;
             FramesInPerSecond = 0;

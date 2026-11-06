@@ -2,11 +2,11 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             xmlns:vm="using:HorizonRadio.Game.ForzaHorizon6.ViewModels"
              xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
              xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
-             x:Class="HorizonRadio.UI.Views.StatsView"
+             x:Class="HorizonRadio.Game.ForzaHorizon6.Views.StatsView"
              x:DataType="vm:StatsViewModel">
 
     <Design.DataContext>

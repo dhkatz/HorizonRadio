@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Sidebar: game pages live under the game's name.** The Mods and Stats pages
+  now come from the Forza Horizon 6 plugin and are listed under a "Forza Horizon
+  6" section. Events and Controls moved to Settings, since they aren't specific
+  to one game. The setup banner ("Mod Not Installed") is now supplied by the
+  game plugin too.
 - **Games are plugins now.** The plugin SDK gains `IGamePlugin` /
   `IGameIntegration`: a game integration supplies the audio output, game
   events, connection state, and optional capabilities (station targeting,
