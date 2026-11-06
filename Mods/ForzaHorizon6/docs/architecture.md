@@ -180,7 +180,9 @@ The game build is fingerprinted by its `.text` VirtualSize (plus the PE
 An unknown build logs a warning, which is not an error: most updates leave the
 signatures intact. On every UI (re)connect the DLL sends two `bridge`-tagged
 `debug` events to the Console tab: the build fingerprint and the live bring-up
-status (`fmod=… metadata=… radio_state=…`). After a game update, that's the
+status (`fmod=… metadata=… radio_state=…`, or "scanning" if the first attempt
+is still running; the IPC server starts before it). The status is sent again
+when the first attempt finishes, and when a retry completes or gives up. After a game update, that's the
 first thing to check. Once the signatures are re-verified on a new build, add
 its `.text` size to `kFh6KnownBuilds`.
 

@@ -361,9 +361,16 @@ void try_bring_up(const PeImage& game_image, BringUp& s, bool verbose) {
     }
 }
 
+// Set once the first (verbose) bring-up attempt has finished. The IPC server
+// starts before it, so a UI that connects early must be told "still scanning"
+// rather than a misleading "MISSING" for pieces that simply haven't been tried.
+std::atomic<bool> g_bring_up_attempted{false};
+
 // Live bring-up status, readable from any thread (derived from the atomics).
 std::string bring_up_status() {
-    std::string out = "fmod=";
+    if (!g_bring_up_attempted.load(std::memory_order_acquire))
+        return "bring-up: scanning game code (first attempt in progress)";
+    std::string out = "bring-up: fmod=";
     out += g_bridge_for_push.load(std::memory_order_acquire) != nullptr ? "ok" : "MISSING";
     out += " metadata=";
     out += g_metadata_injector.load(std::memory_order_acquire) != nullptr ? "ok" : "MISSING";
@@ -738,6 +745,10 @@ void poll_game_events(void* radio_state) {
         }
 
         try_bring_up(game_image, state, /*verbose=*/true);
+        g_bring_up_attempted.store(true, std::memory_order_release);
+        // Report the outcome to an already-connected UI (later connects get it
+        // from the snapshot callback).
+        g_ipc_server.publish_debug("bridge", bring_up_status());
         if (!state.complete())
             log_w(L"[horizon-radio] bring-up incomplete; retrying with backoff (the game may still be unpacking)\n");
 
@@ -1031,7 +1042,7 @@ void poll_game_events(void* radio_state) {
             logf(L"[horizon-radio] bring-up retry #%d: %hs\n", retry, status.c_str());
             if (state.complete()) {
                 log_w(L"[horizon-radio] bring-up complete\n");
-                g_ipc_server.publish_debug("bridge", "bring-up complete after retry: " + status);
+                g_ipc_server.publish_debug("bridge", status + " (complete after retry)");
                 retrying = false;
             } else if (std::chrono::steady_clock::now() - bring_up_started >= kRetryGiveUp) {
                 // One last verbose pass so the log holds the per-signature
@@ -1039,8 +1050,8 @@ void poll_game_events(void* radio_state) {
                 try_bring_up(game_image, state, /*verbose=*/true);
                 log_w(L"[horizon-radio] bring-up: giving up on retries; the missing signatures have likely "
                       L"drifted with a game update (see AGENTS.md -> In-game title injection)\n");
-                g_ipc_server.publish_debug("bridge", "bring-up gave up: " + bring_up_status() +
-                                                         " -- signatures likely drifted with a game update");
+                g_ipc_server.publish_debug(
+                    "bridge", bring_up_status() + " (gave up retrying; signatures likely drifted with a game update)");
                 retrying = false;
             } else {
                 retry_delay = std::min(retry_delay * 2, kRetryMaxDelay);

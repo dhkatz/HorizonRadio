@@ -105,5 +105,6 @@ TEST_CASE("known_build_label: recognizes listed builds only") {
     using horizon::game::signatures::known_build_label;
     CHECK(known_build_label(0x6322F5E) == "Steam, June 2026");
     CHECK(known_build_label(0x630E45E) == "Microsoft Store, June 2026");
+    CHECK(known_build_label(0x63C3D0E) == "Steam, November 2026");
     CHECK(known_build_label(0x1234).empty());
 }

@@ -131,7 +131,9 @@ inline constexpr GameSignatures kFh6Game = {
 //
 // The June 2026 entries are the Steam and Microsoft Store builds that
 // matkhl/FH6-Spotify-Radio (GPL-3.0) verified live; its FMOD and RadioState
-// signatures are byte-identical to ours.
+// signatures are byte-identical to ours. The November 2026 Steam build (PE
+// timestamp 2026-11-03) was verified live here: audio, titles, and game
+// events all work with the signatures unchanged.
 struct KnownBuild {
     std::uint32_t    text_size;
     std::string_view label;
@@ -140,6 +142,7 @@ struct KnownBuild {
 inline constexpr std::array kFh6KnownBuilds = {
     KnownBuild{.text_size = 0x6322F5E, .label = "Steam, June 2026"},
     KnownBuild{.text_size = 0x630E45E, .label = "Microsoft Store, June 2026"},
+    KnownBuild{.text_size = 0x63C3D0E, .label = "Steam, November 2026"},
 };
 
 // The label of the known build with this .text size, or empty if unknown.
