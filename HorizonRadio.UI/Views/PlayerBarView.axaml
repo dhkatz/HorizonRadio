@@ -134,6 +134,28 @@
                         Spacing="6"
                         HorizontalAlignment="Right"
                         VerticalAlignment="Center">
+                <!-- Game chip: the station the game is tuned to and what it plays there.
+                     Stations are picked in-game; the chip opens the game's Stations page. -->
+                <Button Classes="Ghost"
+                        Command="{Binding GameChip.OpenCommand}"
+                        IsVisible="{Binding GameChip.IsAvailable}"
+                        Padding="8,2" Height="36" Margin="0,0,6,0"
+                        VerticalAlignment="Center"
+                        ToolTip.Tip="What the in-game station plays. Click to set up stations.">
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <Ellipse Width="8" Height="8" VerticalAlignment="Center"
+                                 Fill="#22c55e" IsVisible="{Binding GameChip.IsConnected}"/>
+                        <Ellipse Width="8" Height="8" VerticalAlignment="Center"
+                                 Fill="#6b7280" IsVisible="{Binding !GameChip.IsConnected}"/>
+                        <StackPanel Spacing="0" VerticalAlignment="Center" MaxWidth="200">
+                            <TextBlock Text="{Binding GameChip.Title}" FontSize="12" FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding GameChip.Detail}" FontSize="10" Opacity="0.6"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Button>
+
                 <!-- Mixes: tune to a saved cross-source playlist. Hidden until at
                      least one mix exists. -->
                 <Button x:Name="MixButton"

@@ -237,7 +237,7 @@ public partial class App : Application
             var dispatcher = new ActionDispatcher(_runner, _store, mixSwitcher,
                 _game.Volume is { } gameVolume ? gameVolume.SetDuckGain : null);
             _eventExecutor = new EventActionExecutor(_game.EventSources, eventRules, dispatcher);
-            var eventsVm = new EventsViewModel(eventRules, _eventExecutor, _game.EventsHint);
+            var eventsVm = new EventsViewModel(eventRules, _eventExecutor, _game.EventCatalog, _game.EventsHint);
 
             // Controls: global keyboard/mouse (SharpHook) + controllers (SDL),
             // mapped to the same actions through the shared dispatcher.

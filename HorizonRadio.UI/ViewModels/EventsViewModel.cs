@@ -27,15 +27,17 @@ public sealed partial class EventsViewModel : ViewModelBase, IDisposable
     public bool HasSetupHint => !string.IsNullOrEmpty(SetupHint);
 
     // Design-time / fallback ctor.
-    public EventsViewModel() : this(new EventRuleStore(), null, null) { }
+    public EventsViewModel() : this(new EventRuleStore(), null, GameEventKinds.Catalog, null) { }
 
-    public EventsViewModel(EventRuleStore rules, EventActionExecutor? executor, string? setupHint)
+    /// <param name="catalog">The events the active game reports (its own list).</param>
+    public EventsViewModel(EventRuleStore rules, EventActionExecutor? executor,
+                           IReadOnlyList<GameEventInfo> catalog, string? setupHint)
     {
         _executor = executor;
         SetupHint = setupHint;
 
         var options = BuildOptions();
-        foreach (var category in GameEventKinds.Catalog.GroupBy(i => i.Category))
+        foreach (var category in catalog.GroupBy(i => i.Category))
         {
             var rows = category.Select(info => new EventRuleRow(info, options, rules)).ToList();
             Groups.Add(new EventCategoryGroup(category.Key, rows));

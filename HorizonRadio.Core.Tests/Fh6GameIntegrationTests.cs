@@ -1,3 +1,4 @@
+using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Games;
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Models;
@@ -142,5 +143,30 @@ public class Fh6GameIntegrationTests
         await using var game = new Fh6GamePlugin().Create(new TestContext(store));
         var fh6 = Assert.IsType<Fh6GameIntegration>(game);
         Assert.Equal(StationAssignment.Player, fh6.Map.Get("Horizon XS"));
+    }
+
+    [Fact]
+    public async Task Reports_its_events_and_describes_what_a_station_plays()
+    {
+        await using var game = new Fh6GameIntegration("Forza Horizon 6");
+
+        Assert.Equal(GameEventKinds.Catalog, game.EventCatalog);
+        Assert.Equal("stations", game.Stations!.PageId);
+        Assert.Null(game.Stations.CurrentAssignment); // nothing tuned (not connected)
+
+        Assert.Equal("Horizon Radio player", game.Describe(StationAssignment.Player));
+        Assert.Equal("Game audio", game.Describe(StationAssignment.Game));
+        Assert.Equal("Mix", game.Describe(StationAssignment.ForMix("not-loaded"))); // no host mixes yet
+    }
+
+    // The host slots its Events page in by order, between the game's own pages.
+    [Fact]
+    public async Task Page_order_leaves_room_for_the_host_events_page()
+    {
+        await using var game = new Fh6GameIntegration("Forza Horizon 6");
+        var orders = game.Pages.ToDictionary(p => p.Id, p => p.Order);
+
+        Assert.True(orders["stations"] < GamePage.EventsOrder);
+        Assert.True(orders["stats"] > GamePage.EventsOrder);
     }
 }

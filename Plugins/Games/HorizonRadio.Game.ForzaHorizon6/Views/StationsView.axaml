@@ -49,8 +49,11 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:StationRow">
                             <Grid ColumnDefinitions="*,Auto,280" VerticalAlignment="Center">
-                                <TextBlock Grid.Column="0" Text="{Binding Name}"
-                                           FontSize="13" VerticalAlignment="Center"/>
+                                <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Name}" FontSize="13"/>
+                                    <TextBlock Text="{Binding Hint}" IsVisible="{Binding HasHint}"
+                                               FontSize="11" Opacity="0.55" TextWrapping="Wrap"/>
+                                </StackPanel>
                                 <Border Grid.Column="1" IsVisible="{Binding IsOnAir}"
                                         Background="#22c55e" CornerRadius="999"
                                         Padding="8,2" Margin="12,0"

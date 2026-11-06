@@ -90,6 +90,13 @@ public sealed partial class StationRow(string name, Action<string, StationAssign
 {
     public string Name { get; } = name;
 
+    /// <summary>A note under the station's name, or null.</summary>
+    public string? Hint { get; } = name == "Streamer Mode"
+        ? "Only on air with Streamer Mode turned on in Forza's settings, which hides every other station."
+        : null;
+
+    public bool HasHint => Hint != null;
+
     [ObservableProperty] private IReadOnlyList<StationOption> options = [];
 
     [ObservableProperty] private StationOption? selected;
