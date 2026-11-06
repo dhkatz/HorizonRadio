@@ -72,7 +72,10 @@ public sealed class YouTubePlayableItem : PlayableItem
             Year: year);
     }
 
-    public override TimeSpan Position => _subproc?.Elapsed ?? TimeSpan.Zero;
+    // Where this play started (resuming mid-track), plus how far ffmpeg has decoded since.
+    private TimeSpan _startOffset;
+
+    public override TimeSpan Position => _subproc is { } subproc ? _startOffset + subproc.Elapsed : TimeSpan.Zero;
 
     private static void Log(string msg) => Debug.WriteLine($"[hzn-yt-item] {msg}");
 
@@ -123,7 +126,10 @@ public sealed class YouTubePlayableItem : PlayableItem
 
         ctx.OnStarted?.Invoke(this);
 
-        var args = Ffmpeg.BuildUrlDecodeArgs(_resolved.StreamUrl, _normalise);
+        // Resuming a parked station: start ffmpeg where we left off (no live seeking, so
+        // CanSeek stays false, but a play can begin mid-track).
+        _startOffset = ctx.StartPosition?.Invoke(this) is { Ticks: > 0 } start ? start : TimeSpan.Zero;
+        var args = Ffmpeg.BuildUrlDecodeArgs(_resolved.StreamUrl, _normalise, _startOffset);
         var pausing = new PausingSink(ctx.Sink, ctx.IsPaused, ctx.ResumeGate, ct);
 
         await using var subproc = new SubprocessPcmSource(new SubprocessPcmSource.Config

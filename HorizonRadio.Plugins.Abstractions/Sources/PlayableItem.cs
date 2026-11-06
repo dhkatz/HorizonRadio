@@ -95,8 +95,8 @@ public sealed class PumpContext
     public Action<PlayableItem>? OnMetadataUpdated { get; init; }
 
     /// <summary>Where in the item to begin (e.g. resuming a parked station channel);
-    /// <see cref="TimeSpan.Zero"/> or <see langword="null"/> means from the top. Items that
-    /// <see cref="PlayableItem.CanSeek"/> call it once per play, as soon as they can seek, and
-    /// start there; others ignore it.</summary>
+    /// <see cref="TimeSpan.Zero"/> or <see langword="null"/> means from the top. Items that can
+    /// start mid-way call it once per play, as soon as they're able to (seekable items, and
+    /// stream items that pass it to their decoder), and start there; others ignore it.</summary>
     public Func<PlayableItem, TimeSpan>? StartPosition { get; init; }
 }
