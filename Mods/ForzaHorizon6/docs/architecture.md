@@ -154,8 +154,37 @@ image (`PeImage` parses the loaded PE's sections).
   stage on failure (anchor missed / lea decode / no enclosing function / prologue
   mismatch / ambiguous).
 - **Game resolver** (`GameResolver`) — resolves the `RadioState` singleton by
-  sigscanning `radio_set_station_by_name` and decoding the RIP-relative `mov rbx,
-  [rip+disp32]` that loads the global.
+  sigscanning `radio_state_loader` and decoding the RIP-relative `mov rbx,
+  [rip+disp32]` that loads the global. The pattern must match **exactly once**
+  and the decoded address must land inside the game module; otherwise it's
+  rejected with a logged reason (not found / ambiguous / unexpected instruction
+  / target outside image) rather than resolving to the first hit.
+
+### Bring-up and retry
+
+The three pieces — FMOD bridge, metadata injector, RadioState global — resolve
+independently (`try_bring_up` in `dllmain.cpp`), and each is published to its
+atomic the moment it resolves, so the writer, discovery, and PCM threads pick
+it up without a restart. The first attempt runs as soon as the IPC server is up
+and logs full per-signature diagnostics. Because the packed `.text` decrypts at
+load, a scan that races the unpack can miss signatures that resolve moments
+later, so anything still missing is retried on a doubling backoff (5 s → 60 s,
+one log line per retry). After ~10 minutes it gives up with one last verbose
+pass: by then the game has long unpacked, so what's missing has drifted with a
+game update.
+
+### Build fingerprint
+
+The game build is fingerprinted by its `.text` VirtualSize (plus the PE
+`TimeDateStamp`, logged for reference) and checked against `kFh6KnownBuilds`.
+An unknown build logs a warning, which is not an error: most updates leave the
+signatures intact. On every UI (re)connect the DLL sends two `bridge`-tagged
+`debug` events to the Console tab: the build fingerprint and the live bring-up
+status (`fmod=… metadata=… radio_state=…`, or "scanning" if the first attempt
+is still running; the IPC server starts before it). The status is sent again
+when the first attempt finishes, and when a retry completes or gives up. After a game update, that's the
+first thing to check. Once the signatures are re-verified on a new build, add
+its `.text` size to `kFh6KnownBuilds`.
 
 ## SEH strategy
 

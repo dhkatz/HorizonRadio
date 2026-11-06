@@ -1,7 +1,11 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
+#include <cstdint>
 #include <horizon/fmod/resolver.hpp>
 #include <horizon/inject/metadata_injector.hpp>
+#include <string_view>
 
 namespace horizon::fmod::signatures {
 
@@ -81,18 +85,19 @@ inline const MetadataInjectorConfig kFh6Metadata = {
 namespace horizon::game::signatures {
 
 struct GameSignatures {
-    std::string_view radio_set_station_by_name;
+    // A function that loads the RadioState singleton via
+    // `mov rbx, [rip+disp32]`; decoding that displacement yields the address
+    // of the global slot holding RadioState*. Must match exactly once.
+    std::string_view radio_state_loader;
 
+    // Byte offset of the `48 8B 1D <disp32>` within radio_state_loader.
     std::ptrdiff_t mov_rbx_offset_in_match;
-
-    std::string_view radio_state_singleton;
 
     // In-game event detection, offsets relative to *g_radio_state_global.
     // Verify against dllmain's one-shot state dump on a new build; see
     // docs/architecture.md -> "In-game event detection".
     std::ptrdiff_t race_active_a_offset; // byte; nonzero with B ⇒ in a race
     std::ptrdiff_t race_active_b_offset; // byte
-    std::ptrdiff_t race_restart_offset;  // int32; == -1 on a race restart
     // Station name (MSVC std::string), reached via
     // *(*(radio_state + chain0) + chain1) + station_name_offset. Tracks station
     // SELECTION only -- the name does NOT change when the radio is powered off.
@@ -102,21 +107,51 @@ struct GameSignatures {
 };
 
 inline constexpr GameSignatures kFh6Game = {
-    .radio_set_station_by_name = "48 89 5C 24 08 48 89 54 24 10 57 48 83 EC 40 "
-                                 "48 8B FA 48 8B 1D ?? ?? ?? ?? 48 85 DB 74 16 "
-                                 "48 8D 4C 24 20 E8 ?? ?? ?? ?? 48 8B D0 48 8B CB",
+    .radio_state_loader = "48 89 5C 24 08 48 89 54 24 10 57 48 83 EC 40 "
+                          "48 8B FA 48 8B 1D ?? ?? ?? ?? 48 85 DB 74 16 "
+                          "48 8D 4C 24 20 E8 ?? ?? ?? ?? 48 8B D0 48 8B CB",
 
     .mov_rbx_offset_in_match = 18,
 
-    .radio_state_singleton = "48 8B 89 F0 09 01 00 48 85 C9 0F 85 ?? ?? ?? ?? 33 C0 C3",
-
     .race_active_a_offset = 0x68,
     .race_active_b_offset = 0x69,
-    .race_restart_offset  = 0x80,
 
     .station_chain0_offset = 0x40,
     .station_chain1_offset = 0x50,
     .station_name_offset   = 0x200,
 };
+
+// Game builds the signatures and offsets above are known to work on, keyed by
+// the game module's .text VirtualSize (a cheap per-build fingerprint: it
+// changes whenever the game's code does). Running on a build NOT listed here
+// isn't necessarily broken -- most updates leave these patterns intact -- but
+// it's the first thing to check when titles or audio stop working: re-verify
+// with the discovery dump (AGENTS.md -> "In-game title injection"), then add
+// the new build here.
+//
+// The June 2026 entries are the Steam and Microsoft Store builds that
+// matkhl/FH6-Spotify-Radio (GPL-3.0) verified live; its FMOD and RadioState
+// signatures are byte-identical to ours. The November 2026 Steam build (PE
+// timestamp 2026-11-03) was verified live here: audio, titles, and game
+// events all work with the signatures unchanged.
+struct KnownBuild {
+    std::uint32_t    text_size;
+    std::string_view label;
+};
+
+inline constexpr std::array kFh6KnownBuilds = {
+    KnownBuild{.text_size = 0x6322F5E, .label = "Steam, June 2026"},
+    KnownBuild{.text_size = 0x630E45E, .label = "Microsoft Store, June 2026"},
+    KnownBuild{.text_size = 0x63C3D0E, .label = "Steam, November 2026"},
+};
+
+// The label of the known build with this .text size, or empty if unknown.
+[[nodiscard]] constexpr std::string_view known_build_label(const std::size_t text_size) noexcept {
+    for (const auto& b : kFh6KnownBuilds) {
+        if (b.text_size == text_size)
+            return b.label;
+    }
+    return {};
+}
 
 } // namespace horizon::game::signatures

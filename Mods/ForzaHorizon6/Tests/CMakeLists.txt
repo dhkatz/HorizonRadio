@@ -25,6 +25,7 @@ set(HORIZON_TEST_SOURCES
   test_fmod_bridge.cpp
   test_fmod_resolver.cpp
   test_fmod_types.cpp
+  test_game_resolver.cpp
   test_heap_scan.cpp
   test_metadata_injector.cpp
   test_msvc_rtti.cpp

@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <cstring>
 #include <horizon/inject/game_resolver.hpp>
 #include <horizon/inject/safe_mem.hpp>
 #include <windows.h>
@@ -11,32 +12,64 @@ using inject::safe_read_qword;
 
 } // namespace
 
-GameResolver::GameResolver(const inject::PeImage& image) : image_(image) {}
+GlobalResolution resolve_rip_load_global(const std::span<const std::byte> text, const inject::Pattern& pattern,
+                                         const std::ptrdiff_t mov_offset_in_match, const std::uintptr_t image_lo,
+                                         const std::uintptr_t image_hi) {
+    GlobalResolution out;
+    if (pattern.bytes.empty())
+        return out;
 
-void* GameResolver::resolve_global_via_rip_load(std::string_view pattern, std::ptrdiff_t mov_offset_in_match) const {
-    if (pattern.empty())
-        return nullptr;
+    // `mov rbx, [rip+disp32]` is 7 bytes and must sit inside the pattern, so
+    // the bytes we decode are bytes the pattern actually matched.
+    constexpr std::ptrdiff_t kMovLen = 7;
+    if (mov_offset_in_match < 0 || mov_offset_in_match + kMovLen > static_cast<std::ptrdiff_t>(pattern.bytes.size())) {
+        out.status = GlobalResolution::Status::unexpected_instruction;
+        return out;
+    }
 
-    const std::byte* match = inject::find_pattern(image_.text(), pattern);
-    if (match == nullptr)
-        return nullptr;
+    const auto matches = inject::find_pattern_matches(text, pattern);
+    out.match_count    = matches.count;
+    if (matches.count == 0) {
+        out.status = GlobalResolution::Status::not_found;
+        return out;
+    }
+    if (matches.count > 1) {
+        out.status = GlobalResolution::Status::ambiguous;
+        return out;
+    }
 
-    // The MOV should be `48 8B 1D <disp32>`. Sanity-check the opcode
-    // bytes so we don't misdecode if the pattern matched but the
-    // offset is wrong.
-    const std::byte* mov = match + mov_offset_in_match;
-    if (static_cast<std::uint8_t>(mov[0]) != 0x48 || static_cast<std::uint8_t>(mov[1]) != 0x8B ||
-        static_cast<std::uint8_t>(mov[2]) != 0x1D) {
-        return nullptr;
+    // Sanity-check the opcode bytes so we don't misdecode if the pattern
+    // matched but the offset is wrong.
+    const std::byte* mov = matches.first + mov_offset_in_match;
+    if (std::to_integer<std::uint8_t>(mov[0]) != 0x48 || std::to_integer<std::uint8_t>(mov[1]) != 0x8B ||
+        std::to_integer<std::uint8_t>(mov[2]) != 0x1D) {
+        out.status = GlobalResolution::Status::unexpected_instruction;
+        return out;
     }
 
     std::int32_t disp32 = 0;
     std::memcpy(&disp32, mov + 3, sizeof(disp32));
 
-    // The instruction is 7 bytes total; RIP after fetch points at mov+7.
-    auto* mov_end     = mov + 7;
-    auto  target_addr = reinterpret_cast<std::uintptr_t>(mov_end) + static_cast<std::intptr_t>(disp32);
-    return reinterpret_cast<void*>(target_addr);
+    // RIP after fetch points at the end of the instruction.
+    const auto target = reinterpret_cast<std::uintptr_t>(mov + kMovLen) + static_cast<std::intptr_t>(disp32);
+    if (target < image_lo || target >= image_hi) {
+        out.status = GlobalResolution::Status::target_outside_image;
+        return out;
+    }
+
+    out.status  = GlobalResolution::Status::ok;
+    out.address = reinterpret_cast<void*>(target);
+    return out;
+}
+
+GameResolver::GameResolver(const inject::PeImage& image) : image_(image) {}
+
+GlobalResolution GameResolver::resolve_global_via_rip_load(const std::string_view pattern,
+                                                           const std::ptrdiff_t   mov_offset_in_match) const {
+    if (pattern.empty() || !image_.valid())
+        return {};
+    return resolve_rip_load_global(image_.text(), inject::compile_pattern(pattern), mov_offset_in_match, image_.base(),
+                                   image_.base() + image_.image_size());
 }
 
 std::vector<const void*> find_instances_in_heap_arenas(const void* expected_vtable, const inject::PeImage& image,

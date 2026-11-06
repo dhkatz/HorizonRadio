@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   labeled by their real service. (Existing cached songs backfill on next play via a
   cache-version bump.)
 
+- **Game build and bridge status in the Console.** On every connect the
+  in-game DLL reports the FH6 build it's running on (known or unverified) and
+  which parts of the bridge resolved (`fmod` / `metadata` / `radio_state`)
+  under the `bridge` tag, so a game update that breaks something can be
+  diagnosed without a debugger.
+
 ### Changed
 
 - **The FH6 mod moved to `Mods/ForzaHorizon6/`.** The native `version.dll`
@@ -40,6 +46,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rule-of-5 on the thread-owning IPC/PCM servers, and dead-code removal.
 
 ### Fixed
+
+- **The in-game bridge no longer stays dormant when it starts too early.**
+  FH6 decrypts its code at load, and the DLL used to scan for its FMOD and
+  radio signatures exactly once. If that scan raced the unpack, audio, titles
+  and game events stayed off until the game was restarted. Anything that
+  didn't resolve is now retried on a backoff for ~10 minutes. The RadioState
+  lookup (game events, station targeting) also no longer depends on the
+  metadata lookup succeeding, and it now refuses ambiguous or out-of-module
+  signature matches instead of trusting the first hit.
 
 - **Internet-radio tracks no longer attach a wrong same-titled cover.** A romaji
   broadcast artist (e.g. "HachiojiP") could match an unrelated Japanese-named

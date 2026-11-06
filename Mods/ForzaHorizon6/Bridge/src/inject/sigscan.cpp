@@ -23,6 +23,7 @@ PeImage::PeImage(HMODULE module) {
 
     base_       = base;
     image_size_ = nt->OptionalHeader.SizeOfImage;
+    timestamp_  = nt->FileHeader.TimeDateStamp;
 
     const auto section_count = nt->FileHeader.NumberOfSections;
     auto*      section       = IMAGE_FIRST_SECTION(nt);
@@ -86,8 +87,14 @@ Pattern compile_pattern(std::string_view ida_style) {
 }
 
 const std::byte* find_pattern(const std::span<const std::byte> haystack, const Pattern& p) {
-    if (p.bytes.empty() || haystack.size() < p.bytes.size())
-        return nullptr;
+    return find_pattern_matches(haystack, p, 1).first;
+}
+
+PatternMatches find_pattern_matches(const std::span<const std::byte> haystack, const Pattern& p,
+                                    const std::size_t limit) {
+    PatternMatches out;
+    if (p.bytes.empty() || haystack.size() < p.bytes.size() || limit == 0)
+        return out;
     const std::size_t n   = p.bytes.size();
     const std::size_t end = haystack.size() - n;
     for (std::size_t i = 0; i <= end; ++i) {
@@ -98,10 +105,14 @@ const std::byte* find_pattern(const std::span<const std::byte> haystack, const P
                 break;
             }
         }
-        if (ok)
-            return haystack.data() + i;
+        if (!ok)
+            continue;
+        if (out.count == 0)
+            out.first = haystack.data() + i;
+        if (++out.count >= limit)
+            break;
     }
-    return nullptr;
+    return out;
 }
 
 PatternSet compile_pattern_set(std::string_view ida_style) {

@@ -54,6 +54,31 @@ TEST_CASE("find_pattern: empty pattern returns nullptr") {
     CHECK(find_pattern(data, Pattern{}) == nullptr);
 }
 
+TEST_CASE("find_pattern_matches: counts up to the limit and keeps the first hit") {
+    const std::byte data[] = {std::byte{0xAA}, std::byte{0x48}, std::byte{0x89}, std::byte{0x00},
+                              std::byte{0x48}, std::byte{0x89}, std::byte{0x48}, std::byte{0x89}};
+    const auto      p      = compile_pattern("48 89");
+
+    const auto two = find_pattern_matches(data, p); // default limit 2: unique vs ambiguous
+    CHECK(two.count == 2);
+    CHECK(two.first == data + 1);
+
+    const auto all = find_pattern_matches(data, p, 10);
+    CHECK(all.count == 3);
+    CHECK(all.first == data + 1);
+
+    const auto none = find_pattern_matches(data, compile_pattern("48 8B"));
+    CHECK(none.count == 0);
+    CHECK(none.first == nullptr);
+}
+
+TEST_CASE("find_pattern_matches: unique match") {
+    const std::byte data[] = {std::byte{0x00}, std::byte{0x48}, std::byte{0x8B}, std::byte{0x1D}};
+    const auto      m      = find_pattern_matches(data, compile_pattern("48 8B 1D"));
+    CHECK(m.count == 1);
+    CHECK(m.first == data + 1);
+}
+
 TEST_CASE("PeImage: parses sections of the test executable") {
     PeImage img(GetModuleHandleW(nullptr));
     REQUIRE(img.valid());
@@ -64,6 +89,8 @@ TEST_CASE("PeImage: parses sections of the test executable") {
     // .pdata is present on every x64 PE that uses table-based unwind,
     // which includes anything MSVC produces for x64.
     CHECK(!img.pdata().empty());
+    // Every linker stamps the file header; zero would mean we read garbage.
+    CHECK(img.timestamp() != 0u);
 }
 
 TEST_CASE("PeImage + find_pattern: locates a known byte sequence in our own .rdata") {
