@@ -5,7 +5,16 @@ on:
     branches: [main]
   pull_request:
 
+# NuGet packages are cached across runs, keyed on every project/props file, so a run whose
+# dependencies didn't change restores from the cache instead of nuget.org.
+env:
+  NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
 jobs:
+  # The required check. The C# side (format, build, tests) plus the Release version.dll it
+  # bundles. The C++ Debug build and its tests run in parallel in cpp-tests.
   build:
     name: Build + test (Windows x64)
     runs-on: windows-latest
@@ -38,42 +47,43 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NUGET_PACKAGES }}
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      # Restore once; format and build reuse it.
+      - name: Restore
+        run: dotnet restore HorizonRadio.slnx
+
       - name: Verify C# formatting
-        run: dotnet format HorizonRadio.slnx --verify-no-changes --verbosity minimal
+        run: dotnet format HorizonRadio.slnx --verify-no-changes --no-restore --verbosity minimal
 
       - name: Configure CMake
         working-directory: Mods/ForzaHorizon6
         run: cmake --preset windows-x64
-
-      # Tests run against the Debug build (asserts on). version.dll itself
-      # isn't exercised here — the test exe links the production TUs
-      # directly (see Mods/ForzaHorizon6/Tests/CMakeLists.txt).
-      - name: Build C++ side (Debug, x64)
-        working-directory: Mods/ForzaHorizon6
-        run: cmake --build --preset windows-x64-debug
-
-      - name: Run C++ tests
-        working-directory: Mods/ForzaHorizon6
-        run: ctest --preset windows-x64-debug
 
       # The C# UI's <None Include> picks up version.dll from
       # Mods/ForzaHorizon6/build/Release/
       # specifically (a Debug version.dll is useless to FH6 — see the
       # csproj comment), so we must build the Release DLL for the bundle
       # step to have anything to copy. This is also the artifact we ship.
-      - name: Build C++ side (Release, x64)
+      # Only the DLL: the C++ tests build and run in cpp-tests.
+      - name: Build version.dll (Release, x64)
         working-directory: Mods/ForzaHorizon6
-        run: cmake --build --preset windows-x64-release
+        run: cmake --build --preset windows-x64-release --target version
 
       # C# side runs after the Release C++ output (version.dll) is on disk
       # so the UI's <None Include> item picks it up.
       - name: Build C# UI
-        run: dotnet build HorizonRadio.slnx -c Debug --nologo
+        run: dotnet build HorizonRadio.slnx -c Debug --no-restore
 
       # C# unit tests (HorizonRadio.Core.Tests). --no-build reuses the build
       # above so this is just the test run, not a second compile.
       - name: Run C# tests
-        run: dotnet test HorizonRadio.slnx -c Debug --no-build --nologo
+        run: dotnet test HorizonRadio.slnx -c Debug --no-build
 
       # Guard the bundling itself: a regression in the csproj's path or
       # Exists() gate would otherwise silently ship a UI with no DLL.
@@ -93,6 +103,37 @@ jobs:
           name: version-dll
           path: Mods/ForzaHorizon6/build/Release/version.dll
           if-no-files-found: error
+
+  # The C++ tests, alongside the C# job rather than before it. Tests run against the Debug
+  # build (asserts on). version.dll itself isn't exercised here — the test exe links the
+  # production TUs directly (see Mods/ForzaHorizon6/Tests/CMakeLists.txt).
+  cpp-tests:
+    name: C++ tests (Windows x64)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC dev environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Set up Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Configure CMake
+        working-directory: Mods/ForzaHorizon6
+        run: cmake --preset windows-x64
+
+      - name: Build C++ side (Debug, x64)
+        working-directory: Mods/ForzaHorizon6
+        run: cmake --build --preset windows-x64-debug
+
+      - name: Run C++ tests
+        working-directory: Mods/ForzaHorizon6
+        run: ctest --preset windows-x64-debug
 
   # Lints the production C++ (version.dll TUs) with clang-tidy via the
   # windows-x64-analysis preset, which flips on CMAKE_CXX_CLANG_TIDY. The
@@ -159,14 +200,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Cached between runs: Ubuntu's mirrors are sometimes slow enough to time the job out
+      # (a 35 MB mingw package once took 9 minutes).
       - name: Install clang + lld + mingw-w64 + ninja (Linux)
         if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang lld mingw-w64 ninja-build
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: clang lld mingw-w64 ninja-build
+          version: 1
+          # mingw-w64 registers its compilers with update-alternatives in its install scripts.
+          execute_install_scripts: true
 
+      # Skip Homebrew's own update and cleanup: they take longer than the install.
       - name: Install LLVM + lld + mingw-w64 + ninja (macOS)
         if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
         run: brew install llvm lld mingw-w64 ninja
 
       # Homebrew LLVM is keg-only; the toolchain file finds it explicitly,

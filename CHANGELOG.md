@@ -42,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Faster CI.** NuGet packages and the Ubuntu cross-compile's toolchain are cached
+  between runs, the C++ tests run alongside the C# build instead of before it, and the
+  FH6 plugin no longer pulls a second copy of SkiaSharp (~1.2 GB) through LiveCharts.
 - **Song details show up much sooner.** A new song's title and cover art used to take
   several seconds, often 30+ while a queue or mix was filling in. Now they usually take
   under a second. Each song is looked up once instead of three times, the metadata

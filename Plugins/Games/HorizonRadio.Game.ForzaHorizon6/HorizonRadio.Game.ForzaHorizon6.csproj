@@ -20,6 +20,9 @@
        share one copy of each UI assembly. -->
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.0.3" />
+    <!-- LiveCharts asks for Avalonia.Skia 12.0.0, which brings an older SkiaSharp than the app's
+         (another ~1.2 GB of native assets to restore, and a mismatched copy): pin it to ours. -->
+    <PackageReference Include="Avalonia.Skia" Version="12.0.3" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.1" />
     <PackageReference Include="Material.Icons.Avalonia" Version="3.0.2" />
     <PackageReference Include="LiveChartsCore.SkiaSharpView.Avalonia" Version="2.1.0-dev-570" />
