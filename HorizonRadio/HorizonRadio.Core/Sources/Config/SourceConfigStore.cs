@@ -75,6 +75,10 @@ public sealed class SourceConfigStore
     /// song has it; null = the original.</summary>
     public string? LyricsVersion { get; set; }
 
+    /// <summary>How much earlier to show radio lyrics than the station's title change suggests,
+    /// in seconds (negative: later).</summary>
+    public double LyricsRadioOffset { get; set; }
+
     private readonly Dictionary<string, Dictionary<string, object?>> _perSource = new();
 
     private static string DefaultPath =>
@@ -146,6 +150,9 @@ public sealed class SourceConfigStore
             if (root.TryGetProperty("lyricsVersion", out var lv) && lv.ValueKind == JsonValueKind.String)
                 store.LyricsVersion = lv.GetString();
 
+            if (root.TryGetProperty("lyricsRadioOffset", out var lo) && lo.ValueKind == JsonValueKind.Number)
+                store.LyricsRadioOffset = lo.GetDouble();
+
             if (root.TryGetProperty("searchSourcePriority", out var sp) && sp.ValueKind == JsonValueKind.Array)
             {
                 foreach (var id in sp.EnumerateArray())
@@ -192,6 +199,7 @@ public sealed class SourceConfigStore
             writer.WriteNumber("previewVolume", PreviewVolume);
             writer.WriteBoolean("lyricsKaraoke", LyricsKaraoke);
             if (LyricsVersion != null) writer.WriteString("lyricsVersion", LyricsVersion);
+            if (LyricsRadioOffset != 0) writer.WriteNumber("lyricsRadioOffset", LyricsRadioOffset);
             if (SearchSourcePriority.Count > 0)
             {
                 writer.WriteStartArray("searchSourcePriority");

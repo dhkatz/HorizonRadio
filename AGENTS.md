@@ -68,11 +68,17 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   answer in `SortOrder`, else the first unsynced one with variants (romanized,
   translated), else any; a lookup where a provider failed isn't remembered. Karaoke
   fill is laid out by `Karaoke.Words` (word-timed syllables grouped into words; a
-  line-timed line spread over its characters) and drawn by `KaraokeText`. The query carries the playing audio's
-  length (`IPlaybackProgress.Duration`): synced lyrics are only accepted when timed to
-  that length (±2 s on LRCLIB), because a file timed to another cut drifts. Live radio
-  has no length or song position, so its lyrics show as text (`LyricsViewModel`
-  follows along only when both are known).
+  line-timed line spread over its characters) and drawn by `KaraokeText`. The query
+  carries the playing audio's length (`IPlaybackProgress.Duration`): synced lyrics are
+  only accepted when timed to that length (±2 s on LRCLIB), because a file timed to
+  another cut drifts. Lyrics follow `IPlaybackProgress.SongPosition`: the position for a
+  track with a length; for live radio, the time since the song's title change *in the
+  audio*. `IcyStreamReader` reports each title with the audio byte it arrived at, and
+  `StreamClock` turns bytes into decoded time (the `icy-br` rate, or the measured one
+  when the header is nominal). The stream is read seconds ahead of playback, so
+  `RadioPlayableItem` holds each title until its audio plays: titles change with the
+  song, in game too. The song playing when a station is tuned in has no position (its
+  lyrics are a sheet); radio lyrics can be nudged earlier/later (`lyricsRadioOffset`).
 - **Game plugins (`Plugins/Games/`)** — the Horizon Radio side of a game
   integration. An `IGamePlugin` (SDK) builds one `IGameIntegration`: the game's
   audio output, its event sources, connection state, and optional capabilities

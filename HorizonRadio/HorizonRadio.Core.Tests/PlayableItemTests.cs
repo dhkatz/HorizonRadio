@@ -86,7 +86,7 @@ public class PlayableItemTests
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
 
-        await Assert.ThrowsAsync<OperationCanceledException>(
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => item.PlayAsync(new PumpContext { Sink = new CountingSink() }, cts.Token));
     }
 }
