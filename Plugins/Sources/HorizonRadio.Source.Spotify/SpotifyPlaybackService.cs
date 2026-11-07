@@ -50,6 +50,17 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
     private Action? _onPlaying;
     private bool _playingFired;
 
+    // How long a playing (not paused) track may deliver no audio before we give up on
+    // it. Generous: a cold librespot buffers in a second or two, and a seek re-buffers
+    // faster than that, so 15 s of silence means the stream is genuinely gone.
+    private static readonly TimeSpan StallTimeout = TimeSpan.FromSeconds(15);
+
+    // True from the pause watcher's pause edge until its resume (including recovery)
+    // finishes. The end-wait treats that whole span as paused: the engine's pause flag
+    // flips back a beat before the watcher acts on it, and a librespot that died during
+    // the pause is the resume recovery's to relaunch, not a reason to end the track.
+    private volatile bool _pauseHeld;
+
     // Position is PCM-throughput based, like the ffmpeg-backed items: a base offset
     // (0 at track start, the target on seek) plus the frames actually delivered
     // since that base. While paused, librespot stops producing PCM, so no frames are
@@ -148,6 +159,9 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
         // frozen position) without ever blocking the loop — so the pipe never stalls,
         // regardless of whether paused librespot stops writing or emits silence.
         _routing.Target = new PauseAwareSink(ctx.Sink, ctx.IsPaused);
+        _pauseHeld = false;
+        var handedOff = false;
+        long handOffFrames = 0;
         using var pauseCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var pauseWatcher = Task.Run(
             () => WatchPauseAsync(client, trackUri, ctx.IsPaused, pauseCts.Token), pauseCts.Token);
@@ -215,12 +229,56 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
             // queue, leaving resume with no track to resume.)
             //   • librespot's end_of_track breadcrumb (gated by ReachedEnd), or
             //   • position reaching the track's duration (we delivered all its audio).
+            // Neither arrives if librespot dies or its audio stops for good, so the
+            // watchdog also fails the track then (QueueSource logs it and moves on) —
+            // judged only while playing, for the same reason.
+            var watchdog = new TrackEndWatchdog(StallTimeout);
+            var clock = Stopwatch.StartNew();
             while (!ct.IsCancellationRequested)
             {
-                if (ended.Task.IsCompleted) break;
-                var dur = Interlocked.Read(ref _durationMs);
-                if (dur > 0 && (long)Position.TotalMilliseconds >= dur) break;
-                try { await ended.Task.WaitAsync(TimeSpan.FromMilliseconds(500), ct).ConfigureAwait(false); break; }
+                var verdict = watchdog.Check(new TrackWaitState(
+                    EndEventSeen: ended.Task.IsCompleted,
+                    PositionMs: (long)Position.TotalMilliseconds,
+                    DurationMs: Interlocked.Read(ref _durationMs),
+                    Frames: _routing.Frames,
+                    Suspended: ctx.IsPaused() || _pauseHeld,
+                    LibrespotAlive: IsAlive(_librespot)), clock.Elapsed);
+
+                if (verdict == TrackWaitVerdict.Ended) break;
+                if (verdict == TrackWaitVerdict.LibrespotExited)
+                {
+                    Log($"librespot exited mid-track at {(long)Position.TotalMilliseconds}ms; ending the track");
+                    throw new InvalidOperationException("librespot exited mid-track.");
+                }
+                if (verdict == TrackWaitVerdict.Stalled && !handedOff)
+                {
+                    // Playback the user moved to another device (their phone) also goes
+                    // quiet here. Advancing would make the next track's play command
+                    // pull it straight back, so hold this track instead: no steal, no
+                    // loop. A skip, a pause/resume, or moving playback back to us
+                    // resumes control — all explicit user actions.
+                    if (await FindOtherActiveDeviceAsync(client, deviceId, ct).ConfigureAwait(false) is { } other)
+                    {
+                        handedOff = true;
+                        handOffFrames = _routing.Frames;
+                        Log($"playback moved to \"{other}\"; holding this track (skip, or pause and resume, to take it back)");
+                    }
+                    else
+                    {
+                        Log($"no audio for {StallTimeout.TotalSeconds:0}s at {(long)Position.TotalMilliseconds}ms; ending the track");
+                        throw new InvalidOperationException(
+                            $"Spotify playback stalled: no audio for {StallTimeout.TotalSeconds:0}s.");
+                    }
+                }
+                else if (handedOff && _routing.Frames != handOffFrames)
+                {
+                    // Audio again (moved back to us, or a resume took it back): a later
+                    // stall is judged afresh.
+                    handedOff = false;
+                    Log("playback is back on this device");
+                }
+
+                try { await ended.Task.WaitAsync(TimeSpan.FromMilliseconds(500), ct).ConfigureAwait(false); }
                 catch (TimeoutException) { /* re-check progress */ }
                 catch (OperationCanceledException) { break; }
             }
@@ -229,6 +287,7 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
         {
             pauseCts.Cancel();
             try { await pauseWatcher.ConfigureAwait(false); } catch { }
+            _pauseHeld = false;
 
             _routing.Target = null;
             lock (_sync)
@@ -242,8 +301,12 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
             // YouTube/local track won't issue its own Spotify command). Best-effort:
             // on a natural end librespot has already stopped, so this may no-op/404.
             // CancellationToken.None: must run even when ct fired (the skip case).
-            try { await client.Player.PausePlayback(new PlayerPausePlaybackRequest { DeviceId = deviceId }, CancellationToken.None).ConfigureAwait(false); }
-            catch (Exception ex) { Log($"pause-on-exit: {ex.Message}"); }
+            // Skipped when playback moved to another device: it isn't ours to pause.
+            if (!handedOff)
+            {
+                try { await client.Player.PausePlayback(new PlayerPausePlaybackRequest { DeviceId = deviceId }, CancellationToken.None).ConfigureAwait(false); }
+                catch (Exception ex) { Log($"pause-on-exit: {ex.Message}"); }
+            }
         }
 
         // Completion above returns on natural end or cancellation; the token says which.
@@ -292,22 +355,32 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
         finally { _startGate.Release(); }
     }
 
+    // Alive = the process is running AND its PCM read loop is still going. A process
+    // that's up but whose stdout EOF'd/errored will never deliver audio again either.
+    private static bool IsAlive(SubprocessPcmSource? librespot) =>
+        librespot is { IsRunning: true, Completion.IsCompleted: false };
+
     private async Task EnsureStartedAsync(CancellationToken ct)
     {
-        if (_librespot is { IsRunning: true }) return;
+        if (IsAlive(_librespot)) return;
 
         await _startGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (_librespot is { IsRunning: true }) return;
+            if (IsAlive(_librespot)) return;
 
-            // A read loop that EOF'd / a dead process: tear down before relaunch.
+            // A read loop that EOF'd / a dead process: tear it all down before the
+            // relaunch, including the cached device id (re-resolved for the new session).
             if (_librespot != null)
             {
+                Log("librespot is not running; relaunching");
+                try { _serviceCts?.Cancel(); } catch { }
                 await _librespot.DisposeAsync().ConfigureAwait(false);
                 _librespot = null;
-                _deviceId = null;
             }
+            _serviceCts?.Dispose();
+            _serviceCts = null;
+            _deviceId = null;
 
             var o = _options();
             _deviceName = o.DeviceName;
@@ -325,6 +398,28 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
             _librespot = subproc;
         }
         finally { _startGate.Release(); }
+    }
+
+    // When our audio stalls, ask Spotify whether the user's playback is now on another
+    // Connect device (they moved it to their phone). Returns that device's name, or
+    // null when it's still ours, nothing is active, or the lookup failed — all of
+    // which leave the stall a genuine failure. One Web API call, only on a stall.
+    private async Task<string?> FindOtherActiveDeviceAsync(SpotifyClient client, string deviceId, CancellationToken ct)
+    {
+        try
+        {
+            var device = (await client.Player.GetCurrentPlayback(ct).ConfigureAwait(false))?.Device;
+            if (device is not { IsActive: true }) return null;
+            if (device.Id == deviceId || device.Id == _deviceId) return null;
+            if (string.Equals(device.Name, _deviceName, StringComparison.OrdinalIgnoreCase)) return null;
+            return device.Name ?? device.Id ?? "another device";
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            Log($"playback lookup failed: {ex.Message}");
+            return null;
+        }
     }
 
     // Find our librespot device in the user's Connect device list. Freshly launched,
@@ -397,7 +492,8 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
                 // These also fire on a pause-stop and on a context replacement (our
                 // resume-recovery restart of the same track) — not just a genuine end.
                 // Only end the item if we actually reached ~the track's length; a
-                // truly missed end is caught by the duration backstop instead.
+                // truly missed end is caught by the duration backstop or, failing that,
+                // the end-wait's stall watchdog.
                 if (ReachedEnd()) lock (_sync) { _trackEnded?.TrySetResult(); }
                 break;
         }
@@ -442,6 +538,7 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
                     lastPaused = paused;
                     if (paused)
                     {
+                        _pauseHeld = true;
                         Log("pause: pausing device");
                         await TryControlAsync(
                             () => client.Player.PausePlayback(new PlayerPausePlaybackRequest { DeviceId = _deviceId }, ct),
@@ -449,7 +546,10 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
                     }
                     else
                     {
-                        await ResumeWithRecoveryAsync(client, trackUri, isPaused, ct).ConfigureAwait(false);
+                        // Held until the resume (and any recovery) settles, so the end-wait's
+                        // stall clock starts from a resumed stream, not mid-recovery.
+                        try { await ResumeWithRecoveryAsync(client, trackUri, isPaused, ct).ConfigureAwait(false); }
+                        finally { _pauseHeld = false; }
                     }
                 }
                 await Task.Delay(150, ct).ConfigureAwait(false);
@@ -481,7 +581,7 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
         if (_routing.Frames > framesBefore) { Log("resume: audio flowing"); return; }
 
         var posMs = Math.Max(0, (long)Position.TotalMilliseconds);
-        var running = _librespot?.IsRunning ?? false;
+        var running = IsAlive(_librespot);
         Log($"resume: no audio after 3s (librespot running={running}); re-establishing at {posMs}ms");
         try
         {

@@ -125,6 +125,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A Spotify track no longer gets stuck in silence when its player stops.** If librespot
+  exits, or no audio arrives for 15 seconds while playing, Horizon Radio moves on to the next
+  track instead of sitting on a frozen progress bar. If you move playback to another Spotify
+  device (your phone), it waits rather than taking playback back.
 - **Remixes are found when the station credits a different artist.** Stations often credit a
   remix to the remixer while catalogs credit the original artist, or the other way round, and
   some credit someone else entirely: Vocaloid Radio played Sakuzyo's remix of 椎名もた's
