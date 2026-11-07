@@ -10,8 +10,8 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
-  # The required check. The C# side (format, build, tests) plus the Release version.dll it
-  # bundles. The C++ Debug build and its tests run in parallel in cpp-tests.
+  # The required check. The C# build and tests plus the Release version.dll it bundles. The
+  # C# format check (format) and the C++ Debug build and its tests (cpp-tests) run in parallel.
   build:
     name: Build + test (Windows x64)
     runs-on: windows-latest
@@ -50,13 +50,10 @@ jobs:
         shell: pwsh
         run: '"NUGET_PACKAGES=$env:RUNNER_TEMP/nuget" >> $env:GITHUB_ENV'
 
-      # Restore once; format and build reuse it. (Not cached: the packages are ~1.3 GB, and
-      # restoring the cache took longer than restoring from nuget.org.)
+      # Not cached: the packages are ~1.3 GB, and restoring the cache took longer than
+      # restoring from nuget.org.
       - name: Restore
         run: dotnet restore HorizonRadio.slnx
-
-      - name: Verify C# formatting
-        run: dotnet format HorizonRadio.slnx --verify-no-changes --no-restore --verbosity minimal
 
       - name: Configure CMake
         working-directory: Mods/ForzaHorizon6
@@ -100,6 +97,31 @@ jobs:
           name: version-dll
           path: Mods/ForzaHorizon6/build/Release/version.dll
           if-no-files-found: error
+
+  # `dotnet format` loads and analyzes the whole solution (~40 s), so it runs beside the build
+  # rather than ahead of it. No MSVC environment here, so no Platform variable to clear.
+  format:
+    name: Format (C#)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Put NuGet packages on the work drive
+        shell: pwsh
+        run: '"NUGET_PACKAGES=$env:RUNNER_TEMP/nuget" >> $env:GITHUB_ENV'
+
+      - name: Restore
+        run: dotnet restore HorizonRadio.slnx
+
+      - name: Verify C# formatting
+        run: dotnet format HorizonRadio.slnx --verify-no-changes --no-restore --verbosity minimal
 
   # The C++ tests, alongside the C# job rather than before it. Tests run against the Debug
   # build (asserts on). version.dll itself isn't exercised here — the test exe links the
@@ -207,13 +229,8 @@ jobs:
           sudo apt-get $APT update
           sudo apt-get $APT install -y --no-install-recommends             clang lld ninja-build g++-mingw-w64-x86-64
 
-      # Skip Homebrew's own update and cleanup: they take longer than the install.
       - name: Install LLVM + lld + mingw-w64 + ninja (macOS)
         if: runner.os == 'macOS'
-        env:
-          HOMEBREW_NO_AUTO_UPDATE: 1
-          HOMEBREW_NO_INSTALL_CLEANUP: 1
-          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
         run: brew install llvm lld mingw-w64 ninja
 
       # Homebrew LLVM is keg-only; the toolchain file finds it explicitly,
