@@ -16,6 +16,9 @@ jobs:
     name: Build + test (Windows x64)
     runs-on: windows-latest
     timeout-minutes: 30
+    env:
+      # On the runner's work drive (D:), not the profile on C:: restoring there took half as long.
+      NUGET_PACKAGES: ${{ runner.temp }}/nuget
 
     steps:
       - uses: actions/checkout@v4
