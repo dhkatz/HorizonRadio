@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recording of the same length, so they don't drift ahead of the singer. Internet radio
   shows the lyrics as text for now, since it can't yet tell where in the song it is.
   Lyrics providers are plugins (`ILyricsPlugin`, under `Plugins/Lyrics/`).
+- **Karaoke lyrics.** Synced lyrics fill in as they're sung: word by word (syllable by
+  syllable) when the lyrics are word-timed, across the line otherwise. The microphone
+  button on the lyrics panel turns it off, to light the whole line at once instead.
+- **Lyrics from VocaDB, with romaji and translations.** Vocaloid and other synth-voice
+  songs get their lyrics from VocaDB when Unison and LRCLIB have nothing synced, and you
+  can switch between the original, its romanization, and translations. The version you
+  pick is remembered. On internet radio this more than doubles how many songs have
+  lyrics (33 of 40 in a sample of Vocaloid radio, up from 15).
 
 - **VocaDB now supplies real album art and playable links.** A matched VocaDB song
   contributes its linked album's square cover (preferred over the 16:9 video

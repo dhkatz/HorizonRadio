@@ -21,6 +21,11 @@ public static class LyricsConverters
 
     private static readonly Cursor Hand = new(StandardCursorType.Hand);
 
+    /// <summary>The space after a karaoke word (each word is its own text, so the line's spaces
+    /// become gaps).</summary>
+    public static readonly IValueConverter WordGap =
+        new FuncValueConverter<bool, Avalonia.Thickness>(space => space ? new Avalonia.Thickness(0, 0, 6, 0) : default);
+
     /// <summary>The track card spans the whole page (and is centered in it) while there are no
     /// lyrics under it.</summary>
     public static readonly IValueConverter RowSpan =

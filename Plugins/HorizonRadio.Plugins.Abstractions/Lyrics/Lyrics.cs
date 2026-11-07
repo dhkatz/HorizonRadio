@@ -28,7 +28,19 @@ public sealed record LyricLine(
 /// </summary>
 /// <param name="ProviderId">The provider that found them.</param>
 /// <param name="Credit">Attribution to show with the lyrics ("Lyrics from LRCLIB").</param>
-public sealed record SongLyrics(string ProviderId, bool Synced, IReadOnlyList<LyricLine> Lines, string? Credit = null);
+/// <param name="Variants">Other versions of the same lyrics the listener can switch to: a
+/// romanization of the original, translations. <see cref="Lines"/> is the original.</param>
+public sealed record SongLyrics(
+    string ProviderId,
+    bool Synced,
+    IReadOnlyList<LyricLine> Lines,
+    string? Credit = null,
+    IReadOnlyList<LyricsVariant>? Variants = null);
+
+/// <summary>Another version of a song's lyrics: a romanization or a translation.</summary>
+/// <param name="Label">What the listener picks it by: "Romaji", "English".</param>
+/// <param name="Lines">Its lines, timed like the original's when the original is synced.</param>
+public sealed record LyricsVariant(string Label, IReadOnlyList<LyricLine> Lines);
 
 /// <summary>
 /// What a lyrics provider looks a song up by.

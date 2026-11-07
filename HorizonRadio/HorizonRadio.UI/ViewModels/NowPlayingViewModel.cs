@@ -144,7 +144,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         DialogManager? dialogs = null, LyricsService? lyrics = null)
     {
         _runner = runner;
-        Lyrics = new LyricsViewModel(lyrics, () => _runner?.ActiveSource as IPlaybackProgress);
+        Lyrics = new LyricsViewModel(lyrics, () => _runner?.ActiveSource as IPlaybackProgress, store);
         _store = store;
         _mixes = mixes;
         _switcher = switcher;

@@ -61,22 +61,8 @@ public sealed class VocaDbProvider : IMetadataProvider
 
         // Cache only what VocaDB actually answered; a failed request is retried next time.
         using var lookup = CatalogLookup.Begin();
-        Match? match = null;
         var capture = MetadataTrace.NewCapture();
-
-        // Artist-scoped search first (precise): resolve the broadcast artist to VocaDB
-        // artist id(s), then search within their songs.
-        if (!string.IsNullOrEmpty(artist))
-        {
-            foreach (var artistId in await ResolveArtistIdsAsync(artist, ct).ConfigureAwait(false))
-            {
-                match = await SearchSongsAsync(title, query.Title, query.Artist, artistId, capture, ct).ConfigureAwait(false);
-                if (match != null) break;
-            }
-        }
-
-        // Fallback: plain name search (no artist known, or none of the artist's songs matched).
-        match ??= await SearchSongsAsync(title, query.Title, query.Artist, artistId: null, capture, ct).ConfigureAwait(false);
+        var match = await FindSongAsync(query.Title, query.Artist, capture, ct).ConfigureAwait(false);
 
         MetadataTrace.ProviderSearch(Id, string.IsNullOrEmpty(artist) ? title : $"{artist} {title}", capture);
         if (match is null)
@@ -104,6 +90,35 @@ public sealed class VocaDbProvider : IMetadataProvider
         if (!lookup.Failed) _cache.Put(cacheKey, entry);
         return ToContribution(entry);
     }
+
+    /// <summary>The VocaDB song for a title and artist name, or null. Not cached: the metadata lookup
+    /// caches its own result, and the lyrics lookup is remembered by the lyrics service.</summary>
+    internal async Task<Match?> FindSongAsync(string rawTitle, string? rawArtist,
+        ICollection<MetadataTrace.CatalogCandidate>? capture, CancellationToken ct)
+    {
+        var title = SearchTerms.CleanForSearch(rawTitle);
+        if (string.IsNullOrEmpty(title)) return null;
+        var artist = SearchTerms.CleanForSearch(rawArtist);
+        Match? match = null;
+
+        // Artist-scoped search first (precise): resolve the broadcast artist to VocaDB
+        // artist id(s), then search within their songs.
+        if (!string.IsNullOrEmpty(artist))
+        {
+            foreach (var artistId in await ResolveArtistIdsAsync(artist, ct).ConfigureAwait(false))
+            {
+                match = await SearchSongsAsync(title, rawTitle, rawArtist, artistId, capture, ct).ConfigureAwait(false);
+                if (match != null) break;
+            }
+        }
+
+        // Fallback: plain name search (no artist known, or none of the artist's songs matched).
+        return match ?? await SearchSongsAsync(title, rawTitle, rawArtist, artistId: null, capture, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>The song's own JSON with the given <c>fields</c>, or null when the request failed.</summary>
+    internal Task<JsonElement?> GetSongAsync(int songId, string fields, CancellationToken ct) =>
+        GetJsonAsync($"{Base}/songs/{songId}?fields={fields}&lang=Default", ct);
 
     private static MetadataContribution? ToContribution(MetadataCacheEntry e)
     {
@@ -233,7 +248,7 @@ public sealed class VocaDbProvider : IMetadataProvider
 
             bestScore = score;
             best = new Match(name, artist, ownArt, ParseYear(Str(s, "publishDate")), OriginalId(s),
-                SelectAlbumId(s), SelectPvs(s));
+                SelectAlbumId(s), SelectPvs(s), IntOr(s, "id", 0));
         }
         if (titleGuard.IsAmbiguous) return null;
 
@@ -436,5 +451,5 @@ public sealed class VocaDbProvider : IMetadataProvider
     }
 
     internal sealed record Match(string Name, string? Artist, IReadOnlyList<string> ArtUrls, int? Year,
-        int? OriginalVersionId = null, int? AlbumId = null, IReadOnlyList<PlayableRef>? Pvs = null);
+        int? OriginalVersionId = null, int? AlbumId = null, IReadOnlyList<PlayableRef>? Pvs = null, int Id = 0);
 }

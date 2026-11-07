@@ -10,7 +10,8 @@ namespace HorizonRadio.Core.Lyrics;
 
 /// <summary>
 /// Finds the lyrics for a song across the lyrics providers. Every provider is asked at once; the
-/// answer is the first provider (in their order) with synced lyrics, else the first with any.
+/// answer is the first provider (in their order) with synced lyrics, else the first unsynced
+/// lyrics with other versions (romanized, translated), else the first with any.
 /// Answers are remembered for the session; a lookup where a provider failed isn't, so it's tried
 /// again next time.
 /// </summary>
@@ -55,7 +56,10 @@ public sealed class LyricsService : IAsyncDisposable
                     Report(query, lyrics, total.ElapsedMilliseconds);
                     return lyrics;
                 }
-                plain ??= lyrics;
+                // Unsynced, the text with a romanization or translations to switch to is the
+                // more useful sheet (VocaDB's, for a Vocaloid song LRCLIB only has as plain text).
+                if (plain == null || (plain.Variants is not { Count: > 0 } && lyrics?.Variants is { Count: > 0 }))
+                    plain = lyrics ?? plain;
             }
         }
         finally
