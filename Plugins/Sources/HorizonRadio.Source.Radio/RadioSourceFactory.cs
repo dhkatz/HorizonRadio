@@ -60,9 +60,6 @@ public sealed class RadioSourceFactory : IContentSourceFactory, ISearchSource
         return new RadioContentPlayer(ffmpeg, RadioBrowserClient.Shared);
     }
 
-    public IAudioSource Create(ConfigValues values)
-        => CreatePlayer(values).Open(new ContentRef(Id, values.GetString(ContentKey) ?? ""));
-
     // -- ISearchSource (radio-browser directory → radio://uuid locators) --
 
     public async Task<IReadOnlyList<SearchResult>> SearchAsync(string query, int limit, CancellationToken ct = default)

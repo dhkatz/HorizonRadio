@@ -8,19 +8,24 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Core.Sources.Mixes;
+using HorizonRadio.Core.Sources.Queue;
 using HorizonRadio.UI.Tools;
 
 namespace HorizonRadio.UI.ViewModels;
 
 /// <summary>
 /// Sources tab: pick a source from the catalog, fill in its config
-/// (auto-rendered from the factory's schema), Start it. Persists the
-/// last-selected source + last-used config across runs.
+/// (auto-rendered from the factory's schema), then Play or Start it. A content
+/// source plays its quick-play locator through the queue, like quick play and
+/// search; a self-driven source starts on the runner. Persists the last-selected
+/// source + last-used config across runs.
 /// </summary>
 public sealed partial class SourcesViewModel : ViewModelBase
 {
     private readonly SourceRunner _runner;
     private readonly SourceConfigStore _store;
+    private readonly QueuePlayback _queue;
     private readonly ToolRegistry? _registry;
 
     public ObservableCollection<IAudioSourceFactory> AvailableSources { get; } = new();
@@ -48,8 +53,8 @@ public sealed partial class SourcesViewModel : ViewModelBase
     [ObservableProperty] private string connectionStatus = "";
 
     /// <summary>Ad-hoc "play this now" target for a content source — a URL, folder,
-    /// M3U, or file. Transient: it's passed to the source for this play but not
-    /// saved as config (saved collections are mixes).</summary>
+    /// M3U, or file. The only locator Play uses (the content field isn't part of the
+    /// form or the saved config); transient, since saved collections are mixes.</summary>
     [ObservableProperty] private string quickPlayLocator = "";
 
     /// <summary>Placeholder for the quick-play box, following the selected source.</summary>
@@ -62,10 +67,12 @@ public sealed partial class SourcesViewModel : ViewModelBase
     [ObservableProperty] private bool hasError;
     [ObservableProperty] private bool hasNoSchema;
 
-    public SourcesViewModel(SourceRunner runner, SourceConfigStore store, ToolRegistry? registry = null)
+    public SourcesViewModel(SourceRunner runner, SourceConfigStore store, QueuePlayback queue,
+                            ToolRegistry? registry = null)
     {
         _runner = runner;
         _store = store;
+        _queue = queue;
         _registry = registry;
 
         foreach (var f in SourceCatalog.All) AvailableSources.Add(f);
@@ -80,9 +87,11 @@ public sealed partial class SourcesViewModel : ViewModelBase
 
     /// <summary>Designer-only ctor (so Avalonia previewer can construct
     /// the view without a runner).</summary>
-    public SourcesViewModel() : this(
-        new SourceRunner(new NullSink()),
-        new SourceConfigStore())
+    public SourcesViewModel() : this(new SourceRunner(new NullSink()), new SourceConfigStore())
+    { }
+
+    private SourcesViewModel(SourceRunner runner, SourceConfigStore store)
+        : this(runner, store, new QueuePlayback(runner, store, new MixContentResolver(store)))
     { }
 
     private sealed class NullSink : Core.Sources.IPcmSink
@@ -143,19 +152,25 @@ public sealed partial class SourcesViewModel : ViewModelBase
     private async Task StartAsync()
     {
         if (SelectedFactory == null) return;
+        var factory = SelectedFactory;
         HasError = false;
-        StatusMessage = "Starting...";
 
-        // Engine config is snapshotted/persisted; the quick-play locator is layered
-        // on transiently (content sources only) so it plays now without being saved.
+        // Engine config (tool paths, behavior) is snapshotted and persisted either way.
         var values = SnapshotAndPersist();
-        if (SelectedFactory is IContentSourceFactory csf && !string.IsNullOrWhiteSpace(QuickPlayLocator))
-            values.WithLocator(csf, QuickPlayLocator);
 
         try
         {
-            await _runner.StartAsync(SelectedFactory, values);
-            StatusMessage = $"Running: {SelectedFactory.DisplayName}";
+            switch (factory)
+            {
+                case IContentSourceFactory content:
+                    await PlayContentAsync(content);
+                    break;
+                case ISelfDrivenSourceFactory selfDriven:
+                    StatusMessage = "Starting...";
+                    await _runner.StartAsync(selfDriven, values);
+                    StatusMessage = $"Running: {factory.DisplayName}";
+                    break;
+            }
         }
         catch (Exception ex)
         {
@@ -163,6 +178,24 @@ public sealed partial class SourcesViewModel : ViewModelBase
             StatusMessage = ex.Message;
             Debug.WriteLine($"[hzn-sources-vm] start failed: {ex}");
         }
+    }
+
+    /// <summary>Play the quick-play locator now through the queue — the same path as
+    /// quick play and search: its items go to the front of the queue and start
+    /// playing, and whatever was playing (or queued ahead) gives way.</summary>
+    private async Task PlayContentAsync(IContentSourceFactory content)
+    {
+        var locator = QuickPlayLocator.Trim();
+        if (locator.Length == 0)
+        {
+            HasError = true;
+            StatusMessage = $"Enter something to play: {content.LocatorHint}";
+            return;
+        }
+
+        StatusMessage = "Adding to the queue...";
+        await _queue.EnqueueLocatorAsync(content, locator, playNow: true);
+        StatusMessage = $"Playing from {content.DisplayName}";
     }
 
     [RelayCommand]

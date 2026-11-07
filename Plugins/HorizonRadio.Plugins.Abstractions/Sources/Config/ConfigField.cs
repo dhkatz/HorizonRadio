@@ -65,7 +65,8 @@ public sealed record FileField(
 /// Core stays oblivious to where managed tools land; it just emits
 /// the kind. UI fills in the dropdown and resolves the path the user
 /// picks back into a plain string in <see cref="ConfigValues"/>, so
-/// <see cref="IAudioSourceFactory.Create"/> reads it via GetString
+/// the factory (<see cref="IContentSourceFactory.CreatePlayer"/> or
+/// <see cref="ISelfDrivenSourceFactory.Create"/>) reads it via GetString
 /// exactly like a FileField.
 /// </summary>
 public sealed record ToolField(

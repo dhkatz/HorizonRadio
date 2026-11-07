@@ -72,7 +72,7 @@ public sealed partial class EventsViewModel : ViewModelBase, IDisposable
         };
         // Only self-driven sources are directly switchable (Spotify Connect, the
         // test tone). Content sources play via mixes, so they aren't offered here.
-        foreach (var f in SourceCatalog.All.Where(f => f is not IContentSourceFactory))
+        foreach (var f in SourceCatalog.All.Where(f => f is ISelfDrivenSourceFactory))
             list.Add(new EventActionOption($"Switch to: {f.DisplayName}",
                 new EventAction(EventActionType.SwitchSource, f.Id)));
         list.Add(new EventActionOption("Duck volume (30%)",

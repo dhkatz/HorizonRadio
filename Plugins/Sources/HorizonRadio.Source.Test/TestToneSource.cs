@@ -52,7 +52,7 @@ public sealed class TestToneSource(double frequencyHz = 440.0, double amplitude 
     private async Task RunAsync(IPcmSink sink, CancellationToken ct)
     {
         // 2048 frames per chunk @ 44.1 kHz ≈ 46.4 ms. Matches the DLL
-        // reader's expected granularity and the LocalFileSource pacing.
+        // reader's expected granularity and the local-file pump's pacing.
         const int chunkFrames = 2048;
         var chunkPeriod = TimeSpan.FromMicroseconds(
             (long)chunkFrames * 1_000_000 / AudioFormat.SampleRate);

@@ -120,9 +120,17 @@ public sealed class ActionDispatcher : IActionDispatcher
             ProcessConsole.Append(_logChannel, $"switch source: unknown source '{sourceId}'");
             return;
         }
+        if (factory is not ISelfDrivenSourceFactory selfDriven)
+        {
+            // A content source needs a locator and plays through the queue; the rule
+            // editor never offers one, so only a hand-edited rule lands here.
+            ProcessConsole.Append(_logChannel,
+                $"switch source: '{sourceId}' plays through the queue — switch to a mix instead");
+            return;
+        }
         if (_runner.ActiveFactory?.Id == sourceId) return; // already on it
         var values = _configStore.Load(sourceId, factory.Schema);
-        await _runner.StartAsync(factory, values).ConfigureAwait(false);
+        await _runner.StartAsync(selfDriven, values).ConfigureAwait(false);
     }
 
     private void SetVolume(string? param)

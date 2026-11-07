@@ -10,8 +10,7 @@ namespace HorizonRadio.Core.Sources.Local;
 /// One local audio file as a <see cref="PlayableItem"/>. Decodes via NAudio
 /// (MP3/WAV/FLAC built-in; OGG via NAudio.Vorbis), resamples to the canonical
 /// 44.1 kHz s16 stereo, and paces the PCM pump to wall-clock so the DLL ring
-/// buffer doesn't get stuffed — the same decode path <see cref="LocalFileSource"/>
-/// uses, here as a self-contained leaf the mix engine can sequence.
+/// buffer doesn't get stuffed. A self-contained leaf the queue engine sequences.
 /// </summary>
 public sealed class LocalPlayableItem : PlayableItem
 {

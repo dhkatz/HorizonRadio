@@ -7,7 +7,7 @@ namespace HorizonRadio.Core.Sources.Test;
 /// frequency so the smoke test can sweep across the spectrum without a
 /// code change. Defaults to 440 Hz (A4).
 /// </summary>
-public sealed class TestToneSourceFactory : IAudioSourceFactory
+public sealed class TestToneSourceFactory : ISelfDrivenSourceFactory
 {
     public const string KeyFrequency = "frequency";
 

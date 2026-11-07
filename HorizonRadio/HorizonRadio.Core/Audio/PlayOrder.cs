@@ -8,8 +8,9 @@ namespace HorizonRadio.Core.Audio;
 /// <c>[0, count)</c>, plus a cursor into that order. Sequential mode is the
 /// identity permutation (0,1,2,…); shuffle mode is a random permutation.
 ///
-/// Both <see cref="Playlist"/> (local files) and the YouTube source share
-/// this so the shuffle semantics live in exactly one place:
+/// A mix's context (<c>MixContextProvider</c>) orders both its entries and the
+/// items within the current entry with this, so the shuffle semantics live in
+/// exactly one place:
 /// <list type="bullet">
 /// <item><see cref="SetShuffle"/> with <c>keepCurrent:true</c> pins whatever
 ///   is playing to the front and shuffles the rest — the Spotify-style
@@ -49,15 +50,6 @@ public sealed class PlayOrder
         Shuffled = false;
     }
 
-    /// <summary>Append one new item at the end of the order. Only valid while
-    /// sequential (the load-time growth path); the appended index is the new
-    /// last item. The cursor parks at 0 if the order was previously empty.</summary>
-    public void Append()
-    {
-        _order.Add(_order.Count);
-        if (_pos < 0) _pos = 0;
-    }
-
     /// <summary>The item indices from the cursor to the end of the current
     /// order, in play order (the current item first). Empty when the cursor has
     /// walked off the end or the order is empty. A read-only peek — it does not
@@ -91,19 +83,6 @@ public sealed class PlayOrder
         {
             _pos = _order.Count; // off the end; CurrentIndex == -1
         }
-
-        return CurrentIndex;
-    }
-
-    /// <summary>Step back one. With <paramref name="wrap"/> the cursor loops to
-    /// the end; without it the cursor clamps at the start. Returns the new
-    /// current index.</summary>
-    public int Retreat(bool wrap)
-    {
-        if (_order.Count == 0) return -1;
-
-        if (_pos > 0) _pos--;
-        else _pos = wrap ? _order.Count - 1 : 0;
 
         return CurrentIndex;
     }

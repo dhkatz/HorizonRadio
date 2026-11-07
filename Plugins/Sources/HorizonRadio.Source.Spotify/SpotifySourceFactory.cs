@@ -9,7 +9,7 @@ namespace HorizonRadio.Core.Sources.Spotify;
 /// commonly-tweaked librespot knobs as schema fields so users don't
 /// have to read CLI docs to change them.
 /// </summary>
-public sealed class SpotifySourceFactory : IAudioSourceFactory
+public sealed class SpotifySourceFactory : ISelfDrivenSourceFactory
 {
     public const string KeyExecutable = "executable";
     public const string KeyDeviceName = "deviceName";

@@ -128,7 +128,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         GameSettings = gameSettings;
         HasGame = game is not NoGameIntegration;
         ConnectionLabel = HasGame ? $"Not connected to {GameName}" : "Playing on this PC";
-        Sources = new SourcesViewModel(runner, store, registry);
+        Sources = new SourcesViewModel(runner, store, queue, registry);
         NowPlaying = new NowPlayingViewModel(runner, store, mixStore, mixSwitcher, queue,
             game.Output != null ? GameName : null, preview, toasts, DialogManager, lyrics);
         Metadata = metadata;

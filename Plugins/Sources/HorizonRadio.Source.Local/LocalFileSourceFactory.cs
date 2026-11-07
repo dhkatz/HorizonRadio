@@ -3,10 +3,9 @@ using HorizonRadio.Core.Sources.Config;
 namespace HorizonRadio.Core.Sources.Local;
 
 /// <summary>
-/// Factory for <see cref="LocalFileSource"/>. Exposes one field —
-/// the directory or file to load — so the UI auto-renders a path
-/// picker. Future fields (shuffle, recursive, extension filter) just
-/// extend the schema; the form picks them up automatically.
+/// Factory for the local-files source. Its one field — the directory, M3U, or
+/// file to play — is the content locator; <see cref="LocalContentPlayer"/>
+/// expands it into <see cref="LocalPlayableItem"/>s for the queue.
 /// </summary>
 public sealed class LocalFileSourceFactory : IContentSourceFactory
 {
@@ -31,10 +30,4 @@ public sealed class LocalFileSourceFactory : IContentSourceFactory
     public string LocatorHint => @"Folder, M3U, or file (e.g. C:\Music)";
 
     public IContentPlayer CreatePlayer(ConfigValues values) => new LocalContentPlayer();
-
-    // Single-start path: the local engine carries no config, so this just opens
-    // the one path the form holds. Path validation (exists, non-empty, has audio)
-    // lives in LocalContentPlayer.Open so the mix engine gets it per entry too.
-    public IAudioSource Create(ConfigValues values)
-        => CreatePlayer(values).Open(new ContentRef(Id, values.GetString(ContentKey) ?? ""));
 }
