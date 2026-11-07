@@ -138,6 +138,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and VocaDB's same-titled entries are all one song's original and its covers and remixes, the
   song is that original. A title that carries its native name in parentheses ("Cherry Blossoms
   after the Sunshie ( 晴れのち桜)") is also tried by each name alone.
+- **Songs credited only to their singing voice find the real song.** "Hatsune Miku - Melt"
+  matched whatever Miku song had "melt" in its name ("Ice melt", a parody), because naming
+  the voice counted as confirming the artist. The song is now the voice's most popular
+  original with exactly that name (ryo's メルト, wowaka's ローリンガール), and it shows its
+  real artist. A vocalist tag ("【初音ミク】Migratory [Clean Tears]") is tried after the
+  producer, so it no longer picks another song with that word in it.
+- **Fewer wrong songs and covers on internet radio.** When only the title can be trusted,
+  VocaDB, which knows which version is the original, now identifies the song before the
+  stores are asked: "千本桜" and "テトロドトキサイザ2号" got a cover's artist and art from
+  iTunes. A one-word title has to be the song's whole name ("air" no longer matches "The
+  Fresh Prince of Bel-Air"), and a one-word title with no artist ("ARiA") isn't guessed.
+- **The original release is preferred over live, remix, and re-recorded ones** when the
+  station didn't name a version, for the song and for its album art.
+- **"Waiting for Spotify Connect…" isn't looked up or added to play history** as a song.
 - **Local files show their tags again, and YouTube videos aren't skipped.** A file could
   play under the name taken from its file name ("02" as the artist of "02 - WATCH ME.flac",
   no cover), and a YouTube video could be skipped as "unresolved", when the queue was

@@ -93,6 +93,7 @@ public sealed class SpotifySource(LibrespotOptions options) : IAudioSource, IPla
         // Publish a placeholder so the HUD shows "Spotify Connect" right
         // away. The real title comes when librespot logs a Loading line
         // — that's the only metadata channel we have without forking it.
+        // It isn't a song, so it's never looked up or added to play history.
         TrackChanged?.Invoke(new Track(
             Title: "Waiting for Spotify Connect…",
             Artist: "Cast from your Spotify app to “" + options.DeviceName + "”",
@@ -100,7 +101,8 @@ public sealed class SpotifySource(LibrespotOptions options) : IAudioSource, IPla
             AlbumArt: null,
             SourceId: Id,
             SourceDisplay: DisplayName,
-            ExternalId: null));
+            ExternalId: null,
+            Resolvable: false));
     }
 
     public async Task StopAsync()

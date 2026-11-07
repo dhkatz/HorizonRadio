@@ -31,6 +31,9 @@ public sealed class VocaDbProvider : IMetadataProvider
 {
     public string Id => "vocadb";
 
+    // VocaDB links covers, remixes, and PVs to their original (originalVersionId).
+    public bool IdentifiesOriginals => true;
+
     private const string Base = "https://vocadb.net/api";
 
     private readonly IMetadataCache _cache;
@@ -101,6 +104,13 @@ public sealed class VocaDbProvider : IMetadataProvider
         var artist = SearchTerms.CleanForSearch(rawArtist);
         Match? match = null;
 
+        // A credit naming only the singing voice ("Hatsune Miku - Melt") can't pick among the
+        // thousands of songs that voice sings: searching within them, any title that merely
+        // contains "Melt" would pass. Look among its original songs, most popular first, for one
+        // with exactly this name. A station crediting only the voice is playing a well-known song.
+        if (Voicebanks.Voices(rawArtist) is { Count: > 0 } voices)
+            return await FindByVoiceAsync(title, rawTitle, rawArtist, voices, capture, ct).ConfigureAwait(false);
+
         // Artist-scoped search first (precise): resolve the broadcast artist to VocaDB
         // artist id(s), then search within their songs.
         if (!string.IsNullOrEmpty(artist))
@@ -121,6 +131,39 @@ public sealed class VocaDbProvider : IMetadataProvider
             match = await SearchSongsAsync(title, rawTitle, rawArtist, artistId: null, capture, ct, remixesOnly: true).ConfigureAwait(false);
         return match;
     }
+
+    private async Task<Match?> FindByVoiceAsync(string title, string rawTitle, string? rawArtist,
+        IReadOnlyList<string> voices, ICollection<MetadataTrace.CatalogCandidate>? capture, CancellationToken ct)
+    {
+        var url = $"{Base}/songs?query={Uri.EscapeDataString(title)}"
+                + "&maxResults=10&nameMatchMode=Auto&lang=Default&songTypes=Original&sort=RatingScore&fields=" + SongFields
+                // Songs credit a voice's release ("V3 GUMI (English)"), a separate artist from "GUMI".
+                + "&childVoicebanks=true";
+        // Every voice the credit names: the API matches songs that feature all of them.
+        foreach (var voice in voices)
+        {
+            if (await ResolveVoiceIdAsync(voice, ct).ConfigureAwait(false) is not { } id) return null;
+            url += $"&artistId%5B%5D={id}";
+        }
+
+        var root = await GetJsonAsync(url, ct).ConfigureAwait(false);
+        return root is { } r ? SelectMatch(r, rawTitle, rawArtist, artistConfirmed: false, capture, out _, byRating: true) : null;
+    }
+
+    // The VocaDB artist for a voice's name: a voicebank, not a producer who shares the name.
+    private async Task<int?> ResolveVoiceIdAsync(string voice, CancellationToken ct)
+    {
+        var url = $"{Base}/artists?query={Uri.EscapeDataString(voice)}&maxResults=10&nameMatchMode=Exact&lang=English";
+        if (await GetJsonAsync(url, ct).ConfigureAwait(false) is not { } root
+            || !root.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array) return null;
+        foreach (var a in items.EnumerateArray())
+            if (IsVoiceType(Str(a, "artistType")) && IntOr(a, "id", 0) is > 0 and var id) return id;
+        return null;
+    }
+
+    private static bool IsVoiceType(string? type) =>
+        type is "Vocaloid" or "UTAU" or "CeVIO" or "SynthesizerV" or "NEUTRINO" or "VoiceVox" or "NewType"
+            or "Voiceroid" or "ACEVirtualSinger" or "AIVOICE" or "OtherVoiceSynthesizer";
 
     /// <summary>The song's own JSON with the given <c>fields</c>, or null when the request failed.</summary>
     internal Task<JsonElement?> GetSongAsync(int songId, string fields, CancellationToken ct) =>
@@ -228,8 +271,11 @@ public sealed class VocaDbProvider : IMetadataProvider
 
     /// <param name="originalToFetch">Set when the title-only matches are all versions of one original
     /// song that isn't among the results: the caller fetches it (see <see cref="FamilyOriginal"/>).</param>
+    /// <param name="byRating">The results are sorted most popular first, and the first that matches
+    /// is the song, however many others share its name (a voice-only credit; see FindByVoiceAsync).</param>
     internal static Match? SelectMatch(JsonElement root, string queryTitle, string? queryArtist,
-        bool artistConfirmed, ICollection<MetadataTrace.CatalogCandidate>? sink, out int? originalToFetch)
+        bool artistConfirmed, ICollection<MetadataTrace.CatalogCandidate>? sink, out int? originalToFetch,
+        bool byRating = false)
     {
         originalToFetch = null;
         if (!root.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
@@ -273,6 +319,9 @@ public sealed class VocaDbProvider : IMetadataProvider
             bestScore = score;
             best = ToMatch(s, name, artist, ownArt);
         }
+        if (byRating)
+            return matched.Count == 0 ? null
+                : WithAlbumCover(ToMatch(matched[0], Str(matched[0], "name") ?? "", Str(matched[0], "artistString"), PickArt(matched[0])));
         if (titleGuard.IsAmbiguous)
         {
             // Many artists, but often one song: its original and the covers, remixes, and PVs VocaDB

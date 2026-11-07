@@ -128,6 +128,10 @@ public sealed class MusicBrainzProvider : IMetadataProvider
                      ac[0].TryGetProperty("name", out var nm) ? nm.GetString() : null;
 
             var score = SearchTerms.MatchScore(title, artist, rt, ra);
+            // MB keeps a live performance as its own recording under the same title, saying so
+            // only in its note ("MIKU EXPO 2014 in INDONESIA Live"): prefer the studio recording.
+            var note = candidate.TryGetProperty("disambiguation", out var d) ? d.GetString() : null;
+            if (score is { } && SearchTerms.NamesAnotherVersion(note) && !SearchTerms.NamesAnotherVersion(title)) score -= 0.1;
             capture?.Add(new(rt, ra, null, score));
             if (score is not { } sc || sc <= bestScore) continue;
             bestScore = sc;
@@ -194,7 +198,7 @@ public sealed class MusicBrainzProvider : IMetadataProvider
         }
         if (string.IsNullOrEmpty(recordingMbid)) return null;
 
-        var recUrl = $"https://musicbrainz.org/ws/2/recording/{recordingMbid}?inc=artist-credits+releases&fmt=json";
+        var recUrl = $"https://musicbrainz.org/ws/2/recording/{recordingMbid}?inc=artist-credits+releases+release-groups&fmt=json";
         await _rate.WaitAsync(ct).ConfigureAwait(false);
         using var resp2 = await _http.GetAsync(recUrl, ct).ConfigureAwait(false);
         if (!resp2.IsSuccessStatusCode)
@@ -230,9 +234,8 @@ public sealed class MusicBrainzProvider : IMetadataProvider
     private async Task<ReleaseArt?> FirstReleaseWithArtAsync(JsonElement releases, CancellationToken ct)
     {
         var probes = new List<(string Mbid, string? Album, Task<byte[]?> Art)>();
-        for (int i = 0; i < Math.Min(3, releases.GetArrayLength()); ++i)
+        foreach (var rel in OrderReleases(releases).Take(3))
         {
-            var rel = releases[i];
             if (!rel.TryGetProperty("id", out var mbidEl) ||
                 !rel.TryGetProperty("title", out var albumEl)) continue;
 
@@ -246,6 +249,23 @@ public sealed class MusicBrainzProvider : IMetadataProvider
             if (await art.ConfigureAwait(false) is { } bytes)
                 return new ReleaseArt(mbid, album, bytes);
         return null;
+    }
+
+    /// <summary>A recording's releases, the song's own releases first: a studio album, single, or
+    /// EP before a compilation, and those before a live album or remix release ("HATSUNE MIKU EXPO
+    /// 2014 IN INDONESIA" for 千本桜). MB's order breaks ties. Pure JSON-in for unit testing.</summary>
+    internal static IEnumerable<JsonElement> OrderReleases(JsonElement releases) =>
+        releases.EnumerateArray().Select((r, i) => (r, i)).OrderBy(x => ReleaseRank(x.r)).ThenBy(x => x.i).Select(x => x.r);
+
+    private static int ReleaseRank(JsonElement release)
+    {
+        if (!release.TryGetProperty("release-group", out var group) || group.ValueKind != JsonValueKind.Object) return 1;
+        var secondary = group.TryGetProperty("secondary-types", out var s) && s.ValueKind == JsonValueKind.Array
+            ? s.EnumerateArray().Select(t => t.GetString()).ToList()
+            : [];
+        if (secondary.Any(t => t is "Live" or "Remix" or "DJ-mix" or "Mixtape/Street" or "Demo")) return 3;
+        if (secondary.Contains("Compilation")) return 2;
+        return 0;
     }
 
     // CAA front-500 is the right size for the 180×180 HUD tile; 404 (no art) → null.

@@ -24,7 +24,9 @@ public class SearchTermsTests
         var mashup = SearchTerms.MatchScore("ヒバナ", "DECO*27", "ゴーストルール + ヒバナ + マシュマロ = ???",
             "DECO*27 feat. 初音ミク", artistConfirmed: true);
 
-        Assert.True(exact > mashup);
+        // A one-word title has to be the whole name, so the mashup doesn't even match.
+        Assert.NotNull(exact);
+        Assert.True(mashup is null || exact > mashup);
     }
 
     // Vocaloid Radio's title for the Sakuzyo remix of 椎名もた's ササメク, credited to someone else.
