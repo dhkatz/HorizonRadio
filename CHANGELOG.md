@@ -47,9 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Faster CI.** NuGet packages and the Ubuntu cross-compile's toolchain are cached
-  between runs, the C++ tests run alongside the C# build instead of before it, and the
-  FH6 plugin no longer pulls a second copy of SkiaSharp (~1.2 GB) through LiveCharts.
+- **Faster CI.** The C++ tests run alongside the C# build instead of before it, NuGet
+  restores once instead of twice, the FH6 plugin no longer pulls a second copy of SkiaSharp
+  (~1.2 GB) through LiveCharts, and the Ubuntu cross-compile installs only the x64 mingw
+  toolchain.
 - **Radio titles change with the song.** A station is read about a second ahead of what
   you hear, so a new song's title (in the app and in game) used to appear before the
   song did. It now appears as the song starts.
