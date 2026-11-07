@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading;
 using HorizonRadio.Core.Sources;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
@@ -20,18 +21,29 @@ namespace HorizonRadio.Core.Audio;
 /// Drift then surfaces as a capped latency / occasional dropped chunk
 /// rather than unbounded buffer growth — fine for a preview/monitor path.
 ///
-/// Not thread-safe across <see cref="Start"/>/<see cref="Stop"/>: those are
+/// Not thread-safe across <see cref="Open"/>/<see cref="Close"/>: those are
 /// expected to be driven from the UI thread. <see cref="Send"/> may be
 /// called concurrently from a source's background loop.
+///
+/// Device loss (unplugged, disabled, driver reset) surfaces as WASAPI's render
+/// thread dying with an error: <see cref="WasapiOut.PlaybackStopped"/>. We drop
+/// the session there and raise <see cref="Lost"/>, but don't tear the device
+/// down from that callback (it can run on the render thread itself, and
+/// stopping a <see cref="WasapiOut"/> joins that thread); the next
+/// <see cref="Open"/>/<see cref="Close"/> releases it.
 /// </summary>
-public sealed class SpeakerPcmSink : IPcmSink, IDisposable
+public sealed class SpeakerPcmSink : ISpeakerOutput
 {
     private readonly WaveFormat _format;
     private readonly object _gate = new();
 
-    private WasapiOut? _output;
-    private BufferedWaveProvider? _buffer;
-    private float _volume = 1.0f;
+    // The open device. Swapped whole so Send and the stopped callback each see
+    // one consistent output+buffer pair; the callback clears it with a
+    // compare-exchange so a stale callback can't clear a newer session.
+    private Session? _session;
+    // A session that died on its own, held until the UI thread releases it.
+    private Session? _lost;
+    private volatile float _volume = 1.0f;
 
     private static void Log(string msg) => Debug.WriteLine($"[hzn-speaker] {msg}");
 
@@ -42,11 +54,12 @@ public sealed class SpeakerPcmSink : IPcmSink, IDisposable
         _format = new WaveFormat(sampleRate, 16, AudioFormat.Channels);
     }
 
+    public event Action? Lost;
+
     /// <summary>True while a WASAPI device is open and accepting samples.</summary>
-    public bool IsPlaying
-    {
-        get { lock (_gate) return _output != null; }
-    }
+    public bool IsOpen => Volatile.Read(ref _session) != null;
+
+    public string? OpenedDeviceId => Volatile.Read(ref _session)?.DeviceId;
 
     /// <summary>Linear gain in [0, 1], applied in software to the PCM in
     /// <see cref="Send"/>. We scale the samples ourselves rather than using
@@ -54,25 +67,21 @@ public sealed class SpeakerPcmSink : IPcmSink, IDisposable
     /// Safe to set at any time.</summary>
     public float Volume
     {
-        get { lock (_gate) return _volume; }
-        set
-        {
-            var v = value < 0f ? 0f : (value > 1f ? 1f : value);
-            lock (_gate) _volume = v;
-        }
+        get => _volume;
+        set => _volume = value < 0f ? 0f : (value > 1f ? 1f : value);
     }
 
     /// <summary>
     /// Open the given render device (null = system default) and begin
-    /// playing whatever <see cref="Send"/> pushes. Restarting after a
-    /// <see cref="Stop"/> is supported; calling Start while already playing
-    /// re-opens on the requested device.
+    /// playing whatever <see cref="Send"/> pushes. Calling Open while already
+    /// playing re-opens on the requested device. Returns false (never throws) if
+    /// no device could be opened.
     /// </summary>
-    public void Start(string? deviceId = null)
+    public bool Open(string? deviceId = null)
     {
         lock (_gate)
         {
-            StopLocked();
+            CloseLocked();
 
             MMDevice? device = null;
             using var enumerator = new MMDeviceEnumerator();
@@ -87,34 +96,49 @@ public sealed class SpeakerPcmSink : IPcmSink, IDisposable
                 // Saved device may have been unplugged; fall back to default.
                 Log($"device '{deviceId}' unavailable ({ex.Message}); using default");
                 try { device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia); }
-                catch (Exception ex2) { Log($"no render device available: {ex2.Message}"); return; }
+                catch (Exception ex2) { Log($"no render device available: {ex2.Message}"); return false; }
             }
 
+            WasapiOut? output = null;
+            Session? session = null;
             try
             {
                 // ~200 ms of shared-mode latency keeps preview responsive
                 // without starving on a busy machine.
-                var output = new WasapiOut(device, AudioClientShareMode.Shared, useEventSync: true, latency: 200);
+                output = new WasapiOut(device, AudioClientShareMode.Shared, useEventSync: true, latency: 200);
                 var buffer = new BufferedWaveProvider(_format)
                 {
                     BufferDuration = TimeSpan.FromMilliseconds(500),
                     DiscardOnBufferOverflow = true,
                 };
                 output.Init(buffer);
+                var opened = session = new Session(output, buffer, device.ID);
+                opened.Stopped = (_, e) => OnPlaybackStopped(opened, e);
+                output.PlaybackStopped += opened.Stopped;
+                // Publish before Play so a device that dies at once is still caught.
+                Volatile.Write(ref _session, opened);
                 output.Play();
-
-                _output = output;
-                _buffer = buffer;
                 Log("playback started");
+                return true;
             }
             catch (Exception ex)
             {
                 // Device found but couldn't be opened (held exclusively, format
-                // unsupported, yanked between enumerate and Init). Leave
-                // _output/_buffer null so IsPlaying reports false and callers
-                // treat the output as unreachable — never throw out of Start
-                // (it runs from a binding setter on the UI thread).
+                // unsupported, yanked between enumerate and Init). Leave no
+                // session so IsOpen reports false and callers treat the output
+                // as unreachable — never throw out of Open (it runs from a
+                // binding setter on the UI thread).
                 Log($"failed to open output: {ex.Message}");
+                if (session != null)
+                {
+                    Interlocked.CompareExchange(ref _session, null, session);
+                    session.Dispose();
+                }
+                else
+                {
+                    try { output?.Dispose(); } catch { }
+                }
+                return false;
             }
             finally
             {
@@ -124,26 +148,35 @@ public sealed class SpeakerPcmSink : IPcmSink, IDisposable
     }
 
     /// <summary>Stop playback and release the device. Idempotent.</summary>
-    public void Stop()
+    public void Close()
     {
-        lock (_gate) StopLocked();
+        lock (_gate) CloseLocked();
     }
 
-    private void StopLocked()
+    private void CloseLocked()
     {
-        if (_output == null) return;
-        try { _output.Stop(); } catch (Exception ex) { Log($"stop: {ex.Message}"); }
-        try { _output.Dispose(); } catch { }
-        _output = null;
-        _buffer = null;
-        Log("playback stopped");
+        var session = Interlocked.Exchange(ref _session, null);
+        session?.Dispose();
+        Interlocked.Exchange(ref _lost, null)?.Dispose();
+        if (session != null) Log("playback stopped");
+    }
+
+    // Raised by NAudio when the render thread exits: on that thread, or posted to
+    // the sync context the WasapiOut was created on. Close unsubscribes before
+    // stopping, so a current session stopping here stopped on its own. Never take
+    // _gate here: Open/Close hold it while joining the render thread.
+    private void OnPlaybackStopped(Session session, StoppedEventArgs e)
+    {
+        if (Interlocked.CompareExchange(ref _session, null, session) != session) return; // already replaced
+        Interlocked.Exchange(ref _lost, session);
+        Log($"device lost: {e.Exception?.Message ?? "playback stopped"}");
+        Lost?.Invoke();
     }
 
     public bool Send(ReadOnlySpan<short> samples)
     {
-        BufferedWaveProvider? buffer;
-        float vol;
-        lock (_gate) { buffer = _buffer; vol = _volume; }
+        var buffer = Volatile.Read(ref _session)?.Buffer;
+        var vol = _volume;
         if (buffer == null) return false;
 
         // Apply the monitor gain in software, writing s16 little-endian into a
@@ -178,7 +211,7 @@ public sealed class SpeakerPcmSink : IPcmSink, IDisposable
         }
     }
 
-    public void Dispose() => Stop();
+    public void Dispose() => Close();
 
     /// <summary>Stable id + friendly name for each active render endpoint, for
     /// the UI's device picker. The empty-id entry represents "system default".</summary>
@@ -199,6 +232,23 @@ public sealed class SpeakerPcmSink : IPcmSink, IDisposable
             Log($"enumerate failed: {ex.Message}");
         }
         return list;
+    }
+
+    /// <summary>An open device: the output and the buffer it drains, swapped as one.</summary>
+    private sealed class Session(WasapiOut output, BufferedWaveProvider buffer, string deviceId) : IDisposable
+    {
+        public WasapiOut Output { get; } = output;
+        public BufferedWaveProvider Buffer { get; } = buffer;
+        public string DeviceId { get; } = deviceId;
+        public EventHandler<StoppedEventArgs>? Stopped { get; set; }
+
+        public void Dispose()
+        {
+            // Unsubscribe first: our own stop raises PlaybackStopped, which isn't a loss.
+            if (Stopped != null) Output.PlaybackStopped -= Stopped;
+            try { Output.Stop(); } catch (Exception ex) { Log($"stop: {ex.Message}"); }
+            try { Output.Dispose(); } catch { }
+        }
     }
 }
 

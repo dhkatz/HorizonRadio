@@ -15,35 +15,46 @@ namespace HorizonRadio.Core.Audio;
 /// </summary>
 public sealed class TeePcmSink(IPcmSink? primary) : IPcmSink
 {
-    // Swapped atomically; Send reads each once so an attach/detach or gate
-    // toggle racing a chunk either includes that chunk or doesn't, never tears.
-    private volatile IPcmSink? _preview;
-    private volatile bool _primaryEnabled = true;
+    // One immutable value, swapped with a single volatile write; Send reads it
+    // once, so a chunk racing a re-route goes wholly by the old route or the new
+    // one, never to both outputs or neither.
+    private volatile TeeRoute _route = TeeRoute.PrimaryOnly;
 
-    /// <summary>Route subsequent chunks to <paramref name="preview"/>. Replaces
-    /// any current preview.</summary>
-    public void AttachPreview(IPcmSink preview) => _preview = preview;
-
-    /// <summary>Stop routing to the preview sink.</summary>
-    public void DetachPreview() => _preview = null;
-
-    /// <summary>Gate the primary (game) sink. Disabled while previewing to a
-    /// local device so the picker behaves as a single-destination switch.</summary>
-    public void SetPrimaryEnabled(bool enabled) => _primaryEnabled = enabled;
+    /// <summary>Where subsequent chunks go.</summary>
+    public TeeRoute Route
+    {
+        get => _route;
+        set => _route = value ?? throw new ArgumentNullException(nameof(value));
+    }
 
     public bool Send(ReadOnlySpan<short> samples)
     {
-        var preview = _preview;
+        var route = _route;
         bool previewSent = false;
-        if (preview != null)
+        if (route.Preview != null)
         {
-            try { previewSent = preview.Send(samples); } catch { /* best-effort */ }
+            try { previewSent = route.Preview.Send(samples); } catch { /* best-effort */ }
         }
 
-        bool primarySent = _primaryEnabled && primary?.Send(samples) == true;
+        bool primarySent = route.ToPrimary && primary?.Send(samples) == true;
 
         // True if any destination accepted the chunk, so the source doesn't
         // treat a deliberately-gated primary as a stalled sink.
         return primarySent || previewSent;
     }
+}
+
+/// <summary>A <see cref="TeePcmSink"/>'s destinations: the primary (game) sink, and/or
+/// a preview (local speaker) sink.</summary>
+public sealed record TeeRoute(bool ToPrimary, IPcmSink? Preview)
+{
+    /// <summary>The game only: the default, and local monitoring off.</summary>
+    public static readonly TeeRoute PrimaryOnly = new(true, null);
+
+    /// <summary>Nowhere: the chosen speaker is unreachable, and the game stays
+    /// off so audio doesn't leak there while the picker says speakers.</summary>
+    public static readonly TeeRoute Nowhere = new(false, null);
+
+    /// <summary>The speaker only: the picker is a single-destination switch.</summary>
+    public static TeeRoute PreviewOnly(IPcmSink preview) => new(false, preview);
 }
