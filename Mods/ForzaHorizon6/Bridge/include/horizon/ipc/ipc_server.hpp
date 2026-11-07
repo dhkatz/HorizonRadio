@@ -87,6 +87,12 @@ public:
     using CommandFn = std::function<void(const std::string& json_line)>;
     void set_command_callback(CommandFn cb);
 
+    // Fires when a connected UI goes away (closed, crashed, or a broken pipe),
+    // after connected() has turned false. Runs on the listener thread before it
+    // listens again, so it always finishes before the next client's snapshot.
+    using DisconnectFn = std::function<void()>;
+    void set_disconnect_callback(DisconnectFn cb);
+
 private:
     void run();
     void send_line_locked(const std::string& line);
@@ -108,6 +114,9 @@ private:
 
     std::mutex command_mutex_;
     CommandFn  command_cb_;
+
+    std::mutex   disconnect_mutex_;
+    DisconnectFn disconnect_cb_;
 };
 
 } // namespace horizon::ipc

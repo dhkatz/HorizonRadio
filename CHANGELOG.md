@@ -125,6 +125,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Closing Horizon Radio gives your stations back to the game.** If the app closed or
+  crashed while Forza Horizon 6 was running, the stations it was replacing went silent (and
+  kept our song title after a crash); now they play the game's own music and titles again.
+  When the app or the game restarts, the in-game title and the race volume duck pick up
+  straight away instead of waiting for the next song.
 - **The in-game radio no longer risks freezing or crashing when a station's audio goes
   away.** Horizon Radio now lets go of the game's audio cleanly when the radio turns off,
   never touches a channel the game has already destroyed, and stays off rather than

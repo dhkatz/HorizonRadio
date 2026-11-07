@@ -52,14 +52,24 @@ on detach so an attached UI sees a clean pipe disconnect.
 
 Cross-thread state lives in file-scope atomics (`g_bridge_for_push`,
 `g_metadata_injector`, `g_radio_state_global`, `g_radio_stream_vtable`,
-`g_on_target_station`, `g_have_track`) plus two mutex-guarded blocks
-(`g_current_track`, `g_target_station`). The bridge/injector themselves are
-function-local `static`s in `bridge_init_thread`: it blocks forever after setup,
-so their lifetime is effectively the process.
+`g_on_target_station`) plus two mutex-guarded blocks (`g_now_playing`, a
+[`NowPlaying`](../Bridge/include/horizon/game/now_playing.hpp), and
+`g_target_station`). The bridge/injector themselves are function-local `static`s
+in `bridge_init_thread`: it blocks forever after setup, so their lifetime is
+effectively the process.
 
-`g_have_track` is the historical "we have audio worth playing" gate that the DSP
-installer keys on. With no in-DLL source firing it, the first PCM chunk plants a
-stub track so the install path proceeds; real metadata arrives later over IPC.
+`NowPlaying` holds the app's track, whether we have one (the "audio worth
+playing" gate the DSP installer keys on), and whether to show its title. With no
+in-DLL source setting it, the first PCM chunk plants a stub track so the install
+path proceeds; real metadata arrives later over IPC. The stub only arms while the
+control pipe is connected.
+
+**The app going away** (closed or crashed: the control pipe's disconnect
+callback) resets `NowPlaying` to its load state and the duck gain to 1. With no
+track the periodic writer detaches the DSP and restores the game's title, so the
+stations we replaced play the game's own music again instead of an empty ring's
+silence. Station targets are kept (with no track nothing is replaced); a
+reconnecting app re-sends its targets, volume, duck gain, and current track.
 
 ## Audio path
 
@@ -102,7 +112,7 @@ All FMOD entry points are resolved lazily by byte-pattern signature (see
 ## Metadata path
 
 ```
-UI ──IPC {"cmd":"set_track"}──► command callback ──► g_current_track
+UI ──IPC {"cmd":"set_track"}──► command callback ──► g_now_playing
                                                          │ periodic writer
 RadioStreamFmod instance ◄── MetadataInjector.write_to_instance ◄┘
 ```
@@ -279,7 +289,11 @@ Threading: `publish_*` are callable from any thread and serialize on a mutex so
 JSON lines can't interleave; they short-circuit when no client is connected. A
 **snapshot callback** fires on every (re)connect and re-publishes current track,
 source, and tuned station, so the UI doesn't sit on its placeholder when the user
-attaches mid-playback.
+attaches mid-playback. A **disconnect callback** fires when a connected UI goes
+away (closed, crashed, or a broken pipe), after `connected()` turns false; the
+DLL uses it to give the stations back to the game (see *Shared state*). The UI,
+in turn, re-sends its targets, volume, duck gain, and current track (or
+`clear_track`) on every connect, so a restarted game picks up where it was.
 
 ## version.dll proxy
 

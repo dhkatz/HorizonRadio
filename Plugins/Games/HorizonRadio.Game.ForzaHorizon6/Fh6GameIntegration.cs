@@ -22,9 +22,9 @@ namespace HorizonRadio.Game.ForzaHorizon6;
 /// </summary>
 public sealed class Fh6GameIntegration : IGameIntegration, IStationTargeting, IGameVolume, INowPlayingDisplay
 {
-    private readonly IpcClient _ipc = new();
-    private readonly PcmPipeClient _pcm = new();
-    private readonly ForzaTelemetryListener _telemetry = new();
+    private readonly IpcClient _ipc;
+    private readonly PcmPipeClient _pcm;
+    private readonly ForzaTelemetryListener _telemetry;
     private volatile int _state = (int)ConnectionState.Disconnected;
     private IReadOnlyList<GamePage>? _pages;
     private ModManagerViewModel? _modManager;
@@ -32,11 +32,31 @@ public sealed class Fh6GameIntegration : IGameIntegration, IStationTargeting, IG
     private IGameHost? _host;
     private volatile string? _currentStation;
 
+    // What the game should show and how far our audio is ducked, as last asked, re-sent on every
+    // (re)connect: a restarted game starts from scratch, and the next track change or event could
+    // be minutes away. Remembered even when the send fails (not connected). One lock covers the
+    // remember-and-send, so a replay can't land after a newer change.
+    private readonly Lock _replayLock = new();
+    private Track? _shownTrack; // the last Show(), until a Clear()
+    private bool _cleared;      // Clear() was the last call
+    private float _duckGain = 1f;
+
     /// <param name="displayName">The game's name.</param>
     /// <param name="settings">Where station assignments persist; <see langword="null"/> keeps them
     /// in memory only (tests).</param>
     public Fh6GameIntegration(string displayName, IPluginSettings? settings = null)
+        : this(displayName, settings, IpcClient.DefaultPipeName, PcmPipeClient.DefaultPipeName,
+            ForzaTelemetryListener.DefaultPort)
     {
+    }
+
+    /// <summary>Tests: talk to a fake mod on other pipes (and another telemetry port, 0 for any).</summary>
+    internal Fh6GameIntegration(string displayName, IPluginSettings? settings, string pipeName,
+        string pcmPipeName, int telemetryPort)
+    {
+        _ipc = new IpcClient(pipeName);
+        _pcm = new PcmPipeClient(pcmPipeName);
+        _telemetry = new ForzaTelemetryListener(telemetryPort);
         DisplayName = displayName;
         Map = new StationMap(settings);
         Map.Changed += OnMapChanged;
@@ -197,11 +217,46 @@ public sealed class Fh6GameIntegration : IGameIntegration, IStationTargeting, IG
 
     bool IGameVolume.SetMasterVolume(float gain) => _ipc.SendMasterVolume(gain);
 
-    bool IGameVolume.SetDuckGain(float gain) => _ipc.SendGain(gain);
+    bool IGameVolume.SetDuckGain(float gain)
+    {
+        lock (_replayLock)
+        {
+            _duckGain = gain;
+            return _ipc.SendGain(gain);
+        }
+    }
 
-    bool INowPlayingDisplay.Show(Track track) => _ipc.SendTrack(track);
+    bool INowPlayingDisplay.Show(Track track)
+    {
+        lock (_replayLock)
+        {
+            _shownTrack = track;
+            _cleared = false;
+            return _ipc.SendTrack(track);
+        }
+    }
 
-    bool INowPlayingDisplay.Clear() => _ipc.SendClearTrack();
+    bool INowPlayingDisplay.Clear()
+    {
+        lock (_replayLock)
+        {
+            _shownTrack = null;
+            _cleared = true;
+            return _ipc.SendClearTrack();
+        }
+    }
+
+    // The mod forgets the app's track and duck when the app goes away, and a restarted game
+    // starts without them: put them back. (The host re-sends the master volume itself.)
+    private void ReplayState()
+    {
+        lock (_replayLock)
+        {
+            if (_shownTrack is { } track) _ipc.SendTrack(track);
+            else if (_cleared) _ipc.SendClearTrack();
+            _ipc.SendGain(_duckGain);
+        }
+    }
 
     private void SetState(ConnectionState state)
     {
@@ -211,6 +266,7 @@ public sealed class Fh6GameIntegration : IGameIntegration, IStationTargeting, IG
             // The DLL starts out replacing any station; tell it ours. It reports the tuned
             // station right after connecting, which routes playback.
             PushTargets();
+            ReplayState();
         }
         else if (_currentStation != null)
         {

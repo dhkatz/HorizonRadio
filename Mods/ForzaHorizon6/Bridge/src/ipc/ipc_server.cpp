@@ -265,6 +265,19 @@ void IpcServer::run() {
             }
         }
         OutputDebugStringW(L"[horizon-radio] ipc: client disconnected\n");
+
+        DisconnectFn on_disconnect;
+        {
+            const std::scoped_lock lock(disconnect_mutex_);
+            on_disconnect = disconnect_cb_;
+        }
+        if (on_disconnect) {
+            try {
+                on_disconnect();
+            } catch (...) {
+                OutputDebugStringW(L"[horizon-radio] ipc: disconnect handler threw; ignoring\n");
+            }
+        }
     }
 
     OutputDebugStringW(L"[horizon-radio] ipc: server thread exiting\n");
@@ -338,6 +351,11 @@ void IpcServer::set_snapshot_callback(SnapshotFn cb) {
 void IpcServer::set_command_callback(CommandFn cb) {
     const std::scoped_lock lock(command_mutex_);
     command_cb_ = std::move(cb);
+}
+
+void IpcServer::set_disconnect_callback(DisconnectFn cb) {
+    const std::scoped_lock lock(disconnect_mutex_);
+    disconnect_cb_ = std::move(cb);
 }
 
 void IpcServer::publish_game_event(const std::string_view kind) {
