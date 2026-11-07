@@ -30,7 +30,6 @@ public sealed class RadioPlayableItem : PlayableItem
     private RadioStation _station;
     private readonly string _ffmpegPath;
 
-    private bool _prepared;
     private byte[]? _stationArt;
     private volatile SubprocessPcmSource? _subproc;
 
@@ -105,10 +104,10 @@ public sealed class RadioPlayableItem : PlayableItem
             Resolvable: haveSong);
     }
 
-    public override async Task PrepareAsync(CancellationToken ct)
+    public override Task PrepareAsync(CancellationToken ct) => PrepareOnceAsync(FetchLogoAsync, ct);
+
+    private async Task FetchLogoAsync(CancellationToken ct)
     {
-        if (_prepared) return;
-        _prepared = true;
         if (_station.FaviconUrl is { } favicon)
         {
             _stationArt = await ImageDownload.TryGetAsync(ImageDownload.Shared, favicon, ct).ConfigureAwait(false);

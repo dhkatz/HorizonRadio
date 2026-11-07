@@ -115,6 +115,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Local files show their tags again, and YouTube videos aren't skipped.** A file could
+  play under the name taken from its file name ("02" as the artist of "02 - WATCH ME.flac",
+  no cover), and a YouTube video could be skipped as "unresolved", when the queue was
+  reading ahead at the moment the song started. Playback now waits for that read instead
+  of starting from a half-prepared item.
 - **A metadata service being briefly unavailable no longer hides a song for weeks.** When
   MusicBrainz throttled, a request timed out, Spotify wasn't signed in yet, or cover art
   failed to download, the song was cached as "not found" (or as having no art) for up to
