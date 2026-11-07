@@ -88,6 +88,7 @@ public sealed class RadioSource(string locator, string ffmpegPath, RadioBrowserC
     // -- IPlaybackProgress --
     public TimeSpan? Duration => null;
     public TimeSpan Position => _item?.Position ?? TimeSpan.Zero;
+    public TimeSpan? SongPosition => _item?.SongPosition;
     public bool CanSeek => false;
     public Task SeekAsync(TimeSpan position) => Task.CompletedTask;
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -40,6 +41,16 @@ public sealed class RadioPlayableItem : PlayableItem
     private CancellationTokenSource? _modelCts;
     private volatile string? _currentRaw;
 
+    // Where the current song began in the decoded audio of this connection (ticks), or
+    // UnknownStart when it isn't known: tuned in mid-song, or the stream's rate wasn't known yet.
+    private const long UnknownStart = long.MinValue;
+    private long _songStartTicks = UnknownStart;
+
+    /// <summary>A new title is held until its audio plays; one this far ahead (or behind) means the
+    /// byte-to-time estimate is off, and the title is shown at once, with no song position.</summary>
+    private static readonly TimeSpan MaxLead = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan MaxLag = TimeSpan.FromSeconds(2);
+
     public RadioPlayableItem(RadioStation station, string ffmpegPath)
     {
         _station = station;
@@ -51,6 +62,16 @@ public sealed class RadioPlayableItem : PlayableItem
     // can't be seeked; report wall-clock elapsed from the decoder as the position so
     // the HUD can show time-on-station.
     public override TimeSpan Position => _subproc?.Elapsed ?? TimeSpan.Zero;
+
+    /// <summary>How far into the current song playback is, from where its title change falls in
+    /// the audio; null for the song that was playing when the station was tuned in.</summary>
+    public override TimeSpan? SongPosition =>
+        _subproc is { } decoder && Interlocked.Read(ref _songStartTicks) is var start && start != UnknownStart
+            ? decoder.Elapsed - new TimeSpan(start)
+            : null;
+
+    private void SetSongStart(TimeSpan? start) =>
+        Interlocked.Exchange(ref _songStartTicks, start?.Ticks ?? UnknownStart);
 
     private static void Log(string msg) => Debug.WriteLine($"[hzn-radio] {msg}");
 
@@ -149,12 +170,60 @@ public sealed class RadioPlayableItem : PlayableItem
             while (!ct.IsCancellationRequested)
             {
                 var icy = new IcyStreamReader(_station.StreamUrl);
-                icy.StreamTitleChanged += OnTitle;
                 SubprocessPcmSource? subproc = null;
+                StreamClock? clock = null;
+                int titles = 0;
+                CancellationTokenSource? pending = null;
+
+                // The stream is read a few seconds ahead of what's heard. Hold a new title until
+                // its audio plays, so the title changes with the song (in game too), and note where
+                // in the audio the song began: the lyrics follow the song from there.
+                void OnIcyTitle(string raw, long byteOffset)
+                {
+                    pending?.Cancel();
+                    if (titles++ == 0 || subproc is not { } decoder || clock is null)
+                    {
+                        // The song that was already playing when we tuned in: its start isn't known.
+                        SetSongStart(null);
+                        OnTitle(raw);
+                        return;
+                    }
+
+                    var now = decoder.Elapsed;
+                    if (clock.PlaysAt(byteOffset) is not { } startsAt || startsAt < now - MaxLag || startsAt > now + MaxLead)
+                    {
+                        ProcessConsole.Append("radio", $"song start unknown (rate {clock.Rate?.ToString("0", CultureInfo.InvariantCulture) ?? "?"} B/s): {raw}");
+                        SetSongStart(null);
+                        OnTitle(raw);
+                        return;
+                    }
+
+                    ProcessConsole.Append("radio",
+                        $"next song starts in {(startsAt - now).TotalSeconds:0.0} s (at {startsAt.TotalSeconds:0.0} s, {clock.Rate:0} B/s): {raw}");
+                    var cts = pending = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    _ = PublishWhenPlayingAsync(decoder, startsAt, raw, cts.Token);
+                }
+
+                async Task PublishWhenPlayingAsync(SubprocessPcmSource decoder, TimeSpan startsAt, string raw, CancellationToken token)
+                {
+                    try
+                    {
+                        while (decoder.Elapsed < startsAt) await Task.Delay(40, token).ConfigureAwait(false);
+                        SetSongStart(startsAt);
+                        OnTitle(raw);
+                    }
+                    catch (OperationCanceledException) { /* a newer title, or the stream ended */ }
+                    catch (Exception ex) { Log($"title publish failed: {ex.Message}"); }
+                }
+
+                icy.StreamTitleChanged += OnIcyTitle;
+                icy.AudioRead += bytes => { if (subproc is { } d) clock?.Sample(bytes, d.Elapsed); };
                 try
                 {
                     await icy.ConnectAsync(ct).ConfigureAwait(false);
                     AdoptIcyNameIfBetter(icy.IcyName);
+                    clock = new StreamClock(icy.Bitrate);
+                    SetSongStart(null); // the decoded audio starts over on a new connection
 
                     subproc = new SubprocessPcmSource(new SubprocessPcmSource.Config
                     {
@@ -206,7 +275,9 @@ public sealed class RadioPlayableItem : PlayableItem
                 }
                 finally
                 {
-                    icy.StreamTitleChanged -= OnTitle;
+                    icy.StreamTitleChanged -= OnIcyTitle;
+                    pending?.Cancel();
+                    pending?.Dispose();
                     await icy.DisposeAsync().ConfigureAwait(false);
                     if (subproc != null)
                     {
