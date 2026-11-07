@@ -188,4 +188,23 @@ public class RadioStreamTitleTests
     }
 
     private static (string?, string) Pair(HorizonRadio.Core.Models.TitleCandidate c) => (c.Artist, c.Title);
+
+    [Fact]
+    public void A_bilingual_title_offers_each_name_on_its_own()
+    {
+        // 40mP's 晴れのち桜: the English half is misspelled and isn't VocaDB's translation anyway.
+        var (primary, alts, _) = RadioStreamTitle.ParseCandidates("40MP feat. GUMI - Cherry Blossoms after the Sunshie ( 晴れのち桜) [z1]");
+
+        Assert.Equal("Cherry Blossoms after the Sunshie ( 晴れのち桜)", primary.Title);
+        Assert.Contains(alts, c => c.Artist == "40MP feat. GUMI" && c.Title == "晴れのち桜");
+        Assert.Contains(alts, c => c.Artist == "40MP feat. GUMI" && c.Title == "Cherry Blossoms after the Sunshie");
+    }
+
+    [Fact]
+    public void A_credit_in_parentheses_is_not_offered_as_a_title()
+    {
+        var (_, alts, _) = RadioStreamTitle.ParseCandidates("Producer - Song Title (feat. 初音ミク)");
+
+        Assert.DoesNotContain(alts, c => c.Title == "feat. 初音ミク");
+    }
 }

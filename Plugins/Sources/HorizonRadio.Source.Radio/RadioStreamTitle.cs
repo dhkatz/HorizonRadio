@@ -88,6 +88,23 @@ internal static class RadioStreamTitle
                 AddAlt(alts, primary, new TitleCandidate(inner, primary.Title));
         }
 
+        // Bilingual titles carry the song's name twice: "Cherry Blossoms after the Sunshie
+        // ( 晴れのち桜)". The search-cleaner drops the parenthetical, leaving a translation (here a
+        // misspelled one) that no catalog uses, while the native name in the parens is the
+        // catalog's. When the parenthetical is in another script than the rest and isn't a credit,
+        // offer each half as the title on its own, for the same artist.
+        if (ParenName.Match(primary.Title) is { Success: true } named
+            && named.Groups["inner"].Value.Trim() is { Length: > 0 } nameInParens
+            && !SearchTerms.IsCredit(nameInParens))
+        {
+            var outside = primary.Title[..named.Index].Trim();
+            if (outside.Length > 0 && HasCjk(nameInParens) != HasCjk(outside))
+            {
+                AddAlt(alts, primary, new TitleCandidate(primary.Artist, nameInParens));
+                AddAlt(alts, primary, new TitleCandidate(primary.Artist, outside));
+            }
+        }
+
         // A bracketed segment is sometimes the real catalog artist — a producer/circle credited in
         // a tag, e.g. "keerosah - [初音ミク] Migratory [Clean Tears]" whose VocaDB artist is
         // "Clean Tears", not the leading "keerosah". The normal parse strips brackets and loses it.
@@ -155,6 +172,10 @@ internal static class RadioStreamTitle
         stripped = Spaces.Replace(stripped, " ").Trim();
         return stripped.Length == 0 ? raw.Trim() : stripped;
     }
+
+    // Japanese or Chinese text (kana, kanji, full-width forms).
+    private static bool HasCjk(string s) =>
+        s.Any(c => c is >= '\u3040' and <= '\u30FF' or >= '\u3400' and <= '\u9FFF' or >= '\uFF00' and <= '\uFFEF');
 
     // A trailing parenthetical (ASCII or fullwidth) in an artist credit, e.g. "Itachima-p (いたちま)".
     private static readonly Regex ParenName =

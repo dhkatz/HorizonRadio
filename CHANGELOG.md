@@ -125,6 +125,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Remixes are found when the station credits a different artist.** Stations often credit a
+  remix to the remixer while catalogs credit the original artist, or the other way round, and
+  some credit someone else entirely: Vocaloid Radio played Sakuzyo's remix of 椎名もた's
+  ササメク as "キョトンP - ササメク(sasameku can't be the word found in reayfla's inner world
+  mix)" and nothing matched. A remix credit that names the station's artist as the remixer, or
+  is long and specific enough to name just that one remix, now identifies the song (a
+  misspelled word is fine), and VocaDB also looks among remixes when the plain name search is
+  buried under same-named covers.
+- **Songs credited to someone else, or titled in two languages, are found.** When only the
+  title can be trusted (the station credited its uploader, "(∵)キョトンP - エレクトリック・ラブ")
+  and VocaDB's same-titled entries are all one song's original and its covers and remixes, the
+  song is that original. A title that carries its native name in parentheses ("Cherry Blossoms
+  after the Sunshie ( 晴れのち桜)") is also tried by each name alone.
 - **Local files show their tags again, and YouTube videos aren't skipped.** A file could
   play under the name taken from its file name ("02" as the artist of "02 - WATCH ME.flac",
   no cover), and a YouTube video could be skipped as "unresolved", when the queue was
