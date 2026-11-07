@@ -30,11 +30,22 @@ public sealed class IcyStreamReader : IAsyncDisposable
     private HttpResponseMessage? _response;
 
     private string? _lastTitle;
+    private long _audioBytes;
 
     /// <summary>Raised when the in-band song title changes (already de-duplicated and
-    /// trimmed). The raw value is whatever the station broadcasts — usually
+    /// trimmed), with the number of audio bytes read before it: the title applies from that
+    /// byte of the audio on. The raw value is whatever the station broadcasts — usually
     /// "Artist - Title", parsed downstream by the source.</summary>
-    public event Action<string>? StreamTitleChanged;
+    public event Action<string, long>? StreamTitleChanged;
+
+    /// <summary>Raised after each run of audio is passed on, with the total audio bytes so far.</summary>
+    public event Action<long>? AudioRead;
+
+    /// <summary>Audio bytes (metadata excluded) read so far on this connection.</summary>
+    public long AudioBytes => Interlocked.Read(ref _audioBytes);
+
+    /// <summary>The stream's bitrate from the <c>icy-br</c> header, in kbit/s, if the server sent one.</summary>
+    public int? Bitrate { get; private set; }
 
     /// <summary>The station name from the <c>icy-name</c> response header, if any —
     /// used as the display name for the paste-a-URL path where we have no directory entry.</summary>
@@ -73,6 +84,8 @@ public sealed class IcyStreamReader : IAsyncDisposable
         _response.EnsureSuccessStatusCode();
 
         IcyName = FirstHeader(_response, "icy-name");
+        // Sometimes "128,128" (one per channel layout); the first is the stream's.
+        Bitrate = ParseInt(FirstHeader(_response, "icy-br")?.Split(',')[0].Trim()) is > 0 and var kbps ? kbps : null;
     }
 
     /// <summary>Read the audio body to EOF/cancellation, stripping ICY metadata and
@@ -84,7 +97,14 @@ public sealed class IcyStreamReader : IAsyncDisposable
 
         int metaInt = ParseInt(FirstHeader(_response, "icy-metaint"));
         await using var body = await _response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-        await PumpInterleavedAsync(body, metaInt, target, HandleMetadata, ct).ConfigureAwait(false);
+        await PumpInterleavedAsync(body, metaInt, target, HandleMetadata, ct, OnAudio).ConfigureAwait(false);
+    }
+
+    private void OnAudio(int bytes)
+    {
+        var total = Interlocked.Add(ref _audioBytes, bytes);
+        try { AudioRead?.Invoke(total); }
+        catch { /* a handler throwing must not kill the pump */ }
     }
 
     /// <summary>
@@ -92,11 +112,13 @@ public sealed class IcyStreamReader : IAsyncDisposable
     /// <paramref name="target"/>, lifting an ICY metadata block out every
     /// <paramref name="metaInt"/> bytes and handing its raw bytes to
     /// <paramref name="onMetaBlock"/>. When <paramref name="metaInt"/> is 0 the source is a
-    /// plain audio stream and is copied straight through. Pure stream-in/stream-out so it's
-    /// unit-testable without HTTP. Returns on EOF.
+    /// plain audio stream and is copied straight through. <paramref name="onAudio"/> hears how
+    /// many audio bytes each write passed on. Pure stream-in/stream-out so it's unit-testable
+    /// without HTTP. Returns on EOF.
     /// </summary>
     internal static async Task PumpInterleavedAsync(
-        Stream source, int metaInt, Stream target, Action<byte[]> onMetaBlock, CancellationToken ct)
+        Stream source, int metaInt, Stream target, Action<byte[]> onMetaBlock, CancellationToken ct,
+        Action<int>? onAudio = null)
     {
         var buffer = new byte[16 * 1024];
 
@@ -107,6 +129,7 @@ public sealed class IcyStreamReader : IAsyncDisposable
             {
                 await target.WriteAsync(buffer.AsMemory(0, n), ct).ConfigureAwait(false);
                 await target.FlushAsync(ct).ConfigureAwait(false);
+                onAudio?.Invoke(n);
             }
             return;
         }
@@ -121,6 +144,7 @@ public sealed class IcyStreamReader : IAsyncDisposable
                 int got = await source.ReadAsync(buffer.AsMemory(0, want), ct).ConfigureAwait(false);
                 if (got <= 0) return; // EOF
                 await target.WriteAsync(buffer.AsMemory(0, got), ct).ConfigureAwait(false);
+                onAudio?.Invoke(got);
                 bytesUntilMeta -= got;
             }
             await target.FlushAsync(ct).ConfigureAwait(false);
@@ -149,7 +173,7 @@ public sealed class IcyStreamReader : IAsyncDisposable
         title = title.Trim();
         if (title == _lastTitle) return;
         _lastTitle = title;
-        try { StreamTitleChanged?.Invoke(title); }
+        try { StreamTitleChanged?.Invoke(title, AudioBytes); }
         catch { /* a handler throwing must not kill the pump */ }
     }
 

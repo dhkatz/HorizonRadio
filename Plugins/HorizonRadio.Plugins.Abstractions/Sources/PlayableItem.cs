@@ -30,6 +30,11 @@ public abstract class PlayableItem
     /// before playback starts.</summary>
     public virtual TimeSpan Position => TimeSpan.Zero;
 
+    /// <summary>Where in the current song this item is, or null when that isn't known (see
+    /// <see cref="IPlaybackProgress.SongPosition"/>). A fixed track is one song: its
+    /// <see cref="Position"/>, once its length is known.</summary>
+    public virtual TimeSpan? SongPosition => Duration is null ? null : Position;
+
     /// <summary>Whether <see cref="SeekAsync"/> does anything. Defaults false so
     /// stream items (which can report position but not seek) need not override it.</summary>
     public virtual bool CanSeek => false;

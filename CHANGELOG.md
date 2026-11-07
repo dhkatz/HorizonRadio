@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   can switch between the original, its romanization, and translations. The version you
   pick is remembered. On internet radio this more than doubles how many songs have
   lyrics (33 of 40 in a sample of Vocaloid radio, up from 15).
+- **Synced lyrics on internet radio.** Radio now knows where in the song it is, from
+  where the station's title change falls in the audio, so lyrics follow along (and fill
+  karaoke-style) from the second song after tuning in. The song that was already playing
+  when you tuned in still shows its lyrics as text. Stations time their title changes
+  differently, so the lyrics panel has a nudge (±0.5 s, remembered) for radio.
 
 - **VocaDB now supplies real album art and playable links.** A matched VocaDB song
   contributes its linked album's square cover (preferred over the 16:9 video
@@ -42,6 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Radio titles change with the song.** A station is read about a second ahead of what
+  you hear, so a new song's title (in the app and in game) used to appear before the
+  song did. It now appears as the song starts.
 - **Song details show up much sooner.** A new song's title and cover art used to take
   several seconds, often 30+ while a queue or mix was filling in. Now they usually take
   under a second. Each song is looked up once instead of three times, the metadata

@@ -136,6 +136,17 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
     /// <summary>Fill lines as they're sung, rather than lighting the whole line at once.</summary>
     [ObservableProperty] private bool isKaraoke;
 
+    /// <summary>Following a live stream (radio), whose song position comes from where the title
+    /// changed: close, but stations time that differently, so the listener can nudge it.</summary>
+    [ObservableProperty] private bool isLive;
+
+    /// <summary>How much earlier to show radio lyrics, in seconds (negative: later).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(OffsetText))]
+    private double radioOffset;
+
+    public string OffsetText => RadioOffset == 0 ? "In sync" : $"{RadioOffset:+0.0;-0.0} s";
+
     public bool HasLines => Lines.Count > 0;
 
     public LyricsViewModel(LyricsService? service, Func<IPlaybackProgress?> progress, SourceConfigStore? prefs = null)
@@ -144,11 +155,26 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
         _progress = progress;
         _prefs = prefs;
         isKaraoke = prefs?.LyricsKaraoke ?? true;
+        radioOffset = prefs?.LyricsRadioOffset ?? 0;
         // Fast enough for a smooth fill; it only runs while a song's lyrics are up.
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
         _timer.Tick += (_, _) => Tick();
         Lines.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasLines));
         Versions.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasVersions));
+    }
+
+    [RelayCommand]
+    private void Nudge(string? seconds)
+    {
+        if (!double.TryParse(seconds, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var by))
+            return;
+        RadioOffset = Math.Round(Math.Clamp(RadioOffset + by, -10, 10), 1);
+        if (_prefs != null)
+        {
+            _prefs.LyricsRadioOffset = RadioOffset;
+            _prefs.SaveToDisk();
+        }
+        Tick();
     }
 
     partial void OnIsKaraokeChanged(bool value)
@@ -201,6 +227,7 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
         _timer.Stop();
         _following = false;
         IsFollowing = false;
+        IsLive = false;
         _lookedUp = false;
         _queriedDuration = null;
         _lyrics = null;
@@ -224,7 +251,7 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
             var lyrics = await _service!.FindAsync(query, ct);
             ct.ThrowIfCancellationRequested();
             _lookedUp = true;
-            Show(lyrics, duration != null);
+            Show(lyrics, _progress()?.SongPosition != null);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -258,6 +285,7 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
         // is. Live radio doesn't (yet), so its lyrics are a sheet.
         _following = lyrics.Synced && knowsPosition;
         IsFollowing = _following;
+        IsLive = _following && _progress()?.Duration == null;
 
         if (lyrics.Variants is { Count: > 0 } variants)
         {
@@ -330,7 +358,10 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
         }
 
         if (!_following || progress == null) return;
-        var position = Clock(progress.Position);
+        // A live stream that lost its place (it reconnected) has no song position until the next song.
+        if (progress.SongPosition is not { } songPosition) return;
+        var position = Clock(songPosition);
+        if (IsLive) position += TimeSpan.FromSeconds(RadioOffset);
 
         int active = -1;
         for (int i = 0; i < Lines.Count; i++)

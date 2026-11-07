@@ -21,6 +21,13 @@ public interface IPlaybackProgress
     /// <summary>Elapsed position within the current track.</summary>
     TimeSpan Position { get; }
 
+    /// <summary>Where in the current <em>song</em> playback is, or null when that isn't known.
+    /// For a track with a length it's <see cref="Position"/>. A live stream (internet radio)
+    /// plays many songs as one track, so it reports the song's own position when it can tell
+    /// where the song began, and null when it can't (it was tuned in mid-song). Lyrics follow
+    /// this.</summary>
+    TimeSpan? SongPosition => Duration is null ? null : Position;
+
     /// <summary>Whether <see cref="SeekAsync"/> does anything. Defaults false so
     /// read-only sources need not override it.</summary>
     bool CanSeek => false;
