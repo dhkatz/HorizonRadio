@@ -66,7 +66,8 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   `PlayableItem`s and only ever plays through the queue (`QueuePlayback` +
   `QueueSource`), from every surface including the Sources tab. A self-driven
   source (`ISelfDrivenSourceFactory`: Spotify Connect, the test tone) is started
-  on the runner directly (`SourceRunner.StartAsync`).
+  through the playback router (`PlaybackRouter.StartSourceAsync`) as the player's
+  content.
 - **Lyrics (`Plugins/Lyrics/`, `Core/Lyrics/`)** — each `ILyricsPlugin` contributes
   one `ILyricsProvider` (Unison, LRCLIB, and VocaDB, whose metadata plugin is also a
   lyrics plugin; when VocaDB has the song but no lyrics it reads the Vocaloid Lyrics
@@ -118,13 +119,25 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
     page assigns each station the game's music, the app's player, or a mix
     (`StationMap`); as the player tunes, the plugin routes the app's playback
     through `IGameHost.Playback` (`PlaybackRouter`). Mixes stay game-agnostic.
-  - **Playback routing:** one engine (`SourceRunner`), several channels — the
-    player's queue and one `QueueSource` per mix. Leaving a channel parks it
-    (`SourceRunner.ParkAsync`; the engine notes its own place as it stops);
-    returning resumes per the mode: Resume (same track, mid-track where the item
-    can seek, via `PumpContext.StartPosition`), Restart, or Live (fast-forward by
-    elapsed time, manual pause locked). While a mix station is on, player additions
-    queue but don't take the engine (`QueuePlayback.CanActivate`).
+  - **Playback routing:** one engine (`SourceRunner`), one owner
+    (`PlaybackRouter`), several channels — the player's queue and one
+    `QueueSource` per mix. Only the router starts, stops or parks a source (the
+    runner's mutators are `internal`). The game's routes, the queue getting work
+    (`QueuePlayback.EnsureActiveAsync`), a self-driven source started or stopped
+    from the Sources tab, the player bar or a bound action (`StartSourceAsync`,
+    `StopAsync`), and mix edits are commands that one loop applies in order against
+    an explicit state (Silent, OnPlayer, OnMix); rapid tuning collapses to the
+    latest route. Leaving a channel parks it (`SourceRunner.ParkAsync`; the engine
+    notes its own place as it stops); returning resumes per the mode: Resume (same
+    track, mid-track where the item can seek, via `PumpContext.StartPosition`),
+    Restart, or Live (fast-forward by elapsed time, manual pause locked). A new mode
+    for the station that's on only changes the mode. While a mix station is on,
+    player additions wait in the queue. Stop parks a station (the game routing to
+    it again resumes it); a self-driven source started on a station takes the
+    player's place. A channel keeps the mix it was built from, so editing or
+    deleting a mix drops its channel (an on-air one once it stops). The shuffle
+    preference (`SetShuffleAsync`) reaches every channel, on or off, as it
+    (re)starts.
   - **The queue engine** (`QueueSource`) is one state machine (Idle, Picking,
     Playing, Parked) that only its run loop moves on, under one lock. Transport,
     play-now and mix switches only record a request and cancel the step under way

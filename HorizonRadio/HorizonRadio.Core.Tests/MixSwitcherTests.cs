@@ -1,3 +1,4 @@
+using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
@@ -17,13 +18,13 @@ public class MixSwitcherTests
         public bool Send(ReadOnlySpan<short> samples) => true;
     }
 
-    private static (MixSwitcher switcher, SourceRunner runner, QueuePlayback queue) Build(MixStore store)
+    private static (MixSwitcher switcher, SourceRunner runner, PlaybackRouter playback) Build(MixStore store)
     {
         var runner = new SourceRunner(new NullSink());
         var config = new SourceConfigStore();
-        var queue = new QueuePlayback(runner, config, new MixContentResolver(config));
-        var switcher = new MixSwitcher(store, queue, runner);
-        return (switcher, runner, queue);
+        var playback = new PlaybackRouter(runner, config, store, new MixContentResolver(config));
+        var switcher = new MixSwitcher(store, playback.Player, runner);
+        return (switcher, runner, playback);
     }
 
     [Fact]
@@ -35,9 +36,10 @@ public class MixSwitcherTests
         var store = new MixStore();
         store.AddOrUpdate(new Mix("m", "M", [new ContentRef("local", dir.Path)]));
 
-        var (switcher, runner, queue) = Build(store);
+        var (switcher, runner, playback) = Build(store);
         using var _ = switcher;
-        using var __ = queue;
+        await using var __ = playback;
+        var queue = playback.Player;
 
         await switcher.SwitchToAsync("m");
 
@@ -46,16 +48,14 @@ public class MixSwitcherTests
         Assert.Null(runner.ActiveFactory);     // the queue has no single factory
         Assert.Equal("m", switcher.CurrentMixId);
         Assert.Equal("m", queue.Model.ContextMixId);
-
-        await runner.StopAsync();
     }
 
     [Fact]
     public async Task Switch_to_unknown_mix_throws()
     {
-        var (switcher, _, queue) = Build(new MixStore());
+        var (switcher, _, playback) = Build(new MixStore());
         using var _s = switcher;
-        using var _q = queue;
+        await using var _q = playback;
         await Assert.ThrowsAsync<InvalidOperationException>(() => switcher.SwitchToAsync("nope"));
     }
 
@@ -64,9 +64,9 @@ public class MixSwitcherTests
     {
         var store = new MixStore();
         store.AddOrUpdate(new Mix("e", "Empty", []));
-        var (switcher, _, queue) = Build(store);
+        var (switcher, _, playback) = Build(store);
         using var _s = switcher;
-        using var _q = queue;
+        await using var _q = playback;
         await Assert.ThrowsAsync<InvalidOperationException>(() => switcher.SwitchToAsync("e"));
     }
 }

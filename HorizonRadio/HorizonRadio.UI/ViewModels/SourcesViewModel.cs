@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
@@ -18,11 +19,12 @@ namespace HorizonRadio.UI.ViewModels;
 /// Sources tab: pick a source from the catalog, fill in its config
 /// (auto-rendered from the factory's schema), then Play or Start it. A content
 /// source plays its quick-play locator through the queue, like quick play and
-/// search; a self-driven source starts on the runner. Persists the last-selected
-/// source + last-used config across runs.
+/// search; a self-driven source starts through the playback router, which owns the
+/// engine. Persists the last-selected source + last-used config across runs.
 /// </summary>
 public sealed partial class SourcesViewModel : ViewModelBase
 {
+    private readonly PlaybackRouter _playback;
     private readonly SourceRunner _runner;
     private readonly SourceConfigStore _store;
     private readonly QueuePlayback _queue;
@@ -67,12 +69,12 @@ public sealed partial class SourcesViewModel : ViewModelBase
     [ObservableProperty] private bool hasError;
     [ObservableProperty] private bool hasNoSchema;
 
-    public SourcesViewModel(SourceRunner runner, SourceConfigStore store, QueuePlayback queue,
-                            ToolRegistry? registry = null)
+    public SourcesViewModel(PlaybackRouter playback, SourceConfigStore store, ToolRegistry? registry = null)
     {
-        _runner = runner;
+        _playback = playback;
+        _runner = playback.Runner;
         _store = store;
-        _queue = queue;
+        _queue = playback.Player;
         _registry = registry;
 
         foreach (var f in SourceCatalog.All) AvailableSources.Add(f);
@@ -87,11 +89,12 @@ public sealed partial class SourcesViewModel : ViewModelBase
 
     /// <summary>Designer-only ctor (so Avalonia previewer can construct
     /// the view without a runner).</summary>
-    public SourcesViewModel() : this(new SourceRunner(new NullSink()), new SourceConfigStore())
+    public SourcesViewModel() : this(new SourceConfigStore())
     { }
 
-    private SourcesViewModel(SourceRunner runner, SourceConfigStore store)
-        : this(runner, store, new QueuePlayback(runner, store, new MixContentResolver(store)))
+    private SourcesViewModel(SourceConfigStore store)
+        : this(new PlaybackRouter(new SourceRunner(new NullSink()), store, new MixStore(), new MixContentResolver(store)),
+               store)
     { }
 
     private sealed class NullSink : Core.Sources.IPcmSink
@@ -167,7 +170,7 @@ public sealed partial class SourcesViewModel : ViewModelBase
                     break;
                 case ISelfDrivenSourceFactory selfDriven:
                     StatusMessage = "Starting...";
-                    await _runner.StartAsync(selfDriven, values);
+                    await _playback.StartSourceAsync(selfDriven, values);
                     StatusMessage = $"Running: {factory.DisplayName}";
                     break;
             }
@@ -202,7 +205,7 @@ public sealed partial class SourcesViewModel : ViewModelBase
     private async Task StopAsync()
     {
         StatusMessage = "Stopping...";
-        try { await _runner.StopAsync(); }
+        try { await _playback.StopAsync(); }
         catch (Exception ex) { Debug.WriteLine($"[hzn-sources-vm] stop: {ex}"); }
         StatusMessage = "Stopped";
         HasError = false;

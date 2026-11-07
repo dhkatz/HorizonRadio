@@ -52,7 +52,7 @@ public static class SourceRequirements
     /// <summary>
     /// Throw a friendly <see cref="MissingToolException"/> if the source
     /// can't run for lack of its tools. Called at the launch chokepoints
-    /// (<c>SourceRunner.StartAsync</c> for self-driven sources, <c>QueuePlayback</c>
+    /// (<c>PlaybackRouter.StartSourceAsync</c> for self-driven sources, <c>QueuePlayback</c>
     /// for content) so every entry point reports the same thing and the user is
     /// pointed at the Tools tab.
     /// </summary>

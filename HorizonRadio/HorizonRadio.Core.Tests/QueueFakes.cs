@@ -1,6 +1,7 @@
 using System.Threading.Channels;
 using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Sources;
+using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Queue;
 
 namespace HorizonRadio.Core.Tests;
@@ -19,6 +20,7 @@ internal sealed class FakeItem : PlayableItem
     private readonly List<TimeSpan> _startPositions = new();
     private TaskCompletionSource _end = NewSignal();
     private int _plays;
+    private int _playing;
 
     public FakeItem(string title, TimeSpan? duration = null)
     {
@@ -30,6 +32,9 @@ internal sealed class FakeItem : PlayableItem
 
     /// <summary>How many times a play began.</summary>
     public int Plays => Volatile.Read(ref _plays);
+
+    /// <summary>How many plays are under way right now (more than one: two engines play it).</summary>
+    public int Playing => Volatile.Read(ref _playing);
 
     /// <summary>Where each play that got going was told to start.</summary>
     public IReadOnlyList<TimeSpan> StartPositions
@@ -62,6 +67,7 @@ internal sealed class FakeItem : PlayableItem
         Volatile.Write(ref _end, end);
         Context = ctx;
         Interlocked.Increment(ref _plays);
+        Interlocked.Increment(ref _playing);
         try
         {
             if (HoldStart is { } hold) await hold.Task.WaitAsync(ct);
@@ -75,6 +81,10 @@ internal sealed class FakeItem : PlayableItem
             await release.Task;
             throw;
         }
+        finally
+        {
+            Interlocked.Decrement(ref _playing);
+        }
     }
 }
 
@@ -85,6 +95,7 @@ internal sealed class FakeContext(string name = "Fake") : IQueueContext
     private readonly Channel<PlayableItem> _feed = Channel.CreateUnbounded<PlayableItem>();
     private int _calls;
     private int _cancelled;
+    private volatile bool _shuffled;
 
     public string DisplayName => name;
     public bool HasEntries => true;
@@ -113,7 +124,68 @@ internal sealed class FakeContext(string name = "Fake") : IQueueContext
 
     public IReadOnlyList<QueuePreview> Peek(int count) => [];
 
-    public void SetShuffle(bool enabled) { }
+    /// <summary>Whether shuffle is on, as last set.</summary>
+    public bool Shuffled => _shuffled;
+
+    public void SetShuffle(bool enabled) => _shuffled = enabled;
+}
+
+/// <summary>A self-driven source (like Spotify Connect, or the test tone) that only records
+/// whether it's running.</summary>
+internal sealed class FakeSource : IAudioSource
+{
+    private volatile bool _running;
+    private volatile bool _disposed;
+
+    public string Id => "fake";
+    public string DisplayName => "Fake";
+
+    public bool Running => _running;
+    public bool Disposed => _disposed;
+
+    public event Action<Track>? TrackChanged { add { } remove { } }
+
+    public Task StartAsync(IPcmSink sink, CancellationToken ct)
+    {
+        _running = true;
+        return Task.CompletedTask;
+    }
+
+    public Task StopAsync()
+    {
+        _running = false;
+        return Task.CompletedTask;
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _running = false;
+        _disposed = true;
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>Makes <see cref="FakeSource"/>s, keeping every one it made.</summary>
+internal sealed class FakeSourceFactory : ISelfDrivenSourceFactory
+{
+    private readonly List<FakeSource> _created = new();
+
+    public string Id => "fake";
+    public string DisplayName => "Fake";
+    public string? Description => null;
+    public IReadOnlyList<ConfigField> Schema => [];
+
+    public IReadOnlyList<FakeSource> Created
+    {
+        get { lock (_created) return [.. _created]; }
+    }
+
+    public IAudioSource Create(ConfigValues values)
+    {
+        var source = new FakeSource();
+        lock (_created) _created.Add(source);
+        return source;
+    }
 }
 
 internal static class Eventually

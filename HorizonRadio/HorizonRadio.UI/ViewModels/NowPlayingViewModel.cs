@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Lyrics;
 using HorizonRadio.Core.Models;
+using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
@@ -24,8 +25,8 @@ namespace HorizonRadio.UI.ViewModels;
 /// DLL events (`{"event":"track",...}`) and by the local
 /// <see cref="SourceRunner"/> when a C#-side source publishes metadata.
 ///
-/// Also hosts an inline source switcher that drives the same
-/// <see cref="SourceRunner"/> the Sources tab uses — picking from this
+/// Also hosts an inline source switcher that starts sources through the same
+/// <see cref="PlaybackRouter"/> the Sources tab uses — picking from this
 /// dropdown starts the chosen source with its persisted config. If the
 /// source has never been configured (or its config no longer
 /// validates), the switch fails silently here and the user can fix it
@@ -103,6 +104,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     [ObservableProperty] private bool isMuted;
     private double _volumeBeforeMute = 1.0;
 
+    private readonly PlaybackRouter? _playback;
     private readonly SourceRunner? _runner;
     private readonly SourceConfigStore? _store;
     private readonly MixStore? _mixes;
@@ -137,13 +139,15 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     /// <summary>The playing song's lyrics, under the track card.</summary>
     public LyricsViewModel Lyrics { get; }
 
-    public NowPlayingViewModel(SourceRunner runner, SourceConfigStore store,
-        MixStore mixes, MixSwitcher switcher, QueuePlayback queue,
+    public NowPlayingViewModel(PlaybackRouter playback, SourceConfigStore store,
+        MixStore mixes, MixSwitcher switcher,
         string? gameOutputName,
         PreviewController? preview = null, ToastManager? toasts = null,
         DialogManager? dialogs = null, LyricsService? lyrics = null)
     {
-        _runner = runner;
+        _playback = playback;
+        _runner = playback.Runner;
+        var queue = playback.Player;
         Lyrics = new LyricsViewModel(lyrics, () => _runner?.ActiveSource as IPlaybackProgress, store);
         _store = store;
         _mixes = mixes;
@@ -340,22 +344,21 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     {
         if (_suppressShuffle) return;
 
-        // Persist as a global preference and keep the runner in sync so the
-        // next source start honors it...
-        if (_runner != null) _runner.Shuffle = value;
+        // Persist as a global preference, and hand it to the router: it applies it live to
+        // what's playing (keeps the current track, shuffles the rest) and to every channel as
+        // it starts or comes back, so a station parked meanwhile follows it too.
         if (_store != null)
         {
             _store.Shuffle = value;
             _store.SaveToDisk();
         }
+        if (_playback != null) _ = ApplyShuffleAsync(_playback, value);
+    }
 
-        // ...and apply live to the running source (keeps current track, shuffles
-        // the rest).
-        if (_transport != null)
-        {
-            try { _ = _transport.SetShuffleAsync(value); }
-            catch (Exception ex) { Debug.WriteLine($"[hzn-now-vm] shuffle: {ex.Message}"); }
-        }
+    private static async Task ApplyShuffleAsync(PlaybackRouter playback, bool value)
+    {
+        try { await playback.SetShuffleAsync(value); }
+        catch (Exception ex) { Debug.WriteLine($"[hzn-now-vm] shuffle: {ex.Message}"); }
     }
 
     partial void OnSelectedOutputChanged(OutputTarget? value)
@@ -530,8 +533,8 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
             return;
         }
 
-        // Fire-and-forget: setter must stay synchronous, and the runner
-        // handles its own serialization. Errors are captured into
+        // Fire-and-forget: setter must stay synchronous, and the router
+        // applies starts one at a time. Errors are captured into
         // SwitchStatus so the UI can show them.
         if (value is ISelfDrivenSourceFactory selfDriven) _ = SwitchAsync(selfDriven);
     }
@@ -583,12 +586,12 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
 
     private async Task SwitchAsync(ISelfDrivenSourceFactory factory)
     {
-        if (_runner == null || _store == null) return;
+        if (_playback == null || _store == null) return;
         SwitchStatus = $"Starting {factory.DisplayName}...";
         try
         {
             var values = _store.Load(factory.Id, factory.Schema);
-            await _runner.StartAsync(factory, values);
+            await _playback.StartSourceAsync(factory, values);
             SwitchStatus = null;
         }
         catch (MissingToolException ex)

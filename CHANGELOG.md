@@ -131,6 +131,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Two sources no longer play over each other, and switching stations no longer loses
+  songs.** Starting Spotify Connect or the test tone just as the game changed station could
+  leave both playing, and a song added to the queue mid-switch could vanish along with the
+  one it interrupted. Stopping a mix station from the Sources tab now keeps its place for
+  when you tune back, changing a station's switch mode no longer restarts its mix, shuffle
+  reaches stations you aren't tuned to, and edited mixes reach their stations.
 - **Skips, Play and mix switches no longer get lost while the next song loads.** Next, Play
   Now and mix switches during "Loading…" act at once rather than after that song (or one
   more from the old mix) plays through, and Play Now after Previous plays what you picked.
