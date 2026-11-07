@@ -62,6 +62,23 @@ public class IcyStreamReaderTests
     }
 
     [Fact]
+    public async Task A_title_is_placed_by_the_audio_bytes_before_it()
+    {
+        // A title's song starts at the audio byte where the title arrives, so the reader has to
+        // have counted exactly the audio (not the metadata) passed on before it.
+        int metaInt = 8;
+        var src = new MemoryStream(BuildIcyStream(metaInt, (Audio(8, 1), "First"), (Audio(8, 2), null), (Audio(8, 3), "Second")));
+        long audio = 0;
+        var at = new List<long>();
+
+        await IcyStreamReader.PumpInterleavedAsync(src, metaInt, new MemoryStream(),
+            _ => at.Add(audio), CancellationToken.None, n => audio += n);
+
+        Assert.Equal([8L, 24L], at);
+        Assert.Equal(24, audio);
+    }
+
+    [Fact]
     public async Task No_metaint_copies_stream_through_unchanged()
     {
         var payload = Audio(5000, 0x7F);

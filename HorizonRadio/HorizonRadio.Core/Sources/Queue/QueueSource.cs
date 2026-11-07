@@ -208,6 +208,7 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
 
     public TimeSpan? Duration => _activeItem?.Duration;
     public TimeSpan Position => _activeItem?.Position ?? TimeSpan.Zero;
+    public TimeSpan? SongPosition => _activeItem?.SongPosition;
     public bool CanSeek => _activeItem?.CanSeek ?? false;
 
     public Task SeekAsync(TimeSpan position)

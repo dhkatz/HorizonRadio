@@ -15,8 +15,9 @@
          are word-timed. Clicking a line jumps there when the source can seek. Unsynced lyrics
          (and live radio, which doesn't know where in the song it is yet) are a sheet. -->
     <Grid RowDefinitions="Auto,*,Auto">
-        <!-- Versions (Original / Romaji / English) on the left, the karaoke toggle on the right. -->
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+        <!-- Versions (Original / Romaji / English) on the left; radio's sync nudge and the
+             karaoke toggle on the right. -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto">
             <ItemsControl Grid.Column="0" ItemsSource="{Binding Versions}" IsVisible="{Binding HasVersions}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -34,7 +35,21 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
-            <ToggleButton Grid.Column="1"
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" Margin="0,0,8,0"
+                        VerticalAlignment="Center"
+                        IsVisible="{Binding IsLive}">
+                <Button Classes="Ghost" Padding="6,2" FontSize="12"
+                        Content="−0.5 s"
+                        Command="{Binding NudgeCommand}" CommandParameter="-0.5"
+                        ToolTip.Tip="Lyrics are ahead of the singer: show them later" />
+                <TextBlock Text="{Binding OffsetText}" FontSize="12" Opacity="0.6"
+                           MinWidth="48" TextAlignment="Center" VerticalAlignment="Center" />
+                <Button Classes="Ghost" Padding="6,2" FontSize="12"
+                        Content="+0.5 s"
+                        Command="{Binding NudgeCommand}" CommandParameter="0.5"
+                        ToolTip.Tip="Lyrics are behind the singer: show them earlier" />
+            </StackPanel>
+            <ToggleButton Grid.Column="2"
                           IsChecked="{Binding IsKaraoke, Mode=TwoWay}"
                           IsVisible="{Binding IsFollowing}"
                           Background="Transparent" BorderThickness="0"
