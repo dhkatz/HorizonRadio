@@ -153,7 +153,7 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
     public Task SetShuffleAsync(bool enabled)
     {
         _shuffle = enabled;
-        _model.Context?.SetShuffle(enabled);
+        _model.SetShuffle(enabled);
         return Task.CompletedTask;
     }
 

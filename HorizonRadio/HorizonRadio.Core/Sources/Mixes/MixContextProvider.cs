@@ -22,9 +22,10 @@ namespace HorizonRadio.Core.Sources.Mixes;
 /// best-effort rolling window of what's upcoming without consuming anything —
 /// resolved items of the current entry, then a placeholder per upcoming entry.
 ///
-/// Threading: the order state is touched on the engine thread via
-/// <see cref="NextAsync"/> and read by <see cref="Peek"/> from the UI thread, so
-/// both go through <see cref="_lock"/>; the expensive enumerate happens outside it.
+/// Threading: the order state is advanced on the engine thread via
+/// <see cref="NextAsync"/>, reshuffled by <see cref="SetShuffle"/> and read by
+/// <see cref="Peek"/> from the UI thread, so all three go through <see cref="_lock"/>;
+/// the expensive enumerate happens outside it.
 /// </summary>
 public sealed class MixContextProvider
 {
@@ -39,8 +40,13 @@ public sealed class MixContextProvider
     private bool _itemsLoaded;
     private int _idleEntries;
 
+    // Both cursors point at what's playing now: the entry cursor at the current
+    // entry, the item cursor at the item last handed out (it moves on at the start of
+    // the next NextAsync). That way a shuffle toggle pins the playing song at both
+    // levels. False until the loaded entry's first item is handed out.
+    private bool _itemHandedOut;
+
     private bool _shuffle;
-    private bool _shufflePending;
 
     public MixContextProvider(Mix mix, MixContentResolver resolver, bool shuffle = false)
     {
@@ -58,11 +64,25 @@ public sealed class MixContextProvider
 
     private static void Log(string msg) => Debug.WriteLine($"[hzn-mix-ctx] {msg}");
 
-    /// <summary>Turn shuffle on or off; applied to both order levels on the engine
-    /// thread at the next <see cref="NextAsync"/> boundary so it never races.</summary>
+    /// <summary>
+    /// Turn shuffle on or off, now, at both order levels (so <see cref="Peek"/> shows the
+    /// new order straight away). The playing song stays put and is never replayed;
+    /// turning shuffle on reorders only what hasn't played yet this pass, turning it off
+    /// resumes the natural order after the playing song.
+    /// </summary>
     public void SetShuffle(bool on)
     {
-        lock (_lock) { _shuffle = on; _shufflePending = true; }
+        lock (_lock)
+        {
+            _shuffle = on;
+            if (!_initialized) return; // applied when the order is first built
+
+            _entryOrder.SetShuffle(on, keepCurrent: true, keepPlayed: true);
+            // Before the loaded entry's first item is handed out nothing in it has
+            // played, so it can reorder freely.
+            if (_itemsLoaded)
+                _itemOrder.SetShuffle(on, keepCurrent: _itemHandedOut, keepPlayed: true);
+        }
     }
 
     /// <summary>
@@ -84,26 +104,26 @@ public sealed class MixContextProvider
                 {
                     _entryOrder.Reset(entries.Count);
                     if (_shuffle) _entryOrder.SetShuffle(true, keepCurrent: false);
-                    _shufflePending = false;
                     _initialized = true;
                     _itemsLoaded = false;
                 }
 
-                ApplyShufflePending();
-
                 if (_itemsLoaded)
                 {
+                    // Move past the song that was playing (off the end → next entry).
+                    if (_itemHandedOut) _itemOrder.Advance(wrap: false);
+
                     if (_itemOrder.CurrentIndex >= 0)
                     {
-                        var item = _items[_itemOrder.CurrentIndex];
-                        _itemOrder.Advance(wrap: false); // off the end → reload next entry
-                        return item;
+                        _itemHandedOut = true;
+                        return _items[_itemOrder.CurrentIndex];
                     }
 
                     // Current entry exhausted — wrap to the next entry (entry order
                     // reshuffles on wrap for a fresh pass).
                     _entryOrder.Advance(wrap: true);
                     _itemsLoaded = false;
+                    _itemHandedOut = false;
                 }
 
                 entryToLoad = entries[_entryOrder.CurrentIndex];
@@ -131,6 +151,7 @@ public sealed class MixContextProvider
                 _itemOrder.Reset(_items.Count);
                 if (_shuffle) _itemOrder.SetShuffle(true, keepCurrent: false);
                 _itemsLoaded = true;
+                _itemHandedOut = false;
                 empty = _items.Count == 0;
 
                 if (empty)
@@ -175,7 +196,8 @@ public sealed class MixContextProvider
         {
             if (_itemsLoaded)
             {
-                foreach (var idx in _itemOrder.RemainingIndices())
+                // RemainingIndices()[0] is the playing song once it's been handed out.
+                foreach (var idx in _itemOrder.RemainingIndices().Skip(_itemHandedOut ? 1 : 0))
                 {
                     if (result.Count >= count) return result;
                     result.Add(QueuePreview.ForTrack(_items[idx].Metadata));
@@ -194,15 +216,5 @@ public sealed class MixContextProvider
             }
         }
         return result;
-    }
-
-    // Apply a pending shuffle toggle to both order levels (called under _lock on
-    // the engine thread). keepCurrent pins what's playing and shuffles the rest.
-    private void ApplyShufflePending()
-    {
-        if (!_shufflePending) return;
-        _shufflePending = false;
-        _entryOrder.SetShuffle(_shuffle, keepCurrent: true);
-        _itemOrder.SetShuffle(_shuffle, keepCurrent: true);
     }
 }
