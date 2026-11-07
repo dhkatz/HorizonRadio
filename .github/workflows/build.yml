@@ -5,7 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
 jobs:
+  # The required check. The C# build and tests plus the Release version.dll it bundles. The
+  # C# format check (format) and the C++ Debug build and its tests (cpp-tests) run in parallel.
   build:
     name: Build + test (Windows x64)
     runs-on: windows-latest
@@ -38,42 +44,40 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Verify C# formatting
-        run: dotnet format HorizonRadio.slnx --verify-no-changes --verbosity minimal
+      # On the runner's work drive (D:), not the profile on C:: restoring there took half as
+      # long. (Set from a step: the runner context isn't available in a job's env.)
+      - name: Put NuGet packages on the work drive
+        shell: pwsh
+        run: '"NUGET_PACKAGES=$env:RUNNER_TEMP/nuget" >> $env:GITHUB_ENV'
+
+      # Not cached: the packages are ~1.3 GB, and restoring the cache took longer than
+      # restoring from nuget.org.
+      - name: Restore
+        run: dotnet restore HorizonRadio.slnx
 
       - name: Configure CMake
         working-directory: Mods/ForzaHorizon6
         run: cmake --preset windows-x64
-
-      # Tests run against the Debug build (asserts on). version.dll itself
-      # isn't exercised here — the test exe links the production TUs
-      # directly (see Mods/ForzaHorizon6/Tests/CMakeLists.txt).
-      - name: Build C++ side (Debug, x64)
-        working-directory: Mods/ForzaHorizon6
-        run: cmake --build --preset windows-x64-debug
-
-      - name: Run C++ tests
-        working-directory: Mods/ForzaHorizon6
-        run: ctest --preset windows-x64-debug
 
       # The C# UI's <None Include> picks up version.dll from
       # Mods/ForzaHorizon6/build/Release/
       # specifically (a Debug version.dll is useless to FH6 — see the
       # csproj comment), so we must build the Release DLL for the bundle
       # step to have anything to copy. This is also the artifact we ship.
-      - name: Build C++ side (Release, x64)
+      # Only the DLL: the C++ tests build and run in cpp-tests.
+      - name: Build version.dll (Release, x64)
         working-directory: Mods/ForzaHorizon6
-        run: cmake --build --preset windows-x64-release
+        run: cmake --build --preset windows-x64-release --target version
 
       # C# side runs after the Release C++ output (version.dll) is on disk
       # so the UI's <None Include> item picks it up.
       - name: Build C# UI
-        run: dotnet build HorizonRadio.slnx -c Debug --nologo
+        run: dotnet build HorizonRadio.slnx -c Debug --no-restore
 
       # C# unit tests (HorizonRadio.Core.Tests). --no-build reuses the build
       # above so this is just the test run, not a second compile.
       - name: Run C# tests
-        run: dotnet test HorizonRadio.slnx -c Debug --no-build --nologo
+        run: dotnet test HorizonRadio.slnx -c Debug --no-build
 
       # Guard the bundling itself: a regression in the csproj's path or
       # Exists() gate would otherwise silently ship a UI with no DLL.
@@ -94,6 +98,62 @@ jobs:
           path: Mods/ForzaHorizon6/build/Release/version.dll
           if-no-files-found: error
 
+  # `dotnet format` loads and analyzes the whole solution (~40 s), so it runs beside the build
+  # rather than ahead of it. No MSVC environment here, so no Platform variable to clear.
+  format:
+    name: Format (C#)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Put NuGet packages on the work drive
+        shell: pwsh
+        run: '"NUGET_PACKAGES=$env:RUNNER_TEMP/nuget" >> $env:GITHUB_ENV'
+
+      - name: Restore
+        run: dotnet restore HorizonRadio.slnx
+
+      - name: Verify C# formatting
+        run: dotnet format HorizonRadio.slnx --verify-no-changes --no-restore --verbosity minimal
+
+  # The C++ tests, alongside the C# job rather than before it. Tests run against the Debug
+  # build (asserts on). version.dll itself isn't exercised here — the test exe links the
+  # production TUs directly (see Mods/ForzaHorizon6/Tests/CMakeLists.txt).
+  cpp-tests:
+    name: C++ tests (Windows x64)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSVC dev environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Set up Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Configure CMake
+        working-directory: Mods/ForzaHorizon6
+        run: cmake --preset windows-x64
+
+      - name: Build C++ side (Debug, x64)
+        working-directory: Mods/ForzaHorizon6
+        run: cmake --build --preset windows-x64-debug
+
+      - name: Run C++ tests
+        working-directory: Mods/ForzaHorizon6
+        run: ctest --preset windows-x64-debug
+
   # Lints the production C++ (version.dll TUs) with clang-tidy via the
   # windows-x64-analysis preset, which flips on CMAKE_CXX_CLANG_TIDY. The
   # checks and `WarningsAsErrors: '*'` live in Mods/ForzaHorizon6/.clang-tidy, so any finding
@@ -109,12 +169,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # clang-tidy gives the same answer for the same code, config, and toolchain, so a run
+      # whose inputs match an earlier passing run skips the lint: a change that doesn't touch
+      # the C++ (most of them) isn't re-linted. The key covers everything the lint reads: the
+      # linted sources and headers (all under Bridge/), the CMake setup, .clang-tidy, this
+      # workflow (it pins clang-tidy), and the runner image (MSVC and the Windows SDK).
+      # Passing runs on main save the key, and PRs can read main's cache.
+      - name: Identify the runner image
+        id: image
+        shell: pwsh
+        run: '"version=$env:ImageOS-$env:ImageVersion" >> $env:GITHUB_OUTPUT'
+
+      - name: Look for a passing lint of these exact inputs
+        id: passed
+        uses: actions/cache/restore@v4
+        with:
+          path: .clang-tidy-passed
+          key: clang-tidy-passed-${{ steps.image.outputs.version }}-${{ hashFiles('Mods/ForzaHorizon6/Bridge/**', 'Mods/ForzaHorizon6/CMakeLists.txt', 'Mods/ForzaHorizon6/CMakePresets.json', 'Mods/ForzaHorizon6/cmake/**', 'Mods/ForzaHorizon6/.clang-tidy', '.github/workflows/build.yml') }}
+          lookup-only: true
+
       - name: Set up MSVC dev environment
+        if: steps.passed.outputs.cache-hit != 'true'
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
       - name: Set up Ninja
+        if: steps.passed.outputs.cache-hit != 'true'
         uses: seanmiddleditch/gha-setup-ninja@v5
 
       # Pinned via the clang-tidy wheel so the check is reproducible and the
@@ -122,12 +203,14 @@ jobs:
       # PATH below). Bump deliberately — a clang-tidy bump can surface new
       # findings.
       - name: Install clang-tidy (pinned)
+        if: steps.passed.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           pip install clang-tidy==22.1.7
           python -c "import clang_tidy, os; print(os.path.join(os.path.dirname(clang_tidy.__file__),'data','bin'))" >> $env:GITHUB_PATH
 
       - name: Configure CMake (analysis preset)
+        if: steps.passed.outputs.cache-hit != 'true'
         working-directory: Mods/ForzaHorizon6
         run: cmake --preset windows-x64-analysis
 
@@ -135,8 +218,22 @@ jobs:
       # so clang-tidy runs over all shipping code. ~3x slower than a plain
       # build because every TU is linted during compile.
       - name: Run clang-tidy (production TUs)
+        if: steps.passed.outputs.cache-hit != 'true'
         working-directory: Mods/ForzaHorizon6
         run: cmake --build --preset windows-x64-analysis-debug --target version
+
+      # Only reached when the lint passed.
+      - name: Note the passing lint
+        if: steps.passed.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: New-Item -ItemType File .clang-tidy-passed -Force | Out-Null
+
+      - name: Remember the passing lint
+        if: steps.passed.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .clang-tidy-passed
+          key: ${{ steps.passed.outputs.cache-primary-key }}
 
   # Exercises the clang + mingw-w64 cross-compile path (the migration's
   # headline feature) so the toolchain file and the cross presets can't
@@ -159,11 +256,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Only the x86_64 mingw-w64 toolchain (the mingw-w64 meta-package also brings the i686
+      # one, half the download), and no recommends. Ubuntu's mirrors are sometimes slow enough
+      # to time the job out (a 35 MB i686 package once took 9 minutes): retry stalled fetches.
       - name: Install clang + lld + mingw-w64 + ninja (Linux)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y clang lld mingw-w64 ninja-build
+          APT="-o Acquire::Retries=3 -o Acquire::http::Timeout=30"
+          sudo apt-get $APT update
+          sudo apt-get $APT install -y --no-install-recommends             clang lld ninja-build g++-mingw-w64-x86-64
 
       - name: Install LLVM + lld + mingw-w64 + ninja (macOS)
         if: runner.os == 'macOS'
