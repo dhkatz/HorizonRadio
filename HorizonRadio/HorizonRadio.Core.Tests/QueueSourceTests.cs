@@ -160,4 +160,54 @@ public class QueueSourceTests
 
         await src.StopAsync();
     }
+
+    // An item that pumps until it's cancelled (a long track or a station), counting its plays.
+    private sealed class EndlessItem : PlayableItem
+    {
+        private int _plays;
+        private readonly TaskCompletionSource _ended = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int Plays => Volatile.Read(ref _plays);
+        public Task Ended => _ended.Task;
+
+        public EndlessItem() => Metadata = new Track("Endless", "", null, null, "test", "Test");
+
+        public override async Task PlayAsync(PumpContext ctx, CancellationToken ct)
+        {
+            Interlocked.Increment(ref _plays);
+            ctx.OnStarted?.Invoke(this);
+            try { await Task.Delay(Timeout.Infinite, ct); }
+            finally { _ended.TrySetResult(); }
+        }
+    }
+
+    [Fact]
+    public async Task A_parked_source_plays_again_when_its_track_ended_before_the_stop()
+    {
+        var item = new EndlessItem();
+        var model = new QueueModel();
+        model.AppendExplicit([item]);
+
+        await using var src = new QueueSource(model);
+        using var cts = new CancellationTokenSource();
+        await src.StartAsync(new CountingSink(), cts.Token);
+        await WaitUntilAsync(() => item.Plays == 1);
+        Assert.Equal(1, item.Plays);
+
+        // Park it the way SourceRunner does: cancel the owner's token, then stop the source. The
+        // engine winds the track down on its own thread, so it can finish (and drop the track's
+        // cancellation source) before the stop runs; here it always does.
+        src.MarkParked();
+        await cts.CancelAsync();
+        await item.Ended.WaitAsync(TimeSpan.FromSeconds(5));
+        await Task.Delay(100);
+        // SourceRunner swallows a failed stop, so check the source comes back regardless.
+        var stopError = await Record.ExceptionAsync(src.StopAsync);
+
+        src.ResumeFromPark(TimeSpan.Zero);
+        await src.StartAsync(new CountingSink(), CancellationToken.None);
+        await WaitUntilAsync(() => item.Plays == 2);
+
+        Assert.Null(stopError);
+        Assert.Equal(2, item.Plays);
+    }
 }
