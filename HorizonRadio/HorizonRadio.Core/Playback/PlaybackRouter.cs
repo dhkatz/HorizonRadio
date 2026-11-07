@@ -127,14 +127,13 @@ public sealed class PlaybackRouter : IPlaybackRouter, IAsyncDisposable
         }
     }
 
-    // Take whatever is on the runner off it: park a channel (keeping its place), or stop a
-    // self-driven source that can't be parked.
+    // Take whatever is on the runner off it: park a channel (it notes its own place as it
+    // stops), or stop a self-driven source that can't be parked.
     private async Task LeaveAsync(PlaybackRoute leaving)
     {
         var active = _runner.ActiveSource;
         if (active is QueueSource queue)
         {
-            queue.MarkParked();
             await _runner.ParkAsync().ConfigureAwait(false);
 
             if (FindChannelId(queue) is { } mixId)

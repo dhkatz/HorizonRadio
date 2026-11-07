@@ -160,6 +160,10 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         _mixes.Changed += () => Dispatcher.UIThread.Post(RefreshMixes);
         RefreshMixes();
 
+        // Adding to (or clearing) the queue changes whether Next has anywhere to go, without a
+        // track change to re-read it on.
+        queue.Model.Changed += () => Dispatcher.UIThread.Post(RefreshCapabilities);
+
         // Drives the seek/progress bar; started only while a progress-capable
         // source is active (see RebindTransport).
         _progressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
@@ -429,7 +433,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         // resume while still unreachable isn't overridden.
         if (_needsOutputPause && _transport is { CanPause: true, IsPaused: false })
         {
-            _ = SafeTogglePauseAsync();
+            _ = PauseForOutputAsync();
             _needsOutputPause = false;
         }
     }
@@ -464,10 +468,11 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         }
     }
 
-    private async Task SafeTogglePauseAsync()
+    // Pause, not toggle: a play/pause that lands in between can't turn this into a resume.
+    private async Task PauseForOutputAsync()
     {
         if (_transport == null) return;
-        try { await _transport.TogglePauseAsync(); }
+        try { await _transport.SetPausedAsync(true); }
         catch (Exception ex) { Debug.WriteLine($"[hzn-now-vm] output-pause: {ex.Message}"); }
     }
 

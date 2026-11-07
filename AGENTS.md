@@ -120,11 +120,17 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
     through `IGameHost.Playback` (`PlaybackRouter`). Mixes stay game-agnostic.
   - **Playback routing:** one engine (`SourceRunner`), several channels — the
     player's queue and one `QueueSource` per mix. Leaving a channel parks it
-    (`SourceRunner.ParkAsync`, `QueueSource.MarkParked`); returning resumes per
-    the mode: Resume (same track, mid-track where the item can seek, via
-    `PumpContext.StartPosition`), Restart, or Live (fast-forward by elapsed time,
-    manual pause locked). While a mix station is on, player additions queue but
-    don't take the engine (`QueuePlayback.CanActivate`).
+    (`SourceRunner.ParkAsync`; the engine notes its own place as it stops);
+    returning resumes per the mode: Resume (same track, mid-track where the item
+    can seek, via `PumpContext.StartPosition`), Restart, or Live (fast-forward by
+    elapsed time, manual pause locked). While a mix station is on, player additions
+    queue but don't take the engine (`QueuePlayback.CanActivate`).
+  - **The queue engine** (`QueueSource`) is one state machine (Idle, Picking,
+    Playing, Parked) that only its run loop moves on, under one lock. Transport,
+    play-now and mix switches only record a request and cancel the step under way
+    (one pick plus the play after it); the loop acts on the merged request between
+    steps. `QueueModel.Generation` lets it tell a jump it already honoured from a
+    newer one, and drop a track the old context resolves after a switch.
   - The FH6 plugin also bundles its mod: its csproj flows
     `Mods/ForzaHorizon6/build/Release/version.dll` into the app's build output
     (`ExcludeFromSingleFile`), and the UI's publish step copies it next to the exe.

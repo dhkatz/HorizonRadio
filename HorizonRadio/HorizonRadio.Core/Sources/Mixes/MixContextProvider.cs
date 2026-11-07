@@ -27,7 +27,7 @@ namespace HorizonRadio.Core.Sources.Mixes;
 /// <see cref="Peek"/> from the UI thread, so all three go through <see cref="_lock"/>;
 /// the expensive enumerate happens outside it.
 /// </summary>
-public sealed class MixContextProvider
+public sealed class MixContextProvider : IQueueContext
 {
     private readonly Mix _mix;
     private readonly MixContentResolver _resolver;
@@ -70,18 +70,18 @@ public sealed class MixContextProvider
     /// turning shuffle on reorders only what hasn't played yet this pass, turning it off
     /// resumes the natural order after the playing song.
     /// </summary>
-    public void SetShuffle(bool on)
+    public void SetShuffle(bool enabled)
     {
         lock (_lock)
         {
-            _shuffle = on;
+            _shuffle = enabled;
             if (!_initialized) return; // applied when the order is first built
 
-            _entryOrder.SetShuffle(on, keepCurrent: true, keepPlayed: true);
+            _entryOrder.SetShuffle(enabled, keepCurrent: true, keepPlayed: true);
             // Before the loaded entry's first item is handed out nothing in it has
             // played, so it can reorder freely.
             if (_itemsLoaded)
-                _itemOrder.SetShuffle(on, keepCurrent: _itemHandedOut, keepPlayed: true);
+                _itemOrder.SetShuffle(enabled, keepCurrent: _itemHandedOut, keepPlayed: true);
         }
     }
 

@@ -1,3 +1,4 @@
+using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Games;
 using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Playback;
@@ -247,6 +248,111 @@ public class PlaybackRouterTests
         await h.Router.RouteAsync(PlaybackRoute.Player);
         await WaitUntilAsync(() => h.LastTitle == "queued");
         Assert.True(h.Player.IsActive);
+    }
+
+    // -- The player channel, driven step by step with fakes --
+
+    private static async Task<ITransportControls> PlayAsync(Harness h, FakeItem first)
+    {
+        await h.Player.EnsureActiveAsync();
+        await Eventually.Until(() => first.Plays == 1, first.Metadata.Title);
+        return Assert.IsAssignableFrom<ITransportControls>(h.Runner.ActiveSource);
+    }
+
+    [Fact]
+    public async Task Tuning_away_while_the_next_track_loads_does_not_bring_back_the_skipped_one()
+    {
+        await using var h = new Harness();
+        var context = new FakeContext();
+        var a = new FakeItem("a", TimeSpan.FromMinutes(3)) { At = TimeSpan.FromSeconds(30) };
+        h.Player.Model.AppendExplicit([a]);
+        h.Player.Model.SetContext(context, "m");
+        var controls = await PlayAsync(h, a);
+
+        await controls.NextAsync(); // a goes into history while the context resolves
+        await Eventually.Until(() => context.Calls == 1, "the context to be asked for a track");
+        await h.Router.RouteAsync(PlaybackRoute.Silent);
+        await h.Router.RouteAsync(PlaybackRoute.Player);
+
+        // It carries on to the next track rather than resuming a.
+        await Eventually.Until(() => context.Calls == 2, "the context to be asked again");
+        var next = new FakeItem("next");
+        context.Feed(next);
+        await Eventually.Until(() => next.Plays == 1, "the next track");
+        Assert.Equal(1, a.Plays);
+
+        // a is in history once: one step back reaches it, and there's nothing before it.
+        await controls.PreviousAsync();
+        await Eventually.Until(() => a.Plays == 2, "a again");
+        Assert.False(controls.CanSkipPrevious);
+    }
+
+    [Fact]
+    public async Task A_restart_before_a_resumed_track_gets_going_starts_it_from_the_top()
+    {
+        await using var h = new Harness();
+        var a = new FakeItem("a", TimeSpan.FromMinutes(3));
+        h.Player.Model.AppendExplicit([a]);
+        var controls = await PlayAsync(h, a);
+
+        a.At = TimeSpan.FromSeconds(30);
+        await h.Router.RouteAsync(PlaybackRoute.Silent);
+        a.HoldStart = FakeItem.NewSignal(); // starting again takes a moment (a resolve, say)
+        await h.Router.RouteAsync(PlaybackRoute.Player);
+        await Eventually.Until(() => a.Plays == 2, "the resumed play");
+
+        await controls.RestartAsync();
+        await Eventually.Until(() => a.Plays == 3, "the restarted play");
+        a.HoldStart.TrySetResult();
+
+        await Eventually.Until(() => a.StartPositions.Count == 2, "the restarted play to start");
+        Assert.Equal([TimeSpan.Zero, TimeSpan.Zero], a.StartPositions);
+    }
+
+    [Fact]
+    public async Task The_queue_shows_nothing_playing_once_another_source_takes_over()
+    {
+        await using var h = new Harness();
+        var a = new FakeItem("a");
+        h.Player.Model.AppendExplicit([a]);
+        await PlayAsync(h, a);
+        await Eventually.Until(() => h.Player.Model.Current?.Item == a, "a to show as playing");
+
+        // Tuning away parks the player, which comes back to a: it still shows a.
+        await h.Router.RouteAsync(PlaybackRoute.Silent);
+        Assert.Same(a, h.Player.Model.Current?.Item);
+        await h.Router.RouteAsync(PlaybackRoute.Player);
+        await Eventually.Until(() => a.Plays == 2, "a again");
+
+        // Another source taking over (Spotify Connect, the test tone) ends the queue's engine.
+        await new ActionDispatcher(h.Runner, new SourceConfigStore())
+            .RunAsync(new EventAction(EventActionType.SwitchSource, "testtone"));
+
+        Assert.False(h.Player.IsActive);
+        Assert.Null(h.Player.Model.Current);
+    }
+
+    [Fact]
+    public async Task Switching_the_players_mix_while_tuned_away_plays_the_new_mix_on_return()
+    {
+        await using var h = new Harness();
+        var oldMix = new FakeContext("old");
+        var x = new FakeItem("old-1");
+        oldMix.Feed(x);
+        h.Player.Model.SetContext(oldMix, "old");
+        await PlayAsync(h, x);
+        await h.Router.RouteAsync(PlaybackRoute.Silent);
+
+        // What playing a mix does while another channel is on: replace the context, and since
+        // the player can't take the engine, nothing else.
+        var newMix = new FakeContext("new");
+        var y = new FakeItem("new-1");
+        newMix.Feed(y);
+        h.Player.Model.SetContext(newMix, "new", replaceNow: true);
+        await h.Router.RouteAsync(PlaybackRoute.Player);
+
+        await Eventually.Until(() => y.Plays == 1, "the new mix");
+        Assert.Equal(1, x.Plays);
     }
 
     [Fact]

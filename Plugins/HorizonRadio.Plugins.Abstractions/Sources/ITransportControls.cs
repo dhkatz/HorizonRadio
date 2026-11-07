@@ -25,6 +25,12 @@ public interface ITransportControls
     bool IsPaused { get; }
 
     Task TogglePauseAsync();
+
+    /// <summary>Pause or resume. Asking for the state it's already in does nothing, so
+    /// "pause" never resumes. The default toggles when the state differs, which can race a
+    /// toggle on another thread; sources that can set it in one step override it.</summary>
+    Task SetPausedAsync(bool paused) => paused == IsPaused ? Task.CompletedTask : TogglePauseAsync();
+
     Task NextAsync();
     Task PreviousAsync();
 

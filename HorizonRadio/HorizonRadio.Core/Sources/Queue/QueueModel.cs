@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using HorizonRadio.Core.Sources.Mixes;
 
 namespace HorizonRadio.Core.Sources.Queue;
 
@@ -12,7 +11,7 @@ namespace HorizonRadio.Core.Sources.Queue;
 /// the active mix context — persists for the app's lifetime.
 ///
 /// Two zones, Spotify-style: an explicit list of user one-offs played first, then a
-/// single infinite <see cref="MixContextProvider"/> context that refills the tail
+/// single infinite context (<see cref="IQueueContext"/>, a mix) that refills the tail
 /// forever. The model holds the data; the engine drives it.
 ///
 /// Thread-safety: UI-thread callers mutate via the public methods; the engine
@@ -23,10 +22,15 @@ public sealed class QueueModel
 {
     private readonly object _lock = new();
     private readonly List<QueueItem> _explicit = new();
-    private MixContextProvider? _context;
+    private IQueueContext? _context;
     private string? _contextMixId;
     private QueueItem? _current;
     private bool _currentFromContext;
+
+    // Moves on whenever what should play next changes under the engine: a jump, or a new
+    // context. The engine notes the generation it picked at, so it can tell a jump it already
+    // honoured from a newer one, and drop a context track that arrives after its context left.
+    private int _generation;
 
     /// <summary>Raised after any change to the queue's contents or now-playing,
     /// so the sidebar can re-snapshot. Fires on the mutating thread.</summary>
@@ -51,7 +55,10 @@ public sealed class QueueModel
 
     /// <summary>The active context generator, or null. The engine pulls from it
     /// and the sidebar peeks it; both guard their own access.</summary>
-    public MixContextProvider? Context { get { lock (_lock) return _context; } }
+    public IQueueContext? Context { get { lock (_lock) return _context; } }
+
+    /// <summary>See <see cref="_generation"/>.</summary>
+    internal int Generation { get { lock (_lock) return _generation; } }
 
     /// <summary>Whether anything is left to play — used by the engine's idle
     /// re-check and to gate transport's "next". A context only counts if it can
@@ -61,20 +68,25 @@ public sealed class QueueModel
 
     // -- engine-side consumption --
 
-    /// <summary>Take (and remove) the front explicit item, or null if none. The
-    /// item is now "playing", not "in queue", so it leaves the explicit list.</summary>
-    internal QueueItem? TakeExplicitFront()
+    /// <summary>
+    /// The engine's pick: take (and remove) the front explicit item, or else hand back the
+    /// context to draw from, with the generation it was read at, all at once. So a jump either
+    /// happened before (and this is its result) or after (and its generation is newer).
+    /// Raises nothing, so the engine can call it under its own lock: when an item was taken, it
+    /// calls <see cref="NotifyChanged"/> afterwards.
+    /// </summary>
+    internal (QueueItem? Item, IQueueContext? Context, int Generation) TakeNext()
     {
-        QueueItem item;
         lock (_lock)
         {
-            if (_explicit.Count == 0) return null;
-            item = _explicit[0];
+            if (_explicit.Count == 0) return (null, _context, _generation);
+            var item = _explicit[0];
             _explicit.RemoveAt(0);
+            return (item, null, _generation);
         }
-        Changed?.Invoke();
-        return item;
     }
+
+    internal void NotifyChanged() => Changed?.Invoke();
 
     internal void SetNowPlaying(QueueItem? item, bool fromContext)
     {
@@ -159,6 +171,7 @@ public sealed class QueueModel
             var i = _explicit.FindIndex(q => q.Id == id);
             found = i >= 0;
             if (i > 0) _explicit.RemoveRange(0, i);
+            if (found) _generation++;
         }
         if (!found) return;
         Changed?.Invoke();
@@ -175,10 +188,11 @@ public sealed class QueueModel
     /// <summary>Set (or clear) the infinite context the queue draws from once the
     /// explicit zone is empty. <paramref name="replaceNow"/> interrupts the current
     /// track so a station switch takes effect immediately rather than after the
-    /// playing track ends.</summary>
-    public void SetContext(MixContextProvider? provider, string? mixId, bool replaceNow = false)
+    /// playing track ends. Either way, a track the old context is still resolving is
+    /// dropped: the next one comes from the new context.</summary>
+    public void SetContext(IQueueContext? provider, string? mixId, bool replaceNow = false)
     {
-        lock (_lock) { _context = provider; _contextMixId = mixId; }
+        lock (_lock) { _context = provider; _contextMixId = mixId; _generation++; }
         Changed?.Invoke();
         if (provider != null) WorkAvailable?.Invoke();
         if (replaceNow) InterruptRequested?.Invoke();
@@ -199,7 +213,7 @@ public sealed class QueueModel
         QueueItem? current;
         bool fromContext;
         List<QueueItem> snapshot;
-        MixContextProvider? context;
+        IQueueContext? context;
         string? name;
         lock (_lock)
         {
