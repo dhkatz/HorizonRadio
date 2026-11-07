@@ -24,7 +24,6 @@ public sealed class LocalPlayableItem : PlayableItem
     public static string LocalExternalId(string path) => ExternalIdPrefix + path;
 
     private readonly string _path;
-    private bool _prepared;
     private long _positionTicks;
     private long _pendingSeekTicks = -1; // -1 = none; the pump applies it next chunk
 
@@ -62,11 +61,14 @@ public sealed class LocalPlayableItem : PlayableItem
 
     private static void Log(string msg) => Debug.WriteLine($"[hzn-local-item] {msg}");
 
-    public override Task PrepareAsync(CancellationToken ct)
+    public override Task PrepareAsync(CancellationToken ct) => PrepareOnceAsync(_ =>
     {
-        if (_prepared) return Task.CompletedTask;
-        _prepared = true;
+        ReadTags();
+        return Task.CompletedTask;
+    }, ct);
 
+    private void ReadTags()
+    {
         // Tags are cheap local reads — fold metadata + duration in here so an
         // engine that warms the next item also pre-fetches its HUD info.
         try
@@ -98,8 +100,6 @@ public sealed class LocalPlayableItem : PlayableItem
         {
             Log($"tag read failed for {_path}: {ex.Message}");
         }
-
-        return Task.CompletedTask;
     }
 
     public override async Task<Track?> TryGetMetadataAsync(CancellationToken ct)

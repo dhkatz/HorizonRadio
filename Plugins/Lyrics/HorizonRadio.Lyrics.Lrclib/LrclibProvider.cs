@@ -122,20 +122,27 @@ public sealed class LrclibProvider : ILyricsProvider
         return plain == null ? null : Unsynced(plain.PlainLyrics!);
     }
 
-    // The length isn't known (live radio): any record of this song. The lyrics are shown as text,
-    // so their timing doesn't matter; keep it anyway for when the position becomes known.
+    // The length isn't known (live radio): match the song by name. Radio follows the song from
+    // where its title changed, so the timing matters, but with no length to check it against,
+    // take the cut most uploads agree on (the standard one, not a radio edit or an extended mix).
     private static SongLyrics? PickByName(IReadOnlyList<Record> records, LyricsQuery query)
     {
         var matching = records
             .Where(r => !r.Instrumental
                         && SearchTerms.MatchScore(query.Title, query.Artist, r.TrackName, r.ArtistName) != null)
             .ToList();
-        foreach (var r in matching)
+        var timed = matching
+            .Where(r => !string.IsNullOrWhiteSpace(r.SyncedLyrics))
+            .GroupBy(r => (int)Math.Round(r.Duration / DurationTolerance.TotalSeconds))
+            .OrderByDescending(g => g.Count());
+        foreach (var cut in timed)
         {
-            var text = r.SyncedLyrics?.Trim();
-            if (string.IsNullOrEmpty(text)) continue;
-            var (synced, lines) = LrcParser.Parse(text);
-            if (synced && lines.Count > 0) return new SongLyrics("lrclib", true, lines, Credit);
+            foreach (var r in cut)
+            {
+                var (synced, lines) = LrcParser.Parse(r.SyncedLyrics!.Trim());
+                if (synced && lines.Count > 0 && lines[^1].Time <= r.Length)
+                    return new SongLyrics("lrclib", true, lines, Credit);
+            }
         }
         var plain = matching.FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.PlainLyrics));
         return plain == null ? null : Unsynced(plain.PlainLyrics!);
