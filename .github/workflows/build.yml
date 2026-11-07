@@ -48,8 +48,7 @@ jobs:
       # long. (Set from a step: the runner context isn't available in a job's env.)
       - name: Put NuGet packages on the work drive
         shell: pwsh
-        run: '"NUGET_PACKAGES=$env:RUNNER_TEMP
-uget" >> $env:GITHUB_ENV'
+        run: '"NUGET_PACKAGES=$env:RUNNER_TEMP/nuget" >> $env:GITHUB_ENV'
 
       # Restore once; format and build reuse it. (Not cached: the packages are ~1.3 GB, and
       # restoring the cache took longer than restoring from nuget.org.)
