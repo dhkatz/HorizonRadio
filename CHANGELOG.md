@@ -133,6 +133,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is long and specific enough to name just that one remix, now identifies the song (a
   misspelled word is fine), and VocaDB also looks among remixes when the plain name search is
   buried under same-named covers.
+- **Songs credited to someone else, or titled in two languages, are found.** When only the
+  title can be trusted (the station credited its uploader, "(∵)キョトンP - エレクトリック・ラブ")
+  and VocaDB's same-titled entries are all one song's original and its covers and remixes, the
+  song is that original. A title that carries its native name in parentheses ("Cherry Blossoms
+  after the Sunshie ( 晴れのち桜)") is also tried by each name alone.
 - **Local files show their tags again, and YouTube videos aren't skipped.** A file could
   play under the name taken from its file name ("02" as the artist of "02 - WATCH ME.flac",
   no cover), and a YouTube video could be skipped as "unresolved", when the queue was

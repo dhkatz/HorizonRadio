@@ -199,7 +199,7 @@ public sealed class VocaDbProvider : IMetadataProvider
         // accept that: 1-word titles are generic/cover-prone (the single-token guard already
         // distrusts them), and lang=English's mistranslation of name-like kanji was the worse bug.
         var url = $"{Base}/songs?query={Uri.EscapeDataString(nameQuery)}"
-                + "&maxResults=10&nameMatchMode=Auto&lang=Default&fields=Artists,MainPicture,ThumbUrl,Names,Albums,PVs";
+                + "&maxResults=10&nameMatchMode=Auto&lang=Default&fields=" + SongFields;
         // artistId[]= scopes the search to one artist; the array syntax is what the REST API needs.
         // A scoped hit has its artist already confirmed, so the title alone qualifies it.
         bool artistConfirmed = artistId.HasValue;
@@ -207,18 +207,34 @@ public sealed class VocaDbProvider : IMetadataProvider
         if (remixesOnly) url += "&songTypes=Remix&sort=RatingScore";
 
         var root = await GetJsonAsync(url, ct).ConfigureAwait(false);
-        return root is { } r ? SelectMatch(r, rawTitle, rawArtist, artistConfirmed, sink) : null;
+        if (root is not { } r) return null;
+        var match = SelectMatch(r, rawTitle, rawArtist, artistConfirmed, sink, out var originalToFetch);
+        if (match != null || originalToFetch is not { } original) return match;
+
+        // The title's versions all point at an original the search didn't return: fetch it.
+        var song = await GetJsonAsync($"{Base}/songs/{original}?fields={SongFields}&lang=Default", ct).ConfigureAwait(false);
+        return song is { } s && Str(s, "name") is { } name ? WithAlbumCover(ToMatch(s, name, Str(s, "artistString"), PickArt(s))) : null;
     }
+
+    private const string SongFields = "Artists,MainPicture,ThumbUrl,Names,Albums,PVs";
 
     /// <summary>Pick the best-scoring song whose name (and, unless <paramref name="artistConfirmed"/>,
     /// artist) clears the match guard, and lift its representative image URL + year. Pure JSON-in
     /// for unit testing without HTTP. <paramref name="sink"/>, when supplied, collects every scored
     /// song (best score across its name variants) for the diagnostics trace.</summary>
     internal static Match? SelectMatch(JsonElement root, string queryTitle, string? queryArtist,
-        bool artistConfirmed = false, ICollection<MetadataTrace.CatalogCandidate>? sink = null)
+        bool artistConfirmed = false, ICollection<MetadataTrace.CatalogCandidate>? sink = null) =>
+        SelectMatch(root, queryTitle, queryArtist, artistConfirmed, sink, out _);
+
+    /// <param name="originalToFetch">Set when the title-only matches are all versions of one original
+    /// song that isn't among the results: the caller fetches it (see <see cref="FamilyOriginal"/>).</param>
+    internal static Match? SelectMatch(JsonElement root, string queryTitle, string? queryArtist,
+        bool artistConfirmed, ICollection<MetadataTrace.CatalogCandidate>? sink, out int? originalToFetch)
     {
+        originalToFetch = null;
         if (!root.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
             return null;
+        var matched = new List<JsonElement>();
 
         // For a title-only query, reject a widely-covered/ambiguous title rather than attaching a
         // random cover's art. Inert when an artist is present — including the artist-scoped path,
@@ -243,6 +259,7 @@ public sealed class VocaDbProvider : IMetadataProvider
             sink?.Add(new(name, artist, null, scoreForSong));
             if (scoreForSong is { }) titleGuard.Observe(artist);
             if (scoreForSong is not { } score) continue;
+            matched.Add(s);
 
             // Prefer a strictly higher score; on a tie, prefer a candidate that actually has its own
             // art (a real thumbnail) so an equal-scoring sibling with art (e.g. the Kagamine Rin
@@ -254,19 +271,44 @@ public sealed class VocaDbProvider : IMetadataProvider
             if (!better) continue;
 
             bestScore = score;
-            best = new Match(name, artist, ownArt, ParseYear(Str(s, "publishDate")), OriginalId(s),
-                SelectAlbumId(s), SelectPvs(s), IntOr(s, "id", 0));
+            best = ToMatch(s, name, artist, ownArt);
         }
-        if (titleGuard.IsAmbiguous) return null;
-
-        // Prefer a real square album cover over the winner's own 16:9 video thumbnail: prepend the
-        // album image URLs ahead of its thumbnail (DownloadFirstAsync tries them in order and falls
-        // through to the thumbnail if the album image is missing). Both extensions are offered
-        // because VocaDB serves some covers only as .png.
-        if (best is { AlbumId: { } albumId })
-            best = best with { ArtUrls = [.. AlbumCoverUrls(albumId), .. best.ArtUrls] };
-        return best;
+        if (titleGuard.IsAmbiguous)
+        {
+            // Many artists, but often one song: its original and the covers, remixes, and PVs VocaDB
+            // links to it. Then the song is the original.
+            if (FamilyOriginal(matched) is not { } original) return null;
+            var found = matched.FirstOrDefault(s => IntOr(s, "id", 0) == original);
+            if (found.ValueKind == JsonValueKind.Undefined)
+            {
+                originalToFetch = original;
+                return null;
+            }
+            best = ToMatch(found, Str(found, "name") ?? "", Str(found, "artistString"), PickArt(found));
+        }
+        return WithAlbumCover(best);
     }
+
+    /// <summary>The one original song that every one of <paramref name="songs"/> is, or is a version
+    /// of (a cover, remix, or PV VocaDB links to it with originalVersionId), or null when they're
+    /// more than one song. "エレクトリック・ラブ" by a station's uploader credit matches eight
+    /// artists' entries, all versions of 八王子P's original (1389); "Friend" matches unrelated songs.</summary>
+    internal static int? FamilyOriginal(IReadOnlyList<JsonElement> songs)
+    {
+        if (songs.Count < 2) return null;
+        var roots = songs.Select(s => OriginalId(s) ?? IntOr(s, "id", 0)).Distinct().ToList();
+        return roots.Count == 1 && roots[0] > 0 ? roots[0] : null;
+    }
+
+    private static Match ToMatch(JsonElement s, string name, string? artist, List<string> art) =>
+        new(name, artist, art, ParseYear(Str(s, "publishDate")), OriginalId(s), SelectAlbumId(s), SelectPvs(s), IntOr(s, "id", 0));
+
+    // Prefer a real square album cover over the winner's own 16:9 video thumbnail: prepend the
+    // album image URLs ahead of its thumbnail (DownloadFirstAsync tries them in order and falls
+    // through to the thumbnail if the album image is missing). Both extensions are offered
+    // because VocaDB serves some covers only as .png.
+    private static Match? WithAlbumCover(Match? match) =>
+        match is { AlbumId: { } albumId } ? match with { ArtUrls = [.. AlbumCoverUrls(albumId), .. match.ArtUrls] } : match;
 
     // VocaDB's link from a Remaster / re-upload to the song it derives from (0 = none). Lets an
     // art-less remaster borrow the original version's image.

@@ -230,6 +230,10 @@ public static class SearchTerms
     /// often part of the name ("(Transparent Meteor)"), are kept.</summary>
     internal static string StripCreditGroups(string title) => SplitCredits(title).Name;
 
+    /// <summary>Whether a bracketed phrase credits a version or who made it ("feat. GUMI",
+    /// "Piano ver.", "X Remix") rather than naming the song.</summary>
+    public static bool IsCredit(string? text) => !string.IsNullOrEmpty(text) && CreditWord.IsMatch(text);
+
     private static readonly Regex RemixWord = new(
         @"\b(?:remix|rmx|mix|edit|bootleg|remodel|rework|flip)\b|リミックス",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
