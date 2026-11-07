@@ -104,6 +104,20 @@ public static class SearchTerms
     public static double? MatchScore(string queryTitle, string? queryArtist, string? resultTitle, string? resultArtist,
                                      bool artistConfirmed = false)
     {
+        if (MatchScoreCore(queryTitle, queryArtist, resultTitle, resultArtist, artistConfirmed) is not { } score)
+            return null;
+
+        // Among results that all match, prefer the one whose name IS the query over a longer title
+        // that contains it: "ヒバナ" over the mashup "ゴーストルール + ヒバナ + マシュマロ" in the
+        // same artist's songs, which otherwise score the same. Small enough to only break ties.
+        var name = Tokens(StripCreditGroups(resultTitle!));
+        var exactness = name.Count == 0 ? 1.0 : Coverage(name, Tokens(CleanForSearch(queryTitle)));
+        return score + 0.05 * exactness;
+    }
+
+    private static double? MatchScoreCore(string queryTitle, string? queryArtist, string? resultTitle, string? resultArtist,
+                                          bool artistConfirmed)
+    {
         var qt = Tokens(CleanForSearch(queryTitle));
         var rt = Tokens(resultTitle);
         if (qt.Count == 0 || rt.Count == 0) return null;

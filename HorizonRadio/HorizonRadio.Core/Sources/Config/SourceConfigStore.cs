@@ -67,6 +67,14 @@ public sealed class SourceConfigStore
     /// choice survives restarts.</summary>
     public List<string> SearchSourcePriority { get; set; } = new();
 
+    /// <summary>Whether synced lyrics fill in karaoke-style as they're sung (word by word where
+    /// they're word-timed). Off highlights the whole line at once.</summary>
+    public bool LyricsKaraoke { get; set; } = true;
+
+    /// <summary>The lyrics version last picked ("Romaji", "English"), shown by default whenever a
+    /// song has it; null = the original.</summary>
+    public string? LyricsVersion { get; set; }
+
     private readonly Dictionary<string, Dictionary<string, object?>> _perSource = new();
 
     private static string DefaultPath =>
@@ -131,6 +139,13 @@ public sealed class SourceConfigStore
             if (root.TryGetProperty("previewVolume", out var pv) && pv.ValueKind == JsonValueKind.Number)
                 store.PreviewVolume = pv.GetDouble();
 
+            if (root.TryGetProperty("lyricsKaraoke", out var lk) &&
+                (lk.ValueKind == JsonValueKind.True || lk.ValueKind == JsonValueKind.False))
+                store.LyricsKaraoke = lk.GetBoolean();
+
+            if (root.TryGetProperty("lyricsVersion", out var lv) && lv.ValueKind == JsonValueKind.String)
+                store.LyricsVersion = lv.GetString();
+
             if (root.TryGetProperty("searchSourcePriority", out var sp) && sp.ValueKind == JsonValueKind.Array)
             {
                 foreach (var id in sp.EnumerateArray())
@@ -175,6 +190,8 @@ public sealed class SourceConfigStore
             writer.WriteBoolean("previewEnabled", PreviewEnabled);
             if (PreviewDeviceId != null) writer.WriteString("previewDeviceId", PreviewDeviceId);
             writer.WriteNumber("previewVolume", PreviewVolume);
+            writer.WriteBoolean("lyricsKaraoke", LyricsKaraoke);
+            if (LyricsVersion != null) writer.WriteString("lyricsVersion", LyricsVersion);
             if (SearchSourcePriority.Count > 0)
             {
                 writer.WriteStartArray("searchSourcePriority");

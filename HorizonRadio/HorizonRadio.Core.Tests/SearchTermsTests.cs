@@ -18,6 +18,16 @@ public class SearchTermsTests
     }
 
     [Fact]
+    public void The_exact_title_outranks_a_longer_title_containing_it()
+    {
+        var exact = SearchTerms.MatchScore("ヒバナ", "DECO*27", "ヒバナ", "DECO*27 feat. 初音ミク", artistConfirmed: true);
+        var mashup = SearchTerms.MatchScore("ヒバナ", "DECO*27", "ゴーストルール + ヒバナ + マシュマロ = ???",
+            "DECO*27 feat. 初音ミク", artistConfirmed: true);
+
+        Assert.True(exact > mashup);
+    }
+
+    [Fact]
     public void A_remix_query_still_matches_its_remix()
     {
         Assert.NotNull(SearchTerms.MatchScore("Endless World Wahiko Remix", "Aerial Flow",

@@ -1,0 +1,129 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             xmlns:views="using:HorizonRadio.UI.Views"
+             xmlns:material="using:Material.Icons.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="360"
+             x:Class="HorizonRadio.UI.Views.LyricsView"
+             x:Name="Root"
+             x:DataType="vm:LyricsViewModel">
+
+    <!-- The playing song's lyrics. Synced lyrics follow the song: the line being sung is bright,
+         kept in the middle, and (karaoke on) fills as it's sung, word by word where the lyrics
+         are word-timed. Clicking a line jumps there when the source can seek. Unsynced lyrics
+         (and live radio, which doesn't know where in the song it is yet) are a sheet. -->
+    <Grid RowDefinitions="Auto,*,Auto">
+        <!-- Versions (Original / Romaji / English) on the left, the karaoke toggle on the right. -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+            <ItemsControl Grid.Column="0" ItemsSource="{Binding Versions}" IsVisible="{Binding HasVersions}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="6" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:LyricsVersionViewModel">
+                        <Button Content="{Binding Label}"
+                                Classes.Secondary="{Binding IsSelected}"
+                                Classes.Ghost="{Binding !IsSelected}"
+                                Padding="10,4" FontSize="12"
+                                Command="{Binding #Root.((vm:LyricsViewModel)DataContext).SelectVersionCommand}"
+                                CommandParameter="{Binding}" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <ToggleButton Grid.Column="1"
+                          IsChecked="{Binding IsKaraoke, Mode=TwoWay}"
+                          IsVisible="{Binding IsFollowing}"
+                          Background="Transparent" BorderThickness="0"
+                          Width="32" Height="32" Padding="0"
+                          HorizontalContentAlignment="Center"
+                          VerticalContentAlignment="Center"
+                          ToolTip.Tip="Karaoke: fill the lyrics as they're sung">
+                <material:MaterialIcon Kind="MicrophoneVariant" Width="16" Height="16" />
+            </ToggleButton>
+        </Grid>
+
+        <TextBlock Grid.Row="1"
+                   Text="{Binding Status}"
+                   FontSize="14" Opacity="0.55"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   IsVisible="{Binding Status, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+        <ScrollViewer Grid.Row="1"
+                      x:Name="Scroller"
+                      HorizontalScrollBarVisibility="Disabled"
+                      IsVisible="{Binding HasLines}">
+            <!-- Lines fade out at the top and bottom edges rather than being cut off; the list's
+                 margin keeps the first and last lines clear of the fade. -->
+            <ScrollViewer.OpacityMask>
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                    <GradientStop Offset="0" Color="Transparent" />
+                    <GradientStop Offset="0.12" Color="Black" />
+                    <GradientStop Offset="0.88" Color="Black" />
+                    <GradientStop Offset="1" Color="Transparent" />
+                </LinearGradientBrush>
+            </ScrollViewer.OpacityMask>
+            <ItemsControl x:Name="LinesList" ItemsSource="{Binding Lines}" Margin="0,40">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:LyricLineViewModel">
+                        <Border Background="Transparent"
+                                Padding="0,5"
+                                Cursor="{Binding #Root.((vm:LyricsViewModel)DataContext).CanSeek, Converter={x:Static vm:LyricsConverters.HandCursor}}"
+                                Tapped="OnLineTapped">
+                            <Panel>
+                                <!-- A sheet line, or a timed line with no words (a break). -->
+                                <TextBlock Text="{Binding Text}"
+                                           IsVisible="{Binding !HasWords}"
+                                           FontSize="{Binding IsBackground, Converter={x:Static vm:LyricsConverters.LineSize}}"
+                                           FontWeight="SemiBold"
+                                           FontStyle="{Binding IsBackground, Converter={x:Static vm:LyricsConverters.LineStyle}}"
+                                           Opacity="{Binding Opacity}"
+                                           TextWrapping="Wrap">
+                                    <TextBlock.Transitions>
+                                        <Transitions>
+                                            <DoubleTransition Property="Opacity" Duration="0:0:0.2" />
+                                        </Transitions>
+                                    </TextBlock.Transitions>
+                                </TextBlock>
+                                <!-- A line following the song, word by word so it can fill. -->
+                                <ItemsControl ItemsSource="{Binding Words}"
+                                              IsVisible="{Binding HasWords}"
+                                              FontSize="{Binding IsBackground, Converter={x:Static vm:LyricsConverters.LineSize}}"
+                                              FontWeight="SemiBold"
+                                              FontStyle="{Binding IsBackground, Converter={x:Static vm:LyricsConverters.LineStyle}}"
+                                              Opacity="{Binding Opacity}">
+                                    <ItemsControl.Transitions>
+                                        <Transitions>
+                                            <DoubleTransition Property="Opacity" Duration="0:0:0.2" />
+                                        </Transitions>
+                                    </ItemsControl.Transitions>
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:KaraokeWordViewModel">
+                                            <views:KaraokeText Text="{Binding Text}"
+                                                               Fill="{Binding Fill}"
+                                                               Margin="{Binding SpaceAfter, Converter={x:Static vm:LyricsConverters.WordGap}}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Panel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <TextBlock Grid.Row="2"
+                   Text="{Binding Credit}"
+                   FontSize="11" Opacity="0.45"
+                   Margin="0,12,0,0"
+                   IsVisible="{Binding Credit, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+    </Grid>
+</UserControl>
