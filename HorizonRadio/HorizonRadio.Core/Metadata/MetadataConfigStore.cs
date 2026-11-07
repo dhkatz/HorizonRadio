@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using HorizonRadio.Core.IO;
 using HorizonRadio.Core.Sources.Config;
 
 namespace HorizonRadio.Core.Metadata;
@@ -147,35 +148,36 @@ public sealed class MetadataConfigStore
         path ??= DefaultPath;
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            using var stream = File.Create(path);
-            using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
-            writer.WriteStartObject();
-            if (SelectedProviderId != null) writer.WriteString("selected", SelectedProviderId);
-
-            writer.WriteStartArray("order");
-            foreach (var id in Order) writer.WriteStringValue(id);
-            writer.WriteEndArray();
-
-            writer.WriteStartArray("introduced");
-            foreach (var id in Introduced) writer.WriteStringValue(id);
-            writer.WriteEndArray();
-
-            writer.WriteStartObject("forced");
-            foreach (var (field, pid) in Forced) writer.WriteString(field.ToString(), pid);
-            writer.WriteEndObject();
-
-            writer.WriteString("titleModelMode", TitleModelMode.ToString());
-
-            writer.WriteStartObject("perProvider");
-            foreach (var (provId, bag) in _perProvider)
+            AtomicFile.Write(path, stream =>
             {
-                writer.WriteStartObject(provId);
-                foreach (var (k, v) in bag) WriteValue(writer, k, v);
+                using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
+                writer.WriteStartObject();
+                if (SelectedProviderId != null) writer.WriteString("selected", SelectedProviderId);
+
+                writer.WriteStartArray("order");
+                foreach (var id in Order) writer.WriteStringValue(id);
+                writer.WriteEndArray();
+
+                writer.WriteStartArray("introduced");
+                foreach (var id in Introduced) writer.WriteStringValue(id);
+                writer.WriteEndArray();
+
+                writer.WriteStartObject("forced");
+                foreach (var (field, pid) in Forced) writer.WriteString(field.ToString(), pid);
                 writer.WriteEndObject();
-            }
-            writer.WriteEndObject();
-            writer.WriteEndObject();
+
+                writer.WriteString("titleModelMode", TitleModelMode.ToString());
+
+                writer.WriteStartObject("perProvider");
+                foreach (var (provId, bag) in _perProvider)
+                {
+                    writer.WriteStartObject(provId);
+                    foreach (var (k, v) in bag) WriteValue(writer, k, v);
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndObject();
+                writer.WriteEndObject();
+            });
         }
         catch (Exception ex) { Log($"save failed: {ex.Message}"); }
     }

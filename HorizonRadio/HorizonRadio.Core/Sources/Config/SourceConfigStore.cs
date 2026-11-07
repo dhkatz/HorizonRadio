@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
+using HorizonRadio.Core.IO;
 
 namespace HorizonRadio.Core.Sources.Config;
 
@@ -80,6 +81,10 @@ public sealed class SourceConfigStore
     public double LyricsRadioOffset { get; set; }
 
     private readonly Dictionary<string, Dictionary<string, object?>> _perSource = new();
+
+    // Serializes SaveToDisk: two saves (e.g. a UI change and a debounced flush) must not
+    // write the file at the same time.
+    private readonly object _saveLock = new();
 
     private static string DefaultPath =>
         Path.Combine(
@@ -182,39 +187,49 @@ public sealed class SourceConfigStore
     public void SaveToDisk(string? path = null)
     {
         path ??= DefaultPath;
+        lock (_saveLock)
+        {
+            SaveLocked(path);
+        }
+    }
+
+    // Written to a temp file and renamed over sources.json, so a save that throws partway
+    // (or a crash) leaves the previous settings intact instead of a truncated file.
+    private void SaveLocked(string path)
+    {
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-
-            using var stream = File.Create(path);
-            using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
-
-            writer.WriteStartObject();
-            if (LastSelectedId != null) writer.WriteString("lastSelected", LastSelectedId);
-            if (GameId != null) writer.WriteString("game", GameId);
-            if (TargetStation != null) writer.WriteString("targetStation", TargetStation);
-            writer.WriteBoolean("shuffle", Shuffle);
-            writer.WriteBoolean("previewEnabled", PreviewEnabled);
-            if (PreviewDeviceId != null) writer.WriteString("previewDeviceId", PreviewDeviceId);
-            writer.WriteNumber("previewVolume", PreviewVolume);
-            writer.WriteBoolean("lyricsKaraoke", LyricsKaraoke);
-            if (LyricsVersion != null) writer.WriteString("lyricsVersion", LyricsVersion);
-            if (LyricsRadioOffset != 0) writer.WriteNumber("lyricsRadioOffset", LyricsRadioOffset);
-            if (SearchSourcePriority.Count > 0)
+            AtomicFile.Write(path, stream =>
             {
-                writer.WriteStartArray("searchSourcePriority");
-                foreach (var id in SearchSourcePriority) writer.WriteStringValue(id);
-                writer.WriteEndArray();
-            }
-            writer.WriteStartObject("perSource");
-            foreach (var (sourceId, bag) in _perSource)
-            {
-                writer.WriteStartObject(sourceId);
-                foreach (var (k, v) in bag) WriteValue(writer, k, v);
+                using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
+
+                writer.WriteStartObject();
+                if (LastSelectedId != null) writer.WriteString("lastSelected", LastSelectedId);
+                if (GameId != null) writer.WriteString("game", GameId);
+                if (TargetStation != null) writer.WriteString("targetStation", TargetStation);
+                writer.WriteBoolean("shuffle", Shuffle);
+                writer.WriteBoolean("previewEnabled", PreviewEnabled);
+                if (PreviewDeviceId != null) writer.WriteString("previewDeviceId", PreviewDeviceId);
+                writer.WriteNumber("previewVolume", PreviewVolume);
+                writer.WriteBoolean("lyricsKaraoke", LyricsKaraoke);
+                if (LyricsVersion != null) writer.WriteString("lyricsVersion", LyricsVersion);
+                if (LyricsRadioOffset != 0) writer.WriteNumber("lyricsRadioOffset", LyricsRadioOffset);
+                if (SearchSourcePriority.Count > 0)
+                {
+                    writer.WriteStartArray("searchSourcePriority");
+                    foreach (var id in SearchSourcePriority) writer.WriteStringValue(id);
+                    writer.WriteEndArray();
+                }
+                writer.WriteStartObject("perSource");
+                foreach (var (sourceId, bag) in _perSource)
+                {
+                    writer.WriteStartObject(sourceId);
+                    foreach (var (k, v) in bag) WriteValue(writer, k, v);
+                    writer.WriteEndObject();
+                }
                 writer.WriteEndObject();
-            }
-            writer.WriteEndObject();
-            writer.WriteEndObject();
+                writer.WriteEndObject();
+            });
         }
         catch (Exception ex)
         {

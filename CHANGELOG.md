@@ -131,6 +131,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Settings can no longer be wiped by a save that fails partway.** A crash or an unlucky
+  moment while saving could leave `sources.json` (or another settings file) half-written,
+  and the app then started with default settings. Settings are now written to a temporary
+  file and swapped in only once complete, so the previous settings survive a failed save.
 - **A station set to Resume or Live no longer goes silent after you tune back to it.**
   Leaving the station could leave its channel unable to start again until the app
   restarted; it now always picks up when you return.

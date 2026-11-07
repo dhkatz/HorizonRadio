@@ -62,8 +62,8 @@ public sealed class PreviewController : IDisposable
 
     // Volume persistence is debounced: a slider drag fires SetVolume dozens of
     // times, so we coalesce them and write the store once the slider goes quiet.
-    // _persistLock serializes the disk write against the device/enable-change
-    // paths (UI thread) and the debounce timer (thread pool). Without the
+    // The debounce timer posts the write to the UI thread; _persistLock guards
+    // _volumeDirty/_disposed against SetVolume and Dispose. Without the
     // timer the position was only saved on Dispose, so a crash lost it.
     private readonly object _persistLock = new();
     private readonly Timer _persistTimer;
@@ -87,7 +87,9 @@ public sealed class PreviewController : IDisposable
         _speaker = speaker;
         _watcher = watcher;
         _save = save;
-        _persistTimer = new Timer(_ => FlushVolumeIfDirty(), null, Timeout.Infinite, Timeout.Infinite);
+        // The timer fires on the thread pool; the save itself runs on the UI thread, the
+        // thread that mutates the store, so it never enumerates the store mid-change.
+        _persistTimer = new Timer(_ => _post(OnPersistDue), null, Timeout.Infinite, Timeout.Infinite);
         Enabled = store.PreviewEnabled;
         DeviceId = store.PreviewDeviceId;
         Volume = store.PreviewVolume;
@@ -261,6 +263,17 @@ public sealed class PreviewController : IDisposable
         if (State == state) return;
         State = state;
         StateChanged?.Invoke();
+    }
+
+    // The debounce elapsed (posted to the UI thread). Dispose already flushed, so a
+    // post that lands after it does nothing.
+    private void OnPersistDue()
+    {
+        lock (_persistLock)
+        {
+            if (_disposed) return;
+            FlushVolumeIfDirty();
+        }
     }
 
     private void FlushVolumeIfDirty()

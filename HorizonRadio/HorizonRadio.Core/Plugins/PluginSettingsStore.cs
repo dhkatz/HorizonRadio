@@ -1,4 +1,5 @@
 using System.Text.Json;
+using HorizonRadio.Core.IO;
 using HorizonRadio.Plugins.Abstractions;
 
 namespace HorizonRadio.Core.Plugins;
@@ -108,20 +109,21 @@ public sealed class PluginSettingsStore
         if (_path == null) return;
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            using var stream = File.Create(_path);
-            using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
-            writer.WriteStartObject();
-            writer.WriteStartObject("plugins");
-            foreach (var (pluginId, values) in _plugins.OrderBy(p => p.Key, StringComparer.Ordinal))
+            AtomicFile.Write(_path, stream =>
             {
-                writer.WriteStartObject(pluginId);
-                foreach (var (key, value) in values.OrderBy(v => v.Key, StringComparer.Ordinal))
-                    writer.WriteString(key, value);
+                using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
+                writer.WriteStartObject();
+                writer.WriteStartObject("plugins");
+                foreach (var (pluginId, values) in _plugins.OrderBy(p => p.Key, StringComparer.Ordinal))
+                {
+                    writer.WriteStartObject(pluginId);
+                    foreach (var (key, value) in values.OrderBy(v => v.Key, StringComparer.Ordinal))
+                        writer.WriteString(key, value);
+                    writer.WriteEndObject();
+                }
                 writer.WriteEndObject();
-            }
-            writer.WriteEndObject();
-            writer.WriteEndObject();
+                writer.WriteEndObject();
+            });
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

@@ -85,12 +85,17 @@ public class PreviewControllerTests
     /// (the "UI thread") that <see cref="Drain"/> runs.</summary>
     private sealed class Harness
     {
-        private readonly Queue<Action> _posted = new();
+        // Concurrent: the volume debounce timer posts from a pool thread.
+        private readonly System.Collections.Concurrent.ConcurrentQueue<Action> _posted = new();
 
         public Harness(bool enabled = false, string? deviceId = null)
         {
             var store = new SourceConfigStore { PreviewEnabled = enabled, PreviewDeviceId = deviceId };
-            Controller = new PreviewController(Tee, store, _posted.Enqueue, Speaker, Watcher, () => Saves++);
+            Controller = new PreviewController(Tee, store, _posted.Enqueue, Speaker, Watcher, () =>
+            {
+                Saves++;
+                SaveThreadId = Environment.CurrentManagedThreadId;
+            });
             Controller.StateChanged += () => StateChanges++;
         }
 
@@ -102,6 +107,7 @@ public class PreviewControllerTests
         public PreviewController Controller { get; }
         public int StateChanges { get; set; }
         public int Saves { get; private set; }
+        public int SaveThreadId { get; private set; }
         public int Posted => _posted.Count;
 
         public void Drain()
@@ -406,5 +412,48 @@ public class PreviewControllerTests
         Assert.Equal(SpeakerState.Disposed, h.Controller.State);
         Assert.Equal(changes, h.StateChanges);
         Assert.Equal(TeeRoute.PrimaryOnly, h.Tee.Route);
+    }
+
+    // Waits for the volume debounce timer (a pool thread) to post its flush.
+    private static void WaitForPost(Harness h)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (h.Posted == 0)
+        {
+            Assert.True(DateTime.UtcNow < deadline, "the volume save was never posted");
+            Thread.Sleep(20);
+        }
+    }
+
+    [Fact]
+    public void The_debounced_volume_save_runs_via_post_not_on_the_timer_thread()
+    {
+        var h = new Harness();
+        var saves = h.Saves;
+
+        h.Controller.SetVolume(0.4);
+        WaitForPost(h);
+
+        // The timer only posted the save; it didn't write the store on its own thread.
+        Assert.Equal(saves, h.Saves);
+
+        h.Drain();
+
+        Assert.Equal(saves + 1, h.Saves);
+        Assert.Equal(Environment.CurrentManagedThreadId, h.SaveThreadId);
+    }
+
+    [Fact]
+    public void A_volume_save_posted_before_dispose_does_nothing_after_it()
+    {
+        var h = new Harness();
+        h.Controller.SetVolume(0.4);
+        WaitForPost(h);
+
+        h.Controller.Dispose(); // flushes the pending volume itself
+        var saves = h.Saves;
+        h.Drain();
+
+        Assert.Equal(saves, h.Saves);
     }
 }
