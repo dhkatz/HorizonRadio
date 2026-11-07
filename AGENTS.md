@@ -36,7 +36,7 @@ Assets/         README screenshots and artwork
 HorizonRadio/   the app: UI (Avalonia), Core (headless engine), Core.Tests, TitleModel
 Plugins/        everything that plugs into Horizon Radio (.NET)
   HorizonRadio.Plugins.Abstractions/   the plugin SDK
-  Games/  Metadata/  Sources/  Tools/  one project per plugin
+  Games/  Lyrics/  Metadata/  Sources/  Tools/  one project per plugin
 Mods/           code that runs inside a game, one folder per game, any toolchain
   ForzaHorizon6/   the version.dll mod (CMake; Bridge/ + Tests/ + docs/)
 HorizonRadio.slnx   the .NET solution (the native mod builds separately with CMake)
@@ -61,6 +61,14 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
 - **HorizonRadio.UI / HorizonRadio.Core (C#)** — sources (librespot, local files,
   yt-dlp/ffmpeg), metadata enrichment, and the dashboard. Tool-specific details
   stay encapsulated in each source class; they are not leaked into shared code.
+- **Lyrics (`Plugins/Lyrics/`, `Core/Lyrics/`)** — each `ILyricsPlugin` contributes
+  one `ILyricsProvider` (Unison, LRCLIB). `LyricsService` asks them all at once and
+  keeps the first synced answer in `SortOrder`, else the first unsynced one; a lookup
+  where a provider failed isn't remembered. The query carries the playing audio's
+  length (`IPlaybackProgress.Duration`): synced lyrics are only accepted when timed to
+  that length (±2 s on LRCLIB), because a file timed to another cut drifts. Live radio
+  has no length or song position, so its lyrics show as text (`LyricsViewModel`
+  follows along only when both are known).
 - **Game plugins (`Plugins/Games/`)** — the Horizon Radio side of a game
   integration. An `IGamePlugin` (SDK) builds one `IGameIntegration`: the game's
   audio output, its event sources, connection state, and optional capabilities

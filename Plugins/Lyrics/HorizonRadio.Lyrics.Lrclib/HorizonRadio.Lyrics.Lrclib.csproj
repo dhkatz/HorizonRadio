@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- LRCLIB lyrics plugin. References the host (Core) for the LRC parser and the song matcher, and
+       the plugin SDK (Abstractions) transitively. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <!-- Pick and the Record DTO are internal + unit-tested. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="HorizonRadio.Core.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\HorizonRadio\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+  </ItemGroup>
+
+</Project>

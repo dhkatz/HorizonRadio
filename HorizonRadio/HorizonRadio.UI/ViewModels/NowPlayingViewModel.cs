@@ -9,6 +9,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Audio;
+using HorizonRadio.Core.Lyrics;
 using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
@@ -133,13 +134,17 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
 
     public IReadOnlyList<IAudioSourceFactory> AvailableSources { get; }
 
+    /// <summary>The playing song's lyrics, under the track card.</summary>
+    public LyricsViewModel Lyrics { get; }
+
     public NowPlayingViewModel(SourceRunner runner, SourceConfigStore store,
         MixStore mixes, MixSwitcher switcher, QueuePlayback queue,
         string? gameOutputName,
         PreviewController? preview = null, ToastManager? toasts = null,
-        DialogManager? dialogs = null)
+        DialogManager? dialogs = null, LyricsService? lyrics = null)
     {
         _runner = runner;
+        Lyrics = new LyricsViewModel(lyrics, () => _runner?.ActiveSource as IPlaybackProgress);
         _store = store;
         _mixes = mixes;
         _switcher = switcher;
@@ -205,6 +210,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
                 // it must still get output-reachability evaluation/pause.
                 if (_runner?.ActiveSource is null)
                 {
+                    Lyrics.Clear();
                     // Nothing playing: clear the output-pause state so the next
                     // start re-evaluates reachability from a clean slate.
                     _outputAvailable = true;
@@ -497,6 +503,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     public NowPlayingViewModel()
     {
         AvailableSources = SourceCatalog.All;
+        Lyrics = new LyricsViewModel(null, () => null);
     }
 
     partial void OnSelectedFactoryChanged(IAudioSourceFactory? value)
@@ -706,6 +713,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         SourceId = track.SourceId;
         SourceDisplay = track.SourceDisplay;
         AlbumArt = DecodeArt(track.AlbumArt);
+        Lyrics.OnTrack(track);
 
         // Capabilities may have only just become known (e.g. YouTube finished
         // resolving its playlist), so re-evaluate them as tracks come in.
@@ -733,6 +741,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
             SourceDisplay = "—";
             SourceId = "";
             AlbumArt = null;
+            Lyrics.Clear();
         }
 
         // The bridge's reachability tracks the game connection, so a source
