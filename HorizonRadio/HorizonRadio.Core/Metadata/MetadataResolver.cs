@@ -269,8 +269,11 @@ public sealed class MetadataResolver : IAsyncDisposable
             if (!string.IsNullOrWhiteSpace(c.Title))
                 all.Add(new Interpretation(c.Title, c.Artist ?? "", null));
 
-        var ordered = all.Where(i => !string.IsNullOrWhiteSpace(i.Artist))
-                         .Concat(all.Where(i => string.IsNullOrWhiteSpace(i.Artist)));
+        // A credit that names only the singing voice ("【Hatsune Miku】Migratory") says less than a
+        // producer's ("Clean Tears") but more than none, so it goes between. A reading whose title
+        // is a voice ("Melt" by "Hatsune Miku", reversed) isn't a song at all.
+        var ordered = all.Where(i => !Voicebanks.IsVoicebankCredit(i.Title))
+                         .OrderBy(i => string.IsNullOrWhiteSpace(i.Artist) ? 2 : Voicebanks.IsVoicebankCredit(i.Artist) ? 1 : 0);
 
         Lookup? primaryLookup = null;
         foreach (var interp in ordered)
@@ -282,7 +285,7 @@ public sealed class MetadataResolver : IAsyncDisposable
             if (lookup.Network.Count > 0) return lookup; // the confirmed interpretation
         }
 
-        return primaryLookup ?? await LookupOneAsync(primary, seed, contributors, policy, progress, ct).ConfigureAwait(false);
+        return primaryLookup ?? new Lookup(primary, new Dictionary<string, MetadataContribution>(StringComparer.Ordinal));
     }
 
     // Ask the contributors about one interpretation. Only non-empty contributions are kept:
@@ -302,7 +305,7 @@ public sealed class MetadataResolver : IAsyncDisposable
         MetadataTrace.BeginAttempt(interp.Artist, interp.Title, ordered.Select(c => c.Id));
         var network = new Dictionary<string, MetadataContribution>(StringComparer.Ordinal);
 
-        if (!string.IsNullOrEmpty(interp.Artist))
+        if (!SearchTerms.IsArtistless(interp.Artist))
         {
             // Everyone searches the same query, so ask them all at once.
             var query = new MetadataQuery(seed.SourceId, interp.Title, interp.Artist, seed.Album, interp.ExternalId);
@@ -318,17 +321,25 @@ public sealed class MetadataResolver : IAsyncDisposable
             return new Lookup(interp, network);
         }
 
-        // No artist: ask in priority order, filling the working query's blanks from earlier
-        // answers so later text searches have something to search with.
+        // No artist that can confirm a match: only a title, or the voice that sings it. Ask one at a
+        // time, filling the working query's blanks from earlier answers so later searches have an
+        // artist to confirm with. The catalogs that know which version is the original go first:
+        // the first store to answer might have found a cover ("千本桜" by an artist named after a
+        // lyric) or a remix album, and every later search would then confirm that.
         var artist = interp.Artist;
         var album = seed.Album;
-        foreach (var contributor in ordered)
+        var weak = true;
+        foreach (var contributor in ordered.OrderBy(c => c.IdentifiesOriginals ? 0 : 1))
         {
             var query = new MetadataQuery(seed.SourceId, interp.Title, artist, album, interp.ExternalId);
             if (await AskAsync(contributor, query, ct).ConfigureAwait(false) is not { } contribution) continue;
             network[contributor.Id] = contribution;
             progress(new Lookup(interp, new Dictionary<string, MetadataContribution>(network, StringComparer.Ordinal)));
-            if (string.IsNullOrEmpty(artist) && !string.IsNullOrEmpty(contribution.Artist)) artist = contribution.Artist!;
+            if (weak && !string.IsNullOrEmpty(contribution.Artist))
+            {
+                artist = contribution.Artist!;
+                weak = false;
+            }
             if (string.IsNullOrEmpty(album) && !string.IsNullOrEmpty(contribution.Album)) album = contribution.Album;
         }
         return new Lookup(interp, network);
@@ -378,9 +389,13 @@ public sealed class MetadataResolver : IAsyncDisposable
             Candidates = null,
         };
 
+        // A credit naming only the voice ("Hatsune Miku") isn't the song's artist: once a catalog
+        // has found the song, show the artist it names (ryo's "Melt").
+        var source = SourceContribution(interp);
+        if (lookup.Network.Count > 0 && Voicebanks.IsVoicebankCredit(interp.Artist)) source = source with { Artist = null };
         var byId = new Dictionary<string, MetadataContribution>(lookup.Network, StringComparer.Ordinal)
         {
-            [MetadataPolicy.SourceId] = SourceContribution(interp),
+            [MetadataPolicy.SourceId] = source,
         };
 
         // Playable links any contributor learned (VocaDB PVs today), deduped by service+url, in

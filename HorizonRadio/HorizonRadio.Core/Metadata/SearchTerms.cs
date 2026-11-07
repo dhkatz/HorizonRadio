@@ -66,11 +66,13 @@ public static class SearchTerms
     /// "Kerosene" don't. Used to decide whether a set of title-only matches agree on one artist.</summary>
     public static string ArtistKey(string? artist) => Squash(Feat.Replace(artist ?? "", ""));
 
-    /// <summary>True when an artist string carries no search tokens — the "title-only" case, where
-    /// <see cref="MatchScore"/> can only match on title equality. This is the exact predicate
-    /// MatchScore's no-artist branch uses (<c>Tokens(CleanForSearch(artist)).Count == 0</c>), shared
-    /// so the providers' <see cref="TitleOnlyGuard"/> can't drift from the scorer.</summary>
-    public static bool IsArtistless(string? artist) => Tokens(CleanForSearch(artist)).Count == 0;
+    /// <summary>True when an artist string can't confirm a match — the "title-only" case, where
+    /// <see cref="MatchScore"/> can only match on title equality: it carries no search tokens, or it
+    /// names only a synthesizer voice ("Hatsune Miku"), which sings thousands of songs. This is the
+    /// exact predicate MatchScore's no-artist branch uses, shared so the providers'
+    /// <see cref="TitleOnlyGuard"/> can't drift from the scorer.</summary>
+    public static bool IsArtistless(string? artist) =>
+        Tokens(CleanForSearch(artist)).Count == 0 || Voicebanks.IsVoicebankCredit(artist);
 
     /// <summary>Lower-cased alphanumeric tokens, for loose match comparison.</summary>
     public static IReadOnlyList<string> Tokens(string? s)
@@ -115,7 +117,45 @@ public static class SearchTerms
         // same artist's songs, which otherwise score the same. Small enough to only break ties.
         var name = Tokens(StripCreditGroups(resultTitle!));
         var exactness = name.Count == 0 ? 1.0 : Coverage(name, Tokens(CleanForSearch(queryTitle)));
-        return score + 0.05 * exactness;
+        score += 0.05 * exactness;
+
+        // Prefer the release the query names: the original over a live, remixed, or re-recorded
+        // version ("Lost One's Weeping (2025 New Recording)", "Melt - CPK! Remix") when the query
+        // didn't ask for one. Catalogs often list the other versions first.
+        if (VersionWord.IsMatch(resultTitle!) && !VersionWord.IsMatch(queryTitle)) score -= 0.1;
+        return score;
+    }
+
+    // A word that marks a release as another version of the song than the original recording.
+    private static readonly Regex VersionWord = new(
+        @"\b(?:remix|rmx|mix|edit|bootleg|remodel|rework|flip|cover|covered|arrange|arranged|ver|version|live|instrumental|karaoke|off vocal|acoustic|recording|reloaded|re-recorded)\b|リミックス|カバー|アレンジ|バージョン|ライブ",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>Whether a title or a catalog's note on a recording names another version than the
+    /// original recording: live, remixed, re-recorded, covered ("MIKU EXPO 2014 in INDONESIA Live").</summary>
+    public static bool NamesAnotherVersion(string? text) => !string.IsNullOrEmpty(text) && VersionWord.IsMatch(text);
+
+    // A trailing " - <version>" the stores put after the name ("Melt - CPK! Remix", "Song - Live"),
+    // or a version set off by dashes ("Leia -八王子P Remix-").
+    private static readonly Regex DashVersion = new(
+        @"\s+[-–—]\s+(?<v>[^-–—]+)$|\s+[-–—~〜](?<v>[^-–—~〜]+)[-–—~〜]$", RegexOptions.Compiled);
+
+    /// <summary>Whether two titles name the same song once their credits are set aside: brackets
+    /// that credit a version or who made it ("千本桜 (feat. 初音ミク)"), and a store's trailing
+    /// " - Remix"-style suffix.</summary>
+    private static bool SameName(string queryTitle, string? resultTitle)
+    {
+        if (resultTitle is null) return false;
+        var q = BareName(queryTitle);
+        var r = BareName(resultTitle);
+        return SquashEqual(q, r) || SameSet(Tokens(q), Tokens(r));
+    }
+
+    private static string BareName(string title)
+    {
+        var name = StripCreditGroups(title);
+        var dash = DashVersion.Match(name);
+        return dash.Success && VersionWord.IsMatch(dash.Groups["v"].Value) ? name[..dash.Index] : name;
     }
 
     private static double? MatchScoreCore(string queryTitle, string? queryArtist, string? resultTitle, string? resultArtist,
@@ -136,6 +176,10 @@ public static class SearchTerms
         {
             var name = Tokens(StripCreditGroups(resultTitle!));
             if (name.Count > 0 && name.Count < rt.Count && Coverage(qt, name) == 0) return null;
+
+            // A one-word title has to be the song's whole name: "air" is not "The Fresh Prince of
+            // Bel-Air", whatever the artists share. ("Leia (Hachioji P Remix)" is more than a word.)
+            if (qt.Count == 1 && Tokens(queryTitle).Count == 1 && !SameName(queryTitle, resultTitle)) return null;
         }
 
         var qa = Tokens(CleanForSearch(queryArtist));
@@ -144,8 +188,17 @@ public static class SearchTerms
         if (artistConfirmed) return titleCover >= 0.6 ? titleCover + 0.5 : null;
 
         // No artist to corroborate: a loose/subset title can be a cover or a different song,
-        // so require the titles to genuinely match.
-        if (qa.Count == 0) return titlesEqual ? 1.0 : null;
+        // so require the titles to genuinely match (credits aside: "千本桜 (feat. 初音ミク)" is
+        // 千本桜, so the title-only guard sees it). A credit that names only the singing voice
+        // ("Hatsune Miku") corroborates nothing either: the voice sings thousands of songs.
+        if (IsArtistless(queryArtist))
+        {
+            if (!titlesEqual && !SameName(queryTitle, resultTitle)) return null;
+            // With nothing else known, a lone Latin word ("ARiA") is anyone's song. A voice
+            // credit narrows it to that voice's songs, where the catalog can rank "Melt".
+            if (qa.Count == 0 && qt.Count == 1 && !HasCjk(queryTitle)) return null;
+            return 1.0;
+        }
 
         if (titleCover < 0.6) return null;
 

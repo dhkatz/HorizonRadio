@@ -79,6 +79,13 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   `RadioPlayableItem` holds each title until its audio plays: titles change with the
   song, in game too. The song playing when a station is tuned in has no position (its
   lyrics are a sheet); radio lyrics can be nudged earlier/later (`lyricsRadioOffset`).
+- **Metadata matching (`Core/Metadata/`)** — every catalog plugin scores results with
+  `SearchTerms.MatchScore`, which only accepts a song whose name and artist agree with the
+  query. A query with no artist, or one naming only a singing voice
+  (`Voicebanks.IsVoicebankCredit`: "Hatsune Miku"), can't confirm a match, so
+  `MetadataResolver` asks the catalogs that know which version is the original first
+  (`IMetadataProvider.IdentifiesOriginals`; VocaDB, which picks the voice's most popular
+  original with exactly that name) and asks the others with the artist they found.
 - **Game plugins (`Plugins/Games/`)** — the Horizon Radio side of a game
   integration. An `IGamePlugin` (SDK) builds one `IGameIntegration`: the game's
   audio output, its event sources, connection state, and optional capabilities
