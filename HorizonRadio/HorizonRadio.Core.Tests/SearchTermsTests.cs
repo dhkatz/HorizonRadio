@@ -27,6 +27,40 @@ public class SearchTermsTests
         Assert.True(exact > mashup);
     }
 
+    // Vocaloid Radio's title for the Sakuzyo remix of 椎名もた's ササメク, credited to someone else.
+    private const string SasamekuQuery = "ササメク(sasameku can't be the word found in reayfla's inner world mix)";
+
+    [Theory]
+    [InlineData("Sasameku (Sasameku Can't Be the Word Found in Reayfia's Inner World Mix)", "Shiina Mota")]    // iTunes
+    [InlineData("ササメク(sasameku can’t be the word found in reayfia's inner world mix)", "Sakuzyo feat. 初音ミク")] // VocaDB
+    public void A_long_remix_credit_identifies_the_remix_when_the_artists_disagree(string title, string artist) =>
+        Assert.NotNull(SearchTerms.MatchScore(SasamekuQuery, "(∵)キョトンP (kyotn)", title, artist));
+
+    [Theory]
+    [InlineData(SasamekuQuery, true)]
+    [InlineData("Endless World (Wahiko Remix)", true)]
+    [InlineData("Song (feat. GUMI)", false)]
+    [InlineData("玲瓏メテオ (Transparent Meteor)", false)]
+    [InlineData("Remix", false)] // a title that is the word, not a credit
+    public void Recognizes_a_remix_credit(string title, bool remix) =>
+        Assert.Equal(remix, SearchTerms.HasRemixCredit(title));
+
+    [Fact]
+    public void The_remixer_named_in_the_credit_is_the_stations_artist()
+    {
+        Assert.NotNull(SearchTerms.MatchScore("Endless World", "Wahiko", "Endless World (Wahiko Remix)", "Aerial Flow"));
+    }
+
+    [Fact]
+    public void A_short_credit_does_not_excuse_a_different_artist()
+    {
+        // "(Original Mix)" names no one remix: a same-titled track by another act is still rejected.
+        Assert.Null(SearchTerms.MatchScore("Song (Original Mix)", "Band", "Song (Original Mix)", "Other Act"));
+        // The remix credit must be for this song: the name has to be in the query too.
+        Assert.Null(SearchTerms.MatchScore(SasamekuQuery, "kyotn",
+            "Other Song (Sasameku Can't Be the Word Found in Reayfia's Inner World Mix)", "Shiina Mota"));
+    }
+
     [Fact]
     public void A_remix_query_still_matches_its_remix()
     {

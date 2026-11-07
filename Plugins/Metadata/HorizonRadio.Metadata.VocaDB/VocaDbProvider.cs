@@ -113,7 +113,13 @@ public sealed class VocaDbProvider : IMetadataProvider
         }
 
         // Fallback: plain name search (no artist known, or none of the artist's songs matched).
-        return match ?? await SearchSongsAsync(title, rawTitle, rawArtist, artistId: null, capture, ct).ConfigureAwait(false);
+        match ??= await SearchSongsAsync(title, rawTitle, rawArtist, artistId: null, capture, ct).ConfigureAwait(false);
+
+        // A remix whose name search is buried under same-named originals and covers ("ササメク"
+        // has 31 entries): look among remixes, where the credit in the title can pick it out.
+        if (match == null && SearchTerms.HasRemixCredit(rawTitle))
+            match = await SearchSongsAsync(title, rawTitle, rawArtist, artistId: null, capture, ct, remixesOnly: true).ConfigureAwait(false);
+        return match;
     }
 
     /// <summary>The song's own JSON with the given <c>fields</c>, or null when the request failed.</summary>
@@ -178,7 +184,7 @@ public sealed class VocaDbProvider : IMetadataProvider
     // -- song search --
 
     private async Task<Match?> SearchSongsAsync(string nameQuery, string rawTitle, string? rawArtist, int? artistId,
-        ICollection<MetadataTrace.CatalogCandidate>? sink, CancellationToken ct)
+        ICollection<MetadataTrace.CatalogCandidate>? sink, CancellationToken ct, bool remixesOnly = false)
     {
         // lang=Default keeps the artistString in its native script (e.g. "文脈 feat. GUMI") rather
         // than translating it (lang=English turns 文脈 into "Context"), which is what lets the
@@ -198,6 +204,7 @@ public sealed class VocaDbProvider : IMetadataProvider
         // A scoped hit has its artist already confirmed, so the title alone qualifies it.
         bool artistConfirmed = artistId.HasValue;
         if (artistId is { } id) url += $"&artistId%5B%5D={id}";
+        if (remixesOnly) url += "&songTypes=Remix&sort=RatingScore";
 
         var root = await GetJsonAsync(url, ct).ConfigureAwait(false);
         return root is { } r ? SelectMatch(r, rawTitle, rawArtist, artistConfirmed, sink) : null;

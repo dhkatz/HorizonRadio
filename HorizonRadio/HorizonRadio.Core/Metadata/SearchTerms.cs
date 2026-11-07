@@ -104,8 +104,11 @@ public static class SearchTerms
     public static double? MatchScore(string queryTitle, string? queryArtist, string? resultTitle, string? resultArtist,
                                      bool artistConfirmed = false)
     {
-        if (MatchScoreCore(queryTitle, queryArtist, resultTitle, resultArtist, artistConfirmed) is not { } score)
-            return null;
+        var score = MatchScoreCore(queryTitle, queryArtist, resultTitle, resultArtist, artistConfirmed);
+        // A remix the artists disagree on can still be identified by its credit (see CreditIdentifiesRemix).
+        if (score == null && resultTitle != null && CreditIdentifiesRemix(queryTitle, queryArtist, resultTitle))
+            score = 1.0;
+        if (score == null) return null;
 
         // Among results that all match, prefer the one whose name IS the query over a longer title
         // that contains it: "ヒバナ" over the mashup "ゴーストルール + ヒバナ + マシュマロ" in the
@@ -225,11 +228,55 @@ public static class SearchTerms
     /// <summary>The title without its credit groups: bracketed groups (nesting allowed) that name
     /// the version or who made it ("(Wada Takeaki (KurageP) Remix)", "(feat. GUMI)"). Other groups,
     /// often part of the name ("(Transparent Meteor)"), are kept.</summary>
-    internal static string StripCreditGroups(string title)
+    internal static string StripCreditGroups(string title) => SplitCredits(title).Name;
+
+    private static readonly Regex RemixWord = new(
+        @"\b(?:remix|rmx|mix|edit|bootleg|remodel|rework|flip)\b|リミックス",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>Whether the title credits a remix ("ササメク(… inner world mix)", "Song (X Remix)").
+    /// A catalog search for the bare name can bury it under same-named originals and covers, so
+    /// a provider may look among remixes too.</summary>
+    public static bool HasRemixCredit(string? title) =>
+        !string.IsNullOrEmpty(title) && RemixWord.IsMatch(SplitCredits(title).Credits);
+
+    /// <summary>
+    /// Whether a remix's own credit identifies it although the artists share nothing: stations
+    /// credit the remixer where catalogs credit the original artist, or the other way round, and
+    /// some stations credit someone else entirely. "ササメク(sasameku can't be the word found in
+    /// reayfla's inner world mix)" by "キョトンP" is the Sakuzyo remix VocaDB lists, and the track
+    /// iTunes credits to Shiina Mota. Either is enough, as long as the song's own name is in the
+    /// query too:
+    /// <list type="bullet">
+    /// <item>the credit names the query's artist as the remixer ("Wahiko" for "(Wahiko Remix)"), or</item>
+    /// <item>the credit is long enough to name only this remix (four or more words besides "mix",
+    /// "remix", …) and the query carries nearly all of it (one misspelled word is fine:
+    /// "reayfla" for "reayfia").</item>
+    /// </list>
+    /// The query is read as written, brackets and all: the credit is usually in them.
+    /// </summary>
+    internal static bool CreditIdentifiesRemix(string queryTitle, string? queryArtist, string resultTitle)
+    {
+        var (nameText, creditText) = SplitCredits(resultTitle);
+        var credit = Tokens(creditText).Where(t => !CreditWord.IsMatch(t)).ToList();
+        if (credit.Count == 0) return false;
+
+        var query = Tokens(queryTitle);
+        var name = Tokens(nameText);
+        if (name.Count == 0 || Coverage(name, query) < 1.0) return false;
+
+        var artist = Tokens(CleanForSearch(queryArtist));
+        if (artist.Count > 0 && Coverage(artist, credit) == 1.0) return true;
+        return credit.Count >= 4 && Coverage(credit, query) >= 0.8;
+    }
+
+    // A title split into its name and its credit groups (see StripCreditGroups).
+    private static (string Name, string Credits) SplitCredits(string title)
     {
         const string open = "([（【〔〖";
         const string close = ")]）】〕〗";
         var sb = new System.Text.StringBuilder(title.Length);
+        var credits = new System.Text.StringBuilder();
         int depth = 0, start = 0;
         for (int i = 0; i < title.Length; i++)
         {
@@ -245,14 +292,18 @@ public static class SearchTerms
                 {
                     var group = title[start..(i + 1)];
                     if (!CreditWord.IsMatch(group)) sb.Append(group);
-                    else sb.Append(' ');
+                    else
+                    {
+                        sb.Append(' ');
+                        credits.Append(group).Append(' ');
+                    }
                 }
                 continue;
             }
             if (depth == 0) sb.Append(c);
         }
         if (depth > 0) sb.Append(title[start..]); // unbalanced: keep the rest as written
-        return sb.ToString();
+        return (sb.ToString(), credits.ToString());
     }
 
     private static double Coverage(IReadOnlyList<string> query, IReadOnlyList<string> result)
