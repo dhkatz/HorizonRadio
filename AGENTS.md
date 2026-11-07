@@ -63,7 +63,8 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   stay encapsulated in each source class; they are not leaked into shared code.
 - **Lyrics (`Plugins/Lyrics/`, `Core/Lyrics/`)** — each `ILyricsPlugin` contributes
   one `ILyricsProvider` (Unison, LRCLIB, and VocaDB, whose metadata plugin is also a
-  lyrics plugin). `LyricsService` asks them all at once and keeps the first synced
+  lyrics plugin; when VocaDB has the song but no lyrics it reads the Vocaloid Lyrics
+  Wiki page that links that VocaDB song id, `VocaloidLyricsWiki`). `LyricsService` asks them all at once and keeps the first synced
   answer in `SortOrder`, else the first unsynced one with variants (romanized,
   translated), else any; a lookup where a provider failed isn't remembered. Karaoke
   fill is laid out by `Karaoke.Words` (word-timed syllables grouped into words; a

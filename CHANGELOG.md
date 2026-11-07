@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Lyrics from the Vocaloid Lyrics Wiki.** When VocaDB knows a song but has no lyrics
+  for it (e.g. "Blurry Star"), the lyrics come from the [Vocaloid Lyrics
+  Wiki](https://vocaloidlyrics.miraheze.org) instead, with its romaji and English
+  translation as versions to switch to. The page is found by the VocaDB song it links,
+  so it's always the same song. Credited per the wiki's CC BY-SA 4.0 license.
 - **Lyrics on the Dashboard.** The playing song's lyrics show under its title. When the
   song plays from your files, YouTube, or Spotify, they follow along: the line being sung
   is highlighted and kept in view, and clicking a line jumps there in songs you can seek.

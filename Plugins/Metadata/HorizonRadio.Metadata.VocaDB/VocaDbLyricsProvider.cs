@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,8 +21,21 @@ public sealed class VocaDbLyricsProvider : ILyricsProvider
     public string Id => "vocadb";
 
     private readonly VocaDbProvider _vocadb;
+    private readonly HttpClient _http;
+    private readonly bool _ownsHttp;
+    private readonly VocaloidLyricsWiki _wiki;
 
-    public VocaDbLyricsProvider(VocaDbProvider vocadb) => _vocadb = vocadb;
+    public VocaDbLyricsProvider(VocaDbProvider vocadb, HttpClient? http = null)
+    {
+        _vocadb = vocadb;
+        _ownsHttp = http is null;
+        _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        // Miraheze, like Wikimedia, asks API clients to say who they are.
+        var ua = $"HorizonRadio/{BuildInfo.Current.Version} (https://github.com/dhkatz/HorizonRadio)";
+        if (!_http.DefaultRequestHeaders.UserAgent.TryParseAdd(ua))
+            _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "HorizonRadio");
+        _wiki = new VocaloidLyricsWiki(_http);
+    }
 
     public async Task<SongLyrics?> FindAsync(LyricsQuery query, CancellationToken ct)
     {
@@ -35,10 +49,29 @@ public sealed class VocaDbLyricsProvider : ILyricsProvider
             // A remix or cover often has no lyrics entry of its own, but sings the original's.
             if (lyrics == null && match.OriginalVersionId is { } original)
                 lyrics = await LyricsOfAsync(original, ct).ConfigureAwait(false);
+
+            // VocaDB has the song but not its lyrics: the Vocaloid Lyrics Wiki often does.
+            lyrics ??= await FromWikiAsync(match.Id, ct).ConfigureAwait(false);
+            if (lyrics == null && match.OriginalVersionId is { } originalId)
+                lyrics = await FromWikiAsync(originalId, ct).ConfigureAwait(false);
         }
 
         if (lyrics == null && lookup.Failed) throw lookup.Unavailable(Id);
         return lyrics;
+    }
+
+    private async Task<SongLyrics?> FromWikiAsync(int songId, CancellationToken ct)
+    {
+        try
+        {
+            return await _wiki.FindAsync(songId, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException)
+        {
+            CatalogLookup.ReportFailure($"Vocaloid Lyrics Wiki: {ex.GetType().Name}");
+            return null;
+        }
     }
 
     private async Task<SongLyrics?> LyricsOfAsync(int songId, CancellationToken ct)
@@ -123,5 +156,9 @@ public sealed class VocaDbLyricsProvider : ILyricsProvider
         }
     }
 
-    public ValueTask DisposeAsync() => _vocadb.DisposeAsync();
+    public ValueTask DisposeAsync()
+    {
+        if (_ownsHttp) _http.Dispose();
+        return _vocadb.DisposeAsync();
+    }
 }
