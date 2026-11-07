@@ -125,6 +125,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The in-game radio no longer risks freezing or crashing when a station's audio goes
+  away.** Horizon Radio now lets go of the game's audio cleanly when the radio turns off,
+  never touches a channel the game has already destroyed, and stays off rather than
+  half-hooking the game's audio when it can't find everything it needs (which could
+  eventually freeze the game after an update).
 - **A Spotify track no longer gets stuck in silence when its player stops.** If librespot
   exits, or no audio arrives for 15 seconds while playing, Horizon Radio moves on to the next
   track instead of sitting on a frozen progress bar. If you move playback to another Spotify

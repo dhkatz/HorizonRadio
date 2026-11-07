@@ -44,8 +44,10 @@ struct ResolverReport {
 
     // Required for the DSP install path. createDsp is intentionally omitted: FMOD
     // lazy-loads it, so the bridge resolves it on first install instead.
+    // handleUnlock is required alongside handleOpen: every open takes a lock
+    // that must be released, so opening without it would leak FMOD slots.
     [[nodiscard]] bool ready() const noexcept {
-        return addDsp && removeDsp && dspRelease && handleOpen;
+        return addDsp && removeDsp && dspRelease && handleOpen && handleUnlock;
     }
 };
 

@@ -82,9 +82,17 @@ drains the ring.
   track change so a hot intro doesn't inherit the previous track's curve.
 - **Handle resolution / install / retarget** — `tick()` resolves the live FMOD
   channel handle from the stream and installs the DSP. When the handle changes
-  (station switch) it removes the old DSP and reinstalls; when the channel dies
-  (radio off) it clears the target so the DSP uninstalls cleanly — a stale handle
-  would make `removeDSP` hit a destroyed channel on recovery.
+  (station switch) it removes the old DSP and reinstalls. When the channel dies
+  (radio off) or no stream is audible, the writer clears the target and `tick()`
+  detaches. `removeDSP` is only called on a channel that still validates via
+  `Handle::open`: FMOD's dead-handle path has been observed to AV, possibly while
+  holding an internal lock. A dead channel's DSP is just released.
+- **Handle locks** — every `Handle::open` is paired with an unlock, so the bridge
+  is only built once both `handleOpen` and `handleUnlock` resolve (bring-up keeps
+  retrying otherwise); opening without unlocking leaks FMOD resolver slots.
+- **Stale audio** — `install_on_handle` requests a ring drain *before* `addDSP`,
+  so the mixer's first `read()` discards PCM queued while detached and resets the
+  resampler and normalizer.
 - **`set_master_gain`** — scales output, clamped to `[0,1]`; driven by the UI's
   `set_gain` command (the events "duck / set volume" action).
 

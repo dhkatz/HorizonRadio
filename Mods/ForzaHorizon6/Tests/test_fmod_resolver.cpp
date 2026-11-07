@@ -110,6 +110,21 @@ TEST_CASE("FmodResolver: partial set leaves unconfigured slots null but resolves
     CHECK_FALSE(r.report().ready());
 }
 
+TEST_CASE("ResolverReport: ready() requires handleUnlock alongside handleOpen") {
+    ResolverReport report{};
+    report.addDsp     = true;
+    report.removeDsp  = true;
+    report.dspRelease = true;
+    report.handleOpen = true;
+    CHECK_FALSE(report.ready()); // opening without unlocking leaks FMOD slots
+
+    report.handleUnlock = true;
+    CHECK(report.ready());
+
+    report.createDsp = false; // lazy-resolved by the bridge, not required here
+    CHECK(report.ready());
+}
+
 TEST_CASE("FmodResolver: pattern that doesn't match yields nullptr + not-found") {
     PeImage img(GetModuleHandleW(nullptr));
     REQUIRE(img.valid());

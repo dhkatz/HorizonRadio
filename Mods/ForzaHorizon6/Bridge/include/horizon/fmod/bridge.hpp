@@ -41,6 +41,8 @@ public:
 
     // Per-tick: read the channel handle, validate via Handle::open, then
     // install / retarget / uninstall as needed. Cheap (one read + one open).
+    // With no target set it detaches. removeDSP is only called on a channel
+    // that still validates; a dead channel's DSP is just released.
     void tick() noexcept;
 
     // Returns true if our DSP is currently installed on a channel
@@ -146,9 +148,8 @@ private:
 
     horizon::audio::SpscRingBuffer<std::int16_t> ring_;
 
-    // Resampler scratch. Only the FMOD mixer thread touches these.
-    // Reset to zero on every install/uninstall (serialized against the
-    // mixer by FMOD's removeDSP semantics).
+    // Resampler scratch. Only the FMOD mixer thread touches these; read()
+    // resets them when it honours a drain request (requested on every install).
     double       resample_phase_ = 0.0;
     std::int16_t prev_l_         = 0;
     std::int16_t prev_r_         = 0;

@@ -61,7 +61,7 @@ bool FmodBridge::current_channel_alive() const noexcept {
 }
 
 void FmodBridge::tick() noexcept {
-    if (!hooks_.addDsp || !hooks_.removeDsp || !hooks_.dspRelease || !hooks_.handleOpen) {
+    if (!hooks_.addDsp || !hooks_.removeDsp || !hooks_.dspRelease || !hooks_.handleOpen || !hooks_.handleUnlock) {
         return; // resolver didn't fill the required slots
     }
     // createDsp is lazy-resolved on the first install attempt — see
@@ -136,6 +136,15 @@ bool FmodBridge::install_on_handle(const std::uint32_t handle) noexcept {
         return false;
     }
 
+    // Drop whatever's queued in the ring: while the bridge was
+    // uninstalled the source kept push_pcm-ing, leaving up to 1.5s
+    // of stale audio. Request the drain BEFORE addDSP: the mixer may
+    // run read() the instant addDSP succeeds, and its drain also
+    // resets the resampler + normalizer. Resetting from this thread
+    // instead would race the mixer (resampler) and the source's
+    // push_pcm (ring_).
+    drain_request_.store(true, std::memory_order_release);
+
     auto       add_rc = static_cast<Result>(~0);
     const bool add_ok = seh_call([&] { add_rc = hooks_.addDsp(handle_as_channel(handle), 0, dsp); });
     if (!add_ok || add_rc != Result::Ok) {
@@ -146,17 +155,6 @@ bool FmodBridge::install_on_handle(const std::uint32_t handle) noexcept {
 
     dsp_            = dsp;
     current_handle_ = handle;
-
-    // Drop whatever's queued in the ring: while the bridge was
-    // uninstalled the source kept push_pcm-ing, leaving up to 1.5s
-    // of stale audio. We request a drain (executed by the mixer on
-    // its first read) instead of resetting from this thread — the
-    // source's push_pcm runs concurrently and racing it on ring_
-    // is UB. Resampler state we DO own exclusively here.
-    drain_request_.store(true, std::memory_order_release);
-    resample_phase_ = 0.0;
-    have_prev_ = have_cur_ = false;
-    prev_l_ = prev_r_ = cur_l_ = cur_r_ = 0;
 
     // Best-effort: pin the channel in loop mode so FMOD doesn't tear
     // it down when the placeholder sample ends. Failure here is
@@ -176,11 +174,13 @@ void FmodBridge::uninstall_internal() noexcept {
 
     // removeDSP serializes against the FMOD mixer: by the time it
     // returns, no further read callbacks are pending. Only THEN is
-    // it safe to clear g_active_bridge. SEH-wrap because the channel
-    // handle may already be dead (game destroyed it before we got
-    // to our removeDSP), and the dead-handle code path inside FMOD
-    // has been observed to AV.
-    if (current_handle_ != 0 && hooks_.removeDsp) {
+    // it safe to clear g_active_bridge. Skip it when the channel is
+    // already dead (the game destroyed it, which detaches our DSP):
+    // FMOD's dead-handle path has been observed to AV, and a fault
+    // while FMOD holds an internal lock could deadlock game audio.
+    // SEH-wrap anyway: the channel can still die between the check
+    // and the call. dspRelease always runs so the DSP isn't leaked.
+    if (current_handle_ != 0 && hooks_.removeDsp && validate_handle(current_handle_)) {
         seh_call([&] { hooks_.removeDsp(handle_as_channel(current_handle_), dsp_); });
     }
     if (hooks_.dspRelease) {
@@ -209,7 +209,8 @@ std::uint32_t FmodBridge::read_live_channel_handle() const noexcept {
 }
 
 bool FmodBridge::validate_handle(std::uint32_t handle) const noexcept {
-    if (handle == 0 || hooks_.handleOpen == nullptr)
+    // Never open without a way to unlock: each open takes an FMOD lock.
+    if (handle == 0 || hooks_.handleOpen == nullptr || hooks_.handleUnlock == nullptr)
         return false;
     void*         inst       = nullptr;
     std::uint64_t lock_state = 0;
@@ -219,7 +220,7 @@ bool FmodBridge::validate_handle(std::uint32_t handle) const noexcept {
     // Always unlock if we got a lock_state, even on rc != 0. Skipping
     // unlock leaks an FMOD resolver slot and eventually freezes the
     // game thread.
-    if (ok && hooks_.handleUnlock && lock_state) {
+    if (ok && lock_state) {
         seh_call([&] { hooks_.handleUnlock(lock_state); });
     }
     return ok && rc == 0 && inst != nullptr;
