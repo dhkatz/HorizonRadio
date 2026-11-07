@@ -49,8 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Faster CI.** The C# format check and the C++ tests run alongside the C# build instead
   of before it, NuGet restores once and to the runner's faster drive, the FH6 plugin no
-  longer pulls a second copy of SkiaSharp (~1.2 GB) through LiveCharts, and the Ubuntu
-  cross-compile installs only the x64 mingw toolchain.
+  longer pulls a second copy of SkiaSharp (~1.2 GB) through LiveCharts, the Ubuntu
+  cross-compile installs only the x64 mingw toolchain, and clang-tidy is skipped when the
+  C++ it lints, its config, and the toolchain match an earlier passing run.
 - **Radio titles change with the song.** A station is read about a second ahead of what
   you hear, so a new song's title (in the app and in game) used to appear before the
   song did. It now appears as the song starts.

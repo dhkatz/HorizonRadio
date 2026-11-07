@@ -169,12 +169,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # clang-tidy gives the same answer for the same code, config, and toolchain, so a run
+      # whose inputs match an earlier passing run skips the lint: a change that doesn't touch
+      # the C++ (most of them) isn't re-linted. The key covers everything the lint reads: the
+      # linted sources and headers (all under Bridge/), the CMake setup, .clang-tidy, this
+      # workflow (it pins clang-tidy), and the runner image (MSVC and the Windows SDK).
+      # Passing runs on main save the key, and PRs can read main's cache.
+      - name: Identify the runner image
+        id: image
+        shell: pwsh
+        run: '"version=$env:ImageOS-$env:ImageVersion" >> $env:GITHUB_OUTPUT'
+
+      - name: Look for a passing lint of these exact inputs
+        id: passed
+        uses: actions/cache/restore@v4
+        with:
+          path: .clang-tidy-passed
+          key: clang-tidy-passed-${{ steps.image.outputs.version }}-${{ hashFiles('Mods/ForzaHorizon6/Bridge/**', 'Mods/ForzaHorizon6/CMakeLists.txt', 'Mods/ForzaHorizon6/CMakePresets.json', 'Mods/ForzaHorizon6/cmake/**', 'Mods/ForzaHorizon6/.clang-tidy', '.github/workflows/build.yml') }}
+          lookup-only: true
+
       - name: Set up MSVC dev environment
+        if: steps.passed.outputs.cache-hit != 'true'
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
       - name: Set up Ninja
+        if: steps.passed.outputs.cache-hit != 'true'
         uses: seanmiddleditch/gha-setup-ninja@v5
 
       # Pinned via the clang-tidy wheel so the check is reproducible and the
@@ -182,12 +203,14 @@ jobs:
       # PATH below). Bump deliberately — a clang-tidy bump can surface new
       # findings.
       - name: Install clang-tidy (pinned)
+        if: steps.passed.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           pip install clang-tidy==22.1.7
           python -c "import clang_tidy, os; print(os.path.join(os.path.dirname(clang_tidy.__file__),'data','bin'))" >> $env:GITHUB_PATH
 
       - name: Configure CMake (analysis preset)
+        if: steps.passed.outputs.cache-hit != 'true'
         working-directory: Mods/ForzaHorizon6
         run: cmake --preset windows-x64-analysis
 
@@ -195,8 +218,22 @@ jobs:
       # so clang-tidy runs over all shipping code. ~3x slower than a plain
       # build because every TU is linted during compile.
       - name: Run clang-tidy (production TUs)
+        if: steps.passed.outputs.cache-hit != 'true'
         working-directory: Mods/ForzaHorizon6
         run: cmake --build --preset windows-x64-analysis-debug --target version
+
+      # Only reached when the lint passed.
+      - name: Note the passing lint
+        if: steps.passed.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: New-Item -ItemType File .clang-tidy-passed -Force | Out-Null
+
+      - name: Remember the passing lint
+        if: steps.passed.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .clang-tidy-passed
+          key: ${{ steps.passed.outputs.cache-primary-key }}
 
   # Exercises the clang + mingw-w64 cross-compile path (the migration's
   # headline feature) so the toolchain file and the cross presets can't
