@@ -131,6 +131,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Skips, Play and mix switches no longer get lost while the next song loads.** Next, Play
+  Now and mix switches during "Loading…" act at once rather than after that song (or one
+  more from the old mix) plays through, and Play Now after Previous plays what you picked.
+  Restart then Next skips, Next lights up as soon as you add to the queue, pause can't get
+  stuck silent, the queue stops showing a song once Spotify takes over, and tuning back to a
+  station no longer brings back a skipped song or the old mix.
 - **Settings can no longer be wiped by a save that fails partway.** A crash or an unlucky
   moment while saving could leave `sources.json` (or another settings file) half-written,
   and the app then started with default settings. Settings are now written to a temporary

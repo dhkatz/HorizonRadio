@@ -66,9 +66,9 @@ public sealed class QueuePlayback : IDisposable
     internal QueueSource? Source => _source;
 
     /// <summary>
-    /// Bring the player back after the router parked it: continue the interrupted track, or
-    /// start the queue if it has something to play. Called by the router once it has routed
-    /// back to the player.
+    /// Bring the player back after the router parked it: continue the interrupted track (a
+    /// parked engine does that when it starts again), or start the queue if it has something
+    /// to play. Called by the router once it has routed back to the player.
     /// </summary>
     internal async Task ResumeAsync()
     {
@@ -77,7 +77,6 @@ public sealed class QueuePlayback : IDisposable
         {
             if (_source is { IsDisposed: false } parked)
             {
-                parked.ResumeFromPark(TimeSpan.Zero);
                 if (!IsActive) await _runner.StartSourceAsync(parked).ConfigureAwait(false);
             }
             else if (Model.HasWork)

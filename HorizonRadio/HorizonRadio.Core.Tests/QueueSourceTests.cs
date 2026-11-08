@@ -1,3 +1,4 @@
+using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
@@ -195,8 +196,8 @@ public class QueueSourceTests
 
         // Park it the way SourceRunner does: cancel the owner's token, then stop the source. The
         // engine winds the track down on its own thread, so it can finish (and drop the track's
-        // cancellation source) before the stop runs; here it always does.
-        src.MarkParked();
+        // cancellation source) before the stop runs; here it always does. The engine notes where
+        // it was itself.
         await cts.CancelAsync();
         await item.Ended.WaitAsync(TimeSpan.FromSeconds(5));
         await Task.Delay(100);
@@ -209,5 +210,204 @@ public class QueueSourceTests
 
         Assert.Null(stopError);
         Assert.Equal(2, item.Plays);
+    }
+
+    // -- Requests, driven step by step with fakes --
+
+    private static async Task<QueueSource> StartedAsync(QueueModel model)
+    {
+        var src = new QueueSource(model);
+        await src.StartAsync(new NullPcmSink(), CancellationToken.None);
+        return src;
+    }
+
+    [Fact]
+    public async Task Play_now_while_the_context_is_still_resolving_plays_at_once()
+    {
+        var context = new FakeContext();
+        var model = new QueueModel();
+        model.SetContext(context, "m");
+        await using var src = await StartedAsync(model);
+        await Eventually.Until(() => context.Calls == 1, "the context to be asked for a track");
+
+        var now = new FakeItem("now");
+        model.JumpToExplicit(model.AppendExplicit([now])[0]);
+
+        await Eventually.Until(() => now.Plays == 1, "the play-now item to start");
+        Assert.Equal(1, context.Cancelled); // the resolve it was waiting on is dropped
+    }
+
+    [Fact]
+    public async Task A_mix_switch_while_the_context_is_still_resolving_takes_effect_at_once()
+    {
+        var oldMix = new FakeContext("old");
+        var newMix = new FakeContext("new");
+        var model = new QueueModel();
+        model.SetContext(oldMix, "old");
+        await using var src = await StartedAsync(model);
+        await Eventually.Until(() => oldMix.Calls == 1, "the old mix to be asked for a track");
+
+        var first = new FakeItem("new-1");
+        newMix.Feed(first);
+        model.SetContext(newMix, "new", replaceNow: true);
+
+        await Eventually.Until(() => first.Plays == 1, "the new mix to play");
+        Assert.Equal(1, oldMix.Cancelled);
+    }
+
+    [Fact]
+    public async Task A_track_the_old_context_resolves_after_a_switch_never_plays()
+    {
+        var oldMix = new FakeContext("old");
+        var newMix = new FakeContext("new");
+        var model = new QueueModel();
+        model.SetContext(oldMix, "old");
+        await using var src = await StartedAsync(model);
+        await Eventually.Until(() => oldMix.Calls == 1, "the old mix to be asked for a track");
+
+        var fresh = new FakeItem("new-1");
+        newMix.Feed(fresh);
+        model.SetContext(newMix, "new"); // nothing playing to interrupt
+        var stale = new FakeItem("old-1");
+        oldMix.Feed(stale); // the old mix's resolve finishes after the switch
+
+        await Eventually.Until(() => fresh.Plays == 1, "the new mix to play");
+        Assert.Equal(0, stale.Plays);
+    }
+
+    [Fact]
+    public async Task A_second_skip_while_the_next_track_loads_skips_that_one_too()
+    {
+        var context = new FakeContext();
+        var first = new FakeItem("first");
+        var model = new QueueModel();
+        model.AppendExplicit([first]);
+        model.SetContext(context, "m");
+        await using var src = await StartedAsync(model);
+        await Eventually.Until(() => first.Plays == 1, "the first track");
+
+        await src.NextAsync(); // the next comes from the context, which takes a while
+        await Eventually.Until(() => context.Calls == 1, "the context to be asked for a track");
+        await src.NextAsync(); // skip that one too, before it has even arrived
+
+        var skipped = new FakeItem("skipped");
+        context.Feed(skipped);
+        await Eventually.Until(() => context.Calls == 2, "the context to be asked again");
+        var played = new FakeItem("played");
+        context.Feed(played);
+
+        await Eventually.Until(() => played.Plays == 1, "the track after the skipped one");
+        Assert.Equal(0, skipped.Plays);
+    }
+
+    [Fact]
+    public async Task Play_now_after_stepping_back_plays_the_new_item_not_the_one_stepped_over()
+    {
+        var a = new FakeItem("a");
+        var b = new FakeItem("b");
+        var model = new QueueModel();
+        model.AppendExplicit([a, b]);
+        await using var src = await StartedAsync(model);
+        await Eventually.Until(() => a.Plays == 1, "a");
+        await src.NextAsync();
+        await Eventually.Until(() => b.Plays == 1, "b");
+        await src.PreviousAsync(); // back to a; b waits to be redone
+        await Eventually.Until(() => a.Plays == 2, "a again");
+
+        var now = new FakeItem("now");
+        model.JumpToExplicit(model.AppendExplicit([now])[0]);
+
+        await Eventually.Until(() => now.Plays == 1, "the play-now item");
+        Assert.Equal(1, b.Plays);
+        Assert.False(src.CanSkipNext); // the step back is forgotten: nothing left to redo
+    }
+
+    [Fact]
+    public async Task Next_works_as_soon_as_something_is_queued()
+    {
+        var a = new FakeItem("a");
+        var model = new QueueModel();
+        model.AppendExplicit([a]);
+        await using var runner = new SourceRunner(new NullPcmSink());
+        var src = new QueueSource(model);
+        await runner.StartSourceAsync(src);
+        await Eventually.Until(() => a.Plays == 1, "a");
+        Assert.False(src.CanSkipNext);
+
+        var b = new FakeItem("b");
+        model.AppendExplicit([b]);
+
+        Assert.True(src.CanSkipNext);
+        // A bound Next (hotkey, game event) goes through the same check.
+        await new ActionDispatcher(runner, new SourceConfigStore()).RunAsync(new EventAction(EventActionType.NextTrack));
+        await Eventually.Until(() => b.Plays == 1, "b");
+    }
+
+    [Fact]
+    public async Task Next_right_after_restart_skips_instead_of_restarting()
+    {
+        var release = FakeItem.NewSignal();
+        var a = new FakeItem("a") { HoldCancel = release };
+        var b = new FakeItem("b");
+        var model = new QueueModel();
+        model.AppendExplicit([a, b]);
+        await using var src = await StartedAsync(model);
+        await Eventually.Until(() => a.Plays == 1, "a");
+
+        // Both land before the engine has reacted to the first.
+        await src.RestartAsync();
+        await src.NextAsync();
+        release.TrySetResult();
+
+        await Eventually.Until(() => b.Plays == 1, "b");
+        Assert.Equal(1, a.Plays);
+    }
+
+    [Fact]
+    public async Task Pause_toggled_from_several_threads_at_once_stays_consistent()
+    {
+        var a = new FakeItem("a");
+        var model = new QueueModel();
+        model.AppendExplicit([a]);
+        await using var src = await StartedAsync(model);
+        await Eventually.Until(() => a.Plays == 1, "a");
+        var pump = a.Context!;
+
+        for (var round = 0; round < 20; round++)
+        {
+            using var go = new Barrier(4);
+            await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Task.Run(async () =>
+            {
+                go.SignalAndWait();
+                for (var i = 0; i < 1000; i++) await src.TogglePauseAsync();
+            })));
+
+            // An even number of toggles lands back where it started, and the pump's gate agrees:
+            // never "playing" with the gate shut (silence), nor "paused" with it open.
+            Assert.False(src.IsPaused, $"paused after an even number of toggles (round {round})");
+            Assert.Equal(pump.IsPaused(), !pump.ResumeGate.IsSet);
+        }
+    }
+
+    [Fact]
+    public async Task Pause_and_resume_actions_set_the_state_rather_than_toggle_it()
+    {
+        var a = new FakeItem("a");
+        var model = new QueueModel();
+        model.AppendExplicit([a]);
+        await using var runner = new SourceRunner(new NullPcmSink());
+        var src = new QueueSource(model);
+        await runner.StartSourceAsync(src);
+        await Eventually.Until(() => a.Plays == 1, "a");
+        var dispatcher = new ActionDispatcher(runner, new SourceConfigStore());
+
+        await dispatcher.RunAsync(new EventAction(EventActionType.Pause));
+        await dispatcher.RunAsync(new EventAction(EventActionType.Pause));
+        Assert.True(src.IsPaused);
+
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(_ =>
+            Task.Run(() => dispatcher.RunAsync(new EventAction(EventActionType.Resume)))));
+        Assert.False(src.IsPaused);
+        Assert.True(a.Context!.ResumeGate.IsSet);
     }
 }

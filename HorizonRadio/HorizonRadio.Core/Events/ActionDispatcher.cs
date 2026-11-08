@@ -62,12 +62,10 @@ public sealed class ActionDispatcher : IActionDispatcher
                     await Transport(t => t.RestartAsync(), _ => true).ConfigureAwait(false);
                     break;
                 case EventActionType.Pause:
-                    await Transport(t => t.IsPaused ? Task.CompletedTask : t.TogglePauseAsync(),
-                        t => t.CanPause).ConfigureAwait(false);
+                    await Transport(t => t.SetPausedAsync(true), t => t.CanPause).ConfigureAwait(false);
                     break;
                 case EventActionType.Resume:
-                    await Transport(t => t.IsPaused ? t.TogglePauseAsync() : Task.CompletedTask,
-                        t => t.CanPause).ConfigureAwait(false);
+                    await Transport(t => t.SetPausedAsync(false), t => t.CanPause).ConfigureAwait(false);
                     break;
                 case EventActionType.TogglePause:
                     await Transport(t => t.TogglePauseAsync(), t => t.CanPause).ConfigureAwait(false);
