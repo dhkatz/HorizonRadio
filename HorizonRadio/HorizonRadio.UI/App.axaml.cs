@@ -148,7 +148,7 @@ public partial class App : Application
                 // Tee the pipeline so the active source can play to the game
                 // and (optionally) to local speakers for in-app test playback.
                 var tee = new TeePcmSink(_game.Output);
-                _preview = new PreviewController(tee, _store);
+                _preview = new PreviewController(tee, _store, a => Dispatcher.UIThread.Post(a));
 
                 _runner = new SourceRunner(tee) { Shuffle = _store.Shuffle };
 

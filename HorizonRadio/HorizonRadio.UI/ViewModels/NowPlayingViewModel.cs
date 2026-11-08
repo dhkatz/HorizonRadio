@@ -187,6 +187,10 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
                   ?? OutputTargets[0]
                 : OutputTargets[0];
             previewVolume = _preview.Volume;
+
+            // The speaker can fail or recover on its own (unplugged, default device
+            // changed, device back): re-check reachability so a lost device pauses + toasts.
+            _preview.StateChanged += ReevaluateOutput;
         }
 
         // Keep the dropdown in sync when the runner is driven from the
@@ -360,8 +364,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         }
         else
         {
-            _preview.SetDevice(value.DeviceId);
-            _preview.SetEnabled(true);
+            _preview.SelectDevice(value.DeviceId);
         }
         // The destination changed under a (possibly running) source — re-check
         // reachability so we pause/resume + toast as appropriate.

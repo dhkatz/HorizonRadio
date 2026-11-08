@@ -23,8 +23,7 @@ public class TeePcmSinkTests
     {
         var primary = new RecordingSink();
         var preview = new RecordingSink();
-        var tee = new TeePcmSink(primary);
-        tee.AttachPreview(preview);
+        var tee = new TeePcmSink(primary) { Route = new TeeRoute(true, preview) };
 
         Assert.True(tee.Send(Chunk));
         Assert.Equal(1, primary.Chunks);
@@ -36,13 +35,21 @@ public class TeePcmSinkTests
     {
         var primary = new RecordingSink();
         var preview = new RecordingSink();
-        var tee = new TeePcmSink(primary);
-        tee.AttachPreview(preview);
-        tee.SetPrimaryEnabled(false);
+        var tee = new TeePcmSink(primary) { Route = TeeRoute.PreviewOnly(preview) };
 
         Assert.True(tee.Send(Chunk));
         Assert.Equal(0, primary.Chunks);
         Assert.Equal(1, preview.Chunks);
+    }
+
+    [Fact]
+    public void Routing_nowhere_drops_the_chunk()
+    {
+        var primary = new RecordingSink();
+        var tee = new TeePcmSink(primary) { Route = TeeRoute.Nowhere };
+
+        Assert.False(tee.Send(Chunk));
+        Assert.Equal(0, primary.Chunks);
     }
 
     // A game integration with no in-game audio (e.g. "no game") has no primary sink.
@@ -53,7 +60,7 @@ public class TeePcmSinkTests
         var tee = new TeePcmSink(primary: null);
 
         Assert.False(tee.Send(Chunk)); // nowhere to send yet
-        tee.AttachPreview(preview);
+        tee.Route = new TeeRoute(true, preview);
         Assert.True(tee.Send(Chunk));
         Assert.Equal(1, preview.Chunks);
     }

@@ -125,6 +125,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Unplugging the headphones or speakers you're listening on no longer leaves playback
+  silently "playing".** Horizon Radio now pauses and tells you the output is unavailable,
+  "System default" follows Windows when the default device changes, and the output comes
+  back once the device is plugged in again. While it's unavailable, audio no longer slips
+  into the game when the picker says speakers.
 - **Toggling shuffle while a mix plays no longer replays the song that's playing.** Turning
   shuffle on only reorders the songs that haven't played yet, turning it off carries on in
   order after the current song, and the queue's "Next From" list updates straight away.
