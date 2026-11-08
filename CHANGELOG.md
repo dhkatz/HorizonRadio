@@ -125,6 +125,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A station set to Resume or Live no longer goes silent after you tune back to it.**
+  Leaving the station could leave its channel unable to start again until the app
+  restarted; it now always picks up when you return.
 - **Unplugging the headphones or speakers you're listening on no longer leaves playback
   silently "playing".** Horizon Radio now pauses and tells you the output is unavailable,
   "System default" follows Windows when the default device changes, and the output comes

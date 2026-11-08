@@ -90,7 +90,17 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
     {
         _stepBackwards = false;
         _restart = false;
-        try { _trackCts?.Cancel(); } catch { }
+        TryCancel(_trackCts);
+    }
+
+    // The run loop disposes a track's cancellation source when the track ends, on its own
+    // thread, so a reader of _trackCts can find it already disposed: there's nothing left to
+    // cancel then.
+    private static void TryCancel(CancellationTokenSource? cts)
+    {
+        if (cts == null) return;
+        try { cts.Cancel(); }
+        catch (ObjectDisposedException) { }
     }
 
     // -- IAudioSource --
@@ -112,22 +122,28 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
 
     public async Task StopAsync()
     {
-        _stopCts?.Cancel();
-        _trackCts?.Cancel();
-        _resumeGate.Set();
-        _workGate.Set();
-        if (_runLoop != null)
+        try
         {
-            try { await _runLoop.ConfigureAwait(false); }
-            catch { }
-            _runLoop = null;
+            TryCancel(_stopCts);
+            TryCancel(_trackCts);
+            _resumeGate.Set();
+            _workGate.Set();
+            if (_runLoop != null)
+            {
+                try { await _runLoop.ConfigureAwait(false); }
+                catch { }
+            }
         }
-
-        _stopCts?.Dispose();
-        _stopCts = null;
-        _trackCts?.Dispose();
-        _trackCts = null;
-        _activeItem = null;
+        finally
+        {
+            // Always forget the run loop, or the next StartAsync would think it's still
+            // running and never start again.
+            _runLoop = null;
+            _stopCts?.Dispose();
+            _stopCts = null;
+            _trackCts = null; // owned (and disposed) by the run loop
+            _activeItem = null;
+        }
     }
 
     public async ValueTask DisposeAsync()
@@ -186,21 +202,21 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
     public Task NextAsync()
     {
         _stepBackwards = false;
-        _trackCts?.Cancel();
+        TryCancel(_trackCts);
         return Task.CompletedTask;
     }
 
     public Task PreviousAsync()
     {
         _stepBackwards = true;
-        _trackCts?.Cancel();
+        TryCancel(_trackCts);
         return Task.CompletedTask;
     }
 
     public Task RestartAsync()
     {
         _restart = true;
-        _trackCts?.Cancel();
+        TryCancel(_trackCts);
         return Task.CompletedTask;
     }
 
@@ -332,8 +348,12 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
             {
                 Log($"item failed: {ex.GetType().Name}: {ex.Message}");
             }
-
-            if (ReferenceEquals(_trackCts, trackCts)) _trackCts = null;
+            finally
+            {
+                // Forget the track's source on every exit (a stop returns above) before `using`
+                // disposes it, so nothing cancels a disposed source later.
+                Interlocked.CompareExchange(ref _trackCts, null, trackCts);
+            }
 
             // A restart replays the same track without disturbing history.
             if (_restart) { _replay = next; _restart = false; }
