@@ -46,6 +46,10 @@ public sealed class RadioPlayableItem : PlayableItem, ILiveSongAudio
     private const long UnknownStart = long.MinValue;
     private long _songStartTicks = UnknownStart;
 
+    // Where the current song's title change fell in the audio (UnknownStart when it isn't known). The
+    // song's start moves when its place is found from the audio; this doesn't.
+    private long _titleTicks = UnknownStart;
+
     // Which song is playing (ILiveSongAudio.SongId): every song, and every reconnect, gets a new one.
     private static long s_nextSongId;
     private long _songId = Interlocked.Increment(ref s_nextSongId);
@@ -85,6 +89,7 @@ public sealed class RadioPlayableItem : PlayableItem, ILiveSongAudio
         lock (_songLock)
         {
             Interlocked.Exchange(ref _songStartTicks, start?.Ticks ?? UnknownStart);
+            Interlocked.Exchange(ref _titleTicks, start?.Ticks ?? UnknownStart);
             Interlocked.Exchange(ref _songId, Interlocked.Increment(ref s_nextSongId));
         }
     }
@@ -93,6 +98,9 @@ public sealed class RadioPlayableItem : PlayableItem, ILiveSongAudio
 
     public long SongId => Interlocked.Read(ref _songId);
 
+    public TimeSpan? TitleChange =>
+        Interlocked.Read(ref _titleTicks) is var t && t != UnknownStart ? new TimeSpan(t) : null;
+
     public LiveAudio? RecentAudio(TimeSpan span)
     {
         long song;
@@ -100,13 +108,21 @@ public sealed class RadioPlayableItem : PlayableItem, ILiveSongAudio
         lock (_songLock)
         {
             song = _songId;
-            var start = Interlocked.Read(ref _songStartTicks);
             // The song playing when the station was tuned in began before what's been heard.
-            from = start == UnknownStart || start < 0 ? TimeSpan.Zero : new TimeSpan(start);
+            from = TitleChange is { } title && title > TimeSpan.Zero ? title : TimeSpan.Zero;
         }
-        if (_subproc is null || _heard?.Read(from, span) is not { } heard) return null;
-        return SongId == song ? new LiveAudio(song, heard.Samples, Chromaprint.SampleRate, heard.Start) : null;
+        return Tagged(song, _subproc is null ? null : _heard?.Read(from, span));
     }
+
+    public LiveAudio? AudioBetween(TimeSpan from, TimeSpan to)
+    {
+        long song = SongId;
+        return Tagged(song, _subproc is null ? null : _heard?.ReadBetween(from, to));
+    }
+
+    // The audio, as the song's; null when there's none or another song began while it was read.
+    private LiveAudio? Tagged(long song, (short[] Samples, TimeSpan Start)? heard) =>
+        heard is { } h && SongId == song ? new LiveAudio(song, h.Samples, Chromaprint.SampleRate, h.Start) : null;
 
     public bool SetSongPosition(long songId, TimeSpan streamTime, TimeSpan songTime)
     {
@@ -472,7 +488,6 @@ public sealed class RadioPlayableItem : PlayableItem, ILiveSongAudio
         _station = _station with { Name = icyName.Trim() };
         if (Metadata.ExternalId is null) Metadata = BuildTrack(null, null);
     }
-
 
     // Passes the audio on, keeping a copy of what's heard.
     private sealed class HeardSink(IPcmSink inner, LiveAudioBuffer heard) : IPcmSink

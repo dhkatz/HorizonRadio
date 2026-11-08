@@ -9,9 +9,9 @@ namespace HorizonRadio.Core.Fingerprints;
 
 /// <summary>The recording a station's song was lined up against.</summary>
 /// <param name="Locator">The page the recording came from.</param>
-/// <param name="YouTubeVideoId">Its YouTube video id, when it's a YouTube video.</param>
-/// <param name="Duration">Its length: lyrics timed to a recording of this length fit.</param>
-public sealed record SongSync(string Locator, string? YouTubeVideoId, TimeSpan Duration);
+/// <param name="SongLength">How long the song lasts in it: lyrics timed to a recording of this
+/// length fit.</param>
+public sealed record SongSync(string Locator, TimeSpan SongLength);
 
 /// <summary>
 /// Finds where a radio station is in the song it's playing by lining its audio up against a recording
@@ -40,6 +40,18 @@ public sealed class LiveSongSync
 
     /// <summary>Recordings longer than this aren't a song.</summary>
     private static readonly TimeSpan MaxLength = TimeSpan.FromMinutes(15);
+
+    /// <summary>To see where the station's version of a song starts in a recording, look this far
+    /// either side of its title change (stations change titles seconds early or late).</summary>
+    private static readonly TimeSpan BeforeTitle = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan AfterTitle = TimeSpan.FromSeconds(25);
+
+    /// <summary>A station settling on a recording this long after its first sound has skipped a prelude:
+    /// longer than any crossfade (0.7–3.3 s measured on a real station).</summary>
+    private static readonly TimeSpan Prelude = TimeSpan.FromSeconds(6);
+
+    /// <summary>The fingerprint finds where the station settles on a recording to within this, early.</summary>
+    private static readonly TimeSpan SettleSlack = TimeSpan.FromSeconds(3);
 
     /// <summary>A recording that's neither clearly in nor out after this many tries is given up on.</summary>
     private const int MaxTries = 12;
@@ -84,17 +96,17 @@ public sealed class LiveSongSync
             (StoredReference Reference, RecordingFit Fit)? close = null;
             (StoredReference Reference, RecordingFit Fit)? chosen = null;
 
-            await foreach (var reference in ReferencesAsync(track, run.Key, ct).ConfigureAwait(false))
+            await foreach (var candidate in ReferencesAsync(track, run.Key, ct).ConfigureAwait(false))
             {
-                var (outcome, fit) = await AlignAsync(run, reference, ct).ConfigureAwait(false);
+                var (outcome, fit) = await AlignAsync(run, candidate, ct).ConfigureAwait(false);
                 if (outcome == Outcome.SongChanged) return;
                 if (outcome == Outcome.Exact)
                 {
-                    chosen = (reference, fit);
+                    chosen = (candidate, fit);
                     break;
                 }
                 if (outcome == Outcome.Close && (close is null || fit.ErrorRate < close.Value.Fit.ErrorRate))
-                    close = (reference, fit);
+                    close = (candidate, fit);
             }
 
             chosen ??= close;
@@ -103,9 +115,20 @@ public sealed class LiveSongSync
                 if (live.SongId == run.Song) ProcessConsole.Append("sync", $"no recording matched {run.Name}");
                 return;
             }
-            if (!run.Apply(best.Reference, best.Fit)) return;
-            _store.Save(run.Key, best.Reference with { MatchRate = best.Fit.ErrorRate });
-            await KeepInStepAsync(run, best.Reference, best.Fit, ct).ConfigureAwait(false);
+            var reference = best.Reference with { MatchRate = best.Fit.ErrorRate };
+            if (!run.Apply(reference, best.Fit)) return;
+            _store.Save(run.Key, reference);
+
+            // Heard from its start, the song shows whether the recording opens with a prelude the station
+            // doesn't play (a music video's scene): then count the song's time from where the station
+            // starts it, now and next time.
+            if (reference.StationStart is null && await StationStartAsync(run, reference, best.Fit, ct).ConfigureAwait(false) is { } start)
+            {
+                reference = reference with { StationStart = start };
+                if (!run.Apply(reference, best.Fit)) return;
+                _store.Save(run.Key, reference);
+            }
+            await KeepInStepAsync(run, reference, best.Fit, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -119,21 +142,25 @@ public sealed class LiveSongSync
     private sealed class Run(ILiveSongAudio live, long song, string key, string name, Action<SongSync> onSynced)
     {
         public long Song { get; } = song;
+        private TimeSpan _songStart;
         public string Key { get; } = key;
         public string Name { get; } = name;
         public ILiveSongAudio Live { get; } = live;
         public StoredReference? Applied { get; private set; }
 
-        // Take the song's place from this fit; false when the station has moved on to another song.
+        // Take the song's place from this fit, counting from where the song starts in the recording
+        // (uploads pad it differently); false when the station has moved on.
         public bool Apply(StoredReference reference, RecordingFit fit)
         {
-            if (!Live.SetSongPosition(Song, fit.StreamTime, fit.SongTime)) return false;
-            if (Applied?.Locator != reference.Locator)
+            var songTime = fit.SongTime - reference.SongStart;
+            if (!Live.SetSongPosition(Song, fit.StreamTime, songTime)) return false;
+            if (Applied?.Locator != reference.Locator || _songStart != reference.SongStart)
             {
                 Applied = reference;
+                _songStart = reference.SongStart;
                 ProcessConsole.Append("sync", string.Create(CultureInfo.InvariantCulture,
-                    $"{Name}: {fit.SongTime.TotalSeconds:0.00} s into {reference.Locator} ({fit.ErrorRate:P0} of bits differ)"));
-                onSynced(new SongSync(reference.Locator, reference.YouTubeVideoId, reference.Duration));
+                    $"{Name}: {songTime.TotalSeconds:0.00} s into the song, which starts {reference.SongStart.TotalSeconds:0.00} s into {reference.Locator} ({fit.ErrorRate:P0} of bits differ)"));
+                onSynced(new SongSync(reference.Locator, reference.SongLength));
             }
             return true;
         }
@@ -205,7 +232,8 @@ public sealed class LiveSongSync
             var audio = await fetcher.FetchAsync(locator, Chromaprint.SampleRate, MaxLength, ct).ConfigureAwait(false);
             if (audio is null || audio.SampleRate != Chromaprint.SampleRate) return null;
             var fingerprint = await Task.Run(() => Chromaprint.Compute(audio.Samples), ct).ConfigureAwait(false);
-            return new StoredReference(locator, audio.YouTubeVideoId, audio.Duration, fingerprint, MatchRate: null);
+            return new StoredReference(locator, audio.Duration, Silence.Before(audio.Samples, audio.SampleRate),
+                Silence.After(audio.Samples, audio.SampleRate), fingerprint, MatchRate: null);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -264,6 +292,40 @@ public sealed class LiveSongSync
         }
         ProcessConsole.Append("sync", $"{run.Name}: gave up on {reference.Locator}");
         return (Outcome.Different, none);
+    }
+
+    // Where the station's version of the song starts in the recording, when the recording opens with a
+    // prelude the station skips; null when it doesn't, or that can't be told (tuned in mid-song, or the
+    // audio from before the song is gone). The station settles on the recording a crossfade after the
+    // song starts, so only settling far past the recording's first sound means a prelude; the song then
+    // starts about where the station changed its title.
+    private async Task<TimeSpan?> StationStartAsync(Run run, StoredReference reference, RecordingFit placed, CancellationToken ct)
+    {
+        if (run.Live.TitleChange is not { } title) return null;
+        for (int tries = 0; tries < MaxTries; tries++)
+        {
+            if (run.Live.SongId != run.Song) return null;
+            var audio = run.Live.AudioBetween(title - BeforeTitle, title + AfterTitle);
+            if (audio is null || audio.SongId != run.Song) return null;
+            if (audio.Start + audio.Length < title + AfterTitle)
+            {
+                await Delay(Retry, ct).ConfigureAwait(false);
+                continue;
+            }
+            // Nothing from before the title change kept (a reconnect): it can't show where the song began.
+            if (audio.Start > title - BeforeTitle / 2) return null;
+
+            var settles = await Task.Run(() => RecordingMatch.StationSettles(reference.Fingerprint, audio.Samples, audio.Start, placed), ct)
+                .ConfigureAwait(false);
+            if (settles is not { } s || s - reference.LeadIn <= Prelude || s >= reference.Duration) return null;
+
+            var atTitle = placed.SongTime + (title - placed.StreamTime);
+            var start = atTitle < s - Prelude ? s - Prelude : atTitle > s + SettleSlack ? s + SettleSlack : atTitle;
+            ProcessConsole.Append("sync", string.Create(CultureInfo.InvariantCulture,
+                $"{run.Name}: {reference.Locator} opens with a {(start - reference.LeadIn).TotalSeconds:0.0} s prelude the station doesn't play"));
+            return start;
+        }
+        return null;
     }
 
     // Recheck now and then that the station still plays in step with the recording, and move it when it

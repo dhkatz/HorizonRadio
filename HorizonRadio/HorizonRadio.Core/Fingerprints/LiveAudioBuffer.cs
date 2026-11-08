@@ -71,12 +71,28 @@ public sealed class LiveAudioBuffer
     {
         lock (_lock)
         {
-            long first = Math.Max(Math.Max(FirstAt(from), _written - Samples(span)), Math.Max(0, _written - _ring.Length));
-            if (first >= _written) return null;
-            var samples = new short[_written - first];
-            for (long s = first; s < _written; s++) samples[s - first] = _ring[s % _ring.Length];
-            return (samples, Time(first));
+            return Copy(Math.Max(FirstAt(from), _written - Samples(span)), _written);
         }
+    }
+
+    /// <summary>The audio between <paramref name="from"/> and <paramref name="to"/>, as much of it as
+    /// is kept and has been written; null when there's none.</summary>
+    public (short[] Samples, TimeSpan Start)? ReadBetween(TimeSpan from, TimeSpan to)
+    {
+        lock (_lock)
+        {
+            return Copy(FirstAt(from), Math.Min(_written, FirstAt(to)));
+        }
+    }
+
+    // Samples [first, end) of what's still kept. Call under _lock.
+    private (short[] Samples, TimeSpan Start)? Copy(long first, long end)
+    {
+        first = Math.Max(first, Math.Max(0, _written - _ring.Length));
+        if (first >= end) return null;
+        var samples = new short[end - first];
+        for (long s = first; s < end; s++) samples[s - first] = _ring[s % _ring.Length];
+        return (samples, Time(first));
     }
 
     /// <summary>Forget the audio: the stream starts over (a reconnect).</summary>

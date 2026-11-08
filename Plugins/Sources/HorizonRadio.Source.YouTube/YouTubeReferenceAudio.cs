@@ -71,7 +71,7 @@ internal static class YouTubeReferenceAudio
         Buffer.BlockCopy(pcm.GetBuffer(), 0, samples, 0, samples.Length * sizeof(short));
         ProcessConsole.Append("sync",
             $"fetched {url}: {samples.Length / (double)sampleRate:0.0} s of audio in {started.Elapsed.TotalSeconds:0.0} s");
-        return new ReferenceAudio(url, samples, sampleRate, YouTubeLinks.VideoId(url));
+        return new ReferenceAudio(url, samples, sampleRate);
     }
 
     private static Process Start(string exe, string[] args, bool stdin)
@@ -96,32 +96,4 @@ internal static class YouTubeReferenceAudio
         catch (InvalidOperationException) { /* already gone */ }
         catch (System.ComponentModel.Win32Exception) { /* can't be killed; it's exiting */ }
     }
-}
-
-/// <summary>Reading YouTube links.</summary>
-public static class YouTubeLinks
-{
-    /// <summary>The video id in a YouTube watch/short/embed link, or null for anything else.</summary>
-    public static string? VideoId(string url)
-    {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return null;
-        var host = uri.Host.ToLowerInvariant();
-        if (host.StartsWith("www.", StringComparison.Ordinal)) host = host[4..];
-        if (host == "youtu.be") return Clean(uri.AbsolutePath.Trim('/'));
-        if (host is not ("youtube.com" or "m.youtube.com" or "music.youtube.com")) return null;
-
-        var path = uri.AbsolutePath;
-        if (path == "/watch")
-        {
-            foreach (var pair in uri.Query.TrimStart('?').Split('&'))
-                if (pair.StartsWith("v=", StringComparison.Ordinal)) return Clean(Uri.UnescapeDataString(pair[2..]));
-            return null;
-        }
-        foreach (var prefix in (string[])["/shorts/", "/embed/", "/live/", "/v/"])
-            if (path.StartsWith(prefix, StringComparison.Ordinal)) return Clean(path[prefix.Length..].Split('/')[0]);
-        return null;
-    }
-
-    private static string? Clean(string id) =>
-        id.Length == 11 && id.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_') ? id : null;
 }

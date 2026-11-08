@@ -24,9 +24,7 @@ public interface IReferenceAudioSource
 /// <param name="Locator">The page it came from.</param>
 /// <param name="Samples">The audio, mono 16-bit, at <paramref name="SampleRate"/>.</param>
 /// <param name="SampleRate">Samples per second.</param>
-/// <param name="YouTubeVideoId">The YouTube video id, when it's a YouTube video (some lyrics are
-/// timed against a specific video).</param>
-public sealed record ReferenceAudio(string Locator, short[] Samples, int SampleRate, string? YouTubeVideoId)
+public sealed record ReferenceAudio(string Locator, short[] Samples, int SampleRate)
 {
     public TimeSpan Duration => TimeSpan.FromSeconds((double)Samples.Length / SampleRate);
 }

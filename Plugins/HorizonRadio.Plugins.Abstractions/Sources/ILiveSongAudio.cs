@@ -13,9 +13,18 @@ public interface ILiveSongAudio
     /// position worked out for one song is never applied to the next.</summary>
     long SongId { get; }
 
-    /// <summary>The current song's audio heard so far, at most the last <paramref name="span"/> of
-    /// it, or null while there's none.</summary>
+    /// <summary>Where the current song's title change falls on the stream's clock: roughly where the
+    /// station started the song. Null for the song that was playing when the station was tuned in.</summary>
+    TimeSpan? TitleChange { get; }
+
+    /// <summary>The current song's audio heard so far (since its title change), at most the last
+    /// <paramref name="span"/> of it, or null while there's none.</summary>
     LiveAudio? RecentAudio(TimeSpan span);
+
+    /// <summary>The stream's audio between <paramref name="from"/> and <paramref name="to"/> on its
+    /// clock, as much of it as has been heard and is still kept (about the last minute and a half),
+    /// or null when there's none.</summary>
+    LiveAudio? AudioBetween(TimeSpan from, TimeSpan to);
 
     /// <summary>Set where playback is in the song: <paramref name="songTime"/> into song
     /// <paramref name="songId"/> at <paramref name="streamTime"/> on the stream's clock (the clock

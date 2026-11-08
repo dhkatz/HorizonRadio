@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace HorizonRadio.Core.Fingerprints;
 
 /// <summary>What lining a stretch of live audio up against a recording found.</summary>
@@ -60,6 +62,10 @@ public static class RecordingMatch
     /// it to ~0.015 s.</summary>
     private const int Refinements = 8;
 
+    /// <summary>Fingerprint words (about 2 s) the station must stay on the recording for, from where
+    /// its version of the song is taken to start.</summary>
+    private const int SettledWords = 16;
+
     /// <summary>Where <paramref name="audio"/> (mono at <see cref="Chromaprint.SampleRate"/>, its first
     /// sample at <paramref name="start"/> on the stream's clock) fits in the recording whose fingerprint
     /// is <paramref name="reference"/>.</summary>
@@ -106,5 +112,45 @@ public static class RecordingMatch
             Chromaprint.FrameStep * bestOffset,
             bestRate,
             m.Margin);
+    }
+
+    /// <summary>
+    /// Where in the recording the station's audio settles on it, from <paramref name="audio"/> (first
+    /// sample at <paramref name="start"/>) that runs from before the song through its start, and where
+    /// the song was placed (<paramref name="placed"/>). That's not quite where the song starts: stations
+    /// crossfade, so the previous song runs over the new one's first seconds (0.7–3.3 s, measured), and
+    /// it's found a little late. It's far later when the recording opens with a prelude the station's
+    /// version doesn't have (a music video's scene before the song). Null when the station already plays
+    /// the recording from the stretch's first moment (the song began before it), or never settles on it.
+    /// </summary>
+    public static TimeSpan? StationSettles(uint[] reference, short[] audio, TimeSpan start, RecordingFit placed)
+    {
+        var live = Chromaprint.Compute(audio);
+        // The recording's word lined up with the stretch's first word, by the placement.
+        var at = placed.SongTime + (start - placed.StreamTime);
+        int offset = (int)Math.Round(at.TotalSeconds / Chromaprint.FrameStep.TotalSeconds);
+
+        var errors = new int[live.Length];
+        for (int i = 0; i < live.Length; i++)
+        {
+            int j = i + offset;
+            errors[i] = j >= 0 && j < reference.Length ? BitOperations.PopCount(live[i] ^ reference[j]) : 32;
+        }
+
+        // The first word from which two seconds fit closely, and the two after still fit.
+        double close = MaxErrorRate * 32 * SettledWords, still = DifferentErrorRate * 32 * SettledWords;
+        for (int i = 0; i + 2 * SettledWords <= errors.Length; i++)
+        {
+            if (Sum(errors, i, SettledWords) > close || Sum(errors, i + SettledWords, SettledWords) > still) continue;
+            return i == 0 ? null : Chromaprint.FrameStep * (i + offset);
+        }
+        return null;
+    }
+
+    private static int Sum(int[] values, int from, int count)
+    {
+        int sum = 0;
+        for (int i = from; i < from + count; i++) sum += values[i];
+        return sum;
     }
 }

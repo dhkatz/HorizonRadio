@@ -9,17 +9,31 @@ namespace HorizonRadio.Core.Fingerprints;
 
 /// <summary>A recording of a song, fingerprinted.</summary>
 /// <param name="Locator">The page it was fetched from.</param>
-/// <param name="YouTubeVideoId">Its YouTube video id, when it's a YouTube video.</param>
 /// <param name="Duration">Its length.</param>
+/// <param name="LeadIn">The silence before its first sound (<see cref="Silence"/>).</param>
+/// <param name="TrailOut">The silence after its last sound.</param>
 /// <param name="Fingerprint">Its Chromaprint fingerprint (<see cref="Chromaprint"/>).</param>
 /// <param name="MatchRate">How closely a station's audio lined up with it (the share of fingerprint
 /// bits that differed), or null when none has: the closest is tried first next time.</param>
+/// <param name="StationStart">Where a station's version of the song starts in it, when the recording
+/// opens with a prelude stations don't play (a music video's scene before the song); learned the first
+/// time a station is heard starting the song. Null otherwise: the song starts at the first sound.</param>
 public sealed record StoredReference(
     string Locator,
-    string? YouTubeVideoId,
     TimeSpan Duration,
+    TimeSpan LeadIn,
+    TimeSpan TrailOut,
     uint[] Fingerprint,
-    double? MatchRate);
+    double? MatchRate,
+    TimeSpan? StationStart = null)
+{
+    /// <summary>Where the song starts in the recording: where a station starts it, else at the
+    /// recording's first sound. The song's time counts from here.</summary>
+    public TimeSpan SongStart => StationStart ?? LeadIn;
+
+    /// <summary>How long the song lasts in the recording, from <see cref="SongStart"/> to its last sound.</summary>
+    public TimeSpan SongLength => Duration - SongStart - TrailOut is var length && length > TimeSpan.Zero ? length : TimeSpan.Zero;
+}
 
 /// <summary>
 /// The fingerprints of songs' reference recordings, kept on disk so each recording is downloaded once:
@@ -99,13 +113,16 @@ public sealed class ReferenceStore
 
     private sealed record SongFile(string Song, ReferenceFile[] References);
 
-    private sealed record ReferenceFile(string Locator, string? YouTubeVideoId, double Seconds, string Fingerprint, double? MatchRate)
+    private sealed record ReferenceFile(
+        string Locator, double Seconds, double LeadIn, double TrailOut, string Fingerprint, double? MatchRate,
+        double? StationStart)
     {
         public static ReferenceFile From(StoredReference r)
         {
             var bytes = new byte[r.Fingerprint.Length * sizeof(uint)];
             Buffer.BlockCopy(r.Fingerprint, 0, bytes, 0, bytes.Length);
-            return new ReferenceFile(r.Locator, r.YouTubeVideoId, r.Duration.TotalSeconds, Convert.ToBase64String(bytes), r.MatchRate);
+            return new ReferenceFile(r.Locator, r.Duration.TotalSeconds, r.LeadIn.TotalSeconds, r.TrailOut.TotalSeconds,
+                Convert.ToBase64String(bytes), r.MatchRate, r.StationStart?.TotalSeconds);
         }
 
         public StoredReference? ToReference()
@@ -115,7 +132,9 @@ public sealed class ReferenceStore
                 var bytes = Convert.FromBase64String(Fingerprint);
                 var words = new uint[bytes.Length / sizeof(uint)];
                 Buffer.BlockCopy(bytes, 0, words, 0, words.Length * sizeof(uint));
-                return new StoredReference(Locator, YouTubeVideoId, TimeSpan.FromSeconds(Seconds), words, MatchRate);
+                return new StoredReference(Locator, TimeSpan.FromSeconds(Seconds), TimeSpan.FromSeconds(LeadIn),
+                    TimeSpan.FromSeconds(TrailOut), words, MatchRate,
+                    StationStart is { } s ? TimeSpan.FromSeconds(s) : null);
             }
             catch (FormatException)
             {

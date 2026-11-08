@@ -97,6 +97,14 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   bits, another version of the song 13–18% (and lands a few tenths off, so it's only a
   fallback), other songs 35%+; a repeated section fits twice and waits for a longer
   stretch. The fit is refined to ~0.015 s by re-fingerprinting at sub-frame shifts.
+  Uploads pad the music differently (0.01–7.5 s of silence measured), so a song's time
+  counts from the recording's first sound (`Silence`), which puts every upload within
+  ~0.02 s of the others. A recording that opens with a prelude with sound (a music
+  video's scene) is caught the first time a station is heard starting the song: the
+  station settles on the recording far past its first sound, so the song starts where
+  the station changed its title (`StoredReference.StationStart`, kept for tuned-in
+  plays). Short of that, settling late is the station's crossfade (0.7–3.3 s measured),
+  not a different start.
   Fingerprints are stored per song (`ReferenceStore`, `%LOCALAPPDATA%\HorizonRadio\fingerprints`),
   so a song is downloaded once. With matching off or no match, radio lyrics follow the
   title change and can be nudged earlier/later (`lyricsRadioOffset`).

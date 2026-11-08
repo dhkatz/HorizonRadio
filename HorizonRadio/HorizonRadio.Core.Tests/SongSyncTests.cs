@@ -3,7 +3,6 @@ using HorizonRadio.Core.Fingerprints;
 using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
-using HorizonRadio.Core.Sources.YouTube;
 
 namespace HorizonRadio.Core.Tests;
 
@@ -247,7 +246,8 @@ public class ReferenceStoreTests : IDisposable
     }
 
     private static StoredReference Ref(string locator, double? rate) =>
-        new(locator, null, TimeSpan.FromSeconds(200), [1, 2, 0xFFFFFFFF], rate);
+        new(locator, TimeSpan.FromSeconds(200), TimeSpan.FromSeconds(1.5), TimeSpan.FromSeconds(1.5), [1, 2, 0xFFFFFFFF], rate,
+            rate is null ? null : TimeSpan.FromSeconds(2.25));
 
     [Fact]
     public void Keeps_fingerprints_per_song_closest_match_first()
@@ -263,6 +263,11 @@ public class ReferenceStoreTests : IDisposable
         Assert.Equal(["https://c", "https://b", "https://a"], stored.Select(r => r.Locator));
         Assert.Equal([1u, 2u, 0xFFFFFFFFu], stored[0].Fingerprint);
         Assert.Equal(TimeSpan.FromSeconds(200), stored[0].Duration);
+        Assert.Equal(TimeSpan.FromSeconds(1.5), stored[0].LeadIn);
+        // The song starts where a station started it, else at the recording's first sound.
+        Assert.Equal(TimeSpan.FromSeconds(2.25), stored[0].SongStart);
+        Assert.Equal(TimeSpan.FromSeconds(196.25), stored[0].SongLength);
+        Assert.Equal(TimeSpan.FromSeconds(1.5), stored[2].SongStart);
     }
 
     [Fact]
@@ -287,17 +292,23 @@ public class LiveSongSyncTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    // A station that's 40 s into a stream; our song began 6.25 s in, after the end of another.
-    private sealed class Station : ILiveSongAudio
+    // A station that's 40 s into a stream. Our song began 6.25 s in, after the end of another, with
+    // its title change a quarter second early; or, tuned in mid-song, it's been playing from 30 s in.
+    private sealed class Station(bool tunedIn = false) : ILiveSongAudio
     {
-        private readonly LiveAudioBuffer _heard = SyntheticSong.Heard(
-            SyntheticSong.Stream(40, t => t < 6.25 ? (2, t + 80) : (1, t - 6.25)));
+        private readonly LiveAudioBuffer _heard = SyntheticSong.Heard(SyntheticSong.Stream(40,
+            t => tunedIn ? (1, t + 30) : t < 6.25 ? (2, t + 80) : (1, t - 6.25)));
 
         public long SongId => 7;
+        public TimeSpan? TitleChange => tunedIn ? null : TimeSpan.FromSeconds(6);
         public List<(TimeSpan Stream, TimeSpan Song)> Positions { get; } = [];
 
-        public LiveAudio? RecentAudio(TimeSpan span) =>
-            _heard.Read(TimeSpan.FromSeconds(6), span) is { } a ? new LiveAudio(7, a.Samples, Chromaprint.SampleRate, a.Start) : null;
+        public LiveAudio? RecentAudio(TimeSpan span) => Tag(_heard.Read(TitleChange ?? TimeSpan.Zero, span));
+
+        public LiveAudio? AudioBetween(TimeSpan from, TimeSpan to) => Tag(_heard.ReadBetween(from, to));
+
+        private static LiveAudio? Tag((short[] Samples, TimeSpan Start)? a) =>
+            a is { } h ? new LiveAudio(7, h.Samples, Chromaprint.SampleRate, h.Start) : null;
 
         public bool SetSongPosition(long songId, TimeSpan streamTime, TimeSpan songTime)
         {
@@ -307,8 +318,9 @@ public class LiveSongSyncTests : IDisposable
         }
     }
 
-    // Finds two videos for any search, the first of another song; fetches them as synthetic audio.
-    private sealed class Videos : IAudioSourceFactory, IReferenceAudioSource, ISearchSource
+    // Finds two videos for any search, the first of another song; fetches them as synthetic audio. The
+    // song's video opens with a prelude: 3.5 s of silence (a title card), or a scene with sound.
+    private sealed class Videos(double prelude = 3.5, bool silentPrelude = true) : IAudioSourceFactory, IReferenceAudioSource, ISearchSource
     {
         public string Id => "videos";
         public string DisplayName => "Videos";
@@ -328,8 +340,22 @@ public class LiveSongSyncTests : IDisposable
         public Task<ReferenceAudio?> FetchAsync(string locator, int sampleRate, TimeSpan maxLength, CancellationToken ct)
         {
             Fetched.Add(locator);
-            var seed = locator.EndsWith("/song", StringComparison.Ordinal) ? 1 : 3;
-            return Task.FromResult<ReferenceAudio?>(new ReferenceAudio(locator, SyntheticSong.Recording(seed, 120), sampleRate, null));
+            var song = locator.EndsWith("/song", StringComparison.Ordinal);
+            var audio = song
+                ? Video(t => t < prelude ? (silentPrelude ? (1, -1) : (4, t)) : (1, t - prelude))
+                : Video(t => (3, t));
+            return Task.FromResult<ReferenceAudio?>(new ReferenceAudio(locator, audio, sampleRate));
+        }
+
+        private static short[] Video(Func<double, (int Seed, double Time)> at)
+        {
+            var samples = new short[120 * Chromaprint.SampleRate];
+            for (int i = 0; i < samples.Length; i++)
+            {
+                var (seed, time) = at((double)i / Chromaprint.SampleRate);
+                samples[i] = (short)(SyntheticSong.At(seed, time) * 12000);
+            }
+            return samples;
         }
     }
 
@@ -366,13 +392,42 @@ public class LiveSongSyncTests : IDisposable
         var synced = await RunAsync(station, videos);
 
         Assert.Equal("https://video/song", Assert.Single(synced).Locator);
+        // The song's time counts from the music, not from the video's silent title card.
         var (stream, song) = station.Positions[^1];
         Assert.InRange((stream - song).TotalSeconds, 6.25 - 0.03, 6.25 + 0.03);
+        Assert.InRange(synced[0].SongLength.TotalSeconds, 116, 117);
 
-        // Both fingerprints are kept; the one that matched is tried first next time.
+        // Both fingerprints are kept; the one that matched is tried first next time. A silent title card
+        // is no prelude: the song starts at the first sound.
         var stored = new ReferenceStore(_dir).For(ReferenceStore.SongKey(Song.Artist, Song.Title));
         Assert.Equal(["https://video/song", "https://video/other"], stored.Select(r => r.Locator));
         Assert.NotNull(stored[0].MatchRate);
+        Assert.Null(stored[0].StationStart);
+    }
+
+    [Fact]
+    public async Task A_video_that_opens_with_a_scene_counts_the_song_from_where_the_station_starts_it()
+    {
+        // A music video with 20 s of a scene, with sound, before the song.
+        var station = new Station();
+
+        var synced = await RunAsync(station, new Videos(prelude: 20, silentPrelude: false));
+
+        // The song starts where the station changed its title, a quarter second early here.
+        var (stream, song) = station.Positions[^1];
+        Assert.InRange((stream - song).TotalSeconds, 6.0 - 0.05, 6.0 + 0.05);
+        Assert.InRange(synced[^1].SongLength.TotalSeconds, 99.5, 100.5);
+        var stored = new ReferenceStore(_dir).For(ReferenceStore.SongKey(Song.Artist, Song.Title));
+        Assert.InRange(stored[0].StationStart!.Value.TotalSeconds, 19.75 - 0.05, 19.75 + 0.05);
+
+        // Tuned in mid-song the next time, the song is still counted from there.
+        var tunedIn = new Station(tunedIn: true);
+        var videos = new Videos(prelude: 20, silentPrelude: false);
+        await RunAsync(tunedIn, videos);
+
+        Assert.Empty(videos.Fetched);
+        var (later, at) = tunedIn.Positions[^1];
+        Assert.InRange((at - later).TotalSeconds, 30.25 - 0.05, 30.25 + 0.05);
     }
 
     [Fact]
@@ -390,15 +445,17 @@ public class LiveSongSyncTests : IDisposable
     }
 }
 
-public class YouTubeLinksTests
+public class SilenceTests
 {
-    [Theory]
-    [InlineData("https://www.youtube.com/watch?v=yftUk8R1gwA", "yftUk8R1gwA")]
-    [InlineData("https://youtu.be/Pc6m0o_BjMc", "Pc6m0o_BjMc")]
-    [InlineData("https://music.youtube.com/watch?list=x&v=Pc6m0o_BjMc", "Pc6m0o_BjMc")]
-    [InlineData("https://www.youtube.com/shorts/Pc6m0o_BjMc", "Pc6m0o_BjMc")]
-    [InlineData("http://www.nicovideo.jp/watch/sm43083649", null)]
-    [InlineData("https://www.youtube.com/playlist?list=PL123", null)]
-    public void Reads_the_video_id_of_a_youtube_link(string url, string? id) =>
-        Assert.Equal(id, YouTubeLinks.VideoId(url));
+    [Fact]
+    public void Finds_the_silence_around_the_music()
+    {
+        // 2 s of near-silence (tape hiss), 10 s of music, 1 s of silence.
+        var audio = SyntheticSong.Recording(1, 13, t => t is >= 2 and < 12 ? t - 2 : -1);
+        var rng = new Random(5);
+        for (int i = 0; i < audio.Length; i++) audio[i] += (short)rng.Next(-20, 21);
+
+        Assert.InRange(Silence.Before(audio, Chromaprint.SampleRate).TotalSeconds, 1.99, 2.01); // to the 10 ms
+        Assert.InRange(Silence.After(audio, Chromaprint.SampleRate).TotalSeconds, 0.99, 1.01);
+    }
 }

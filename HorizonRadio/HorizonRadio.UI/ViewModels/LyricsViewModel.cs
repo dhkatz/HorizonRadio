@@ -406,14 +406,14 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
         _ = RefitLyricsAsync(found, ct);
     }
 
-    // The station plays the recording that was matched; lyrics timed to a recording of its length (or
-    // to that very video) fit it best. Keep what's showing when there aren't any.
+    // The station plays the recording that was matched; lyrics timed to a recording of the song's length
+    // in it fit best. Keep what's showing when there aren't any.
     private async Task RefitLyricsAsync(SongSync found, CancellationToken ct)
     {
         if (_service == null || _track is not { } track) return;
         try
         {
-            var query = new LyricsQuery(track.Title, track.Artist, track.Album, found.Duration, found.YouTubeVideoId);
+            var query = new LyricsQuery(track.Title, track.Artist, track.Album, found.SongLength);
             var lyrics = await _service.FindAsync(query, ct);
             if (ct.IsCancellationRequested || lyrics is not { Synced: true } || SameLyrics(lyrics, _lyrics)) return;
             Show(lyrics, knowsPosition: true);
