@@ -125,6 +125,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Toggling shuffle while a mix plays no longer replays the song that's playing.** Turning
+  shuffle on only reorders the songs that haven't played yet, turning it off carries on in
+  order after the current song, and the queue's "Next From" list updates straight away.
 - **Closing Horizon Radio gives your stations back to the game.** If the app closed or
   crashed while Forza Horizon 6 was running, the stations it was replacing went silent (and
   kept our song title after a crash); now they play the game's own music and titles again.

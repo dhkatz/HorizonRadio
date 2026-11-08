@@ -184,6 +184,16 @@ public sealed class QueueModel
         if (replaceNow) InterruptRequested?.Invoke();
     }
 
+    /// <summary>Turn shuffle on or off for the active context. Its upcoming order
+    /// changes at once, so this raises <see cref="Changed"/> for the list to refresh.</summary>
+    public void SetShuffle(bool on)
+    {
+        var context = Context;
+        if (context == null) return;
+        context.SetShuffle(on);
+        Changed?.Invoke();
+    }
+
     public QueueSnapshot Snapshot(int contextPeek = 50)
     {
         QueueItem? current;

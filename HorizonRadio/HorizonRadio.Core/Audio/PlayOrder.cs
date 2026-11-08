@@ -112,12 +112,22 @@ public sealed class PlayOrder
     /// the currently-pointed item (pinned to front when enabling, kept at its
     /// natural position when disabling); when false the order is fully
     /// randomized / reset and the cursor returns to the start. No-op if the
-    /// requested mode already matches.</summary>
-    public void SetShuffle(bool on, bool keepCurrent)
+    /// requested mode already matches.
+    ///
+    /// <paramref name="keepPlayed"/> (enabling, with <paramref name="keepCurrent"/>)
+    /// leaves the order up to and including the current item as is and shuffles only
+    /// what comes after it, so items already played this pass don't come round again
+    /// before the order wraps.</summary>
+    public void SetShuffle(bool on, bool keepCurrent, bool keepPlayed = false)
     {
         if (on == Shuffled) return;
 
-        if (on)
+        if (on && keepCurrent && keepPlayed && CurrentIndex >= 0)
+        {
+            ShuffleRange(_pos + 1);
+            Shuffled = true;
+        }
+        else if (on)
         {
             Reshuffle(keepCurrent);
         }
@@ -132,14 +142,7 @@ public sealed class PlayOrder
     private void Reshuffle(bool keepCurrent)
     {
         int cur = CurrentIndex;
-
-        // Fisher–Yates over the whole order.
-        for (int i = _order.Count - 1; i > 0; i--)
-        {
-            int j = _rng.Next(i + 1);
-            (_order[i], _order[j]) = (_order[j], _order[i]);
-        }
-
+        ShuffleRange(0);
         Shuffled = true;
 
         if (keepCurrent && cur >= 0)
@@ -151,6 +154,16 @@ public sealed class PlayOrder
         else
         {
             _pos = _order.Count > 0 ? 0 : -1;
+        }
+    }
+
+    // Fisher–Yates over _order[start..].
+    private void ShuffleRange(int start)
+    {
+        for (int i = _order.Count - 1; i > start; i--)
+        {
+            int j = start + _rng.Next(i - start + 1);
+            (_order[i], _order[j]) = (_order[j], _order[i]);
         }
     }
 }

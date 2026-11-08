@@ -90,4 +90,26 @@ public class QueueModelTests
         Assert.Equal("M", model.Snapshot().ContextName);
         Assert.Equal(1, work);
     }
+
+    [Fact]
+    public async Task SetShuffle_reorders_the_context_peek_now_and_signals_a_change()
+    {
+        using var dir = TempDir.Create();
+        foreach (var n in new[] { "a", "b", "c", "d", "e", "f" }) dir.Touch($"{n}.mp3");
+        var provider = new MixContextProvider(
+            new Mix("m", "M", [new ContentRef("local", dir.Path)]), new MixContentResolver(new SourceConfigStore()));
+        var model = new QueueModel();
+        model.SetContext(provider, "m");
+        Assert.Equal("a", (await provider.NextAsync(CancellationToken.None))?.Metadata.Title);
+
+        var changed = 0;
+        model.Changed += () => changed++;
+        model.SetShuffle(true);
+
+        Assert.Equal(1, changed);
+        var upcoming = model.Snapshot().ContextPeek.Select(p => p.Title).ToList();
+        Assert.Equal(["b", "c", "d", "e", "f"], upcoming.Order());
+        for (var i = 0; i < upcoming.Count; i++)
+            Assert.Equal(upcoming[i], (await provider.NextAsync(CancellationToken.None))?.Metadata.Title);
+    }
 }
