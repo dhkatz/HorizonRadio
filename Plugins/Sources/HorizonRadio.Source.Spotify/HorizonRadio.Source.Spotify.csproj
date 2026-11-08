@@ -20,4 +20,9 @@
     <PackageReference Include="SpotifyAPI.Web" Version="7.4.2" />
   </ItemGroup>
 
+  <!-- TrackEndWatchdog is internal; its end-wait decision tests live in Core.Tests. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="HorizonRadio.Core.Tests" />
+  </ItemGroup>
+
 </Project>
