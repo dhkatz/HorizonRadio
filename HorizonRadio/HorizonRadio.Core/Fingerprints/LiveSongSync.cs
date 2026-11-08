@@ -205,7 +205,9 @@ public sealed class LiveSongSync
             {
                 ProcessConsole.Append("sync", $"couldn't look up the song's recordings: {ex.Message}");
             }
-            foreach (var p in playables) yield return p.Url;
+            // YouTube first: the same recording downloads in ~3 s there, against 20–40 s from Niconico.
+            foreach (var p in playables.OrderBy(p => p.Service.Equals("YouTube", StringComparison.OrdinalIgnoreCase) ? 0 : 1))
+                yield return p.Url;
         }
 
         var query = $"{track.Artist} {track.Title}".Trim();
