@@ -115,6 +115,9 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   `MetadataResolver` asks the catalogs that know which version is the original first
   (`IMetadataProvider.IdentifiesOriginals`; VocaDB, which picks the voice's most popular
   original with exactly that name) and asks the others with the artist they found.
+  Each catalog caches its answers (`MetadataCache`); a miss is kept for two weeks, so when
+  matching improves, bump `MetadataCache.CurrentMatchVersion`: misses from older matching
+  are then looked up again at once.
 - **Game plugins (`Plugins/Games/`)** — the Horizon Radio side of a game
   integration. An `IGamePlugin` (SDK) builds one `IGameIntegration`: the game's
   audio output, its event sources, connection state, and optional capabilities

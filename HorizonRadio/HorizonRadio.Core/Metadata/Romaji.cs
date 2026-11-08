@@ -17,7 +17,7 @@ namespace HorizonRadio.Core.Metadata;
 /// returns null when the text isn't purely kana, so the caller leaves kanji names on their prior
 /// (unverified-but-accepted) behavior rather than rejecting them.
 /// </summary>
-public static class Romaji
+public static partial class Romaji
 {
     // Accept a match when the romanizations are this close (1 - editDistance/maxLen). Canonicalize
     // already folds Hepburn/Nippon and long-vowel/sokuon wobble to equal, so a legit pair is usually
@@ -109,6 +109,10 @@ public static class Romaji
     {
         if (string.IsNullOrEmpty(s)) return "";
         var t = new string(s.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+        // A name spelled the English way ("Camellia" for かめりあ, kameria): Japanese has one sound
+        // where English has l and r, and romaji writes k where English writes c. Romaji itself never
+        // uses l or a c outside "ch", so folding these can't merge two romanized names.
+        t = EnglishC().Replace(t.Replace('l', 'r'), "k");
         foreach (var (from, to) in DigraphFolds) t = t.Replace(from, to);
         t = t.Replace("ou", "o"); // long ō written "ou"; "oo"/"uu" are handled by the collapse below
         // Collapse any doubled letter (long vowels "aa"/"oo"/"uu", sokuon "tt", "kk", …) to a single.
@@ -119,6 +123,9 @@ public static class Romaji
     }
 
     private static bool IsVowel(char c) => c is 'a' or 'i' or 'u' or 'e' or 'o';
+
+    [System.Text.RegularExpressions.GeneratedRegex("c(?!h)")]
+    private static partial System.Text.RegularExpressions.Regex EnglishC();
 
     private static int Levenshtein(string a, string b)
     {

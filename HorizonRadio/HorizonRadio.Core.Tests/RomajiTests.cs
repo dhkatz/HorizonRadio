@@ -36,6 +36,9 @@ public class RomajiTests
     [InlineData("Kikuo", "kikuo")]
     [InlineData("HachiojiP", "hachioujip")] // long-vowel wobble, same name
     [InlineData("hachioji", "hachiojip")]   // one-char "P" suffix
+    [InlineData("Camelia", "kameria")]      // English spelling of かめりあ: c for k, l for r
+    [InlineData("Camellia", "kameria")]
+    [InlineData("Chinozo", "chinozo")]      // "ch" stays a romaji digraph, not a k
     public void SoundsLike_bridges_romanization_variants(string a, string b)
         => Assert.True(Romaji.SoundsLike(a, b));
 

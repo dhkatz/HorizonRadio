@@ -231,6 +231,21 @@ public class SearchTermsTests
         => Assert.NotNull(SearchTerms.MatchScore("Sweet Devil", "Mafumafu", "Sweet Devil", "まふまふ"));
 
     [Fact]
+    public void MatchScore_accepts_a_one_word_title_by_a_kana_artist_the_broadcast_name_sounds_like()
+        // A station credits かめりあ as "Camelia": romanized, the kana sounds like it, which confirms
+        // the artist, so even a one-word title is enough.
+        => Assert.NotNull(SearchTerms.MatchScore("∞度寝", "Camelia", "∞度寝", "かめりあ feat. 初音ミク"));
+
+    [Fact]
+    public void MatchScore_still_rejects_a_one_word_title_by_an_unconfirmed_artist()
+    {
+        // A kana artist that doesn't sound like the broadcast name: another act's song.
+        Assert.Null(SearchTerms.MatchScore("∞度寝", "HachiojiP", "∞度寝", "くろくも"));
+        // A kanji artist can't be confirmed: a one-word title is anyone's.
+        Assert.Null(SearchTerms.MatchScore("∞度寝", "Camelia", "∞度寝", "椿"));
+    }
+
+    [Fact]
     public void MatchScore_allows_a_partial_or_unknown_result_artist()
     {
         // Shares a token (looser store credit) → still matches.

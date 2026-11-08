@@ -47,6 +47,25 @@ public sealed class MetadataCacheTests : IDisposable
     }
 
     [Fact]
+    public void A_miss_from_older_matching_is_retried_at_once()
+    {
+        // The song matching couldn't find then, it may find now: don't wait out the TTL.
+        new MetadataCache(_root, retryTtl: TimeSpan.FromDays(14), now: () => T0, matchVersion: 1).PutMiss(Key);
+
+        Assert.NotNull(new MetadataCache(_root, retryTtl: TimeSpan.FromDays(14), now: () => T0.AddHours(1), matchVersion: 1).TryGet(Key));
+        Assert.Null(new MetadataCache(_root, retryTtl: TimeSpan.FromDays(14), now: () => T0.AddHours(1), matchVersion: 2).TryGet(Key));
+    }
+
+    [Fact]
+    public void A_match_with_art_survives_better_matching()
+    {
+        new MetadataCache(_root, now: () => T0, matchVersion: 1).Put(Key,
+            new MetadataCacheEntry("Song", "Artist", null, new byte[] { 1 }, Mbid: null));
+
+        Assert.NotNull(new MetadataCache(_root, now: () => T0.AddHours(1), matchVersion: 2).TryGet(Key));
+    }
+
+    [Fact]
     public void Art_bearing_entry_is_kept_forever_within_the_same_version()
     {
         Cache(T0, version: 2).Put(Key, new MetadataCacheEntry("Song", "Artist", "Album",
