@@ -1,3 +1,5 @@
+using System.IO.Pipes;
+using System.Text.Json;
 using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Games;
 using HorizonRadio.Core.Metadata;
@@ -9,7 +11,8 @@ using HorizonRadio.Plugins.Abstractions;
 
 namespace HorizonRadio.Core.Tests;
 
-// Wiring only: nothing here calls Start(), so no pipes or sockets are opened.
+// Mostly wiring, with no pipes or sockets opened. The reconnect test is the exception: it runs the
+// integration against a fake mod on pipe names of its own.
 public class Fh6GameIntegrationTests
 {
     private sealed class TestContext(PluginSettingsStore settings) : IPluginContext
@@ -157,6 +160,99 @@ public class Fh6GameIntegrationTests
         Assert.Equal("Horizon Radio player", game.Describe(StationAssignment.Player));
         Assert.Equal("Game audio", game.Describe(StationAssignment.Game));
         Assert.Equal("Mix", game.Describe(StationAssignment.ForMix("not-loaded"))); // no host mixes yet
+    }
+
+    private sealed class NullRouter : IPlaybackRouter
+    {
+        public IReadOnlyList<MixInfo> Mixes => [];
+        public event Action? MixesChanged { add { } remove { } }
+        public void Route(PlaybackRoute route) { }
+    }
+
+    private sealed class Host : IGameHost
+    {
+        public IPlaybackRouter Playback { get; } = new NullRouter();
+    }
+
+    /// <summary>Stands in for the mod's control pipe: accepts the app, then reads its commands up
+    /// to and including the first <c>set_gain</c> (the last thing the app re-sends on connect).
+    /// Disposing it is the game going away.</summary>
+    private static async Task<(NamedPipeServerStream Pipe, List<JsonElement> Commands)> AcceptAsync(
+        string pipeName, CancellationToken ct)
+    {
+        var pipe = new NamedPipeServerStream(pipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous);
+        await pipe.WaitForConnectionAsync(ct);
+        var reader = new StreamReader(pipe, leaveOpen: true);
+        var commands = new List<JsonElement>();
+        while (await reader.ReadLineAsync(ct) is { } line)
+        {
+            var cmd = JsonDocument.Parse(line).RootElement.Clone();
+            commands.Add(cmd);
+            if (cmd.GetProperty("cmd").GetString() == "set_gain") break;
+        }
+        return (pipe, commands);
+    }
+
+    /// <summary>Closes the fake mod's pipe and waits for the integration to notice. It retries a
+    /// second later, so whatever the test does right after happens while the game is gone.</summary>
+    private static async Task GameGoneAsync(Fh6GameIntegration game, NamedPipeServerStream pipe,
+        CancellationToken ct)
+    {
+        var gone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnState(ConnectionState s)
+        {
+            if (s == ConnectionState.Disconnected) gone.TrySetResult();
+        }
+        game.StateChanged += OnState;
+        await pipe.DisposeAsync();
+        await gone.Task.WaitAsync(ct);
+        game.StateChanged -= OnState;
+    }
+
+    private static string[] Names(List<JsonElement> commands) =>
+        [.. commands.Select(c => c.GetProperty("cmd").GetString()!)];
+
+    // The mod forgets the app's track and duck when the app leaves, and a restarted game starts
+    // without them, so every (re)connect puts back what the app last asked for, even what it asked
+    // while the game was gone.
+    [Fact]
+    public async Task Reconnecting_resends_the_last_track_and_duck_gain()
+    {
+        var pipeName = $"HorizonRadioTest-{Guid.NewGuid():N}";
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        await using var game = new Fh6GameIntegration("Forza Horizon 6", null, pipeName, pipeName + ".pcm",
+            telemetryPort: 0);
+        var display = game.NowPlaying!;
+        var volume = game.Volume!;
+
+        // Asked before the game is up: nothing to send to yet, but remembered.
+        Assert.False(display.Show(new Track("Melt", "ryo", null, null, "test", "Test")));
+        Assert.False(volume.SetDuckGain(0.25f));
+
+        var accepted = AcceptAsync(pipeName, cts.Token);
+        game.Start(new Host());
+        var (pipe, commands) = await accepted;
+        Assert.Equal(["set_target_stations", "set_track", "set_gain"], Names(commands));
+        Assert.Equal("Melt", commands[1].GetProperty("title").GetString());
+        Assert.Equal(0.25, commands[2].GetProperty("gain").GetDouble(), 3);
+
+        // The game restarts; the song changes while it's gone.
+        await GameGoneAsync(game, pipe, cts.Token);
+        Assert.False(display.Show(new Track("World is Mine", "ryo", null, null, "test", "Test")));
+        (pipe, commands) = await AcceptAsync(pipeName, cts.Token);
+        Assert.Equal(["set_target_stations", "set_track", "set_gain"], Names(commands));
+        Assert.Equal("World is Mine", commands[1].GetProperty("title").GetString());
+        Assert.Equal(0.25, commands[2].GetProperty("gain").GetDouble(), 3);
+
+        // Nothing playing any more, and the duck lifted: that's what comes back, not the old song.
+        await GameGoneAsync(game, pipe, cts.Token);
+        Assert.False(display.Clear());
+        Assert.False(volume.SetDuckGain(1f));
+        (pipe, commands) = await AcceptAsync(pipeName, cts.Token);
+        Assert.Equal(["set_target_stations", "clear_track", "set_gain"], Names(commands));
+        Assert.Equal(1.0, commands[2].GetProperty("gain").GetDouble(), 3);
+        await pipe.DisposeAsync();
     }
 
     // The host slots its Events page in by order, between the game's own pages.

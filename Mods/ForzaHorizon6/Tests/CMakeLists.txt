@@ -31,6 +31,7 @@ set(HORIZON_TEST_SOURCES
   test_msvc_rtti.cpp
   test_msvc_string.cpp
   test_normalizer.cpp
+  test_now_playing.cpp
   test_ring_buffer.cpp
   test_sigscan.cpp
   test_station_codes.cpp

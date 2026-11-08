@@ -16,6 +16,11 @@
     <ProjectReference Include="..\..\..\HorizonRadio\HorizonRadio.Core\HorizonRadio.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The tests drive the integration against a fake mod on their own pipe names. -->
+    <InternalsVisibleTo Include="HorizonRadio.Core.Tests" />
+  </ItemGroup>
+
   <!-- UI for the plugin's pages. Versions must match HorizonRadio.UI's: the host and its plugins
        share one copy of each UI assembly. -->
   <ItemGroup>

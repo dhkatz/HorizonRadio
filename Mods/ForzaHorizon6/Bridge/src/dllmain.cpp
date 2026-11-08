@@ -16,6 +16,7 @@
 #include <horizon/fmod/resolver.hpp>
 #include <horizon/fmod/signatures.hpp>
 #include <horizon/fmod/system_resolver.hpp>
+#include <horizon/game/now_playing.hpp>
 #include <horizon/game/station_codes.hpp>
 #include <horizon/game/station_targets.hpp>
 #include <horizon/inject/game_resolver.hpp>
@@ -36,16 +37,9 @@ namespace {
 
 using horizon::fmod::FmodBridge;
 using horizon::fmod::FmodResolver;
+using horizon::game::TrackInfo;
 using horizon::inject::MetadataInjector;
 using horizon::inject::PeImage;
-
-// Track info the UI sends via {"cmd":"set_track"}; the DLL just stores it.
-struct TrackInfo {
-    std::string id; // canonical id from the source (e.g. "spotify:track:abc"); blank for local
-    std::string title;
-    std::string artist;
-    std::string album;
-};
 
 HMODULE g_module = nullptr;
 
@@ -57,13 +51,9 @@ std::atomic<void**>            g_radio_state_global{nullptr}; // slot; *it yield
 std::atomic<const void*>       g_radio_stream_vtable{nullptr};
 
 // Latest track from set_track; the periodic writer re-applies it each tick.
-std::mutex        g_track_mutex;
-TrackInfo         g_current_track;
-std::atomic<bool> g_have_track{false};
-// False after clear_track (nothing playing on the routed channel): the writer
-// puts the game's own title back instead of ours. Audio is unaffected. The next
-// set_track turns it back on.
-std::atomic<bool> g_show_title{true};
+// clear_track hides our title (the game's comes back, audio unaffected); the app
+// disconnecting drops the track entirely, so the DSP detaches too.
+horizon::game::NowPlaying g_now_playing;
 
 // Station targeting (set_target_station / set_target_stations). on_target gates
 // DSP attach + metadata so other stations keep playing the game's own music.
@@ -510,21 +500,16 @@ void poll_game_events(void* radio_state) {
     log_w(L"[horizon-radio] init thread started\n");
 
     // PCM ingress: forward UI frames to the bridge. The first chunk also plants
-    // a stub track so g_have_track flips true and the DSP install path proceeds
-    // (nothing else fires it now that sources live in C#); real metadata follows
-    // over IPC. See docs/architecture.md -> "Shared state".
+    // a stub track so the DSP install path proceeds (nothing else fires it now
+    // that sources live in C#); real metadata follows over IPC. Only while the
+    // app's control pipe is connected: audio still buffered in the PCM pipe when
+    // the app goes away mustn't re-arm what the disconnect cleared. See
+    // docs/architecture.md -> "Shared state".
     g_pcm_pipe.start([](const std::int16_t* frames, std::size_t frame_count) {
         if (auto* b = g_bridge_for_push.load(std::memory_order_acquire)) {
             b->push_pcm(frames, frame_count);
         }
-        if (!g_have_track.load(std::memory_order_acquire)) {
-            const std::scoped_lock lock(g_track_mutex);
-            if (g_current_track.title.empty()) {
-                g_current_track.title  = "Horizon Radio";
-                g_current_track.artist = "";
-            }
-            g_have_track.store(true, std::memory_order_release);
-        }
+        g_now_playing.arm_from_pcm([] { return g_ipc_server.connected(); });
     });
 
     // Inbound JSON commands from the UI (set_track/set_gain/set_target_station).
@@ -657,17 +642,8 @@ void poll_game_events(void* radio_state) {
             json_extract_string(line, "source_display", source_display);
             json_extract_string(line, "external_id", external_id);
 
-            TrackInfo snapshot;
-            {
-                const std::scoped_lock lock(g_track_mutex);
-                g_current_track.title  = title;
-                g_current_track.artist = artist;
-                g_current_track.album  = album;
-                g_current_track.id     = external_id;
-                g_have_track.store(true, std::memory_order_release);
-                g_show_title.store(true, std::memory_order_release);
-                snapshot = g_current_track;
-            }
+            const TrackInfo snapshot =
+                g_now_playing.set_track(TrackInfo{.id = external_id, .title = title, .artist = artist, .album = album});
             if (!source_id.empty() && source_id != g_active_source_id) {
                 g_active_source_id      = source_id;
                 g_active_source_display = source_display.empty() ? source_id : source_display;
@@ -688,11 +664,7 @@ void poll_game_events(void* radio_state) {
         } else if (cmd == "clear_track") {
             // Nothing is playing on the channel the UI routed to: stop showing
             // our (now stale) title and restore the game's.
-            {
-                const std::scoped_lock lock(g_track_mutex);
-                g_current_track = TrackInfo{};
-            }
-            g_show_title.store(false, std::memory_order_release);
+            g_now_playing.clear_track();
             log_w(L"[horizon-radio] cmd clear_track\n");
         } else if (cmd == "set_gain") {
             // Events "set volume / duck" action: scale the bridge's
@@ -770,14 +742,8 @@ void poll_game_events(void* radio_state) {
         if (!g_active_source_id.empty()) {
             g_ipc_server.publish_source_changed(g_active_source_id, g_active_source_display);
         }
-        if (g_have_track.load(std::memory_order_acquire) && g_show_title.load(std::memory_order_acquire)) {
-            TrackInfo snapshot;
-            {
-                const std::scoped_lock lock(g_track_mutex);
-                snapshot = g_current_track;
-            }
-            publish_track_ipc(snapshot, g_active_source_id, g_active_source_display);
-        }
+        if (const auto now = g_now_playing.state(); now.have_track && now.show_title)
+            publish_track_ipc(now.track, g_active_source_id, g_active_source_display);
         std::string station;
         {
             const std::scoped_lock lock(g_target_mutex);
@@ -790,6 +756,19 @@ void poll_game_events(void* radio_state) {
         // look, and it needs no debugger.
         g_ipc_server.publish_debug("bridge", g_build_summary);
         g_ipc_server.publish_debug("bridge", bring_up_status());
+    });
+    // The app closed or crashed. Nothing feeds the ring any more, so a station we
+    // kept replacing would play silence (and, after a crash with no clear_track,
+    // keep our stale title). Drop the track: the periodic writer then detaches the
+    // DSP and restores the game's title, and those stations play the game's own
+    // music again. The duck belongs to the app's session, so it goes too. Targets
+    // stay: with no track nothing is replaced. A reconnecting app re-sends its
+    // targets, volume, gain and track.
+    g_ipc_server.set_disconnect_callback([] {
+        g_now_playing.disconnect();
+        if (auto* b = g_bridge_for_push.load(std::memory_order_acquire))
+            b->set_master_gain(1.0f);
+        log_w(L"[horizon-radio] app disconnected; stations play the game's own music again\n");
     });
     g_ipc_server.start();
 
@@ -844,12 +823,11 @@ void poll_game_events(void* radio_state) {
                     // on_idle still restores once the source stops. See TitleWriteController.
                     static horizon::inject::TitleWriteController title_writer;
 
-                    if (inj && rs_slot && vt && g_have_track.load(std::memory_order_acquire)) {
-                        TrackInfo t;
-                        {
-                            const std::scoped_lock lock(g_track_mutex);
-                            t = g_current_track;
-                        }
+                    // One read, so the track and whether to show it always agree.
+                    const auto now = g_now_playing.state();
+
+                    if (inj && rs_slot && vt && now.have_track) {
+                        const TrackInfo&  t     = now.track;
                         const std::string sound = t.id.empty() ? t.title : t.id;
 
                         // Only replace the station the user targeted (empty
@@ -966,7 +944,7 @@ void poll_game_events(void* radio_state) {
                         }
 
                         int n = 0;
-                        if (g_show_title.load(std::memory_order_acquire))
+                        if (now.show_title)
                             n = title_writer.on_active(*inj, active_instance, sound, t.title, t.artist,
                                                        block_identity(*inj, active_instance));
                         else
@@ -1048,13 +1026,24 @@ void poll_game_events(void* radio_state) {
                                 // wherever it is now (real-radio semantics).
                             }
                         }
-                    } else if (inj) {
+                    } else {
                         // Not writing this tick (no track / unresolved): put the
                         // game's original title back so a stopped source doesn't
                         // leave ours frozen on the station. write_to_instance is
                         // SEH-safe and re-checks the vptr, so restoring a block
                         // that was freed since is a no-op, not a crash.
-                        title_writer.on_idle(*inj);
+                        if (inj)
+                            title_writer.on_idle(*inj);
+                        // And take our DSP off the channel: with no track (the app
+                        // went away) nothing feeds the ring, so it would play
+                        // silence over the game's own music.
+                        if (auto* b = g_bridge_for_push.load(std::memory_order_acquire)) {
+                            if (b->installed())
+                                log_w(L"[horizon-radio] bridge: no app audio; detaching DSP\n");
+                            b->set_target(nullptr, nullptr);
+                            b->tick();
+                            last_installed = false;
+                        }
                     }
                     ++iter;
                     std::this_thread::sleep_for(kTickInterval);

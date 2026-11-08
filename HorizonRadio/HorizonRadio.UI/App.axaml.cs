@@ -325,7 +325,8 @@ public partial class App : Application
                 _game.StateChanged += state =>
                 {
                     Dispatcher.UIThread.Post(() => vm.SetConnection(state));
-                    // The game re-asserts its own station target on connect; volume is ours to re-send.
+                    // The game re-asserts its own station targets, duck gain, and now-playing title on
+                    // connect; the master volume is ours to re-send.
                     if (state != ConnectionState.Connected) return;
                     PushGain(force: true);
                 };
