@@ -34,11 +34,20 @@ public sealed class MetadataCache : IMetadataCache
     /// v2: VocaDB PV links + linked-album cover art.</summary>
     public const int CurrentCacheVersion = 2;
 
+    /// <summary>Bump when the catalogs' matching gets better (a song it couldn't find before, it can
+    /// now): a miss or partial hit written under an older matching version is retried at once rather
+    /// than trusted until its TTL runs out. Results with art or PVs are unaffected (use
+    /// <see cref="CurrentCacheVersion"/> to re-fetch those). Entries without a stamp read as 0.
+    /// v1: remix credits, title families, bilingual titles, voice-only credits (#89, #90), and
+    /// English-spelled romaji names ("Camelia" for かめりあ).</summary>
+    public const int CurrentMatchVersion = 1;
+
     private static readonly TimeSpan DefaultRetryTtl = TimeSpan.FromDays(14);
 
     private readonly string _root;
     private readonly TimeSpan _retryTtl;
     private readonly int _cacheVersion;
+    private readonly int _matchVersion;
     private readonly Func<DateTimeOffset> _now;
     private readonly ConcurrentDictionary<string, MetadataCacheEntry?> _memoryCache = new();
 
@@ -47,9 +56,12 @@ public sealed class MetadataCache : IMetadataCache
     /// <param name="cacheVersion">Logic version stamped on writes; reads from another version are
     /// stale. Defaults to <see cref="CurrentCacheVersion"/>.</param>
     /// <param name="now">Clock seam for tests. Defaults to <see cref="DateTimeOffset.UtcNow"/>.</param>
+    /// <param name="matchVersion">Matching version stamped on writes; a miss or partial hit from
+    /// another version is stale. Defaults to <see cref="CurrentMatchVersion"/>.</param>
     public MetadataCache(string? root = null, TimeSpan? retryTtl = null, int? cacheVersion = null,
-                         Func<DateTimeOffset>? now = null)
+                         Func<DateTimeOffset>? now = null, int? matchVersion = null)
     {
+        _matchVersion = matchVersion ?? CurrentMatchVersion;
         _root = root ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "HorizonRadio", "metadata");
@@ -86,7 +98,7 @@ public sealed class MetadataCache : IMetadataCache
         try
         {
             MetadataCacheEntry entry;
-            bool versionCurrent, withinTtl;
+            bool versionCurrent, matchCurrent, withinTtl;
             using (var stream = File.OpenRead(path))
             using (var doc = JsonDocument.Parse(stream))
             {
@@ -100,6 +112,7 @@ public sealed class MetadataCache : IMetadataCache
                     Year: GetInt(r, "year"),
                     Pvs: GetPvs(r));
                 versionCurrent = GetInt(r, "cache_ver") == _cacheVersion;
+                matchCurrent = (GetInt(r, "match_ver") ?? 0) == _matchVersion;
                 withinTtl = GetLong(r, "cached_at") is { } at
                         && _now() - DateTimeOffset.FromUnixTimeSeconds(at) < _retryTtl;
             }
@@ -108,10 +121,10 @@ public sealed class MetadataCache : IMetadataCache
             // recording), but ONLY while the entry's logic version matches: a version bump re-fetches
             // even art-bearing entries so newly-extracted fields (PVs, real album covers) backfill
             // onto songs already in the cache. An entry without either durable field (a miss / partial
-            // hit) is honored only while still fresh; once stale or version-behind it's dropped so the
-            // lookup re-runs and can pick up a fix.
+            // hit) is honored only while still fresh and found by the current matching; otherwise it's
+            // dropped so the lookup re-runs and can pick up a fix.
             var durable = entry.AlbumArt is { Length: > 0 } || entry.Pvs is { Count: > 0 };
-            if (versionCurrent && (durable || withinTtl))
+            if (versionCurrent && (durable || (withinTtl && matchCurrent)))
             {
                 _memoryCache[key] = entry;
                 return entry;
@@ -164,6 +177,7 @@ public sealed class MetadataCache : IMetadataCache
             // Stamp every write so an art-less entry can be aged out (TTL) or invalidated (version).
             writer.WriteNumber("cached_at", _now().ToUnixTimeSeconds());
             writer.WriteNumber("cache_ver", _cacheVersion);
+            writer.WriteNumber("match_ver", _matchVersion);
             writer.WriteEndObject();
         }
         catch (Exception ex)

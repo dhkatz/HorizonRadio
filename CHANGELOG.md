@@ -131,6 +131,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Songs the app couldn't identify before get looked up again.** A song that matched nothing was
+  remembered as a miss for two weeks, even after matching improved, so a radio song could stay
+  unidentified long after the app learned to find it. Misses are now retried as soon as matching
+  improves. Stations that spell a Japanese artist the English way ("Camelia" for かめりあ) now
+  match too, including one-word titles like "∞度寝".
+
 - **Two sources no longer play over each other, and switching stations no longer loses
   songs.** Starting Spotify Connect or the test tone just as the game changed station could
   leave both playing, and a song added to the queue mid-switch could vanish along with the
