@@ -21,10 +21,10 @@ public interface ILiveSongAudio
     /// <paramref name="span"/> of it, or null while there's none.</summary>
     LiveAudio? RecentAudio(TimeSpan span);
 
-    /// <summary>The stream's audio between <paramref name="from"/> and <paramref name="to"/> on its
+    /// <summary>The stream's audio between <paramref name="startTime"/> and <paramref name="endTime"/> on its
     /// clock, as much of it as has been heard and is still kept (about the last minute and a half),
     /// or null when there's none.</summary>
-    LiveAudio? AudioBetween(TimeSpan from, TimeSpan to);
+    LiveAudio? AudioBetween(TimeSpan startTime, TimeSpan endTime);
 
     /// <summary>Set where playback is in the song: <paramref name="songTime"/> into song
     /// <paramref name="songId"/> at <paramref name="streamTime"/> on the stream's clock (the clock

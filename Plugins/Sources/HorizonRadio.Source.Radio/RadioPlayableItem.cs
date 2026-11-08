@@ -114,10 +114,10 @@ public sealed class RadioPlayableItem : PlayableItem, ILiveSongAudio
         return Tagged(song, _subproc is null ? null : _heard?.Read(from, span));
     }
 
-    public LiveAudio? AudioBetween(TimeSpan from, TimeSpan to)
+    public LiveAudio? AudioBetween(TimeSpan startTime, TimeSpan endTime)
     {
         long song = SongId;
-        return Tagged(song, _subproc is null ? null : _heard?.ReadBetween(from, to));
+        return Tagged(song, _subproc is null ? null : _heard?.ReadBetween(startTime, endTime));
     }
 
     // The audio, as the song's; null when there's none or another song began while it was read.

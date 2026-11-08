@@ -75,13 +75,13 @@ public sealed class LiveAudioBuffer
         }
     }
 
-    /// <summary>The audio between <paramref name="from"/> and <paramref name="to"/>, as much of it as
+    /// <summary>The audio between <paramref name="start"/> and <paramref name="end"/>, as much of it as
     /// is kept and has been written; null when there's none.</summary>
-    public (short[] Samples, TimeSpan Start)? ReadBetween(TimeSpan from, TimeSpan to)
+    public (short[] Samples, TimeSpan Start)? ReadBetween(TimeSpan start, TimeSpan end)
     {
         lock (_lock)
         {
-            return Copy(FirstAt(from), Math.Min(_written, FirstAt(to)));
+            return Copy(FirstAt(start), Math.Min(_written, FirstAt(end)));
         }
     }
 

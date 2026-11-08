@@ -305,7 +305,7 @@ public class LiveSongSyncTests : IDisposable
 
         public LiveAudio? RecentAudio(TimeSpan span) => Tag(_heard.Read(TitleChange ?? TimeSpan.Zero, span));
 
-        public LiveAudio? AudioBetween(TimeSpan from, TimeSpan to) => Tag(_heard.ReadBetween(from, to));
+        public LiveAudio? AudioBetween(TimeSpan startTime, TimeSpan endTime) => Tag(_heard.ReadBetween(startTime, endTime));
 
         private static LiveAudio? Tag((short[] Samples, TimeSpan Start)? a) =>
             a is { } h ? new LiveAudio(7, h.Samples, Chromaprint.SampleRate, h.Start) : null;
