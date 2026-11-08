@@ -44,8 +44,19 @@ Result fake_create(System*, const DspDescription* desc, Dsp** out) {
     return g_next_create_result;
 }
 
+// When set, fake_add runs one read callback from inside addDSP, as FMOD's
+// mixer may the instant the DSP is attached; the output lands here.
+bool               g_read_inside_add = false;
+std::vector<float> g_read_inside_add_out;
+
 Result fake_add(ChannelControl*, int, Dsp*) {
     g_add_calls.fetch_add(1);
+    if (g_read_inside_add && g_captured_read != nullptr) {
+        constexpr unsigned int kFrames = 64;
+        g_read_inside_add_out.assign(std::size_t{kFrames} * 2, 7.0f);
+        int channels = 2;
+        g_captured_read(nullptr, nullptr, g_read_inside_add_out.data(), kFrames, 0, &channels);
+    }
     return g_next_add_result;
 }
 
@@ -102,6 +113,8 @@ void reset_fakes() {
     g_next_add_result                                              = Result::Ok;
     g_create_versions.clear();
     g_live_handles.clear();
+    g_read_inside_add = false;
+    g_read_inside_add_out.clear();
 }
 
 // A synthetic radio_stream buffer with the channel handle written at
@@ -205,9 +218,74 @@ TEST_CASE("tick: uninstalls when handle goes dead") {
     g_live_handles.clear();
     bridge.tick();
 
+    // FMOD's dead-handle removeDSP path can AV: skip it, but still release.
     CHECK_FALSE(bridge.installed());
-    CHECK(g_remove_calls.load() == 1);
+    CHECK(g_remove_calls.load() == 0);
     CHECK(g_release_calls.load() == 1);
+}
+
+TEST_CASE("tick: retarget off a dead channel releases without removeDSP") {
+    reset_fakes();
+    FakeRadioStream         stream;
+    constexpr std::uint32_t kHandleA = 0xAAAA'3333;
+    constexpr std::uint32_t kHandleB = 0xBBBB'4444;
+    stream.set_handle(kHandleA);
+    g_live_handles = {kHandleA};
+
+    FmodBridge bridge(fake_hooks());
+    bridge.set_target(kFakeSystem, stream.ptr());
+    bridge.tick();
+    REQUIRE(bridge.installed());
+
+    // The game destroyed channel A and created B.
+    stream.set_handle(kHandleB);
+    g_live_handles = {kHandleB};
+    bridge.tick();
+
+    CHECK(bridge.installed());
+    CHECK(g_add_calls.load() == 2);
+    CHECK(g_remove_calls.load() == 0);
+    CHECK(g_release_calls.load() == 1);
+}
+
+TEST_CASE("tick: clearing the target detaches") {
+    reset_fakes();
+    FakeRadioStream         stream;
+    constexpr std::uint32_t kHandle = 0x7E57'0001;
+    stream.set_handle(kHandle);
+    g_live_handles = {kHandle};
+
+    FmodBridge bridge(fake_hooks());
+    bridge.set_target(kFakeSystem, stream.ptr());
+    bridge.tick();
+    REQUIRE(bridge.installed());
+
+    // The writer's "no audible stream" path: null target, then tick.
+    bridge.set_target(nullptr, nullptr);
+    bridge.tick();
+
+    CHECK_FALSE(bridge.installed());
+    CHECK(g_remove_calls.load() == 1); // channel still alive -> removed properly
+    CHECK(g_release_calls.load() == 1);
+}
+
+TEST_CASE("tick: never opens a handle without handleUnlock") {
+    reset_fakes();
+    FakeRadioStream         stream;
+    constexpr std::uint32_t kHandle = 0x7E57'0002;
+    stream.set_handle(kHandle);
+    g_live_handles = {kHandle};
+
+    auto hooks         = fake_hooks();
+    hooks.handleUnlock = nullptr;
+    FmodBridge bridge(hooks);
+    bridge.set_target(kFakeSystem, stream.ptr());
+    bridge.tick();
+
+    CHECK_FALSE(bridge.installed());
+    CHECK_FALSE(bridge.current_channel_alive());
+    CHECK(g_handle_open_calls.load() == 0);
+    CHECK(g_add_calls.load() == 0);
 }
 
 TEST_CASE("tick: createDSP failure leaves bridge uninstalled") {
@@ -240,6 +318,34 @@ TEST_CASE("tick: addDSP failure releases the orphaned DSP") {
 
     CHECK_FALSE(bridge.installed());
     CHECK(g_release_calls.load() == 1);
+}
+
+TEST_CASE("install: drain is requested before addDSP, so the first read drops stale audio") {
+    reset_fakes();
+    FakeRadioStream         stream;
+    constexpr std::uint32_t kHandle = 0x7E57'0003;
+    stream.set_handle(kHandle);
+    g_live_handles    = {kHandle};
+    g_read_inside_add = true;
+
+    FmodBridge bridge(fake_hooks());
+    bridge.set_resample_enabled(false);
+    bridge.normalizer().set_enabled(false);
+    bridge.set_user_volume(1.0f);
+
+    // PCM pushed while detached is stale by the time the DSP attaches.
+    std::array<std::int16_t, std::size_t{64} * 2> stale{};
+    stale.fill(12345);
+    REQUIRE(bridge.push_pcm(stale.data(), 64) == 64);
+
+    bridge.set_target(kFakeSystem, stream.ptr());
+    bridge.tick();
+    REQUIRE(bridge.installed());
+    REQUIRE(g_read_inside_add_out.size() == std::size_t{64} * 2);
+
+    // The mixer's read inside addDSP already honoured the drain: silence.
+    for (const float v : g_read_inside_add_out)
+        CHECK(v == 0.0f);
 }
 
 TEST_CASE("install: tries each pluginsdkversion until one succeeds") {

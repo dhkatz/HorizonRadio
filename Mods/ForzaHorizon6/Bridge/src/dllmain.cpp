@@ -989,59 +989,63 @@ void poll_game_events(void* radio_state) {
                         auto* bridge_for_install = g_bridge_for_push.load(std::memory_order_acquire);
                         // Track resolve state so we only log on transitions.
                         static bool last_sys_resolved = true;
-                        if (!on_target && bridge_for_install) {
-                            // Off the targeted station: detach our DSP so
-                            // the game's own station audio plays untouched.
-                            // Drop the preferred instance so we re-pick when
-                            // the user tunes back to our station.
-                            bridge_for_install->set_target(nullptr, nullptr);
-                            bridge_for_install->tick();
-                            preferred_instance = nullptr;
-                        } else if (active_instance && bridge_for_install) {
-                            auto* radio_stream =
-                                const_cast<std::byte*>(static_cast<const std::byte*>(active_instance) + 0x10);
-                            auto* sys = horizon::fmod::resolve_fmod_system_from_stream(game_image, radio_stream);
-                            if (sys == nullptr) {
-                                // Radio off / channel dead: clear the target so
-                                // the DSP uninstalls cleanly (a stale handle
-                                // would make removeDsp hit a destroyed channel
-                                // on recovery).
-                                bridge_for_install->set_target(nullptr, nullptr);
-                                bridge_for_install->tick();
-                                if (last_sys_resolved) {
+                        if (bridge_for_install) {
+                            // Null target = detach (tick() uninstalls). That's
+                            // the outcome unless we're on target with an audible
+                            // stream whose FMOD System* resolves.
+                            horizon::fmod::System* sys          = nullptr;
+                            std::byte*             radio_stream = nullptr;
+                            if (!on_target) {
+                                // Off the targeted station: detach so the game's
+                                // own station audio plays untouched. Drop the
+                                // preferred instance so we re-pick when the user
+                                // tunes back to our station.
+                                preferred_instance = nullptr;
+                            } else if (active_instance) {
+                                auto* rs =
+                                    const_cast<std::byte*>(static_cast<const std::byte*>(active_instance) + 0x10);
+                                sys = horizon::fmod::resolve_fmod_system_from_stream(game_image, rs);
+                                if (sys != nullptr)
+                                    radio_stream = rs;
+                                if ((sys != nullptr) != last_sys_resolved) {
+                                    last_sys_resolved = sys != nullptr;
                                     wchar_t smsg[200];
                                     swprintf_s(smsg,
-                                               L"[horizon-radio] bridge: system unresolvable "
-                                               L"(radio off?); uninstalling DSP iter=%d\n",
+                                               last_sys_resolved
+                                                   ? L"[horizon-radio] bridge: system resolved again iter=%d\n"
+                                                   : L"[horizon-radio] bridge: system unresolvable "
+                                                     L"(radio off?); uninstalling DSP iter=%d\n",
                                                iter);
                                     OutputDebugStringW(smsg);
-                                    last_sys_resolved = false;
                                 }
-                            } else {
-                                if (!last_sys_resolved) {
-                                    wchar_t smsg[200];
-                                    swprintf_s(smsg,
-                                               L"[horizon-radio] bridge: system resolved again "
-                                               L"iter=%d\n",
-                                               iter);
-                                    OutputDebugStringW(smsg);
-                                    last_sys_resolved = true;
-                                }
+                            }
+                            // else: on target but no stream resolves (radio off /
+                            // channel dead). Detach rather than leave the DSP on
+                            // a stale stream still reporting installed -- but only
+                            // once that has lasted kDetachGraceTicks: a re-point
+                            // can drop the stream for a tick or two, and a detach
+                            // + re-attach drains the ring (up to 1.5 s of audio).
+                            constexpr int kDetachGraceTicks = 20; // ~1 s
+                            static int    unresolved_ticks  = 0;
+                            const bool    lost_on_target    = on_target && sys == nullptr;
+                            unresolved_ticks = lost_on_target ? std::min(unresolved_ticks + 1, kDetachGraceTicks) : 0;
+                            if (!lost_on_target || unresolved_ticks >= kDetachGraceTicks) {
                                 bridge_for_install->set_target(sys, radio_stream);
                                 bridge_for_install->tick();
-                                const bool now_installed = bridge_for_install->installed();
-                                if (now_installed != last_installed) {
-                                    wchar_t bmsg[240];
-                                    swprintf_s(bmsg,
-                                               L"[horizon-radio] bridge: installed=%d "
-                                               L"(sys=%p rs=%p) iter=%d\n",
-                                               now_installed ? 1 : 0, sys, radio_stream, iter);
-                                    OutputDebugStringW(bmsg);
-                                    last_installed = now_installed;
-                                    // No source restart on detach: the source
-                                    // keeps running, so re-attach resumes from
-                                    // wherever it is now (real-radio semantics).
-                                }
+                            }
+
+                            const bool now_installed = bridge_for_install->installed();
+                            if (now_installed != last_installed) {
+                                wchar_t bmsg[240];
+                                swprintf_s(bmsg,
+                                           L"[horizon-radio] bridge: installed=%d "
+                                           L"(sys=%p rs=%p) iter=%d\n",
+                                           now_installed ? 1 : 0, sys, radio_stream, iter);
+                                OutputDebugStringW(bmsg);
+                                last_installed = now_installed;
+                                // No source restart on detach: the source
+                                // keeps running, so re-attach resumes from
+                                // wherever it is now (real-radio semantics).
                             }
                         }
                     } else if (inj) {
