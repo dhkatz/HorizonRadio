@@ -150,7 +150,7 @@ public partial class App : Application
                 var tee = new TeePcmSink(_game.Output);
                 _preview = new PreviewController(tee, _store, a => Dispatcher.UIThread.Post(a));
 
-                _runner = new SourceRunner(tee) { Shuffle = _store.Shuffle };
+                _runner = new SourceRunner(tee);
 
                 // Spotify: the account connection (PKCE, bring-your-own Client ID) and the
                 // shared librespot playback service our engine drives via the Web API are
@@ -256,11 +256,17 @@ public partial class App : Application
                 var mixStore = provider.GetRequiredService<MixStore>();
                 MixMigration.MaybeMigrate(mixStore);
 
-                // The global queue owns playback now: one engine plays straight down the
-                // queue (explicit one-offs first, then the active mix as an infinite
-                // tail). The switcher sets a mix as that tail; quick-play appends one-offs.
+                // The playback router is the one owner of the engine: everything that changes what
+                // plays (the game tuning, the queue getting something to play, a source the user
+                // starts or stops) goes through it, one step at a time. The game steers it between
+                // channels: the app's player, one channel per mix, or nothing (for FH6: whatever the
+                // tuned station is set to play). Without a game it stays on the player, which is
+                // plain app playback. The player is the global queue: one engine plays straight
+                // down it (explicit one-offs first, then the active mix as an infinite tail). The
+                // switcher sets a mix as that tail; quick-play appends one-offs.
                 var contentResolver = provider.GetRequiredService<MixContentResolver>();
-                var queuePlayback = new QueuePlayback(_runner, _store, contentResolver);
+                var router = new PlaybackRouter(_runner, _store, mixStore, contentResolver);
+                var queuePlayback = router.Player;
                 var mixSwitcher = new MixSwitcher(mixStore, queuePlayback, _runner);
 
                 // Play history: records every song the runner reports (deduped), tags freeform songs
@@ -271,7 +277,7 @@ public partial class App : Application
                 // One dispatcher turns an EventAction into a transport/source/mix/
                 // volume call; both the Events tab (game events) and the Controls tab
                 // (input bindings) feed it, so they share capability checks.
-                var dispatcher = new ActionDispatcher(_runner, _store, mixSwitcher,
+                var dispatcher = new ActionDispatcher(router, _store, mixSwitcher,
                     _game.Volume is { } gameVolume ? gameVolume.SetDuckGain : null);
                 _eventExecutor = new EventActionExecutor(_game.EventSources, eventRules, dispatcher);
                 var eventsVm = new EventsViewModel(eventRules, _eventExecutor, _game.EventCatalog, _game.EventsHint);
@@ -294,16 +300,11 @@ public partial class App : Application
 
                 var gameSettings = new GameSettingsViewModel(gamePlugins, _store, chosenGameId);
                 gameSettings.RestartRequested += () => Restart(desktop);
-                var vm = new MainWindowViewModel(_runner, _store, mixStore, mixSwitcher, queuePlayback, _historyStore, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, _game, gameSettings, toasts, dialogManager, lyrics);
+                var vm = new MainWindowViewModel(router, _store, mixStore, mixSwitcher, queuePlayback, _historyStore, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, _game, gameSettings, toasts, dialogManager, lyrics);
                 var mainWindow = new MainWindow { DataContext = vm };
                 desktop.MainWindow = mainWindow;
                 // Composed after startup (the first-run picker), so show it ourselves.
                 if (showNow) mainWindow.Show();
-
-                // The game steers playback between channels: the app's player, one channel per mix, or
-                // nothing (for FH6: whatever the tuned station is set to play). Without a game it stays
-                // on the player, which is plain app playback.
-                var router = new PlaybackRouter(_runner, queuePlayback, mixStore, contentResolver);
 
                 // The master volume slider doubles as an in-game pre-amp: push its
                 // tapered gain to the game on every change (live feedback while
@@ -362,12 +363,11 @@ public partial class App : Application
                     _inputService?.Dispose();
                     _historyService?.Dispose(); // unsubscribes from the runner + flushes the final save
                     mixSwitcher.Dispose();
-                    queuePlayback.Dispose();
                     _preview?.Dispose();
                     if (_enricher != null) await _enricher.DisposeAsync();
                     await lyrics.DisposeAsync();
                     if (_metaResolver != null) await _metaResolver.DisposeAsync();
-                    await router.DisposeAsync(); // parked channels; the runner disposes the active one
+                    await router.DisposeAsync(); // stops the engine; disposes parked channels and the player
                     if (_runner != null) await _runner.DisposeAsync();
                     if (_spotifyPlayback != null) await _spotifyPlayback.DisposeAsync();
                     if (_spotifyConnection != null) await _spotifyConnection.DisposeAsync();

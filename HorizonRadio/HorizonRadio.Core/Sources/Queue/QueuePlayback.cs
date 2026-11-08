@@ -11,84 +11,61 @@ namespace HorizonRadio.Core.Sources.Queue;
 /// <summary>
 /// The single entry point everything that feeds the queue goes through — quick-play
 /// one-offs, "play a mix", and the mix-switch hotkeys (via <see cref="MixSwitcher"/>).
-/// Owns the long-lived <see cref="QueueModel"/> and is responsible for making the
-/// <see cref="QueueSource"/> the active source on the runner whenever there's content
-/// to play, recreating it after a self-driven source (Spotify Connect) took over.
+/// Owns the long-lived <see cref="QueueModel"/> and the player's queue engine, and asks
+/// the playback router to play the queue whenever there's content: the router is the
+/// only one that puts the engine on the runner (or parks it, or recreates it after a
+/// self-driven source like Spotify Connect took over), so a change of station and an
+/// addition to the queue can't race for it. The router creates this (its player channel).
 ///
-/// Resolving (a yt-dlp enumerate) happens off the gate; only the model mutation and
-/// the runner hand-off are serialized, so concurrent triggers can't race on the
-/// runner or double-start the engine.
+/// Resolving (a yt-dlp enumerate) happens off the gate; only the model mutations are
+/// serialized, so concurrent triggers can't interleave a multi-step change.
 /// </summary>
 public sealed class QueuePlayback : IDisposable
 {
     private readonly SourceRunner _runner;
     private readonly SourceConfigStore _config;
     private readonly MixContentResolver _resolver;
+    private readonly Func<Task> _requestPlay;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     public QueueModel Model { get; } = new();
 
-    // The player's engine. Long-lived so a game's playback router can park it (tuning to a mix
-    // station) and resume it later with its history and place intact; recreated only after it
-    // was disposed (e.g. a self-driven source like Spotify Connect took the runner).
-    private QueueSource? _source;
+    // The player's engine. Long-lived so the router can park it (tuning to a mix station) and
+    // resume it later with its history and place intact; recreated only after it was disposed
+    // (e.g. a self-driven source like Spotify Connect took the runner). Only the router's loop
+    // creates, starts, parks or disposes it.
+    private volatile QueueSource? _source;
 
-    /// <summary>
-    /// Whether the player may take the runner. False while a game routes playback to another
-    /// channel (see <c>PlaybackRouter</c>): additions still land in the queue, they just aren't
-    /// heard until the game routes back to the player.
-    /// </summary>
-    internal Func<bool> CanActivate { get; set; } = static () => true;
-
-    public QueuePlayback(SourceRunner runner, SourceConfigStore config, MixContentResolver resolver)
+    /// <param name="requestPlay">Asks the router to play the queue: it starts the engine if the
+    /// player has the runner (not while a game routes playback to a mix station or silence:
+    /// additions then wait in the queue until the game routes back to the player).</param>
+    internal QueuePlayback(SourceRunner runner, SourceConfigStore config, MixContentResolver resolver,
+                           Func<Task> requestPlay)
     {
         _runner = runner;
         _config = config;
         _resolver = resolver;
+        _requestPlay = requestPlay;
     }
 
     /// <summary>True when the queue engine is the source currently on the runner
     /// (as opposed to a self-driven source like Spotify, or nothing).</summary>
-    public bool IsActive => _source != null && ReferenceEquals(_runner.ActiveSource, _source);
+    public bool IsActive => _source is { } source && ReferenceEquals(_runner.ActiveSource, source);
 
-    /// <summary>Ensure the queue engine is the active source, recreating it if a
-    /// self-driven source had taken over. The model (and so the queue's contents
-    /// and context) is preserved across the swap. No-op while a game routes playback
-    /// elsewhere (<see cref="CanActivate"/>).</summary>
-    public async Task EnsureActiveAsync()
-    {
-        if (!CanActivate() || IsActive) return;
-        if (_source is not { IsDisposed: false }) _source = new QueueSource(Model);
-        await _runner.StartSourceAsync(_source).ConfigureAwait(false);
-    }
+    /// <summary>Ask for the queue to play, and wait until the router has acted on it: it starts
+    /// the engine (recreating it if a self-driven source had taken over) when the player has the
+    /// runner, and leaves the queue waiting otherwise. The model (and so the queue's contents and
+    /// context) is preserved across engine swaps.</summary>
+    public Task EnsureActiveAsync() => _requestPlay();
 
-    /// <summary>The player's engine, for the playback router to park; null if never started.</summary>
+    /// <summary>The player's engine, for the router to start or park; null if never created.</summary>
     internal QueueSource? Source => _source;
 
-    /// <summary>
-    /// Bring the player back after the router parked it: continue the interrupted track (a
-    /// parked engine does that when it starts again), or start the queue if it has something
-    /// to play. Called by the router once it has routed back to the player.
-    /// </summary>
-    internal async Task ResumeAsync()
-    {
-        await _gate.WaitAsync().ConfigureAwait(false);
-        try
-        {
-            if (_source is { IsDisposed: false } parked)
-            {
-                if (!IsActive) await _runner.StartSourceAsync(parked).ConfigureAwait(false);
-            }
-            else if (Model.HasWork)
-            {
-                await EnsureActiveAsync().ConfigureAwait(false);
-            }
-        }
-        finally { _gate.Release(); }
-    }
+    /// <summary>A fresh engine over the queue, replacing a disposed one (router only).</summary>
+    internal QueueSource NewEngine() => _source = new QueueSource(Model);
 
-    /// <summary>Resolve a one-off locator and append it to the explicit queue,
-    /// starting the engine if it isn't already playing. Mirrors the old quick-play
+    /// <summary>Resolve a one-off locator and append it to the explicit queue, and ask for
+    /// the queue to play (<see cref="EnsureActiveAsync"/>). Mirrors the old quick-play
     /// pre-flight (tool check) so a missing tool still surfaces a friendly error.
     /// When <paramref name="playNow"/> is set, jumps to the first resolved item so it
     /// starts immediately (the search "Play" action), dropping anything queued ahead
@@ -113,9 +90,9 @@ public sealed class QueuePlayback : IDisposable
             var addedIds = Model.AppendExplicit(items);
             if (playNow && addedIds.Count > 0)
                 Model.JumpToExplicit(addedIds[0]);
-            await EnsureActiveAsync().ConfigureAwait(false);
         }
         finally { _gate.Release(); }
+        await EnsureActiveAsync().ConfigureAwait(false);
     }
 
     /// <summary>Play a mix into the queue. <see cref="QueueAddMode.Replace"/> makes
@@ -133,12 +110,9 @@ public sealed class QueuePlayback : IDisposable
         {
             var provider = new MixContextProvider(mix, _resolver, _runner.Shuffle);
             await _gate.WaitAsync(ct).ConfigureAwait(false);
-            try
-            {
-                Model.SetContext(provider, mix.Id, replaceNow: true);
-                await EnsureActiveAsync().ConfigureAwait(false);
-            }
+            try { Model.SetContext(provider, mix.Id, replaceNow: true); }
             finally { _gate.Release(); }
+            await EnsureActiveAsync().ConfigureAwait(false);
             return;
         }
 
@@ -154,12 +128,9 @@ public sealed class QueuePlayback : IDisposable
             throw new InvalidOperationException($"'{mix.Name}' produced nothing to queue.");
 
         await _gate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            Model.AppendExplicit(all);
-            await EnsureActiveAsync().ConfigureAwait(false);
-        }
+        try { Model.AppendExplicit(all); }
         finally { _gate.Release(); }
+        await EnsureActiveAsync().ConfigureAwait(false);
     }
 
     private void EnsureMixToolsAvailable(Mix mix)

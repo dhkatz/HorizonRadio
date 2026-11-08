@@ -6,6 +6,7 @@ using HorizonRadio.Core.Games;
 using HorizonRadio.Core.History;
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Models;
+using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
@@ -47,7 +48,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private GamePageItem? selectedGamePage;
 
     // Both NowPlaying (for its inline source dropdown) and Sources need
-    // the runner + store; the App creates them once and passes through.
+    // the playback router + store; the App creates them once and passes through.
     public SourcesViewModel Sources { get; }
     public MetadataViewModel Metadata { get; }
     public ToolsViewModel ToolsTab { get; }
@@ -101,7 +102,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         History = new HistoryViewModel();
     }
 
-    public MainWindowViewModel(SourceRunner runner,
+    public MainWindowViewModel(PlaybackRouter playback,
                                SourceConfigStore store,
                                MixStore mixStore,
                                MixSwitcher mixSwitcher,
@@ -128,8 +129,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         GameSettings = gameSettings;
         HasGame = game is not NoGameIntegration;
         ConnectionLabel = HasGame ? $"Not connected to {GameName}" : "Playing on this PC";
-        Sources = new SourcesViewModel(runner, store, queue, registry);
-        NowPlaying = new NowPlayingViewModel(runner, store, mixStore, mixSwitcher, queue,
+        Sources = new SourcesViewModel(playback, store, registry);
+        NowPlaying = new NowPlayingViewModel(playback, store, mixStore, mixSwitcher,
             game.Output != null ? GameName : null, preview, toasts, DialogManager, lyrics);
         Metadata = metadata;
         ToolsTab = new ToolsViewModel(registry, installers);

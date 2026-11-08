@@ -1,5 +1,6 @@
 using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Models;
+using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
@@ -27,6 +28,11 @@ public class QueueSourceTests
     }
 
     private static MixContentResolver Resolver() => new(new SourceConfigStore());
+
+    // Bound actions reach the engine through the router; these tests put a queue engine of
+    // their own on its runner.
+    private static PlaybackRouter Router(SourceRunner runner) =>
+        new(runner, new SourceConfigStore(), new MixStore(), Resolver());
 
     private static async Task<IReadOnlyList<PlayableItem>> ResolveAsync(string locator)
         => await Resolver().EnumerateAsync(new ContentRef("local", locator), CancellationToken.None);
@@ -329,6 +335,7 @@ public class QueueSourceTests
         var model = new QueueModel();
         model.AppendExplicit([a]);
         await using var runner = new SourceRunner(new NullPcmSink());
+        await using var playback = Router(runner);
         var src = new QueueSource(model);
         await runner.StartSourceAsync(src);
         await Eventually.Until(() => a.Plays == 1, "a");
@@ -339,7 +346,7 @@ public class QueueSourceTests
 
         Assert.True(src.CanSkipNext);
         // A bound Next (hotkey, game event) goes through the same check.
-        await new ActionDispatcher(runner, new SourceConfigStore()).RunAsync(new EventAction(EventActionType.NextTrack));
+        await new ActionDispatcher(playback, new SourceConfigStore()).RunAsync(new EventAction(EventActionType.NextTrack));
         await Eventually.Until(() => b.Plays == 1, "b");
     }
 
@@ -396,10 +403,11 @@ public class QueueSourceTests
         var model = new QueueModel();
         model.AppendExplicit([a]);
         await using var runner = new SourceRunner(new NullPcmSink());
+        await using var playback = Router(runner);
         var src = new QueueSource(model);
         await runner.StartSourceAsync(src);
         await Eventually.Until(() => a.Plays == 1, "a");
-        var dispatcher = new ActionDispatcher(runner, new SourceConfigStore());
+        var dispatcher = new ActionDispatcher(playback, new SourceConfigStore());
 
         await dispatcher.RunAsync(new EventAction(EventActionType.Pause));
         await dispatcher.RunAsync(new EventAction(EventActionType.Pause));

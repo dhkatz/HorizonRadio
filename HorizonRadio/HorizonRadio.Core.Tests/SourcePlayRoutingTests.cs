@@ -1,4 +1,5 @@
 using HorizonRadio.Core.Events;
+using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
@@ -34,7 +35,8 @@ public class SourcePlayRoutingTests
     {
         var config = new SourceConfigStore();
         await using var runner = new SourceRunner(new NullSink());
-        using var queue = new QueuePlayback(runner, config, new MixContentResolver(config));
+        await using var playback = new PlaybackRouter(runner, config, new MixStore(), new MixContentResolver(config));
+        var queue = playback.Player;
         var titles = new List<string>();
         runner.TrackChanged += t =>
         {
@@ -59,11 +61,18 @@ public class SourcePlayRoutingTests
         Assert.Null(runner.ActiveFactory);
     }
 
+    private static PlaybackRouter Router(SourceRunner runner)
+    {
+        var config = new SourceConfigStore();
+        return new PlaybackRouter(runner, config, new MixStore(), new MixContentResolver(config));
+    }
+
     [Fact]
     public async Task Switch_source_action_ignores_a_content_source()
     {
         await using var runner = new SourceRunner(new NullSink());
-        var dispatcher = new ActionDispatcher(runner, new SourceConfigStore());
+        await using var playback = Router(runner);
+        var dispatcher = new ActionDispatcher(playback, new SourceConfigStore());
 
         await dispatcher.RunAsync(new EventAction(EventActionType.SwitchSource, "local"));
 
@@ -74,7 +83,8 @@ public class SourcePlayRoutingTests
     public async Task Switch_source_action_starts_a_self_driven_source()
     {
         await using var runner = new SourceRunner(new NullSink());
-        var dispatcher = new ActionDispatcher(runner, new SourceConfigStore());
+        await using var playback = Router(runner);
+        var dispatcher = new ActionDispatcher(playback, new SourceConfigStore());
 
         await dispatcher.RunAsync(new EventAction(EventActionType.SwitchSource, "testtone"));
 

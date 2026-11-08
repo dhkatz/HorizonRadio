@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
@@ -9,7 +10,7 @@ namespace HorizonRadio.Core.Events;
 
 /// <summary>
 /// Runs a single <see cref="EventAction"/> against the active transport
-/// (play/pause/next/prev), the source runner (switch source), or the bridge
+/// (play/pause/next/prev), the playback router (switch source), or the bridge
 /// (volume).
 /// </summary>
 public interface IActionDispatcher
@@ -26,6 +27,7 @@ public interface IActionDispatcher
 /// </summary>
 public sealed class ActionDispatcher : IActionDispatcher
 {
+    private readonly PlaybackRouter _playback;
     private readonly SourceRunner _runner;
     private readonly SourceConfigStore _configStore;
     private readonly MixSwitcher? _mixes;
@@ -33,13 +35,14 @@ public sealed class ActionDispatcher : IActionDispatcher
     private readonly string _logChannel;
 
     public ActionDispatcher(
-        SourceRunner runner,
+        PlaybackRouter playback,
         SourceConfigStore configStore,
         MixSwitcher? mixes = null,
         Func<float, bool>? setGain = null,
         string logChannel = "events")
     {
-        _runner = runner;
+        _playback = playback;
+        _runner = playback.Runner;
         _configStore = configStore;
         _mixes = mixes;
         _setGain = setGain;
@@ -128,7 +131,7 @@ public sealed class ActionDispatcher : IActionDispatcher
         }
         if (_runner.ActiveFactory?.Id == sourceId) return; // already on it
         var values = _configStore.Load(sourceId, factory.Schema);
-        await _runner.StartAsync(selfDriven, values).ConfigureAwait(false);
+        await _playback.StartSourceAsync(selfDriven, values).ConfigureAwait(false);
     }
 
     private void SetVolume(string? param)
