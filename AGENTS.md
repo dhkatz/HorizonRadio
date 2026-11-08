@@ -61,6 +61,12 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
 - **HorizonRadio.UI / HorizonRadio.Core (C#)** — sources (librespot, local files,
   yt-dlp/ffmpeg), metadata enrichment, and the dashboard. Tool-specific details
   stay encapsulated in each source class; they are not leaked into shared code.
+  A source factory is one of two kinds. A content source (`IContentSourceFactory`:
+  local files, YouTube, Spotify links, internet radio) turns a locator into
+  `PlayableItem`s and only ever plays through the queue (`QueuePlayback` +
+  `QueueSource`), from every surface including the Sources tab. A self-driven
+  source (`ISelfDrivenSourceFactory`: Spotify Connect, the test tone) is started
+  on the runner directly (`SourceRunner.StartAsync`).
 - **Lyrics (`Plugins/Lyrics/`, `Core/Lyrics/`)** — each `ILyricsPlugin` contributes
   one `ILyricsProvider` (Unison, LRCLIB, and VocaDB, whose metadata plugin is also a
   lyrics plugin; when VocaDB has the song but no lyrics it reads the Vocaloid Lyrics

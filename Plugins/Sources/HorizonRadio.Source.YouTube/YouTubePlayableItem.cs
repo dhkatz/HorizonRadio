@@ -12,8 +12,7 @@ namespace HorizonRadio.Core.Sources.YouTube;
 /// does the expensive bit — a yt-dlp resolve into a fresh signed stream URL plus
 /// canonical metadata/art — so the mix engine can warm the next item ahead of
 /// time and make the track transition gapless. <see cref="PlayAsync"/> then
-/// decodes that stream with ffmpeg into the canonical PCM, exactly as
-/// <see cref="YouTubeSource"/> does per track.
+/// decodes that stream with ffmpeg into the canonical PCM.
 /// </summary>
 public sealed class YouTubePlayableItem : PlayableItem
 {

@@ -4,16 +4,17 @@ using HorizonRadio.Core.Sources.Config;
 namespace HorizonRadio.Core.Sources;
 
 /// <summary>
-/// Describes one kind of audio source and constructs instances from
-/// user-supplied configuration. The factory is the registration unit:
-/// the host's source catalog lists them, the UI renders a config
-/// form from <see cref="Schema"/>, and <see cref="Create"/> turns the
-/// completed config into a runnable <see cref="IAudioSource"/>.
+/// Describes one kind of audio source. The factory is the registration unit:
+/// the host's source catalog lists them and the UI renders a config form from
+/// <see cref="Schema"/>. A factory is one of two kinds, and implements the
+/// matching sub-interface: <see cref="IContentSourceFactory"/> (it plays a
+/// locator — a URL, folder, link — through the queue) or
+/// <see cref="ISelfDrivenSourceFactory"/> (it runs on its own, like Spotify
+/// Connect or the test tone, and the host starts it directly).
 ///
 /// Factories must be cheap to construct (no I/O, no thread spinup) —
 /// they're enumerated at app startup just to populate the source
-/// picker. All heavy lifting happens inside <see cref="Create"/> or
-/// the resulting source's StartAsync.
+/// picker. All heavy lifting happens when a source or item actually plays.
 /// </summary>
 public interface IAudioSourceFactory
 {
@@ -30,9 +31,4 @@ public interface IAudioSourceFactory
     /// <summary>Ordered list of configurable fields. May be empty for
     /// sources with no settings (like the test tone).</summary>
     IReadOnlyList<ConfigField> Schema { get; }
-
-    /// <summary>Construct a configured source. Implementations may
-    /// throw if the values are invalid (e.g. directory doesn't exist);
-    /// the UI surfaces the message in the Start button feedback.</summary>
-    IAudioSource Create(ConfigValues values);
 }

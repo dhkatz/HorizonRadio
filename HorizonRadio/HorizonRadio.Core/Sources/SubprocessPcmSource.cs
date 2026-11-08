@@ -41,7 +41,7 @@ public sealed class SubprocessPcmSource(SubprocessPcmSource.Config config) : IAs
         public string? ToolName { get; init; }
 
         /// <summary>Frames per chunk read out of the child's stdout.
-        /// 2048 ≈ 46 ms at 44.1 kHz, matches LocalFileSource.</summary>
+        /// 2048 ≈ 46 ms at 44.1 kHz, matches the local-file pump.</summary>
         public int ReadChunkFrames { get; init; } = 2048;
 
         /// <summary>Redirect the child's stdin so the caller can feed it bytes via

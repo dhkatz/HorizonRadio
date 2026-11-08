@@ -21,7 +21,10 @@ public sealed class SourceRunner(IPcmSink sink) : IAsyncDisposable
     public event Action<Track>? TrackChanged;
     public event Action<IAudioSourceFactory?>? ActiveSourceChanged;
 
-    public async Task StartAsync(IAudioSourceFactory factory, ConfigValues values)
+    /// <summary>Make a self-driven source (Spotify Connect, the test tone) the active
+    /// source. Content sources never start here: they play through the queue
+    /// (<c>QueuePlayback</c>), which starts its own engine via <see cref="StartSourceAsync"/>.</summary>
+    public async Task StartAsync(ISelfDrivenSourceFactory factory, ConfigValues values)
     {
         // Pre-flight before we stop what's already playing — a switch to a
         // source whose tools are missing shouldn't tear down the current
@@ -34,9 +37,9 @@ public sealed class SourceRunner(IPcmSink sink) : IAsyncDisposable
 
     /// <summary>
     /// Start an already-built source. The factory path (<see cref="StartAsync"/>)
-    /// funnels here after Create; a mix funnels here directly (it has no single
-    /// factory — pass null, and the mix's own resolver/pre-flight handles its
-    /// entries). <see cref="ActiveFactory"/> is null for a factory-less source.
+    /// funnels here after Create; the queue and mix engines funnel here directly
+    /// (they have no single factory — pass null, and their own resolver/pre-flight
+    /// handles each item). <see cref="ActiveFactory"/> is null for a factory-less source.
     /// </summary>
     public async Task StartSourceAsync(IAudioSource source, IAudioSourceFactory? factory = null)
     {

@@ -4,8 +4,9 @@ using HorizonRadio.Core.Tools;
 namespace HorizonRadio.Core.Sources.YouTube;
 
 /// <summary>
-/// Factory for <see cref="YouTubeSource"/>. Exposes yt-dlp + ffmpeg
-/// paths (auto-detected if bundled or on PATH) and the URL to play.
+/// Factory for the YouTube source. Exposes yt-dlp + ffmpeg paths (auto-detected
+/// if bundled or on PATH) and the URL to play; <see cref="YouTubeContentPlayer"/>
+/// expands the URL into items for the queue.
 /// </summary>
 public sealed class YouTubeSourceFactory : IContentSourceFactory, ISearchSource
 {
@@ -74,12 +75,6 @@ public sealed class YouTubeSourceFactory : IContentSourceFactory, ISearchSource
 
         return new YouTubeContentPlayer(ytDlp, ffmpeg, values.GetBool(KeyNormalise, false));
     }
-
-    // Single-start path: build the engine, then open the one URL the form holds.
-    // The content (URL) validation lives in the player's Open; the mix engine
-    // reuses CreatePlayer directly and opens many refs against it.
-    public IAudioSource Create(ConfigValues values)
-        => CreatePlayer(values).Open(new ContentRef(Id, values.GetString(ContentKey) ?? ""));
 
     // -- ISearchSource (yt-dlp ytsearch → youtube.com/watch locators) --
 

@@ -200,12 +200,11 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         _runner.ActiveSourceChanged += factory =>
             Dispatcher.UIThread.Post(() =>
             {
-                // Content sources aren't a persistent picker selection — they're
-                // launched via the quick-play dialog — so don't pin the picker to
-                // them, or re-picking the same one is a no-op and won't reopen the
-                // dialog. Self-driven sources still mirror into the picker.
+                // Only a self-driven source is ever the runner's factory (content plays
+                // through the queue, which is factory-less), so a content source is
+                // never pinned here and re-picking it always reopens the dialog.
                 _suppressSwitch = true;
-                SelectedFactory = factory is IContentSourceFactory ? null : factory;
+                SelectedFactory = factory;
                 _suppressSwitch = false;
                 RebindTransport();
 
@@ -529,7 +528,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         // Fire-and-forget: setter must stay synchronous, and the runner
         // handles its own serialization. Errors are captured into
         // SwitchStatus so the UI can show them.
-        _ = SwitchAsync(value);
+        if (value is ISelfDrivenSourceFactory selfDriven) _ = SwitchAsync(selfDriven);
     }
 
     private void OpenQuickPlay(IAudioSourceFactory source)
@@ -577,7 +576,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         }
     }
 
-    private async Task SwitchAsync(IAudioSourceFactory factory)
+    private async Task SwitchAsync(ISelfDrivenSourceFactory factory)
     {
         if (_runner == null || _store == null) return;
         SwitchStatus = $"Starting {factory.DisplayName}...";

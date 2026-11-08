@@ -18,18 +18,13 @@ namespace HorizonRadio.Core.Sources.Radio;
 /// </summary>
 public sealed class RadioContentPlayer(string ffmpegPath, RadioBrowserClient directory) : IContentPlayer
 {
-    // Hand the source the locator (not a resolved station): a radio:// locator needs an
-    // async directory lookup, which RadioSource does inside its own run loop — never block
-    // the caller's thread.
-    public IAudioSource Open(ContentRef content) => new RadioSource(content.Locator, ffmpegPath, directory);
-
     public async Task<IReadOnlyList<PlayableItem>> EnumerateAsync(ContentRef content, CancellationToken ct)
     {
         var station = await ResolveStationAsync(content.Locator, directory, ct).ConfigureAwait(false);
         return [new RadioPlayableItem(station, ffmpegPath)];
     }
 
-    internal static async Task<RadioStation> ResolveStationAsync(string? locator, RadioBrowserClient directory, CancellationToken ct)
+    private static async Task<RadioStation> ResolveStationAsync(string? locator, RadioBrowserClient directory, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(locator))
             throw new InvalidOperationException("Internet Radio: enter a station URL.");

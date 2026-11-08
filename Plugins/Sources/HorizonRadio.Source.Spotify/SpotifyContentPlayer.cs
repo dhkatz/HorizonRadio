@@ -8,20 +8,12 @@ namespace HorizonRadio.Core.Sources.Spotify;
 
 /// <summary>
 /// Content-free Spotify engine: resolves a Spotify locator (track/playlist/album,
-/// URI or web link) into <see cref="SpotifyPlayableItem"/>s via the Web API, and
-/// opens a sequential <see cref="IAudioSource"/> for the direct Sources-tab play.
-/// Playback itself runs through the shared <see cref="SpotifyPlaybackService"/>;
+/// URI or web link) into <see cref="SpotifyPlayableItem"/>s via the Web API for the
+/// queue. Playback itself runs through the shared <see cref="SpotifyPlaybackService"/>;
 /// this only does the catalog lookups (which need the authed Web API client).
 /// </summary>
 public sealed class SpotifyContentPlayer(SpotifyConnection connection, SpotifyPlaybackService playback) : IContentPlayer
 {
-    public IAudioSource Open(ContentRef content)
-    {
-        if (!SpotifyLinks.TryParse(content.Locator, out _))
-            throw new InvalidOperationException(InvalidLocatorMessage);
-        return new SpotifyContentSource(content, this);
-    }
-
     public async Task<IReadOnlyList<PlayableItem>> EnumerateAsync(ContentRef content, CancellationToken ct)
     {
         if (!SpotifyLinks.TryParse(content.Locator, out var link))

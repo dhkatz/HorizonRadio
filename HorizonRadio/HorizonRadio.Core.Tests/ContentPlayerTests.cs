@@ -5,68 +5,35 @@ using HorizonRadio.Core.Sources.YouTube;
 namespace HorizonRadio.Core.Tests;
 
 /// <summary>
-/// Locks the content/engine decouple: an <see cref="IContentPlayer"/> opens a
-/// runnable source for a <see cref="ContentRef"/> and rejects bad locators with
-/// the same user-facing messages the old factory.Create surfaced.
+/// An <see cref="IContentPlayer"/> rejects a locator it can't play with a user-facing
+/// message before doing any work (no yt-dlp run, no directory walk on a missing path).
 /// </summary>
 public class ContentPlayerTests
 {
     [Fact]
-    public void Local_open_empty_locator_throws()
+    public async Task Local_enumerate_empty_locator_throws()
     {
-        var player = new LocalContentPlayer();
-        var ex = Assert.Throws<InvalidOperationException>(
-            () => player.Open(new ContentRef("local", "")));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => new LocalContentPlayer().EnumerateAsync(new ContentRef("local", ""), default));
         Assert.Contains("pick a music folder", ex.Message);
     }
 
     [Fact]
-    public void Local_open_missing_path_throws()
+    public async Task Local_enumerate_missing_path_throws()
     {
-        var player = new LocalContentPlayer();
         var missing = Path.Combine(Path.GetTempPath(), "hzn-missing-" + Guid.NewGuid().ToString("N"));
-        var ex = Assert.Throws<InvalidOperationException>(
-            () => player.Open(new ContentRef("local", missing)));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => new LocalContentPlayer().EnumerateAsync(new ContentRef("local", missing), default));
         Assert.Contains("doesn't exist", ex.Message);
     }
 
     [Fact]
-    public void Local_open_folder_without_audio_throws()
+    public async Task YouTube_enumerate_blank_locator_throws_without_running_yt_dlp()
     {
-        using var dir = TempDir.Create();
-        dir.Touch("notes.txt");
-        var player = new LocalContentPlayer();
-        var ex = Assert.Throws<InvalidOperationException>(
-            () => player.Open(new ContentRef("local", dir.Path)));
-        Assert.Contains("no audio files", ex.Message);
-    }
-
-    [Fact]
-    public async Task Local_open_folder_with_audio_returns_local_source()
-    {
-        using var dir = TempDir.Create();
-        dir.Touch("song.mp3");
-        var player = new LocalContentPlayer();
-        await using var source = player.Open(new ContentRef("local", dir.Path));
-        Assert.Equal("local", source.Id);
-    }
-
-    [Fact]
-    public void YouTube_open_empty_locator_throws()
-    {
+        // Placeholder tool paths: a blank URL must be rejected before yt-dlp is invoked.
         var player = new YouTubeContentPlayer("yt-dlp", "ffmpeg", normalise: false);
-        var ex = Assert.Throws<InvalidOperationException>(
-            () => player.Open(new ContentRef("youtube", "  ")));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => player.EnumerateAsync(new ContentRef("youtube", "  "), default));
         Assert.Contains("video or playlist URL", ex.Message);
-    }
-
-    [Fact]
-    public async Task YouTube_open_url_returns_youtube_source()
-    {
-        // The player builds the source object; it doesn't touch yt-dlp/ffmpeg or
-        // the network until StartAsync, so placeholder tool paths are fine here.
-        var player = new YouTubeContentPlayer("yt-dlp", "ffmpeg", normalise: false);
-        await using var source = player.Open(new ContentRef("youtube", "https://youtu.be/x"));
-        Assert.Equal("youtube", source.Id);
     }
 }

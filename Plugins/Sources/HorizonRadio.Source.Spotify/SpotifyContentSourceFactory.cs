@@ -115,9 +115,6 @@ public sealed class SpotifyContentSourceFactory : IContentSourceFactory, IAuthen
         return new SpotifyContentPlayer(connection, playback);
     }
 
-    public IAudioSource Create(ConfigValues values)
-        => CreatePlayer(values).Open(new ContentRef(Id, values.GetString(ContentKey) ?? ""));
-
     // -- IAuthenticatingSource (bring-your-own Client ID, PKCE browser login) --
 
     public bool IsConnected => SpotifyRuntime.Connection?.IsConnected ?? false;

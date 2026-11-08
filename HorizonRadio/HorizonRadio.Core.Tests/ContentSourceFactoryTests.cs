@@ -8,10 +8,9 @@ namespace HorizonRadio.Core.Tests;
 
 /// <summary>
 /// Verifies the content-addressable factories: they advertise themselves via
-/// <see cref="IContentSourceFactory"/>, name the right content field, and their
-/// single-start <c>Create</c> is a thin adapter that builds the engine from the
-/// environment fields and opens the content field — validating tools (engine)
-/// before content (locator).
+/// <see cref="IContentSourceFactory"/> (and never as self-driven), name the right
+/// content field, and build their engine from the environment fields alone —
+/// validating tools (engine) separately from content (locator).
 /// </summary>
 [Collection("tool-resolver")]
 public class ContentSourceFactoryTests
@@ -28,22 +27,11 @@ public class ContentSourceFactoryTests
     }
 
     [Fact]
-    public async Task Local_factory_create_opens_the_content_field()
+    public void Content_factories_are_not_self_driven()
     {
-        using var dir = TempDir.Create();
-        dir.Touch("song.flac");
-        var f = new LocalFileSourceFactory();
-        var values = new ConfigValues();
-        values.Set(f.ContentKey, dir.Path);
-        await using var source = f.Create(values);
-        Assert.Equal("local", source.Id);
-    }
-
-    [Fact]
-    public void Local_factory_create_empty_path_throws()
-    {
-        var f = new LocalFileSourceFactory();
-        Assert.Throws<InvalidOperationException>(() => f.Create(new ConfigValues()));
+        // A content source only plays through the queue; it can't be started on the runner.
+        Assert.All(SourceCatalog.All.OfType<IContentSourceFactory>(),
+            f => Assert.IsNotAssignableFrom<ISelfDrivenSourceFactory>(f));
     }
 
     [Fact]
@@ -65,14 +53,6 @@ public class ContentSourceFactoryTests
     }
 
     [Fact]
-    public void WithLocator_sets_trimmed_value_under_content_key()
-    {
-        var f = new LocalFileSourceFactory();
-        var values = new ConfigValues().WithLocator(f, @"  C:\Music  ");
-        Assert.Equal(@"C:\Music", values.GetString(f.ContentKey));
-    }
-
-    [Fact]
     public void YouTube_create_player_missing_tools_throws()
     {
         // Simulate a clean machine: nothing configured AND nothing discoverable.
@@ -87,26 +67,16 @@ public class ContentSourceFactoryTests
     }
 
     [Fact]
-    public void YouTube_create_validates_tools_before_content()
+    public async Task YouTube_player_validates_tools_apart_from_content()
     {
         // Tools present but URL empty: tool validation (CreatePlayer) passes and
-        // content validation (Open) fails — proving the env/content split.
+        // content validation (EnumerateAsync) fails — proving the env/content split.
         using var dir = TempDir.Create();
         var f = new YouTubeSourceFactory();
-        var values = ToolValues(dir);
-        var ex = Assert.Throws<InvalidOperationException>(() => f.Create(values));
+        var player = f.CreatePlayer(ToolValues(dir));
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => player.EnumerateAsync(new ContentRef(f.Id, ""), default));
         Assert.Contains("video or playlist URL", ex.Message);
-    }
-
-    [Fact]
-    public async Task YouTube_create_with_tools_and_url_returns_source()
-    {
-        using var dir = TempDir.Create();
-        var f = new YouTubeSourceFactory();
-        var values = ToolValues(dir);
-        values.Set(f.ContentKey, "https://youtu.be/x");
-        await using var source = f.Create(values);
-        Assert.Equal("youtube", source.Id);
     }
 
     private static ConfigValues ToolValues(TempDir dir)

@@ -7,17 +7,15 @@ namespace HorizonRadio.Core.Sources;
 /// <see cref="IContentPlayer"/> from environment/behavior config and names the
 /// one schema field that carries the content locator.
 ///
-/// Self-driven sources (Spotify Connect, the test tone) implement only
-/// <see cref="IAudioSourceFactory"/>, never this — they have no locator to give.
-/// Code that needs "can this source be a mix entry?" tests
+/// Self-driven sources (Spotify Connect, the test tone) implement
+/// <see cref="ISelfDrivenSourceFactory"/>, never this — they have no locator to give.
+/// Code that needs "can this source be queued or be a mix entry?" tests
 /// <c>factory is IContentSourceFactory</c>; that single check is the
 /// content-addressable vs. self-driven discriminator.
 ///
-/// <see cref="IAudioSourceFactory.Create"/> remains the single-start entry point
-/// and, for these factories, is implemented in terms of the split: read the
-/// content field, build a one-off <see cref="ContentRef"/>, and
-/// <see cref="IContentPlayer.Open"/> it. The mix engine instead calls
-/// <see cref="CreatePlayer"/> once and opens many refs against it.
+/// A content source is never started on its own: every way of playing one (the
+/// Sources tab, quick play, search, history, mixes) goes through the queue, which
+/// calls <see cref="CreatePlayer"/> and enumerates the locator's items.
 /// </summary>
 public interface IContentSourceFactory : IAudioSourceFactory
 {
@@ -37,7 +35,7 @@ public interface IContentSourceFactory : IAudioSourceFactory
     /// Build the content-free engine from environment + behavior values (tool
     /// paths, normalization). Ignores the <see cref="ContentKey"/> field. Throws
     /// <see cref="System.InvalidOperationException"/> if a required environment
-    /// value (a tool path) is missing, matching the old Create behavior.
+    /// value (a tool path) is missing.
     /// </summary>
     IContentPlayer CreatePlayer(ConfigValues values);
 }

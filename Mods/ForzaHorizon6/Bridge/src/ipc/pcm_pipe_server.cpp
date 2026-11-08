@@ -54,8 +54,8 @@ void PcmPipeServer::stop() {
 void PcmPipeServer::run() {
     OutputDebugStringW(L"[horizon-radio] pcm-pipe: server thread started\n");
 
-    // Read s16 frames in chunks of ~46 ms (matches the existing
-    // LocalFileSource read cadence). The client paces; we just consume.
+    // Read s16 frames in chunks of ~46 ms (matches the
+    // app's PCM pump cadence). The client paces; we just consume.
     constexpr std::size_t kChunkFrames = 2048;
     constexpr std::size_t kChunkBytes  = kChunkFrames * 2 /*ch*/ * sizeof(std::int16_t);
     std::int16_t          buf[kChunkFrames * 2];

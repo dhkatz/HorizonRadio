@@ -52,6 +52,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Play on the Sources tab now plays through the queue.** Local folders, YouTube links,
+  Spotify links and radio stations start right away from the queue, the same as Play in
+  search. Shuffle, Next/Previous, Restart and pause now behave the same everywhere, which
+  fixes playlists going silent after their last track, YouTube ignoring the saved shuffle
+  setting, and quick skips getting lost or reversed. For plugin authors: a source that plays
+  by itself now implements `ISelfDrivenSourceFactory`; content sources only enumerate items.
 - **Faster CI.** The C# format check and the C++ tests run alongside the C# build instead
   of before it, NuGet restores once and to the runner's faster drive, the FH6 plugin no
   longer pulls a second copy of SkiaSharp (~1.2 GB) through LiveCharts, the Ubuntu
