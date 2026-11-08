@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using HorizonRadio.Core.Events;
+using HorizonRadio.Core.IO;
 
 namespace HorizonRadio.Core.Input;
 
@@ -145,32 +146,33 @@ public sealed class InputBindingStore
         path ??= DefaultPath;
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            using var stream = File.Create(path);
-            using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
-            writer.WriteStartObject();
-            writer.WriteStartArray("bindings");
-            foreach (var e in _byKey.Values)
+            AtomicFile.Write(path, stream =>
             {
+                using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
                 writer.WriteStartObject();
-                writer.WriteString("kind", e.Binding.Kind.ToString());
-                if (!string.IsNullOrEmpty(e.Binding.Device))
-                    writer.WriteString("device", e.Binding.Device);
-                writer.WriteNumber("code", e.Binding.Code);
-                writer.WriteString("label", e.Binding.Label);
-                if (!string.IsNullOrEmpty(e.Binding.GlyphId))
-                    writer.WriteString("glyphId", e.Binding.GlyphId);
-                if (e.Binding.Style is { } st)
-                    writer.WriteString("style", st.ToString());
-                writer.WriteStartObject("action");
-                writer.WriteString("type", e.Action.Type.ToString());
-                if (!string.IsNullOrEmpty(e.Action.Param))
-                    writer.WriteString("param", e.Action.Param);
+                writer.WriteStartArray("bindings");
+                foreach (var e in _byKey.Values)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteString("kind", e.Binding.Kind.ToString());
+                    if (!string.IsNullOrEmpty(e.Binding.Device))
+                        writer.WriteString("device", e.Binding.Device);
+                    writer.WriteNumber("code", e.Binding.Code);
+                    writer.WriteString("label", e.Binding.Label);
+                    if (!string.IsNullOrEmpty(e.Binding.GlyphId))
+                        writer.WriteString("glyphId", e.Binding.GlyphId);
+                    if (e.Binding.Style is { } st)
+                        writer.WriteString("style", st.ToString());
+                    writer.WriteStartObject("action");
+                    writer.WriteString("type", e.Action.Type.ToString());
+                    if (!string.IsNullOrEmpty(e.Action.Param))
+                        writer.WriteString("param", e.Action.Param);
+                    writer.WriteEndObject();
+                    writer.WriteEndObject();
+                }
+                writer.WriteEndArray();
                 writer.WriteEndObject();
-                writer.WriteEndObject();
-            }
-            writer.WriteEndArray();
-            writer.WriteEndObject();
+            });
         }
         catch (Exception ex) { Log($"save failed: {ex.Message}"); }
     }

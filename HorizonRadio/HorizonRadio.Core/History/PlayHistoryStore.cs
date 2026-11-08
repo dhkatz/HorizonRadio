@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using HorizonRadio.Core.IO;
 
 namespace HorizonRadio.Core.History;
 
@@ -203,17 +204,13 @@ public sealed class PlayHistoryStore
 
         // Write to a unique temp then atomically rename, so a crash or a concurrent save can never
         // leave a half-written/truncated history.json (a plain File.Create truncates in place).
-        var tmp = $"{path}.{Guid.NewGuid():n}.tmp";
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllBytes(tmp, bytes);
-            File.Move(tmp, path, overwrite: true);
+            AtomicFile.WriteAllBytes(path, bytes);
         }
         catch (Exception ex)
         {
             Log($"save failed: {ex.Message}");
-            try { if (File.Exists(tmp)) File.Delete(tmp); } catch { /* best effort */ }
         }
     }
 

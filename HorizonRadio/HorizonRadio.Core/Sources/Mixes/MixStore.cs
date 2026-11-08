@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using HorizonRadio.Core.IO;
 
 namespace HorizonRadio.Core.Sources.Mixes;
 
@@ -108,34 +109,34 @@ public sealed class MixStore
         path ??= DefaultPath;
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-
-            using var stream = File.Create(path);
-            using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
-
-            writer.WriteStartObject();
-            writer.WriteStartArray("mixes");
-            foreach (var m in _mixes)
+            AtomicFile.Write(path, stream =>
             {
-                writer.WriteStartObject();
-                writer.WriteString("id", m.Id);
-                writer.WriteString("name", m.Name);
+                using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
 
-                writer.WriteStartArray("entries");
-                foreach (var e in m.Entries)
+                writer.WriteStartObject();
+                writer.WriteStartArray("mixes");
+                foreach (var m in _mixes)
                 {
                     writer.WriteStartObject();
-                    writer.WriteString("source", e.SourceId);
-                    writer.WriteString("locator", e.Locator);
-                    if (e.DisplayName != null) writer.WriteString("name", e.DisplayName);
+                    writer.WriteString("id", m.Id);
+                    writer.WriteString("name", m.Name);
+
+                    writer.WriteStartArray("entries");
+                    foreach (var e in m.Entries)
+                    {
+                        writer.WriteStartObject();
+                        writer.WriteString("source", e.SourceId);
+                        writer.WriteString("locator", e.Locator);
+                        if (e.DisplayName != null) writer.WriteString("name", e.DisplayName);
+                        writer.WriteEndObject();
+                    }
+                    writer.WriteEndArray();
+
                     writer.WriteEndObject();
                 }
                 writer.WriteEndArray();
-
                 writer.WriteEndObject();
-            }
-            writer.WriteEndArray();
-            writer.WriteEndObject();
+            });
         }
         catch (Exception ex)
         {

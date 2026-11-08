@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
+using HorizonRadio.Core.IO;
 
 namespace HorizonRadio.Core.Sources.Spotify;
 
@@ -54,8 +55,7 @@ public sealed class SpotifyAuthStore
         if (!OperatingSystem.IsWindows() || string.IsNullOrEmpty(refreshToken)) return;
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            File.WriteAllBytes(_path, Encrypt(refreshToken));
+            AtomicFile.WriteAllBytes(_path, Encrypt(refreshToken));
         }
         catch (Exception ex)
         {

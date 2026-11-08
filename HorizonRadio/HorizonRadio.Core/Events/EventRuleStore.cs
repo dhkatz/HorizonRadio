@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
+using HorizonRadio.Core.IO;
 
 namespace HorizonRadio.Core.Events;
 
@@ -78,21 +79,22 @@ public sealed class EventRuleStore
         path ??= DefaultPath;
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            using var stream = File.Create(path);
-            using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
-            writer.WriteStartObject();
-            writer.WriteStartObject("rules");
-            foreach (var (kind, action) in _rules)
+            AtomicFile.Write(path, stream =>
             {
-                writer.WriteStartObject(kind);
-                writer.WriteString("type", action.Type.ToString());
-                if (!string.IsNullOrEmpty(action.Param))
-                    writer.WriteString("param", action.Param);
+                using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
+                writer.WriteStartObject();
+                writer.WriteStartObject("rules");
+                foreach (var (kind, action) in _rules)
+                {
+                    writer.WriteStartObject(kind);
+                    writer.WriteString("type", action.Type.ToString());
+                    if (!string.IsNullOrEmpty(action.Param))
+                        writer.WriteString("param", action.Param);
+                    writer.WriteEndObject();
+                }
                 writer.WriteEndObject();
-            }
-            writer.WriteEndObject();
-            writer.WriteEndObject();
+                writer.WriteEndObject();
+            });
         }
         catch (Exception ex) { Log($"save failed: {ex.Message}"); }
     }
