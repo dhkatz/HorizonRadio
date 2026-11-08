@@ -240,6 +240,24 @@ public static class YtDlpClient
             duration, m.Track, m.Artist, m.ReleaseYear);
     }
 
+    /// <summary>
+    /// The command line that downloads one video's best audio and writes it to stdout, for piping into
+    /// a decoder. yt-dlp does the download itself (not the decoder from a resolved URL): some sites only
+    /// serve their streams with the cookies and headers yt-dlp sends (Niconico's HLS answers a bare
+    /// request with 403). Videos longer than <paramref name="maxLength"/> are skipped, writing nothing.
+    /// </summary>
+    public static string[] BuildAudioToStdoutArgs(string videoUrl, TimeSpan maxLength) =>
+    [
+        "-f", "bestaudio/best",
+        "--no-playlist",
+        "--no-warnings",
+        "--no-progress",
+        // "<=?" lets a video whose length isn't known through; the reader caps what it takes.
+        "--match-filter", $"duration <=? {(int)maxLength.TotalSeconds}",
+        "-o", "-",
+        videoUrl,
+    ];
+
     private static Entry? TryReadEntry(JsonElement e)
     {
         var id = ReadString(e, "id");

@@ -13,11 +13,12 @@
     <!-- The playing song's lyrics. Synced lyrics follow the song: the line being sung is bright,
          kept in the middle, and (karaoke on) fills as it's sung, word by word where the lyrics
          are word-timed. Clicking a line jumps there when the source can seek. Unsynced lyrics
-         (and live radio, which doesn't know where in the song it is yet) are a sheet. -->
+         (and radio, until its place in the song is found) are a sheet. -->
     <Grid RowDefinitions="Auto,*,Auto">
-        <!-- Versions (Original / Romaji / English) on the left; radio's sync nudge and the
-             karaoke toggle on the right. -->
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto">
+        <!-- Versions (Original / Romaji / English) on the left; on the right, radio's audio
+             matching (its status, or the nudge when the place comes from the station's title
+             change, and its toggle) and the karaoke toggle. -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto">
             <ItemsControl Grid.Column="0" ItemsSource="{Binding Versions}" IsVisible="{Binding HasVersions}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -35,9 +36,14 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
+            <TextBlock Grid.Column="1" Margin="0,0,8,0"
+                       Text="{Binding AudioSyncStatus}"
+                       FontSize="12" Opacity="0.6" VerticalAlignment="Center"
+                       ToolTip.Tip="{Binding AudioSyncSource}"
+                       IsVisible="{Binding !ShowNudge}" />
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" Margin="0,0,8,0"
                         VerticalAlignment="Center"
-                        IsVisible="{Binding IsLive}">
+                        IsVisible="{Binding ShowNudge}">
                 <Button Classes="Ghost" Padding="6,2" FontSize="12"
                         Content="−0.5 s"
                         Command="{Binding NudgeCommand}" CommandParameter="-0.5"
@@ -50,6 +56,16 @@
                         ToolTip.Tip="Lyrics are behind the singer: show them earlier" />
             </StackPanel>
             <ToggleButton Grid.Column="2"
+                          IsChecked="{Binding IsAudioSyncEnabled, Mode=TwoWay}"
+                          IsVisible="{Binding CanAudioSync}"
+                          Background="Transparent" BorderThickness="0"
+                          Width="32" Height="32" Padding="0"
+                          HorizontalContentAlignment="Center"
+                          VerticalContentAlignment="Center"
+                          ToolTip.Tip="Match the song's audio so the lyrics follow along (downloads a recording of each song once)">
+                <material:MaterialIcon Kind="Waveform" Width="16" Height="16" />
+            </ToggleButton>
+            <ToggleButton Grid.Column="3"
                           IsChecked="{Binding IsKaraoke, Mode=TwoWay}"
                           IsVisible="{Binding IsFollowing}"
                           Background="Transparent" BorderThickness="0"

@@ -61,6 +61,23 @@ public static class Ffmpeg
         return args.ToArray();
     }
 
+    /// <summary>
+    /// Decode audio fed into ffmpeg's stdin to mono s16-LE PCM at <paramref name="sampleRate"/>, for
+    /// analysis rather than playback (a reference recording to fingerprint). ffmpeg's resampler does
+    /// the rate change, so nothing above the new rate's Nyquist frequency folds back.
+    /// </summary>
+    public static string[] BuildStdinAnalysisArgs(int sampleRate) =>
+    [
+        "-hide_banner",
+        "-loglevel", "error",
+        "-i", "pipe:0",
+        "-vn",
+        "-f", "s16le",
+        "-ac", "1",
+        "-ar", sampleRate.ToString(CultureInfo.InvariantCulture),
+        "pipe:1",
+    ];
+
     // Drop video, emit raw s16-LE PCM at the canonical channels/rate to stdout (pipe:1), with
     // optional loudnorm. This is the shared tail of every decode command.
     private static void AppendPcmOutput(List<string> args, bool normalise)

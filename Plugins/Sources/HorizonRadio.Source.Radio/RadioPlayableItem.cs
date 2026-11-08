@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Core.Fingerprints;
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Models;
 using HorizonRadio.Tools.FFmpeg;
@@ -25,7 +26,7 @@ namespace HorizonRadio.Core.Sources.Radio;
 /// On a stream drop it reconnects with backoff; the station only ends when the queue
 /// skips/stops it (cancellation).
 /// </summary>
-public sealed class RadioPlayableItem : PlayableItem
+public sealed class RadioPlayableItem : PlayableItem, ILiveSongAudio
 {
     private RadioStation _station;
     private readonly string _ffmpegPath;
@@ -44,6 +45,15 @@ public sealed class RadioPlayableItem : PlayableItem
     // UnknownStart when it isn't known: tuned in mid-song, or the stream's rate wasn't known yet.
     private const long UnknownStart = long.MinValue;
     private long _songStartTicks = UnknownStart;
+
+    // Which song is playing (ILiveSongAudio.SongId): every song, and every reconnect, gets a new one.
+    private static long s_nextSongId;
+    private long _songId = Interlocked.Increment(ref s_nextSongId);
+    private readonly Lock _songLock = new();
+
+    // What's been heard of this connection, to line the song up against a recording of it; only while
+    // the station plays (a queue can hold many stations).
+    private volatile LiveAudioBuffer? _heard;
 
     /// <summary>A new title is held until its audio plays; one this far ahead (or behind) means the
     /// byte-to-time estimate is off, and the title is shown at once, with no song position.</summary>
@@ -69,8 +79,44 @@ public sealed class RadioPlayableItem : PlayableItem
             ? decoder.Elapsed - new TimeSpan(start)
             : null;
 
-    private void SetSongStart(TimeSpan? start) =>
-        Interlocked.Exchange(ref _songStartTicks, start?.Ticks ?? UnknownStart);
+    // A new song (or the stream starting over): where it began, if that's known.
+    private void SetSongStart(TimeSpan? start)
+    {
+        lock (_songLock)
+        {
+            Interlocked.Exchange(ref _songStartTicks, start?.Ticks ?? UnknownStart);
+            Interlocked.Exchange(ref _songId, Interlocked.Increment(ref s_nextSongId));
+        }
+    }
+
+    // -- ILiveSongAudio: the song's place, found from its audio --
+
+    public long SongId => Interlocked.Read(ref _songId);
+
+    public LiveAudio? RecentAudio(TimeSpan span)
+    {
+        long song;
+        TimeSpan from;
+        lock (_songLock)
+        {
+            song = _songId;
+            var start = Interlocked.Read(ref _songStartTicks);
+            // The song playing when the station was tuned in began before what's been heard.
+            from = start == UnknownStart || start < 0 ? TimeSpan.Zero : new TimeSpan(start);
+        }
+        if (_subproc is null || _heard?.Read(from, span) is not { } heard) return null;
+        return SongId == song ? new LiveAudio(song, heard.Samples, Chromaprint.SampleRate, heard.Start) : null;
+    }
+
+    public bool SetSongPosition(long songId, TimeSpan streamTime, TimeSpan songTime)
+    {
+        lock (_songLock)
+        {
+            if (songId != _songId) return false;
+            Interlocked.Exchange(ref _songStartTicks, (streamTime - songTime).Ticks);
+            return true;
+        }
+    }
 
     private static void Log(string msg) => Debug.WriteLine($"[hzn-radio] {msg}");
 
@@ -119,7 +165,9 @@ public sealed class RadioPlayableItem : PlayableItem
     {
         await PrepareAsync(ct).ConfigureAwait(false);
 
-        var pausing = new PausingSink(ctx.Sink, ctx.IsPaused, ctx.ResumeGate, ct);
+        // Keep what's heard (past the pause gate, so a paused stream adds nothing) for lining songs up.
+        var heard = _heard = new LiveAudioBuffer(TimeSpan.FromSeconds(90));
+        var pausing = new PausingSink(new HeardSink(ctx.Sink, heard), ctx.IsPaused, ctx.ResumeGate, ct);
 
         void OnTitle(string raw)
         {
@@ -222,6 +270,7 @@ public sealed class RadioPlayableItem : PlayableItem
                     await icy.ConnectAsync(ct).ConfigureAwait(false);
                     AdoptIcyNameIfBetter(icy.IcyName);
                     clock = new StreamClock(icy.Bitrate);
+                    heard.Reset();
                     SetSongStart(null); // the decoded audio starts over on a new connection
 
                     subproc = new SubprocessPcmSource(new SubprocessPcmSource.Config
@@ -299,6 +348,7 @@ public sealed class RadioPlayableItem : PlayableItem
         }
         finally
         {
+            _heard = null;
             lock (_modelGate)
             {
                 try { _modelCts?.Cancel(); } catch { }
@@ -423,4 +473,14 @@ public sealed class RadioPlayableItem : PlayableItem
         if (Metadata.ExternalId is null) Metadata = BuildTrack(null, null);
     }
 
+
+    // Passes the audio on, keeping a copy of what's heard.
+    private sealed class HeardSink(IPcmSink inner, LiveAudioBuffer heard) : IPcmSink
+    {
+        public bool Send(ReadOnlySpan<short> samples)
+        {
+            heard.Write(samples);
+            return inner.Send(samples);
+        }
+    }
 }

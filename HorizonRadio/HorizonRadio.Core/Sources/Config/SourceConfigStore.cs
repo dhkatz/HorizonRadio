@@ -80,6 +80,10 @@ public sealed class SourceConfigStore
     /// in seconds (negative: later).</summary>
     public double LyricsRadioOffset { get; set; }
 
+    /// <summary>Whether a radio song's place is found by lining the station's audio up against a
+    /// recording of the song (downloaded once per song), so its synced lyrics follow along.</summary>
+    public bool LyricsAudioSync { get; set; } = true;
+
     private readonly Dictionary<string, Dictionary<string, object?>> _perSource = new();
 
     // Serializes SaveToDisk: two saves (e.g. a UI change and a debounced flush) must not
@@ -158,6 +162,10 @@ public sealed class SourceConfigStore
             if (root.TryGetProperty("lyricsRadioOffset", out var lo) && lo.ValueKind == JsonValueKind.Number)
                 store.LyricsRadioOffset = lo.GetDouble();
 
+            if (root.TryGetProperty("lyricsAudioSync", out var la) &&
+                (la.ValueKind == JsonValueKind.True || la.ValueKind == JsonValueKind.False))
+                store.LyricsAudioSync = la.GetBoolean();
+
             if (root.TryGetProperty("searchSourcePriority", out var sp) && sp.ValueKind == JsonValueKind.Array)
             {
                 foreach (var id in sp.EnumerateArray())
@@ -214,6 +222,7 @@ public sealed class SourceConfigStore
                 writer.WriteBoolean("lyricsKaraoke", LyricsKaraoke);
                 if (LyricsVersion != null) writer.WriteString("lyricsVersion", LyricsVersion);
                 if (LyricsRadioOffset != 0) writer.WriteNumber("lyricsRadioOffset", LyricsRadioOffset);
+                writer.WriteBoolean("lyricsAudioSync", LyricsAudioSync);
                 if (SearchSourcePriority.Count > 0)
                 {
                     writer.WriteStartArray("searchSourcePriority");

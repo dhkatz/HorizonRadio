@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HorizonRadio.Core.Fingerprints;
 using HorizonRadio.Core.Lyrics;
 using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Sources;
@@ -82,8 +83,10 @@ public sealed partial class LyricsVersionViewModel(string label) : ObservableObj
 /// <summary>
 /// The lyrics panel on the Now Playing page: looks up the playing song's lyrics and, when they're
 /// synced and the source reports where in the song it is, follows along, filling each line
-/// karaoke-style as it's sung (word by word where the lyrics are word-timed). Otherwise (live
-/// radio, or unsynced lyrics) the lyrics show as a sheet.
+/// karaoke-style as it's sung (word by word where the lyrics are word-timed). Otherwise (unsynced
+/// lyrics, or radio before its place in the song is known) the lyrics show as a sheet. On radio,
+/// synced lyrics have the station's audio lined up against a recording of the song (see
+/// <see cref="LiveSongSync"/>), which tells where in the song it is even when it was tuned in mid-song.
 /// </summary>
 public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
 {
@@ -99,7 +102,12 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
     private readonly LyricsService? _service;
     private readonly Func<IPlaybackProgress?> _progress;
     private readonly SourceConfigStore? _prefs;
+    private readonly LiveSongSync? _sync;
     private readonly DispatcherTimer _timer;
+
+    // Lining the radio station's audio up against a recording of the song, once per song.
+    private CancellationTokenSource? _syncCts;
+    private bool _syncStarted;
 
     private CancellationTokenSource? _cts;
     private string? _songKey;
@@ -147,14 +155,38 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
 
     public string OffsetText => RadioOffset == 0 ? "In sync" : $"{RadioOffset:+0.0;-0.0} s";
 
+    /// <summary>The radio song's place was found from its audio: the lyrics are on time, with no
+    /// nudging needed.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowNudge))]
+    private bool isAudioSynced;
+
+    /// <summary>The nudge is for when the place comes from the station's title change.</summary>
+    public bool ShowNudge => IsLive && !IsAudioSynced;
+
+    /// <summary>What the audio matching is doing ("Matching the song's audio…"), or null.</summary>
+    [ObservableProperty] private string? audioSyncStatus;
+
+    /// <summary>Where the matched recording came from, for the status's tooltip.</summary>
+    [ObservableProperty] private string? audioSyncSource;
+
+    /// <summary>The song is on a live stream whose place can be found from its audio (radio).</summary>
+    [ObservableProperty] private bool canAudioSync;
+
+    /// <summary>Find radio songs' places from their audio (downloads a recording of each song once).</summary>
+    [ObservableProperty] private bool isAudioSyncEnabled;
+
     public bool HasLines => Lines.Count > 0;
 
-    public LyricsViewModel(LyricsService? service, Func<IPlaybackProgress?> progress, SourceConfigStore? prefs = null)
+    public LyricsViewModel(LyricsService? service, Func<IPlaybackProgress?> progress, SourceConfigStore? prefs = null,
+        LiveSongSync? sync = null)
     {
         _service = service;
         _progress = progress;
         _prefs = prefs;
+        _sync = sync;
         isKaraoke = prefs?.LyricsKaraoke ?? true;
+        isAudioSyncEnabled = prefs?.LyricsAudioSync ?? true;
         radioOffset = prefs?.LyricsRadioOffset ?? 0;
         // Fast enough for a smooth fill; it only runs while a song's lyrics are up.
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
@@ -175,6 +207,26 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
             _prefs.SaveToDisk();
         }
         Tick();
+    }
+
+    partial void OnIsLiveChanged(bool value) => OnPropertyChanged(nameof(ShowNudge));
+
+    partial void OnIsAudioSyncEnabledChanged(bool value)
+    {
+        if (_prefs != null && _prefs.LyricsAudioSync != value)
+        {
+            _prefs.LyricsAudioSync = value;
+            _prefs.SaveToDisk();
+        }
+        if (value)
+        {
+            if (_lyrics != null) StartAudioSync(_lyrics);
+        }
+        else
+        {
+            // The place found so far stays: the station has no better one for this song.
+            StopAudioSync();
+        }
     }
 
     partial void OnIsKaraokeChanged(bool value)
@@ -224,6 +276,12 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
         _cts?.Cancel();
         _cts?.Dispose();
         _cts = null;
+        StopAudioSync();
+        _syncStarted = false;
+        IsAudioSynced = false;
+        AudioSyncStatus = null;
+        AudioSyncSource = null;
+        CanAudioSync = false;
         _timer.Stop();
         _following = false;
         IsFollowing = false;
@@ -296,7 +354,89 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
         BuildLines(Versions.Any(v => v.Label == preferred) ? preferred! : OriginalLabel);
         Status = null;
         Credit = lyrics.Credit;
+        CanAudioSync = _sync != null && lyrics.Synced && _progress()?.LiveAudio != null;
+        if (IsAudioSyncEnabled) StartAudioSync(lyrics);
         Tick();
+    }
+
+    // Find the radio song's place from its audio, so its synced lyrics can follow along: from the
+    // start for the song that was playing when the station was tuned in, and on time for the rest
+    // (stations change titles seconds before or after the song does).
+    private void StartAudioSync(SongLyrics lyrics)
+    {
+        if (_syncStarted || _sync == null || !lyrics.Synced || _track is not { } track) return;
+        if (_progress()?.LiveAudio is not { } live) return;
+        _syncStarted = true;
+
+        var cts = _syncCts = new CancellationTokenSource();
+        AudioSyncStatus = "Matching the song's audio…";
+        _ = RunAudioSyncAsync(_sync, track, live, cts.Token);
+    }
+
+    private async Task RunAudioSyncAsync(LiveSongSync sync, Track track, ILiveSongAudio live, CancellationToken ct)
+    {
+        try
+        {
+            await Task.Run(() => sync.RunAsync(track, live,
+                found => Dispatcher.UIThread.Post(() => OnAudioSynced(found, ct)), ct), ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[hzn-lyrics-vm] audio sync: {ex.Message}");
+        }
+        // Done without a match (none of the recordings was this song): say nothing more.
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!ct.IsCancellationRequested && !IsAudioSynced) AudioSyncStatus = null;
+        });
+    }
+
+    private void OnAudioSynced(SongSync found, CancellationToken ct)
+    {
+        if (ct.IsCancellationRequested || _lyrics is not { } lyrics) return;
+        IsAudioSynced = true;
+        AudioSyncStatus = "Synced to the song's audio";
+        AudioSyncSource = found.Locator;
+        // Tuned in mid-song, the lyrics were a sheet: now they can follow.
+        if (!_following) Show(lyrics, knowsPosition: true);
+        _ = RefitLyricsAsync(found, ct);
+    }
+
+    // The station plays the recording that was matched; lyrics timed to a recording of its length (or
+    // to that very video) fit it best. Keep what's showing when there aren't any.
+    private async Task RefitLyricsAsync(SongSync found, CancellationToken ct)
+    {
+        if (_service == null || _track is not { } track) return;
+        try
+        {
+            var query = new LyricsQuery(track.Title, track.Artist, track.Album, found.Duration, found.YouTubeVideoId);
+            var lyrics = await _service.FindAsync(query, ct);
+            if (ct.IsCancellationRequested || lyrics is not { Synced: true } || SameLyrics(lyrics, _lyrics)) return;
+            Show(lyrics, knowsPosition: true);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[hzn-lyrics-vm] refit: {ex.Message}");
+        }
+    }
+
+    private static bool SameLyrics(SongLyrics a, SongLyrics? b) =>
+        b != null && a.ProviderId == b.ProviderId && a.Lines.Count == b.Lines.Count
+        && a.Lines.Zip(b.Lines).All(p => p.First.Time == p.Second.Time && p.First.Text == p.Second.Text);
+
+    private void StopAudioSync()
+    {
+        _syncCts?.Cancel();
+        _syncCts?.Dispose();
+        _syncCts = null;
+        if (!IsAudioSynced) AudioSyncStatus = null;
     }
 
     [RelayCommand]
@@ -361,7 +501,8 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
         // A live stream that lost its place (it reconnected) has no song position until the next song.
         if (progress.SongPosition is not { } songPosition) return;
         var position = Clock(songPosition);
-        if (IsLive) position += TimeSpan.FromSeconds(RadioOffset);
+        // The nudge corrects the station's title timing; a place found from the audio needs none.
+        if (ShowNudge) position += TimeSpan.FromSeconds(RadioOffset);
 
         int active = -1;
         for (int i = 0; i < Lines.Count; i++)
@@ -420,6 +561,7 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
     public void Dispose()
     {
         _timer.Stop();
+        StopAudioSync();
         _cts?.Cancel();
         _cts?.Dispose();
     }

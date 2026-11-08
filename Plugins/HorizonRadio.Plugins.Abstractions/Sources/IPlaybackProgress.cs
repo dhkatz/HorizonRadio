@@ -28,6 +28,10 @@ public interface IPlaybackProgress
     /// this.</summary>
     TimeSpan? SongPosition => Duration is null ? null : Position;
 
+    /// <summary>The live stream playing, when its place in the song can be found from its audio
+    /// (internet radio); otherwise null.</summary>
+    ILiveSongAudio? LiveAudio => null;
+
     /// <summary>Whether <see cref="SeekAsync"/> does anything. Defaults false so
     /// read-only sources need not override it.</summary>
     bool CanSeek => false;
