@@ -120,7 +120,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                                GameSettingsViewModel gameSettings,
                                ToastManager toasts,
                                DialogManager dialogManager,
-                               Core.Lyrics.LyricsService? lyrics = null)
+                               Core.Lyrics.LyricsService? lyrics = null,
+                               Core.Fingerprints.LiveSongSync? songSync = null)
     {
         ToastManager = toasts;
         DialogManager = dialogManager;
@@ -131,7 +132,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ConnectionLabel = HasGame ? $"Not connected to {GameName}" : "Playing on this PC";
         Sources = new SourcesViewModel(playback, store, registry);
         NowPlaying = new NowPlayingViewModel(playback, store, mixStore, mixSwitcher,
-            game.Output != null ? GameName : null, preview, toasts, DialogManager, lyrics);
+            game.Output != null ? GameName : null, preview, toasts, DialogManager, lyrics, songSync);
         Metadata = metadata;
         ToolsTab = new ToolsViewModel(registry, installers);
         Events = events;

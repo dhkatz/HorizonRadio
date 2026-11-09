@@ -8,7 +8,7 @@ namespace HorizonRadio.Core.Sources.YouTube;
 /// if bundled or on PATH) and the URL to play; <see cref="YouTubeContentPlayer"/>
 /// expands the URL into items for the queue.
 /// </summary>
-public sealed class YouTubeSourceFactory : IContentSourceFactory, ISearchSource
+public sealed class YouTubeSourceFactory : IContentSourceFactory, ISearchSource, IReferenceAudioSource
 {
     /// <summary>Catalog id for the YouTube source — the key search results carry so the
     /// enqueuer can find this factory again (see <see cref="SourceCatalog.Find"/>).</summary>
@@ -87,5 +87,19 @@ public sealed class YouTubeSourceFactory : IContentSourceFactory, ISearchSource
             return Task.FromResult<IReadOnlyList<SearchResult>>([]);
 
         return YouTubeSearch.SearchTracksAsync(ytDlp, query.Trim(), limit, ct);
+    }
+
+    // -- IReferenceAudioSource (yt-dlp download → ffmpeg decode, as fast as it downloads) --
+
+    /// <summary>Any web page: yt-dlp knows most video and audio sites.</summary>
+    public bool CanFetch(string locator) =>
+        Uri.TryCreate(locator, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https";
+
+    public Task<ReferenceAudio?> FetchAsync(string locator, int sampleRate, TimeSpan maxLength, CancellationToken ct)
+    {
+        var ytDlp = ToolResolver.Resolve(YouTubeRuntime.YtDlpPath, Tools.ToolKind.YtDlp);
+        var ffmpeg = ToolResolver.Resolve(YouTubeRuntime.FfmpegPath, Tools.ToolKind.Ffmpeg);
+        if (ytDlp is null || ffmpeg is null || !CanFetch(locator)) return Task.FromResult<ReferenceAudio?>(null);
+        return YouTubeReferenceAudio.FetchAsync(ytDlp, ffmpeg, locator, sampleRate, maxLength, ct);
     }
 }

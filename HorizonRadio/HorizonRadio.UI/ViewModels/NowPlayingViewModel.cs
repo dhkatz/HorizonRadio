@@ -143,12 +143,13 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         MixStore mixes, MixSwitcher switcher,
         string? gameOutputName,
         PreviewController? preview = null, ToastManager? toasts = null,
-        DialogManager? dialogs = null, LyricsService? lyrics = null)
+        DialogManager? dialogs = null, LyricsService? lyrics = null,
+        Core.Fingerprints.LiveSongSync? songSync = null)
     {
         _playback = playback;
         _runner = playback.Runner;
         var queue = playback.Player;
-        Lyrics = new LyricsViewModel(lyrics, () => _runner?.ActiveSource as IPlaybackProgress, store);
+        Lyrics = new LyricsViewModel(lyrics, () => _runner?.ActiveSource as IPlaybackProgress, store, songSync);
         _store = store;
         _mixes = mixes;
         _switcher = switcher;

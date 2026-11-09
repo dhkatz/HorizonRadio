@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using HorizonRadio.Core;
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Events;
+using HorizonRadio.Core.Fingerprints;
 using HorizonRadio.Core.Games;
 using HorizonRadio.Core.History;
 using HorizonRadio.Core.Input;
@@ -181,12 +182,14 @@ public partial class App : Application
                 // Tools tab mid-session takes effect without a restart), or null when it
                 // isn't set/installed yet — which the search source treats as "no results".
                 var youtubeFactory = (YouTubeSourceFactory)SourceCatalog.Find(YouTubeSourceFactory.SourceId)!;
-                YouTubeRuntime.Initialize(() =>
+                string? YouTubeTool(string key)
                 {
-                    var path = _store!.Load(youtubeFactory.Id, youtubeFactory.Schema)
-                        .GetString(YouTubeSourceFactory.KeyYtDlp);
+                    var path = _store!.Load(youtubeFactory.Id, youtubeFactory.Schema).GetString(key);
                     return !string.IsNullOrWhiteSpace(path) && File.Exists(path) ? path : null;
-                });
+                }
+                YouTubeRuntime.Initialize(
+                    () => YouTubeTool(YouTubeSourceFactory.KeyYtDlp),
+                    () => YouTubeTool(YouTubeSourceFactory.KeyFfmpeg));
 
                 // Discover the metadata plugins by scanning the loaded plugin assemblies (rather than
                 // naming each here) before the config store loads — it derives fresh-install defaults + the
@@ -209,6 +212,9 @@ public partial class App : Application
                 // their SortOrder: the service prefers synced lyrics, then the earlier provider.
                 var lyrics = new LyricsService([.. PluginDiscovery.DiscoverPlugins<ILyricsPlugin>()
                     .Select(p => p.CreateLyricsProvider(pluginContext))]);
+                // Radio lyrics follow the song by lining the station's audio up against a recording
+                // of it (the song's own video, fetched through a source that can, e.g. YouTube).
+                var songSync = new LiveSongSync(() => SourceCatalog.All, new ReferenceStore(), _metaResolver);
 
                 var toolRegistry = provider.GetRequiredService<ToolRegistry>();
                 var installers = ToolInstallers.CreateAll();
@@ -300,7 +306,7 @@ public partial class App : Application
 
                 var gameSettings = new GameSettingsViewModel(gamePlugins, _store, chosenGameId);
                 gameSettings.RestartRequested += () => Restart(desktop);
-                var vm = new MainWindowViewModel(router, _store, mixStore, mixSwitcher, queuePlayback, _historyStore, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, _game, gameSettings, toasts, dialogManager, lyrics);
+                var vm = new MainWindowViewModel(router, _store, mixStore, mixSwitcher, queuePlayback, _historyStore, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, _game, gameSettings, toasts, dialogManager, lyrics, songSync);
                 var mainWindow = new MainWindow { DataContext = vm };
                 desktop.MainWindow = mainWindow;
                 // Composed after startup (the first-run picker), so show it ourselves.

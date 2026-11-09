@@ -15,10 +15,18 @@ namespace HorizonRadio.Core.Sources.YouTube;
 public static class YouTubeRuntime
 {
     private static Func<string?>? _ytDlpPath;
+    private static Func<string?>? _ffmpegPath;
 
-    public static void Initialize(Func<string?> ytDlpPath) => _ytDlpPath = ytDlpPath;
+    public static void Initialize(Func<string?> ytDlpPath, Func<string?>? ffmpegPath = null)
+    {
+        _ytDlpPath = ytDlpPath;
+        _ffmpegPath = ffmpegPath;
+    }
 
     /// <summary>The currently-configured yt-dlp.exe path, or null when unset/missing
     /// (or before <see cref="Initialize"/> runs — e.g. headless tools, the designer).</summary>
     public static string? YtDlpPath => _ytDlpPath?.Invoke();
+
+    /// <summary>The ffmpeg.exe path configured for the YouTube source, or null when unset/missing.</summary>
+    public static string? FfmpegPath => _ffmpegPath?.Invoke();
 }

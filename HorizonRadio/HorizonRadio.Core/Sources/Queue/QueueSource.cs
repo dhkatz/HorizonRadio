@@ -356,6 +356,7 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
     public TimeSpan? Duration => ItemPlaying?.Duration;
     public TimeSpan Position => ItemPlaying?.Position ?? TimeSpan.Zero;
     public TimeSpan? SongPosition => ItemPlaying?.SongPosition;
+    public ILiveSongAudio? LiveAudio => ItemPlaying as ILiveSongAudio;
     public bool CanSeek => ItemPlaying?.CanSeek ?? false;
 
     public Task SeekAsync(TimeSpan position)

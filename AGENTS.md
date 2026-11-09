@@ -84,8 +84,30 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   `StreamClock` turns bytes into decoded time (the `icy-br` rate, or the measured one
   when the header is nominal). The stream is read seconds ahead of playback, so
   `RadioPlayableItem` holds each title until its audio plays: titles change with the
-  song, in game too. The song playing when a station is tuned in has no position (its
-  lyrics are a sheet); radio lyrics can be nudged earlier/later (`lyricsRadioOffset`).
+  song, in game too. Stations time their title changes loosely (seconds early or late),
+  and the song playing when a station is tuned in has no position at all, so when a
+  radio song has synced lyrics, `LiveSongSync` (`Core/Fingerprints/`) finds its place
+  from the audio: `RadioPlayableItem` keeps what's heard (`LiveAudioBuffer`, mono at
+  11025 Hz) and exposes it as `ILiveSongAudio` (via `IPlaybackProgress.LiveAudio`); a
+  recording of the song (the VocaDB videos the resolver returns as `Playables`, then
+  YouTube search hits) is fetched whole through an `IReferenceAudioSource` (the YouTube
+  source: yt-dlp downloads to stdout, piped into ffmpeg), both are fingerprinted with
+  Chromaprint (AcoustID.NET), and `RecordingMatch` slides one over the other. The
+  thresholds were measured on a real station: the same recording differs in 1–8% of
+  bits, another version of the song 13–18% (and lands a few tenths off, so it's only a
+  fallback), other songs 35%+; a repeated section fits twice and waits for a longer
+  stretch. The fit is refined to ~0.015 s by re-fingerprinting at sub-frame shifts.
+  Uploads pad the music differently (0.01–7.5 s of silence measured), so a song's time
+  counts from the recording's first sound (`Silence`), which puts every upload within
+  ~0.02 s of the others. A recording that opens with a prelude with sound (a music
+  video's scene) is caught the first time a station is heard starting the song: the
+  station settles on the recording far past its first sound, so the song starts where
+  the station changed its title (`StoredReference.StationStart`, kept for tuned-in
+  plays). Short of that, settling late is the station's crossfade (0.7–3.3 s measured),
+  not a different start.
+  Fingerprints are stored per song (`ReferenceStore`, `%LOCALAPPDATA%\HorizonRadio\fingerprints`),
+  so a song is downloaded once. With matching off or no match, radio lyrics follow the
+  title change and can be nudged earlier/later (`lyricsRadioOffset`).
 - **Metadata matching (`Core/Metadata/`)** — every catalog plugin scores results with
   `SearchTerms.MatchScore`, which only accepts a song whose name and artist agree with the
   query. A query with no artist, or one naming only a singing voice

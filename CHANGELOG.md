@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Radio lyrics follow the song from its audio.** When a radio song has synced lyrics, Horizon
+  Radio lines the station's audio up against a recording of the song (its video on YouTube or
+  Niconico, from VocaDB or a search) and follows the lyrics from exactly where the song is, to a
+  few hundredths of a second. This also works for the song that was already playing when you
+  tuned in, which used to show its lyrics only as text, and it fixes stations that change their
+  title seconds before or after the song changes. A recording that isn't the song never lines up,
+  so the wrong one is never used. Each song's recording is downloaded once (a few MB) and its
+  fingerprint kept; the waveform button on the lyrics panel turns matching off. Fingerprinting
+  uses [AcoustID.NET](https://github.com/wo80/AcoustID.NET) (Chromaprint, LGPL-2.1).
+
 - **Lyrics from the Vocaloid Lyrics Wiki.** When VocaDB knows a song but has no lyrics
   for it (e.g. "Blurry Star"), the lyrics come from the [Vocaloid Lyrics
   Wiki](https://vocaloidlyrics.miraheze.org) instead, with its romaji and English
