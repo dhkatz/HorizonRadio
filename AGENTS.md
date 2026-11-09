@@ -61,6 +61,12 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
 - **HorizonRadio.UI / HorizonRadio.Core (C#)** — sources (librespot, local files,
   yt-dlp/ffmpeg), metadata enrichment, and the dashboard. Tool-specific details
   stay encapsulated in each source class; they are not leaked into shared code.
+  Every tool process the app starts is tied to it (`ChildProcesses.TieToApp`, a
+  kill-on-close job object), so none outlives the app: a stray librespot stays
+  logged in as the same Connect device and takes the next session's plays. The
+  Console tab and the app's `Trace` lines are also written to
+  `%LOCALAPPDATA%\HorizonRadio\logs` (`LogFile`, one file per session); log with
+  `Trace.WriteLine`, not `Debug.WriteLine`, which no listener can capture.
   A source factory is one of two kinds. A content source (`IContentSourceFactory`:
   local files, YouTube, Spotify links, internet radio) turns a locator into
   `PlayableItem`s and only ever plays through the queue (`QueuePlayback` +
