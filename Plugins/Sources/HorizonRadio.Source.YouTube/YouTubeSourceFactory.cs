@@ -61,6 +61,8 @@ public sealed class YouTubeSourceFactory : IContentSourceFactory, ISearchSource,
 
     public string LocatorHint => "https://youtube.com/watch?v=… or /playlist?list=…";
 
+    public bool Recognizes(string locator) => YouTubeLinks.IsYouTube(locator);
+
     public IContentPlayer CreatePlayer(ConfigValues values)
     {
         // Prefer the per-source path, but fall back to a managed/bundled copy so a tool

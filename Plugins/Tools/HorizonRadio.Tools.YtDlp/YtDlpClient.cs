@@ -43,6 +43,15 @@ public static class YtDlpClient
         string? Artist = null,
         int? ReleaseYear = null);
 
+    /// <summary>A URL's flat listing: its entries, plus the playlist's own title, owner, and
+    /// thumbnail when the URL is a playlist (<see cref="IsPlaylist"/>).</summary>
+    public sealed record Listing(
+        bool IsPlaylist,
+        string? Title,
+        string? Uploader,
+        string? ThumbnailUrl,
+        IReadOnlyList<Entry> Entries);
+
     /// <summary>
     /// Resolves <paramref name="url"/> into a flat list of entries.
     /// Single-video URL → one entry; playlist URL → one entry per item.
@@ -50,6 +59,14 @@ public static class YtDlpClient
     /// probing here — that happens lazily in <see cref="ResolveAsync"/>.
     /// </summary>
     public static async Task<IReadOnlyList<Entry>> EnumerateAsync(
+        string ytDlpPath, string url, CancellationToken ct)
+        => (await ListAsync(ytDlpPath, url, ct).ConfigureAwait(false)).Entries;
+
+    /// <summary>
+    /// Like <see cref="EnumerateAsync"/>, and also reads the playlist's own title, owner, and
+    /// thumbnail, which the same call prints.
+    /// </summary>
+    public static async Task<Listing> ListAsync(
         string ytDlpPath, string url, CancellationToken ct)
     {
         // --flat-playlist: don't resolve individual video formats yet,
@@ -72,19 +89,25 @@ public static class YtDlpClient
         if (root.TryGetProperty("entries", out var entries) &&
             entries.ValueKind == JsonValueKind.Array)
         {
+            string? firstThumb = null;
             foreach (var e in entries.EnumerateArray())
             {
                 var entry = TryReadEntry(e);
-                if (entry != null) list.Add(entry);
+                if (entry == null) continue;
+                list.Add(entry);
+                firstThumb ??= LargestThumbnailUrl(e);
             }
-        }
-        else
-        {
-            var entry = TryReadEntry(root);
-            if (entry != null) list.Add(entry);
+            return new Listing(
+                IsPlaylist: true,
+                Title: ReadString(root, "title"),
+                Uploader: ReadString(root, "uploader") ?? ReadString(root, "channel"),
+                ThumbnailUrl: LargestThumbnailUrl(root) ?? firstThumb,
+                Entries: list);
         }
 
-        return list;
+        var single = TryReadEntry(root);
+        if (single != null) list.Add(single);
+        return new Listing(false, single?.Title, single?.Uploader, LargestThumbnailUrl(root), list);
     }
 
     /// <summary>One search hit: enough to render a result row and play it. The

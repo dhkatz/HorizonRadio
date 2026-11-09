@@ -12,6 +12,35 @@
         <vm:MixesViewModel />
     </Design.DataContext>
 
+    <UserControl.Styles>
+        <!-- Entry rows: reveal reorder/remove on hover and fade the text's right edge out from
+             under them, like the queue's rows. IsHitTestVisible follows visibility so the hidden
+             buttons can't catch the pointer. -->
+        <Style Selector="StackPanel.rowActions">
+            <Setter Property="Opacity" Value="0"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+        </Style>
+        <Style Selector="Border.entryRow:pointerover StackPanel.rowActions">
+            <Setter Property="Opacity" Value="1"/>
+            <Setter Property="IsHitTestVisible" Value="True"/>
+        </Style>
+        <Style Selector="Border.entryRow:pointerover StackPanel.rowText">
+            <Setter Property="OpacityMask">
+                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                    <GradientStop Offset="0" Color="White"/>
+                    <GradientStop Offset="0.7" Color="White"/>
+                    <GradientStop Offset="1" Color="Transparent"/>
+                </LinearGradientBrush>
+            </Setter>
+        </Style>
+        <Style Selector="Border.entryRow:pointerover">
+            <Setter Property="Background" Value="{DynamicResource SecondaryColor}"/>
+        </Style>
+        <Style Selector="TextBlock.error">
+            <Setter Property="Foreground" Value="#EF4444"/>
+        </Style>
+    </UserControl.Styles>
+
     <ScrollViewer>
         <StackPanel Margin="24" Spacing="16">
 
@@ -21,37 +50,76 @@
                     <TextBlock Text="Cross-source playlists. Mix tracks and playlists from any source, then tune to one in a click."
                                FontSize="12" Opacity="0.6"/>
                 </StackPanel>
-                <Button Grid.Column="1" Classes="Primary" Content="New Mix"
+                <Button Grid.Column="1" Classes="Primary"
                         VerticalAlignment="Center"
                         Command="{Binding NewCommand}"
-                        IsVisible="{Binding !IsEditing}"/>
+                        IsVisible="{Binding !IsEditing}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <materialIcons:MaterialIcon Kind="Plus" Width="16" Height="16"/>
+                        <TextBlock Text="New Mix" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
             </Grid>
 
-            <!-- List of mixes -->
+            <!-- ── Library ─────────────────────────────────────────────── -->
             <StackPanel Spacing="0" IsVisible="{Binding !IsEditing}">
-                <TextBlock Text="No mixes yet. Click “New Mix” to create one."
-                           FontSize="12" Opacity="0.5" Margin="2,4"
-                           IsVisible="{Binding !HasMixes}"/>
+                <Border Classes="Card" Padding="24" IsVisible="{Binding !HasMixes}">
+                    <StackPanel Spacing="8" HorizontalAlignment="Center">
+                        <materialIcons:MaterialIcon Kind="PlaylistMusic" Width="36" Height="36" Opacity="0.4"/>
+                        <TextBlock Text="No mixes yet" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Click “New Mix”, then paste Spotify or YouTube links, radio stations, or music folders."
+                                   FontSize="12" Opacity="0.6" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360"/>
+                    </StackPanel>
+                </Border>
 
                 <ItemsControl ItemsSource="{Binding Mixes}">
                     <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="{x:Type vm:MixRow}">
-                            <Border Classes="Card" Padding="14" Margin="0,0,0,8">
-                                <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
-                                    <StackPanel Grid.Column="0" Spacing="4" VerticalAlignment="Center" Margin="0,0,12,0">
-                                        <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
-                                                   VerticalAlignment="Center"/>
-                                        <TextBlock Text="{Binding Summary}"
-                                                   FontSize="11" Opacity="0.55"
+                        <DataTemplate DataType="{x:Type vm:MixCardViewModel}">
+                            <Border Classes="Card" Padding="12" Margin="0,0,0,8">
+                                <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+                                    <!-- Cover: a 2×2 mosaic of the first entries' art, one cover, or a placeholder. -->
+                                    <Border Grid.Column="0" Width="64" Height="64" CornerRadius="6"
+                                            ClipToBounds="True" Margin="0,0,14,0"
+                                            Background="{DynamicResource SecondaryColor}">
+                                        <Panel>
+                                            <materialIcons:MaterialIcon Kind="PlaylistMusic" Width="26" Height="26" Opacity="0.45"
+                                                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            <Image Source="{Binding Cover}" Stretch="UniformToFill"
+                                                   IsVisible="{Binding HasCover}"/>
+                                            <ItemsControl ItemsSource="{Binding Mosaic}" IsVisible="{Binding HasMosaic}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <UniformGrid Rows="2" Columns="2"/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Image Source="{Binding}" Stretch="UniformToFill"/>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Panel>
+                                    </Border>
+
+                                    <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center" Margin="0,0,12,0">
+                                        <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding CountText}" FontSize="12" Opacity="0.6"/>
+                                        <TextBlock Text="{Binding Summary}" FontSize="11" Opacity="0.5"
                                                    TextTrimming="CharacterEllipsis"/>
                                     </StackPanel>
 
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
+                                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8"
                                                 VerticalAlignment="Center">
-                                        <Button Classes="Primary" Content="Play" Command="{Binding PlayCommand}"/>
+                                        <Button Classes="Primary" Command="{Binding PlayCommand}">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <materialIcons:MaterialIcon Kind="Play" Width="16" Height="16"/>
+                                                <TextBlock Text="Play" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Button>
                                         <Button Classes="Outline" Content="Edit" Command="{Binding EditCommand}"/>
                                         <Button Classes="Ghost" Command="{Binding DeleteCommand}"
-                                                Padding="8" ToolTip.Tip="Delete mix">
+                                                Padding="8" ToolTip.Tip="Delete Mix">
                                             <materialIcons:MaterialIcon Kind="TrashCanOutline" Width="15" Height="15"/>
                                         </Button>
                                     </StackPanel>
@@ -62,10 +130,10 @@
                 </ItemsControl>
             </StackPanel>
 
-            <!-- Inline builder -->
+            <!-- ── Builder ─────────────────────────────────────────────── -->
             <Border Classes="Card" Padding="16" IsVisible="{Binding IsEditing}">
-                <StackPanel Spacing="14">
-                    <TextBlock Text="Mix" FontSize="14" FontWeight="SemiBold"/>
+                <StackPanel Spacing="16">
+                    <TextBlock Text="{Binding EditorTitle}" FontSize="16" FontWeight="SemiBold"/>
 
                     <StackPanel Spacing="4">
                         <TextBlock Text="Name" FontSize="12" FontWeight="Medium"/>
@@ -73,54 +141,120 @@
                                  PlaceholderText="e.g. Drive"/>
                     </StackPanel>
 
+                    <!-- Add bar: paste a link or path; a source that recognises it is picked for you. -->
                     <StackPanel Spacing="6">
-                        <TextBlock Text="Entries" FontSize="12" FontWeight="Medium"/>
-                        <TextBlock Text="Played in order. Each entry can be a single track or a whole playlist/folder."
+                        <TextBlock Text="Add To This Mix" FontSize="12" FontWeight="Medium"/>
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <ComboBox Grid.Column="0"
+                                      ItemsSource="{Binding EntrySources}"
+                                      SelectedItem="{Binding NewSource, Mode=TwoWay}"
+                                      MinWidth="140" Margin="0,0,8,0"
+                                      VerticalAlignment="Center">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding DisplayName}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <TextBox Grid.Column="1"
+                                     Text="{Binding NewLocator, Mode=TwoWay}"
+                                     PlaceholderText="{Binding NewLocatorHint}"
+                                     VerticalAlignment="Center">
+                                <TextBox.KeyBindings>
+                                    <KeyBinding Gesture="Enter" Command="{Binding AddEntryCommand}"/>
+                                </TextBox.KeyBindings>
+                            </TextBox>
+                            <Button Grid.Column="2" Classes="Secondary" Margin="8,0,0,0"
+                                    Command="{Binding AddEntryCommand}" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <materialIcons:MaterialIcon Kind="Plus" Width="16" Height="16"/>
+                                    <TextBlock Text="Add" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+                        <TextBlock Classes="error" Text="{Binding AddError}" FontSize="11"
+                                   IsVisible="{Binding AddError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                        <TextBlock Text="A track, a whole playlist or album, a radio station, or a music folder. Entries play in order."
                                    FontSize="11" Opacity="0.55" TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <!-- Entries -->
+                    <StackPanel Spacing="6">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Text="Entries" FontSize="12" FontWeight="Medium"/>
+                            <TextBlock Grid.Column="1" Text="{Binding EditSummary}" FontSize="11" Opacity="0.55"/>
+                        </Grid>
+
+                        <Border BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CornerRadius="6"
+                                Padding="16" IsVisible="{Binding !HasEditEntries}">
+                            <TextBlock Text="Nothing here yet. Paste a link above to add it."
+                                       FontSize="12" Opacity="0.55" HorizontalAlignment="Center"/>
+                        </Border>
 
                         <ItemsControl ItemsSource="{Binding EditEntries}">
                             <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="{x:Type vm:MixEntryEditRow}">
-                                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,4,0,0">
-                                        <ComboBox Grid.Column="0"
-                                                  ItemsSource="{Binding Sources}"
-                                                  SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
-                                                  MinWidth="120" Margin="0,0,8,0"
-                                                  VerticalAlignment="Center">
-                                            <ComboBox.ItemTemplate>
-                                                <DataTemplate>
-                                                    <TextBlock Text="{Binding DisplayName}"/>
-                                                </DataTemplate>
-                                            </ComboBox.ItemTemplate>
-                                        </ComboBox>
+                                <DataTemplate DataType="{x:Type vm:MixEntryRowViewModel}">
+                                    <Border Classes="entryRow" Padding="6" CornerRadius="6"
+                                            Background="Transparent">
+                                        <Grid ColumnDefinitions="28,Auto,*" VerticalAlignment="Center">
+                                            <TextBlock Grid.Column="0" Text="{Binding Position}" FontSize="12" Opacity="0.45"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
 
-                                        <TextBox Grid.Column="1"
-                                                 Text="{Binding Locator, Mode=TwoWay}"
-                                                 PlaceholderText="{Binding LocatorHint}"
-                                                 VerticalAlignment="Center"/>
+                                            <!-- Cover over a placeholder for what the entry is. -->
+                                            <Border Grid.Column="1" Width="48" Height="48" CornerRadius="4"
+                                                    ClipToBounds="True" Margin="4,0,12,0"
+                                                    Background="{DynamicResource SecondaryColor}">
+                                                <Panel>
+                                                    <materialIcons:MaterialIcon Kind="{Binding Icon}" Width="20" Height="20" Opacity="0.5"
+                                                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"
+                                                           IsVisible="{Binding HasThumbnail}"/>
+                                                </Panel>
+                                            </Border>
 
-                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2"
-                                                    Margin="6,0,0,0" VerticalAlignment="Center">
-                                            <Button Classes="Ghost" Padding="6" Command="{Binding MoveUpCommand}"
-                                                    ToolTip.Tip="Move up">
-                                                <materialIcons:MaterialIcon Kind="ChevronUp" Width="16" Height="16"/>
-                                            </Button>
-                                            <Button Classes="Ghost" Padding="6" Command="{Binding MoveDownCommand}"
-                                                    ToolTip.Tip="Move down">
-                                                <materialIcons:MaterialIcon Kind="ChevronDown" Width="16" Height="16"/>
-                                            </Button>
-                                            <Button Classes="Ghost" Padding="6" Command="{Binding RemoveCommand}"
-                                                    ToolTip.Tip="Remove entry">
-                                                <materialIcons:MaterialIcon Kind="Close" Width="16" Height="16"/>
-                                            </Button>
-                                        </StackPanel>
-                                    </Grid>
+                                            <Panel Grid.Column="2">
+                                                <StackPanel Classes="rowText" Spacing="1" VerticalAlignment="Center"
+                                                            ToolTip.Tip="{Binding Locator}">
+                                                    <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="Medium"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding Subtitle}" FontSize="12" Opacity="0.65"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               IsVisible="{Binding Subtitle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                                    <TextBlock Text="Looking up…" FontSize="11" Opacity="0.5"
+                                                               IsVisible="{Binding IsLoading}"/>
+                                                    <TextBlock Classes="error" Text="{Binding Error}" FontSize="11"
+                                                               TextWrapping="Wrap" IsVisible="{Binding HasError}"/>
+                                                    <TextBlock Text="{Binding Details}" FontSize="11" Opacity="0.45"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               IsVisible="{Binding !IsLoading}"/>
+                                                </StackPanel>
+
+                                                <StackPanel Classes="rowActions" Orientation="Horizontal" Spacing="1"
+                                                            HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                            Background="Transparent">
+                                                    <Button Classes="Ghost" Padding="6" Command="{Binding RetryCommand}"
+                                                            ToolTip.Tip="Look Up Again">
+                                                        <materialIcons:MaterialIcon Kind="Refresh" Width="16" Height="16"/>
+                                                    </Button>
+                                                    <Button Classes="Ghost" Padding="6" Command="{Binding MoveUpCommand}"
+                                                            IsEnabled="{Binding !IsFirst}" ToolTip.Tip="Move Up">
+                                                        <materialIcons:MaterialIcon Kind="ChevronUp" Width="16" Height="16"/>
+                                                    </Button>
+                                                    <Button Classes="Ghost" Padding="6" Command="{Binding MoveDownCommand}"
+                                                            IsEnabled="{Binding !IsLast}" ToolTip.Tip="Move Down">
+                                                        <materialIcons:MaterialIcon Kind="ChevronDown" Width="16" Height="16"/>
+                                                    </Button>
+                                                    <Button Classes="Ghost" Padding="6" Command="{Binding RemoveCommand}"
+                                                            ToolTip.Tip="Remove">
+                                                        <materialIcons:MaterialIcon Kind="Close" Width="16" Height="16"/>
+                                                    </Button>
+                                                </StackPanel>
+                                            </Panel>
+                                        </Grid>
+                                    </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-
-                        <Button Classes="Outline" Content="Add Entry" Command="{Binding AddEntryCommand}"
-                                HorizontalAlignment="Left" Margin="0,8,0,0"/>
                     </StackPanel>
 
                     <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
@@ -131,8 +265,8 @@
             </Border>
 
             <!-- Status: Save validation and Play feedback both surface here. -->
-            <TextBlock Text="{Binding StatusMessage}"
-                       FontSize="11" Opacity="0.75" TextWrapping="Wrap"
+            <TextBlock Text="{Binding StatusMessage}" Classes.error="{Binding HasError}"
+                       FontSize="11" Opacity="0.85" TextWrapping="Wrap"
                        IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 
         </StackPanel>

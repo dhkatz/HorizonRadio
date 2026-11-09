@@ -46,6 +46,8 @@ public sealed class SpotifyContentSourceFactory : IContentSourceFactory, IAuthen
     public string ContentKey => KeyUri;
     public string LocatorHint => "spotify:track:… / playlist / album, or an open.spotify.com link";
 
+    public bool Recognizes(string locator) => SpotifyLinks.TryParse(locator, out _);
+
     public IReadOnlyList<ConfigField> Schema { get; }
 
     public SpotifyContentSourceFactory()

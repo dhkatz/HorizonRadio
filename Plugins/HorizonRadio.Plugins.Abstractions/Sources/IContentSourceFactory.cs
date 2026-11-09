@@ -32,6 +32,13 @@ public interface IContentSourceFactory : IAudioSourceFactory
     string LocatorHint { get; }
 
     /// <summary>
+    /// Whether <paramref name="locator"/> is one of this source's own (a link to its service, a
+    /// path it plays), so a pasted locator can pick its source by itself. Only claim what's
+    /// unambiguous: a generic <c>https://</c> URL that several sources could play is no one's.
+    /// </summary>
+    bool Recognizes(string locator) => false;
+
+    /// <summary>
     /// Build the content-free engine from environment + behavior values (tool
     /// paths, normalization). Ignores the <see cref="ContentKey"/> field. Throws
     /// <see cref="System.InvalidOperationException"/> if a required environment

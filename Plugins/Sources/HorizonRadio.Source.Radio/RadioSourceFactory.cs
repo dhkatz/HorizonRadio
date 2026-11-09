@@ -51,6 +51,10 @@ public sealed class RadioSourceFactory : IContentSourceFactory, ISearchSource
     public string ContentKey => KeyUrl;
     public string LocatorHint => "https://…/stream.mp3 (or pick a station from search)";
 
+    // A directory station. A bare http(s) stream URL could be anything, so it isn't claimed.
+    public bool Recognizes(string locator) =>
+        locator.TrimStart().StartsWith("radio://", StringComparison.OrdinalIgnoreCase);
+
     public IContentPlayer CreatePlayer(ConfigValues values)
     {
         var ffmpeg = ToolResolver.Resolve(values.GetString(KeyFfmpeg), ToolKind.Ffmpeg);

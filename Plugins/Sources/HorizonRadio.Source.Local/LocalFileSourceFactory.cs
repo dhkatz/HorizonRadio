@@ -29,5 +29,9 @@ public sealed class LocalFileSourceFactory : IContentSourceFactory
 
     public string LocatorHint => @"Folder, M3U, or file (e.g. C:\Music)";
 
+    // A full path (C:\…, \\server\…), whether or not it exists: a mistyped one should say the
+    // path doesn't exist, not go to another source. A relative one could be anything.
+    public bool Recognizes(string locator) => Path.IsPathFullyQualified(locator.Trim().Trim('"'));
+
     public IContentPlayer CreatePlayer(ConfigValues values) => new LocalContentPlayer();
 }
