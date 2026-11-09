@@ -78,7 +78,7 @@ public sealed class LrclibProvider : ILyricsProvider
         {
             resp.EnsureSuccessStatusCode();
             var records = await resp.Content.ReadFromJsonAsync<List<Record>>(ct).ConfigureAwait(false);
-            Debug.WriteLine($"[hzn-lrclib] {records?.Count ?? 0} records: {url}");
+            Trace.WriteLine($"[hzn-lrclib] {records?.Count ?? 0} records: {url}");
             return records ?? [];
         }
     }

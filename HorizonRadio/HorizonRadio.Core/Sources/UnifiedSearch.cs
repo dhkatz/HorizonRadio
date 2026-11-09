@@ -81,7 +81,7 @@ public static class UnifiedSearch
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[hzn-search] {factory.Id} failed: {ex.Message}");
+                System.Diagnostics.Trace.WriteLine($"[hzn-search] {factory.Id} failed: {ex.Message}");
                 Diagnostics.ProcessConsole.Append("search", $"{factory.DisplayName} error: {ex.Message}");
                 return new SourceSearchOutcome(factory.Id, factory.DisplayName, [], ex, notConnected);
             }

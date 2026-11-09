@@ -194,7 +194,7 @@ public sealed partial class QueueViewModel : ViewModelBase, IDisposable
                 ShowNowEnriched(enriched, sig);
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) { Debug.WriteLine($"[hzn-queue-vm] enrich current: {ex.Message}"); }
+            catch (Exception ex) { Trace.WriteLine($"[hzn-queue-vm] enrich current: {ex.Message}"); }
         });
     }
 
@@ -284,7 +284,7 @@ public sealed partial class QueueViewModel : ViewModelBase, IDisposable
                 if (await item.Item.TryGetMetadataAsync(CancellationToken.None).ConfigureAwait(false) is { } better)
                     seed = better;
             }
-            catch (Exception ex) { Debug.WriteLine($"[hzn-queue-vm] meta-ahead: {ex.Message}"); }
+            catch (Exception ex) { Trace.WriteLine($"[hzn-queue-vm] meta-ahead: {ex.Message}"); }
 
             // Background: the song playing now goes ahead of upcoming rows at every provider.
             var final = _resolver is { HasContributors: true }
@@ -299,7 +299,7 @@ public sealed partial class QueueViewModel : ViewModelBase, IDisposable
                 if (art != null) row.Thumbnail = art;
             });
         }
-        catch (Exception ex) { Debug.WriteLine($"[hzn-queue-vm] enrich row: {ex.Message}"); }
+        catch (Exception ex) { Trace.WriteLine($"[hzn-queue-vm] enrich row: {ex.Message}"); }
         finally { MetaGate.Release(); }
     }
 
@@ -359,7 +359,7 @@ public sealed partial class QueueViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[hzn-queue-vm] enqueue failed: {ex.Message}");
+            Trace.WriteLine($"[hzn-queue-vm] enqueue failed: {ex.Message}");
         }
     }
 }

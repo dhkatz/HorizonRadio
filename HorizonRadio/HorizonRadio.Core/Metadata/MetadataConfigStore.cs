@@ -43,7 +43,7 @@ public sealed class MetadataConfigStore
             "HorizonRadio",
             "metadata-config.json");
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-meta-cfg] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-meta-cfg] {msg}");
 
     public ConfigValues Load(string providerId, IReadOnlyList<ConfigField> schema)
     {

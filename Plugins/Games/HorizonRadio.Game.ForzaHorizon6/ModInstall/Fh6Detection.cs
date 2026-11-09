@@ -28,7 +28,7 @@ public static class Fh6Detection
         if (!OperatingSystem.IsWindows()) return hits;
 
         try { TryDetectSteam(hits); }
-        catch (System.Exception ex) { Debug.WriteLine($"[hzn-detect] steam: {ex.Message}"); }
+        catch (System.Exception ex) { Trace.WriteLine($"[hzn-detect] steam: {ex.Message}"); }
         return hits;
     }
 

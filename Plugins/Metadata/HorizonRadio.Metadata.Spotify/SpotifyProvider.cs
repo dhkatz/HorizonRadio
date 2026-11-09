@@ -36,7 +36,7 @@ public sealed class SpotifyProvider : IMetadataProvider
         _clientFactory = clientFactory;
     }
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-spotify-mp] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-spotify-mp] {msg}");
 
     public async Task<MetadataContribution?> ContributeAsync(MetadataQuery query, CancellationToken ct)
     {

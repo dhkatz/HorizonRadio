@@ -50,7 +50,7 @@ public sealed class SpotifyConnection : IAsyncDisposable
 
     private static void Log(string msg)
     {
-        Debug.WriteLine($"[hzn-spotify-conn] {msg}");
+        Trace.WriteLine($"[hzn-spotify-conn] {msg}");
         Diagnostics.ProcessConsole.Append("spotify", msg);
     }
 

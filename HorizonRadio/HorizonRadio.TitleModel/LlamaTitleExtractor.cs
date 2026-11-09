@@ -64,7 +64,7 @@ public sealed class LlamaTitleExtractor : ITitleExtractor
         _gpuLayerCount = gpuLayerCount;
     }
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-titlemodel] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-titlemodel] {msg}");
 
     public async Task<IReadOnlyList<TitleCandidate>> ExtractAsync(string rawTitle, CancellationToken ct)
     {

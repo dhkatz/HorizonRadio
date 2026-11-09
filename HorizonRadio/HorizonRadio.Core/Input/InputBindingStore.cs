@@ -37,7 +37,7 @@ public sealed class InputBindingStore
             "HorizonRadio",
             "controls-config.json");
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-controls-cfg] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-controls-cfg] {msg}");
 
     /// <summary>The action bound to <paramref name="binding"/>'s physical
     /// identity, or <see cref="EventAction.None"/> if unbound.</summary>

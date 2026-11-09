@@ -62,7 +62,7 @@ public sealed class MixContextProvider : IQueueContext
     /// to avoid a tight retry loop when every entry is unplayable.</summary>
     private static readonly TimeSpan IdleBackoff = TimeSpan.FromSeconds(3);
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-mix-ctx] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-mix-ctx] {msg}");
 
     /// <summary>
     /// Turn shuffle on or off, now, at both order levels (so <see cref="Peek"/> shows the

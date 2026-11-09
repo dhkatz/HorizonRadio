@@ -32,7 +32,7 @@ public sealed class EventRuleStore
             "HorizonRadio",
             "events-config.json");
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-events-cfg] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-events-cfg] {msg}");
 
     /// <summary>The action bound to <paramref name="kind"/>, or
     /// <see cref="EventAction.None"/> if unbound.</summary>

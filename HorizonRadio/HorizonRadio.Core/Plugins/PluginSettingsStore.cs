@@ -58,7 +58,7 @@ public sealed class PluginSettingsStore
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            System.Diagnostics.Debug.WriteLine($"[hzn-plugins] settings load failed: {ex.Message}");
+            System.Diagnostics.Trace.WriteLine($"[hzn-plugins] settings load failed: {ex.Message}");
         }
         return new PluginSettingsStore(path, plugins);
     }
@@ -127,7 +127,7 @@ public sealed class PluginSettingsStore
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            System.Diagnostics.Debug.WriteLine($"[hzn-plugins] settings save failed: {ex.Message}");
+            System.Diagnostics.Trace.WriteLine($"[hzn-plugins] settings save failed: {ex.Message}");
         }
     }
 

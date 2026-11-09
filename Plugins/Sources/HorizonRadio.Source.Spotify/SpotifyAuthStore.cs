@@ -33,7 +33,7 @@ public sealed class SpotifyAuthStore
             "HorizonRadio", "spotify-auth.dat");
     }
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-spotify-auth] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-spotify-auth] {msg}");
 
     /// <summary>The stored refresh token, or null if none / unreadable.</summary>
     public string? Load()

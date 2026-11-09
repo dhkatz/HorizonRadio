@@ -84,7 +84,7 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
     // debugger, so pause/resume/recovery behaviour is diagnosable from a normal run.
     private static void Log(string msg)
     {
-        Debug.WriteLine($"[hzn-spotify-svc] {msg}");
+        Trace.WriteLine($"[hzn-spotify-svc] {msg}");
         Diagnostics.ProcessConsole.Append("spotify", msg);
     }
 

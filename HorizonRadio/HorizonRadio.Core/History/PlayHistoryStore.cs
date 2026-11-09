@@ -109,7 +109,7 @@ public sealed class PlayHistoryStore
             "HorizonRadio",
             "history.json");
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-history] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-history] {msg}");
 
     public static PlayHistoryStore LoadFromDisk(string? path = null)
     {

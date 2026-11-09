@@ -45,7 +45,7 @@ public sealed class SpeakerPcmSink : ISpeakerOutput
     private Session? _lost;
     private volatile float _volume = 1.0f;
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-speaker] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-speaker] {msg}");
 
     /// <param name="sampleRate">PCM rate of the samples passed to <see cref="Send"/>.
     /// Defaults to the pipeline format (44.1 kHz); the game-capture path uses 48 kHz.</param>

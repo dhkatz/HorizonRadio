@@ -140,7 +140,7 @@ public sealed partial class MixesViewModel : ViewModelBase
             _entryTitles[key] = $"{src}: {items[0].Metadata.Title}";
             Dispatcher.UIThread.Post(() => row.Summary = BuildSummary(m));
         }
-        catch (Exception ex) { Debug.WriteLine($"[hzn-mixes-vm] resolve summary: {ex.Message}"); }
+        catch (Exception ex) { Trace.WriteLine($"[hzn-mixes-vm] resolve summary: {ex.Message}"); }
         finally { ResolveGate.Release(); }
     }
 
@@ -280,7 +280,7 @@ public sealed partial class MixesViewModel : ViewModelBase
         catch (Exception ex)
         {
             Fail(ex.Message);
-            Debug.WriteLine($"[hzn-mixes-vm] play failed: {ex}");
+            Trace.WriteLine($"[hzn-mixes-vm] play failed: {ex}");
         }
     }
 

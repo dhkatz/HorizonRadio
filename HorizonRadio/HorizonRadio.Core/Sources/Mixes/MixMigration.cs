@@ -22,7 +22,7 @@ public static class MixMigration
             "HorizonRadio",
             "profiles.json");
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-mix-migrate] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-mix-migrate] {msg}");
 
     /// <summary>
     /// If <paramref name="store"/> has no mixes yet, populate it from the legacy

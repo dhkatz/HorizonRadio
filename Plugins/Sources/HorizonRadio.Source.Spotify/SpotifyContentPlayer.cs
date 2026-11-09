@@ -59,7 +59,7 @@ public sealed class SpotifyContentPlayer(SpotifyConnection connection, SpotifyPl
 
     private static void Log(string msg)
     {
-        Debug.WriteLine($"[hzn-spotify-content] {msg}");
+        Trace.WriteLine($"[hzn-spotify-content] {msg}");
         Diagnostics.ProcessConsole.Append("spotify", msg);
     }
 

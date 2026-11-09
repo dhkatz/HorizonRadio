@@ -22,7 +22,7 @@ public static class BrowserLauncher
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[hzn-browser] open failed: {ex.Message}");
+            Trace.WriteLine($"[hzn-browser] open failed: {ex.Message}");
             return false;
         }
     }

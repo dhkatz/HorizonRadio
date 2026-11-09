@@ -79,6 +79,9 @@ public partial class App : Application
         {
             // Re-arm opt-in metadata diagnostics if the user left them on (or HZN_META_TRACE is set)
             // before any source can emit, so the first song of the session is captured too.
+            // Everything the Console tab shows, and the app's own debug lines, also go to a file per
+            // session (%LOCALAPPDATA%\HorizonRadio\logs), so a failure can be read afterwards.
+            HorizonRadio.Core.Diagnostics.LogFile.Start();
             HorizonRadio.Core.Diagnostics.MetadataTrace.RestoreFromSettings();
 
             // Discover the source plugins by scanning the loaded plugin assemblies (rather than naming
@@ -381,6 +384,7 @@ public partial class App : Application
                     if (_game != null) await _game.DisposeAsync();
                     // Dispose the container last — it owns the leaf singletons (stores + cache).
                     await provider.DisposeAsync();
+                    HorizonRadio.Core.Diagnostics.LogFile.Stop();
                 };
 
                 // Background provisioning-freshness check: surface stale tools
@@ -405,7 +409,7 @@ public partial class App : Application
         if (Environment.ProcessPath is { } exe)
         {
             try { System.Diagnostics.Process.Start(exe); }
-            catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[hzn-app] restart failed: {ex.Message}"); }
+            catch (Exception ex) { System.Diagnostics.Trace.WriteLine($"[hzn-app] restart failed: {ex.Message}"); }
         }
         desktop.Shutdown();
     }

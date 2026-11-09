@@ -60,7 +60,7 @@ public static class MetadataCatalog
             }
             catch (System.Exception ex)
             {
-                Debug.WriteLine($"[hzn-meta] skip {id}: {ex.Message}");
+                Trace.WriteLine($"[hzn-meta] skip {id}: {ex.Message}");
             }
         }
 

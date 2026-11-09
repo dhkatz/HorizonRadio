@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Session logs on disk.** Everything the Console tab shows, plus the app's own diagnostic
+  lines (the queue, sources, metadata), is also written to
+  `%LOCALAPPDATA%\HorizonRadio\logs`, one file per session (the last 10 are kept), so a
+  problem can be looked into after it happened.
 - **Radio lyrics follow the song from its audio.** When a radio song has synced lyrics, Horizon
   Radio lines the station's audio up against a recording of the song (its video on YouTube or
   Niconico, from VocaDB or a search) and follows the lyrics from exactly where the song is, to a

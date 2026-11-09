@@ -55,7 +55,7 @@ public sealed class MetadataResolver : IAsyncDisposable
     // what we have. Long enough that a fast set of providers gives one update, not two.
     private static readonly TimeSpan EarlyGrace = TimeSpan.FromMilliseconds(400);
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-resolve] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-resolve] {msg}");
 
     /// <summary>Swap the live contributor set + policy (from the Metadata tab).</summary>
     public void Configure(IReadOnlyList<IMetadataProvider> contributors, MetadataPolicy policy)

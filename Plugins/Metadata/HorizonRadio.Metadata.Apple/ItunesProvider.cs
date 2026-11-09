@@ -48,7 +48,7 @@ public sealed class ItunesProvider : IMetadataProvider
         _storefronts = new[] { primary, "jp", "us" }.Distinct().ToList();
     }
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-itunes] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-itunes] {msg}");
 
     public async Task<MetadataContribution?> ContributeAsync(MetadataQuery query, CancellationToken ct)
     {

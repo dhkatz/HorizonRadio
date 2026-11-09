@@ -60,7 +60,7 @@ public sealed class SubprocessPcmSource(SubprocessPcmSource.Config config) : IAs
     private CancellationTokenSource? _cts;
     private long _pcmBytes;
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-subproc] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-subproc] {msg}");
 
     public bool IsRunning => _process is { HasExited: false };
 

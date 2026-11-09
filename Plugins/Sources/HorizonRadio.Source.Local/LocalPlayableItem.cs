@@ -58,7 +58,7 @@ public sealed class LocalPlayableItem : PlayableItem
         Interlocked.Exchange(ref _positionTicks, ticks);
     }
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-local-item] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-local-item] {msg}");
 
     public override Task PrepareAsync(CancellationToken ct) => PrepareOnceAsync(_ =>
     {

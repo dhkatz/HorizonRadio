@@ -325,7 +325,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         {
             var target = TimeSpan.FromSeconds(PositionSeconds);
             try { _ = _progress.SeekAsync(target); }
-            catch (Exception ex) { Debug.WriteLine($"[hzn-now-vm] seek: {ex.Message}"); }
+            catch (Exception ex) { Trace.WriteLine($"[hzn-now-vm] seek: {ex.Message}"); }
         }
     }
 
@@ -359,7 +359,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     private static async Task ApplyShuffleAsync(PlaybackRouter playback, bool value)
     {
         try { await playback.SetShuffleAsync(value); }
-        catch (Exception ex) { Debug.WriteLine($"[hzn-now-vm] shuffle: {ex.Message}"); }
+        catch (Exception ex) { Trace.WriteLine($"[hzn-now-vm] shuffle: {ex.Message}"); }
     }
 
     partial void OnSelectedOutputChanged(OutputTarget? value)
@@ -477,7 +477,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     {
         if (_transport == null) return;
         try { await _transport.SetPausedAsync(true); }
-        catch (Exception ex) { Debug.WriteLine($"[hzn-now-vm] output-pause: {ex.Message}"); }
+        catch (Exception ex) { Trace.WriteLine($"[hzn-now-vm] output-pause: {ex.Message}"); }
     }
 
     private void OnPausedChanged(bool paused) =>
@@ -491,7 +491,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         // output auto-pause so we don't override their choice.
         _needsOutputPause = false;
         try { await _transport.TogglePauseAsync(); }
-        catch (Exception ex) { Debug.WriteLine($"[hzn-now-vm] pause: {ex.Message}"); }
+        catch (Exception ex) { Trace.WriteLine($"[hzn-now-vm] pause: {ex.Message}"); }
     }
 
     [RelayCommand]
@@ -499,7 +499,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     {
         if (_transport == null) return;
         try { await _transport.NextAsync(); }
-        catch (Exception ex) { Debug.WriteLine($"[hzn-now-vm] next: {ex.Message}"); }
+        catch (Exception ex) { Trace.WriteLine($"[hzn-now-vm] next: {ex.Message}"); }
     }
 
     [RelayCommand]
@@ -507,7 +507,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     {
         if (_transport == null) return;
         try { await _transport.PreviousAsync(); }
-        catch (Exception ex) { Debug.WriteLine($"[hzn-now-vm] prev: {ex.Message}"); }
+        catch (Exception ex) { Trace.WriteLine($"[hzn-now-vm] prev: {ex.Message}"); }
     }
 
     /// <summary>Designer ctor — no runner, dropdown is inert.</summary>
@@ -565,7 +565,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         }
         catch (MissingToolException ex)
         {
-            Debug.WriteLine($"[hzn-now-vm] quick play blocked: {ex.Message}");
+            Trace.WriteLine($"[hzn-now-vm] quick play blocked: {ex.Message}");
             SwitchStatus = ex.Message;
             _toasts?.CreateToast("Tool required")
                 .WithContent(ex.Message)
@@ -575,7 +575,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[hzn-now-vm] quick play failed: {ex.Message}");
+            Trace.WriteLine($"[hzn-now-vm] quick play failed: {ex.Message}");
             SwitchStatus = ex.Message;
             _toasts?.CreateToast($"Couldn't start {source.DisplayName}")
                 .WithContent(ex.Message)
@@ -599,7 +599,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         {
             // Not a failure so much as a setup prompt — surface it as a
             // warning that points the user at the Tools tab.
-            Debug.WriteLine($"[hzn-now-vm] switch blocked: {ex.Message}");
+            Trace.WriteLine($"[hzn-now-vm] switch blocked: {ex.Message}");
             SwitchStatus = ex.Message;
             _toasts?.CreateToast("Tool required")
                 .WithContent(ex.Message)
@@ -609,7 +609,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[hzn-now-vm] switch failed: {ex.Message}");
+            Trace.WriteLine($"[hzn-now-vm] switch failed: {ex.Message}");
             SwitchStatus = $"{factory.DisplayName}: {ex.Message}";
             // The dashboard no longer shows SwitchStatus inline (controls moved
             // to the player bar), so surface the failure as a toast.
@@ -692,7 +692,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         }
         catch (MissingToolException ex)
         {
-            Debug.WriteLine($"[hzn-now-vm] mix switch blocked: {ex.Message}");
+            Trace.WriteLine($"[hzn-now-vm] mix switch blocked: {ex.Message}");
             SwitchStatus = ex.Message;
             _toasts?.CreateToast("Tool required")
                 .WithContent(ex.Message)
@@ -702,7 +702,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[hzn-now-vm] mix switch failed: {ex.Message}");
+            Trace.WriteLine($"[hzn-now-vm] mix switch failed: {ex.Message}");
             SwitchStatus = ex.Message; // already includes the mix name
             _toasts?.CreateToast($"Couldn't start “{mix.Name}”")
                 .WithContent(ex.Message)

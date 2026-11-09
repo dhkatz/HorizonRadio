@@ -59,7 +59,7 @@ public sealed class EnrichmentService : IAsyncDisposable
                 TrackEnriched?.Invoke(enriched);
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) { Debug.WriteLine($"[hzn-enrich] {ex.GetType().Name}: {ex.Message}"); }
+            catch (Exception ex) { Trace.WriteLine($"[hzn-enrich] {ex.GetType().Name}: {ex.Message}"); }
         }, ct);
     }
 

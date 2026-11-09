@@ -134,7 +134,7 @@ public sealed class RadioPlayableItem : PlayableItem, ILiveSongAudio
         }
     }
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-radio] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-radio] {msg}");
 
     private Track BuildTrack(string? songTitle, string? songArtist, IReadOnlyList<TitleCandidate>? candidates = null)
     {

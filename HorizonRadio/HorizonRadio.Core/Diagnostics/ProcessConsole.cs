@@ -18,7 +18,7 @@ public readonly record struct ConsoleLine(DateTime TimestampUtc, string Tool, st
 ///
 /// Deliberately static: the producers are created deep inside source
 /// factories that don't take a logging dependency, and the existing code
-/// already logs via static <c>Debug.WriteLine</c> helpers — this mirrors
+/// already logs via static <c>Trace.WriteLine</c> helpers — this mirrors
 /// that shape while making the output user-visible. A bounded ring buffer
 /// keeps memory flat during long sessions.
 /// </summary>
