@@ -117,11 +117,15 @@ public sealed class AudioTapTests
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             await using var tap = await AudioTap.AttachAsync(child, dll, cts.Token);
             var logged = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-            tap.Log += line => logged.TrySetResult(line);
+            // "hooks installed" with an audio device; without one (CI) the reason it couldn't open the
+            // device comes first, then "hooks NOT installed…". Either way the tap loaded, set up and
+            // talks over its pipe.
+            tap.Log += line =>
+            {
+                if (line.StartsWith("hooks", StringComparison.Ordinal)) logged.TrySetResult(line);
+            };
             var reading = tap.RunAsync(new CollectingSink(), cts.Token);
 
-            // "hooks installed" with an audio device, "hooks NOT installed…" without (CI): either way
-            // the tap loaded, set up and talks over its pipe.
             var line = await logged.Task.WaitAsync(cts.Token);
             Assert.StartsWith("hooks", line, StringComparison.Ordinal);
             await cts.CancelAsync();
