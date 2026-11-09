@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Spotify Soloist in the Tools tab.** Installs Spotify's own Connect client straight from
+  Spotify, checked against the checksum Spotify's servers give, and shows when Spotify has a
+  newer build (each one stops working 90 days after release). The Spotify settings have a place
+  for your Soloist key; playback through Soloist comes next.
 - **Session logs on disk.** Everything the Console tab shows, plus the app's own diagnostic
   lines (the queue, sources, metadata), is also written to
   `%LOCALAPPDATA%\HorizonRadio\logs`, one file per session (the last 10 are kept), so a
@@ -149,6 +153,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Secret settings are encrypted.** A setting that's a credential (the Soloist key) is stored
+  encrypted for your Windows account instead of in plain text in `sources.json`, and its box
+  shows dots instead of the text.
 - **A Spotify track Spotify won't play fails at once, with the reason.** When Spotify refuses
   librespot the audio (it does for more and more accounts, librespot #1649), the track used to
   hang for 15 seconds and fail with "the device may be unavailable". It now moves on within a

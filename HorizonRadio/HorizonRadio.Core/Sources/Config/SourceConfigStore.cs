@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using HorizonRadio.Core.IO;
 
@@ -22,6 +23,9 @@ namespace HorizonRadio.Core.Sources.Config;
 ///   }
 /// }
 /// </code>
+///
+/// A secret field (<see cref="TextField.IsSecret"/>) is written encrypted (<see cref="SecretText"/>)
+/// and read back in the clear; the rest is plain.
 ///
 /// Storage uses <see cref="object"/> values to round-trip JSON
 /// primitives (string/bool/number); <see cref="ConfigValues"/>'s typed
@@ -103,6 +107,8 @@ public sealed class SourceConfigStore
     /// if no entry exists yet, so callers always get a usable bag.</summary>
     public ConfigValues Load(string sourceId, IReadOnlyList<ConfigField> schema)
     {
+        foreach (var secret in schema.OfType<TextField>().Where(f => f.IsSecret))
+            MarkSecret(sourceId, secret.Key);
         var values = new ConfigValues();
         if (_perSource.TryGetValue(sourceId, out var stored))
         {
@@ -110,6 +116,24 @@ public sealed class SourceConfigStore
         }
         values.ApplyDefaults(schema);
         return values;
+    }
+
+    // Keys written encrypted, per source: the schema's secret fields (seen on Load) and any value
+    // that was encrypted on disk, so a secret stays encrypted even if saved before its schema loads.
+    private readonly Dictionary<string, HashSet<string>> _secretKeys = new();
+
+    private void MarkSecret(string sourceId, string key)
+    {
+        lock (_secretKeys)
+        {
+            if (!_secretKeys.TryGetValue(sourceId, out var keys)) _secretKeys[sourceId] = keys = new HashSet<string>();
+            keys.Add(key);
+        }
+    }
+
+    private bool IsSecret(string sourceId, string key)
+    {
+        lock (_secretKeys) return _secretKeys.TryGetValue(sourceId, out var keys) && keys.Contains(key);
     }
 
     /// <summary>Replace the stored values for one source.</summary>
@@ -180,7 +204,15 @@ public sealed class SourceConfigStore
                     if (src.Value.ValueKind != JsonValueKind.Object) continue;
                     var bag = new Dictionary<string, object?>();
                     foreach (var prop in src.Value.EnumerateObject())
-                        bag[prop.Name] = JsonElementToObject(prop.Value);
+                    {
+                        var value = JsonElementToObject(prop.Value);
+                        if (value is string text && SecretText.IsProtected(text))
+                        {
+                            store.MarkSecret(src.Name, prop.Name);
+                            value = SecretText.Unprotect(text);
+                        }
+                        bag[prop.Name] = value;
+                    }
                     store._perSource[src.Name] = bag;
                 }
             }
@@ -233,7 +265,13 @@ public sealed class SourceConfigStore
                 foreach (var (sourceId, bag) in _perSource)
                 {
                     writer.WriteStartObject(sourceId);
-                    foreach (var (k, v) in bag) WriteValue(writer, k, v);
+                    foreach (var (k, v) in bag)
+                    {
+                        var stored = v is string { Length: > 0 } plain && IsSecret(sourceId, k)
+                            ? SecretText.Protect(plain)
+                            : v;
+                        WriteValue(writer, k, stored);
+                    }
                     writer.WriteEndObject();
                 }
                 writer.WriteEndObject();

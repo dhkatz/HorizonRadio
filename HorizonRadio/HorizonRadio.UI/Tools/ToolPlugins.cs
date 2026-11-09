@@ -3,6 +3,7 @@ using System.Linq;
 using HorizonRadio.Core.Tools;
 using HorizonRadio.Tools.FFmpeg;
 using HorizonRadio.Tools.Librespot;
+using HorizonRadio.Tools.Soloist;
 using HorizonRadio.Tools.TitleModel;
 using HorizonRadio.Tools.YtDlp;
 
@@ -21,6 +22,7 @@ public static class ToolPlugins
         new YtDlpToolPlugin(),
         new FfmpegToolPlugin(),
         new LibrespotToolPlugin(),
+        new SoloistToolPlugin(),
         new TitleModelToolPlugin(),
     ];
 

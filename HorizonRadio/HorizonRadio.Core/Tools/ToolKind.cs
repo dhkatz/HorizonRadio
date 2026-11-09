@@ -16,6 +16,10 @@ public static class ToolKind
     public const string Ffmpeg = "ffmpeg";
     public const string Librespot = "librespot";
 
+    /// <summary>Spotify Soloist, Spotify's own Connect client: plays the Spotify tracks librespot is
+    /// refused, through the Spotify plugin's audio tap.</summary>
+    public const string Soloist = "soloist";
+
     /// <summary>The optional local title-extraction model — a single GGUF file (not an exe),
     /// downloaded via the Tools tab. See <see cref="ToolsPaths.ModelFor"/>.</summary>
     public const string TitleModel = "title-model";

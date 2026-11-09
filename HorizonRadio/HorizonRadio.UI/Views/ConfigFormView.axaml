@@ -101,6 +101,7 @@
             <StackPanel Spacing="4">
                 <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="Medium"/>
                 <TextBox Text="{Binding Text, Mode=TwoWay}"
+                         PasswordChar="{Binding PasswordChar}"
                          PlaceholderText="{Binding Placeholder}"/>
                 <TextBlock Text="{Binding Description}"
                            FontSize="11" Opacity="0.55"
