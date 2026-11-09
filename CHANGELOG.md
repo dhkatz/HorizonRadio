@@ -13,8 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   refuses librespot the audio of some tracks, and for some accounts all of them. Once Soloist is
   installed (Tools tab) and your Soloist key is in the Spotify settings, those tracks play through
   Soloist, Spotify's own Connect client, into the game like any other, and Soloist itself stays
-  silent. After the first refusal, later tracks go straight to Soloist. The first time, pick
-  "Horizon Radio (Soloist)" once in the Spotify app to log it in. This is against Spotify's
+  silent. After the first refusal, later tracks go straight to Soloist. The first time, a toast
+  asks you to pick "Horizon Radio (Soloist)" once in the Spotify app to log it in, and the track
+  waits (up to 3 minutes) and plays once you have. This is against Spotify's
   developer terms and could get the key revoked.
 - **Spotify Soloist in the Tools tab.** Installs Spotify's own Connect client straight from
   Spotify, checked against the checksum Spotify's servers give, and shows when Spotify has a
@@ -160,6 +161,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Source settings save as you edit them.** The Sources tab only saved a source's settings
+  when you pressed Play, Start or Connect there, so a setting typed in and then used from
+  elsewhere (the Soloist key, then a track played from search) was never saved. When Spotify
+  refuses librespot a track and Soloist can't take over, the Console now says what's missing.
 - **Secret settings are encrypted.** A setting that's a credential (the Soloist key) is stored
   encrypted for your Windows account instead of in plain text in `sources.json`, and its box
   shows dots instead of the text.

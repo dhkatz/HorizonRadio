@@ -28,6 +28,11 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
     private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan TrackTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan StallTimeout = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan RestoreTimeout = TimeSpan.FromSeconds(8);
+    private static readonly TimeSpan PairingTimeout = TimeSpan.FromMinutes(3);
+    private static readonly TimeSpan RetryInterval = TimeSpan.FromSeconds(4);
+    private static readonly TimeSpan HandoverSettle = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan ResumeInterval = TimeSpan.FromSeconds(1);
 
     private readonly Func<SoloistOptions?> _options;
     private readonly Func<string?> _tapDll;
@@ -41,7 +46,6 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
     private ClientWebSocket? _socket;
     private CancellationTokenSource? _lifetime;
     private TaskCompletionSource<bool>? _authKnown;
-    private TaskCompletionSource? _loggedInSignal;
     private volatile bool _loggedIn;
     private volatile bool _isActive;
 
@@ -63,7 +67,17 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
     }
 
     /// <summary>A key, soloist.exe and the tap are all there: refused tracks can play here.</summary>
-    public bool IsConfigured => _options() != null && _tapDll() != null;
+    public bool IsConfigured => NotReadyReason == null;
+
+    /// <summary>What's missing for <see cref="IsConfigured"/>, or null when nothing is.</summary>
+    public string? NotReadyReason =>
+        _options() == null ? "add a Spotify Soloist key in the Spotify settings and install Soloist from the Tools tab"
+        : _tapDll() == null ? $"this build doesn't include {AudioTap.DllName}"
+        : null;
+
+    /// <summary>Soloist isn't paired and a track is waiting for the user to pick this device
+    /// (the argument) in the Spotify app. Raised on a background thread.</summary>
+    public event Action<string>? PairingNeeded;
 
     public TimeSpan Position
     {
@@ -89,6 +103,7 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
     {
         ArgumentNullException.ThrowIfNull(ctx);
         await EnsureStartedAsync(ct).ConfigureAwait(false);
+        await WaitForLoginAsync(ct).ConfigureAwait(false);
 
         var track = new SoloistTrack(trackUri, duration, ctx.IsPaused);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -109,12 +124,13 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
             if (!_isActive) await SendAsync("activate", ct).ConfigureAwait(false);
             await SendAsync("play", ct, ("uri", trackUri)).ConfigureAwait(false);
 
-            await WaitStepAsync(started.Task, "Soloist didn't start the track", ct).ConfigureAwait(false);
-            await WaitStepAsync(playing.Task, "Soloist started the track but no audio came", ct).ConfigureAwait(false);
+            await WaitUntilPlayingAsync(trackUri, started.Task, playing.Task, ct).ConfigureAwait(false);
 
-            // Until it ends: follow the user's pause, and give up on a stream that's gone quiet.
+            // Until it ends: follow the user's pause, undo a pause from elsewhere (the Spotify app,
+            // a handover: the queue is what plays here), and give up on a stream that's gone quiet.
             var lastFrames = _routing.Frames;
             var quiet = Stopwatch.StartNew();
+            var sinceResume = Stopwatch.StartNew();
             while (!ended.Task.IsCompleted)
             {
                 if (ctx.IsPaused() != pausedHere)
@@ -122,6 +138,13 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
                     pausedHere = !pausedHere;
                     await SendAsync(pausedHere ? "pause" : "play", ct).ConfigureAwait(false);
                     quiet.Restart();
+                    sinceResume.Restart();
+                }
+                else if (!pausedHere && track.IsPaused && sinceResume.Elapsed > ResumeInterval)
+                {
+                    Log("Soloist paused without the user pausing here: resuming");
+                    await SendAsync("play", ct).ConfigureAwait(false);
+                    sinceResume.Restart();
                 }
                 if (_routing.Frames != lastFrames || pausedHere)
                 {
@@ -162,10 +185,36 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
         catch (Exception ex) when (ex is WebSocketException or InvalidOperationException) { Log($"seek: {ex.Message}"); }
     }
 
-    private static async Task WaitStepAsync(Task step, string failure, CancellationToken ct)
+    // Something else can take the device from our play: the Spotify app hands its own playback
+    // over when the user pairs (measured: our track, paused, a few ms after Soloist acknowledged
+    // the play, and the device dropped and regained). So while no audio has come, put the track
+    // back every few seconds.
+    private async Task WaitUntilPlayingAsync(string trackUri, Task started, Task playing, CancellationToken ct)
     {
-        try { await step.WaitAsync(TrackTimeout, ct).ConfigureAwait(false); }
-        catch (TimeoutException) { throw new InvalidOperationException($"{failure} within {TrackTimeout.TotalSeconds:0} s."); }
+        var clock = Stopwatch.StartNew();
+        while (true)
+        {
+            var left = TrackTimeout - clock.Elapsed;
+            if (left > TimeSpan.Zero)
+            {
+                try
+                {
+                    await playing.WaitAsync(left < RetryInterval ? left : RetryInterval, ct).ConfigureAwait(false);
+                    return;
+                }
+                catch (TimeoutException) { }
+            }
+            if (clock.Elapsed >= TrackTimeout)
+            {
+                throw new InvalidOperationException(started.IsCompleted
+                    ? $"Soloist started the track but no audio came within {TrackTimeout.TotalSeconds:0} s."
+                    : $"Soloist didn't start the track within {TrackTimeout.TotalSeconds:0} s.");
+            }
+
+            Log("the track isn't playing yet: asking Soloist again");
+            if (!_isActive) await SendAsync("activate", ct).ConfigureAwait(false);
+            await SendAsync("play", ct, ("uri", trackUri)).ConfigureAwait(false);
+        }
     }
 
     // -- Soloist's process, tap and socket --
@@ -175,11 +224,7 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
         await _startGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (_process is { HasExited: false } && _socket is { State: WebSocketState.Open })
-            {
-                RequireLoggedIn();
-                return;
-            }
+            if (_process is { HasExited: false } && _socket is { State: WebSocketState.Open }) return;
             await StopAsync().ConfigureAwait(false);
 
             var options = _options() ?? throw new SoloistUnavailableException(
@@ -226,23 +271,13 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
 
             var port = await WaitForPortAsync(process, portFile, ct).ConfigureAwait(false);
             _authKnown = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _loggedInSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var socket = new ClientWebSocket();
             await socket.ConnectAsync(new Uri($"ws://127.0.0.1:{port}"), ct).ConfigureAwait(false);
             _socket = socket;
             _ = Task.Run(() => ReceiveAsync(socket, lifetime), CancellationToken.None);
 
-            // Soloist says whether it's logged in as soon as we connect, but a paired Soloist is
-            // still restoring its session then (measured: logged in ~1 s later), so a "no" gets a
-            // few seconds to become a yes before it means "pair it".
             try { await _authKnown.Task.WaitAsync(TimeSpan.FromSeconds(10), ct).ConfigureAwait(false); }
             catch (TimeoutException) { throw new SoloistUnavailableException("Soloist didn't report whether it's logged in."); }
-            if (!_loggedIn)
-            {
-                try { await _loggedInSignal.Task.WaitAsync(TimeSpan.FromSeconds(8), ct).ConfigureAwait(false); }
-                catch (TimeoutException) { }
-            }
-            RequireLoggedIn();
         }
         finally
         {
@@ -250,12 +285,38 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
         }
     }
 
-    private void RequireLoggedIn()
+    // Soloist says whether it's logged in as soon as we connect, but a paired Soloist is still
+    // restoring its session then (measured: logged in ~1 s later), so a "no" gets a few seconds to
+    // become a yes. After that it needs pairing, which only the user can do (in the Spotify app):
+    // say so, and hold the track until they have.
+    private async Task WaitForLoginAsync(CancellationToken ct)
     {
-        if (_loggedIn) return;
-        // Soloist stays running so the user can pair it now; the next track plays once they have.
+        if (await LoggedInWithinAsync(RestoreTimeout, ct).ConfigureAwait(false)) return;
+
+        var device = _options()?.DeviceName ?? Soloist.DefaultDeviceName;
+        Log($"waiting for pairing: pick \"{device}\" in the Spotify app");
+        PairingNeeded?.Invoke(device);
+        if (await LoggedInWithinAsync(PairingTimeout, ct).ConfigureAwait(false))
+        {
+            // Pairing hands the Spotify app's playback to Soloist: let that land before our play.
+            await Task.Delay(HandoverSettle, ct).ConfigureAwait(false);
+            return;
+        }
+
+        // Soloist stays running, so pairing later still works for the next track.
         throw new SoloistUnavailableException(
-            $"Soloist needs pairing once: in the Spotify app, pick the device \"{_options()?.DeviceName ?? Soloist.DefaultDeviceName}\".");
+            $"Soloist needs pairing once: in the Spotify app, pick the device \"{device}\".");
+    }
+
+    private async Task<bool> LoggedInWithinAsync(TimeSpan timeout, CancellationToken ct)
+    {
+        var clock = Stopwatch.StartNew();
+        while (!_loggedIn && clock.Elapsed < timeout)
+        {
+            if (_process is { HasExited: true }) throw new SoloistUnavailableException("Soloist exited while waiting to log in.");
+            await Task.Delay(250, ct).ConfigureAwait(false);
+        }
+        return _loggedIn;
     }
 
     private static async Task<int> WaitForPortAsync(Process process, string portFile, CancellationToken ct)
@@ -313,7 +374,6 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
             if (loggedIn != _loggedIn) Log(loggedIn ? "logged in" : "not logged in: pair it from the Spotify app");
             _loggedIn = loggedIn;
             _authKnown?.TrySetResult(loggedIn);
-            if (loggedIn) _loggedInSignal?.TrySetResult();
         }
         if (e.IsActive is { } active) _isActive = active;
         if (e.Type == "error") Log($"error: {e.Message}");

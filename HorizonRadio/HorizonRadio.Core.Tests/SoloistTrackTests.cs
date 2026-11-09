@@ -83,6 +83,20 @@ public sealed class SoloistTrackTests
     }
 
     [Fact]
+    public void A_pause_from_elsewhere_shows_as_paused_without_ending_the_track()
+    {
+        // Pairing hands the Spotify app's playback over: our track, paused, right after our play.
+        var track = new SoloistTrack(Firestarter, null, () => false);
+        var steps = Feed(track, PlayAccepted, TrackChanged(Firestarter, 187280), Status("paused"));
+        Assert.Equal([SoloistTrackStep.Started], steps);
+        Assert.True(track.IsPaused);
+        Assert.False(track.Ended);
+
+        Assert.Equal(SoloistTrackStep.Playing, track.Apply(SoloistEvent.Parse(Status("playing"))!));
+        Assert.False(track.IsPaused);
+    }
+
+    [Fact]
     public void Replaying_the_loaded_track_starts_from_its_snapshot()
     {
         var track = new SoloistTrack(Firestarter, null, () => false);
