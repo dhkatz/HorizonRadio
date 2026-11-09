@@ -162,6 +162,7 @@ bool InstallHooks() {
             }
         }
     };
+    Log("hooks: opening the device enumerator");
     IMMDeviceEnumerator* enumerator = nullptr;
     HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&enumerator));
     if (FAILED(hr)) {
@@ -170,6 +171,7 @@ bool InstallHooks() {
     }
     const std::unique_ptr<IMMDeviceEnumerator, Releaser> enumerator_guard(enumerator);
     IMMDevice*                                           device = nullptr;
+    Log("hooks: finding the default output");
     hr = enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &device);
     if (FAILED(hr)) {
         LogHr("GetDefaultAudioEndpoint", hr);
@@ -177,6 +179,7 @@ bool InstallHooks() {
     }
     const std::unique_ptr<IMMDevice, Releaser> device_guard(device);
     IAudioClient*                              client = nullptr;
+    Log("hooks: opening a client on it");
     hr = device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, reinterpret_cast<void**>(&client));
     if (FAILED(hr)) {
         LogHr("Activate(IAudioClient)", hr);
@@ -253,10 +256,21 @@ bool InstallHooks() {
     }
 }
 
+DWORD WINAPI Serve(void* /*unused*/) {
+    ServePipe();
+}
+
+// The pipe comes up first, on its own thread, so the app can read the steps below even if one
+// of them never returns.
 DWORD WINAPI Start(void* /*unused*/) {
+    HANDLE serve = CreateThread(nullptr, 0, Serve, nullptr, 0, nullptr);
+    if (serve != nullptr) {
+        CloseHandle(serve);
+    }
     CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     Log(InstallHooks() ? "hooks installed" : "hooks NOT installed: the process plays out loud");
-    ServePipe();
+    CoUninitialize();
+    return 0;
 }
 
 } // namespace

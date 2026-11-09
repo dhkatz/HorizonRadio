@@ -116,18 +116,13 @@ public sealed class AudioTapTests
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
             await using var tap = await AudioTap.AttachAsync(child, dll, cts.Token);
-            var logged = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-            // "hooks installed" with an audio device; without one (CI) the reason it couldn't open the
-            // device comes first, then "hooks NOT installed…". Either way the tap loaded, set up and
-            // talks over its pipe.
-            tap.Log += line =>
-            {
-                if (line.StartsWith("hooks", StringComparison.Ordinal)) logged.TrySetResult(line);
-            };
             var reading = tap.RunAsync(new CollectingSink(), cts.Token);
 
-            var line = await logged.Task.WaitAsync(cts.Token);
-            Assert.StartsWith("hooks", line, StringComparison.Ordinal);
+            // Installed with an audio device; without one (CI) the reason it couldn't open the device
+            // comes first, then "hooks NOT installed…". Either way the tap loaded, set up and talks
+            // over its pipe.
+            await tap.Hooked.WaitAsync(cts.Token);
+            Assert.StartsWith("hooks", tap.LastLog, StringComparison.Ordinal);
             await cts.CancelAsync();
             try { await reading; } catch (OperationCanceledException) { }
         }
@@ -149,11 +144,9 @@ public sealed class AudioTapTests
         NativeLibrary.Load(dll);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         await using var tap = await AudioTap.ConnectAsync(Environment.ProcessId, cts.Token);
-        var installed = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        tap.Log += line => installed.TrySetResult(line);
         var sink = new CollectingSink();
         var reading = tap.RunAsync(sink, cts.Token);
-        Assert.Equal("hooks installed", await installed.Task.WaitAsync(cts.Token));
+        Assert.True(await tap.Hooked.WaitAsync(cts.Token), tap.LastLog);
 
         var tone = new SignalGenerator(48000, 2) { Type = SignalGeneratorType.Sin, Frequency = 1000, Gain = 0.25 }
             .Take(TimeSpan.FromSeconds(1.5));
