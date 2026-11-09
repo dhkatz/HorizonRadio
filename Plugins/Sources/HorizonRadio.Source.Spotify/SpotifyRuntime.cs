@@ -17,9 +17,14 @@ public static class SpotifyRuntime
     public static SpotifyConnection? Connection { get; private set; }
     public static SpotifyPlaybackService? Playback { get; private set; }
 
-    public static void Initialize(SpotifyConnection connection, SpotifyPlaybackService playback)
+    /// <summary>Plays the tracks Spotify refuses librespot (when the user has set Soloist up).</summary>
+    public static SoloistPlaybackService? Soloist { get; private set; }
+
+    public static void Initialize(SpotifyConnection connection, SpotifyPlaybackService playback,
+                                  SoloistPlaybackService? soloist = null)
     {
         Connection = connection;
         Playback = playback;
+        Soloist = soloist;
     }
 }

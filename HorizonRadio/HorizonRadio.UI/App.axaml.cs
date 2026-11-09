@@ -34,6 +34,8 @@ using HorizonRadio.Core.Tools;
 using HorizonRadio.Plugins.Abstractions;
 using HorizonRadio.TitleModel;
 using HorizonRadio.Tools.Librespot;
+
+using HorizonRadio.Tools.Soloist;
 using HorizonRadio.UI.Services;
 using HorizonRadio.UI.Tools;
 using HorizonRadio.UI.ViewModels;
@@ -65,6 +67,7 @@ public partial class App : Application
     private InputBindingService? _inputService;
     private SpotifyConnection? _spotifyConnection;
     private SpotifyPlaybackService? _spotifyPlayback;
+    private SoloistPlaybackService? _soloistPlayback;
     private PlayHistoryStore? _historyStore;
     private PlayHistoryService? _historyService;
 
@@ -169,7 +172,10 @@ public partial class App : Application
                         .GetString(SpotifyContentSourceFactory.KeyClientId) ?? "");
                 _spotifyPlayback = new SpotifyPlaybackService(
                     _spotifyConnection, () => LoadLibrespotOptions(_store!, spotifyFactory));
-                SpotifyRuntime.Initialize(_spotifyConnection, _spotifyPlayback);
+                // The tracks Spotify refuses librespot play through Spotify Soloist once the user
+                // has set it up (its key + soloist.exe), read fresh on each Soloist start.
+                _soloistPlayback = new SoloistPlaybackService(() => LoadSoloistOptions(_store!, spotifyFactory));
+                SpotifyRuntime.Initialize(_spotifyConnection, _spotifyPlayback, _soloistPlayback);
 
                 // The driven service and the zero-config "Spotify Connect" receiver both
                 // drive the "Horizon Radio" librespot device; when the receiver (id
@@ -379,6 +385,7 @@ public partial class App : Application
                     await router.DisposeAsync(); // stops the engine; disposes parked channels and the player
                     if (_runner != null) await _runner.DisposeAsync();
                     if (_spotifyPlayback != null) await _spotifyPlayback.DisposeAsync();
+                    if (_soloistPlayback != null) await _soloistPlayback.DisposeAsync();
                     if (_spotifyConnection != null) await _spotifyConnection.DisposeAsync();
                     // After the runner, so nothing is still sending audio to the game.
                     if (_game != null) await _game.DisposeAsync();
@@ -432,6 +439,16 @@ public partial class App : Application
             Bitrate = cfg.GetString(SpotifyContentSourceFactory.KeyBitrate) ?? "auto",
             EnableVolumeNormalisation = cfg.GetBool(SpotifyContentSourceFactory.KeyNormalise, true),
         };
+    }
+
+    // The user's Soloist setup, or null while it's incomplete (no key, or no soloist.exe).
+    private static SoloistOptions? LoadSoloistOptions(SourceConfigStore store, SpotifyContentSourceFactory factory)
+    {
+        var cfg = store.Load(factory.Id, factory.Schema);
+        var key = cfg.GetString(SpotifyContentSourceFactory.KeySoloistKey)?.Trim();
+        var exe = Or(cfg.GetString(SpotifyContentSourceFactory.KeySoloistExecutable), Soloist.DiscoverExe() ?? "");
+        if (string.IsNullOrEmpty(key) || !System.IO.File.Exists(exe)) return null;
+        return new SoloistOptions { ExecutablePath = exe, ApiKey = key };
     }
 
     private static async void CheckAppUpdateAsync(MainWindowViewModel vm)

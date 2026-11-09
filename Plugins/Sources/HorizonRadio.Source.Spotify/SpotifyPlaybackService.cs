@@ -51,6 +51,10 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
     // refused its audio key (seen on stderr since the play began).
     private TaskCompletionSource<bool>? _trackRefused;
     private volatile bool _keyRefused;
+
+    /// <summary>Spotify refused librespot a track's audio key this session. It refuses per
+    /// account, so later tracks can skip librespot (and the second it takes to be refused).</summary>
+    public bool AudioKeyRefused { get; private set; }
     private Action? _onPlaying;
     private bool _playingFired;
 
@@ -224,6 +228,7 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
                     Log(keyRefused
                         ? "play: Spotify refused the track's audio key to librespot"
                         : "play: librespot reports the track unavailable");
+                    if (keyRefused) AudioKeyRefused = true;
                     throw new SpotifyTrackUnavailableException(trackUri, keyRefused);
                 }
 

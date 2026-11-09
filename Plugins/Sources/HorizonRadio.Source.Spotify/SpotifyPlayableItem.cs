@@ -26,13 +26,18 @@ public sealed class SpotifyPlayableItem : PlayableItem
 
     private readonly SpotifyTrackInfo _info;
     private readonly SpotifyPlaybackService _playback;
+    private readonly SoloistPlaybackService? _soloist;
+    // This play went to Soloist: position and seek follow it.
+    private volatile bool _viaSoloist;
     private byte[]? _art;
     private bool _artFetched;
 
-    public SpotifyPlayableItem(SpotifyTrackInfo info, SpotifyPlaybackService playback)
+    public SpotifyPlayableItem(SpotifyTrackInfo info, SpotifyPlaybackService playback,
+                               SoloistPlaybackService? soloist = null)
     {
         _info = info;
         _playback = playback;
+        _soloist = soloist ?? SpotifyRuntime.Soloist;
         Duration = info.Duration;
         Metadata = BuildTrack(art: null);
     }
@@ -40,9 +45,11 @@ public sealed class SpotifyPlayableItem : PlayableItem
     // Position/seek come from the playback service (valid while this is the active
     // item — the engine plays one item at a time, so the shared service's state is
     // this track's state).
-    public override TimeSpan Position => _playback.Position;
+    public override TimeSpan Position => _viaSoloist && _soloist != null ? _soloist.Position : _playback.Position;
     public override bool CanSeek => true;
-    public override void Seek(TimeSpan position) => _ = _playback.SeekAsync(position);
+
+    public override void Seek(TimeSpan position) =>
+        _ = _viaSoloist && _soloist != null ? _soloist.SeekAsync(position) : _playback.SeekAsync(position);
 
     private static void Log(string msg) => Trace.WriteLine($"[hzn-spotify-item] {msg}");
 
@@ -82,15 +89,39 @@ public sealed class SpotifyPlayableItem : PlayableItem
     {
         await PrepareAsync(ct).ConfigureAwait(false);
 
-        // OnStarted fires when librespot actually begins streaming (timed to real
-        // audio, not the laggy play command), publishing the now-final metadata.
-        await _playback.PlayTrackAsync(
-            _info.Uri, _info.Duration, ctx,
-            onPlaying: () =>
-            {
-                ctx.OnStarted?.Invoke(this);
-                // Resuming mid-track: seek once librespot is streaming this track.
-                if (ctx.StartPosition?.Invoke(this) is { Ticks: > 0 } start) Seek(start);
-            }, ct).ConfigureAwait(false);
+        // OnStarted fires when the audio actually begins (timed to real audio, not the laggy play
+        // command), publishing the now-final metadata.
+        void OnPlaying()
+        {
+            ctx.OnStarted?.Invoke(this);
+            // Resuming mid-track: seek once this track is streaming.
+            if (ctx.StartPosition?.Invoke(this) is { Ticks: > 0 } start) Seek(start);
+        }
+
+        // Spotify refuses librespot per account: once it has this session, don't wait to be
+        // refused again.
+        var soloistReady = _soloist is { IsConfigured: true };
+        if (soloistReady && _playback.AudioKeyRefused)
+        {
+            await PlayWithSoloistAsync(ctx, OnPlaying, ct).ConfigureAwait(false);
+            return;
+        }
+
+        try
+        {
+            _viaSoloist = false;
+            await _playback.PlayTrackAsync(_info.Uri, _info.Duration, ctx, OnPlaying, ct).ConfigureAwait(false);
+        }
+        catch (SpotifyTrackUnavailableException ex) when (ex.AudioKeyRefused && soloistReady)
+        {
+            Diagnostics.ProcessConsole.Append("spotify", "Spotify refused librespot the audio; playing it through Soloist");
+            await PlayWithSoloistAsync(ctx, OnPlaying, ct).ConfigureAwait(false);
+        }
+    }
+
+    private async Task PlayWithSoloistAsync(PumpContext ctx, Action onPlaying, CancellationToken ct)
+    {
+        _viaSoloist = true;
+        await _soloist!.PlayTrackAsync(_info.Uri, _info.Duration, ctx, onPlaying, ct).ConfigureAwait(false);
     }
 }
