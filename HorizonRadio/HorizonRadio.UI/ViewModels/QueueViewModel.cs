@@ -31,6 +31,7 @@ public sealed partial class QueueViewModel : ViewModelBase, IDisposable
     private readonly QueuePlayback? _queue;
     private readonly DialogManager? _dialogs;
     private readonly MetadataResolver? _resolver;
+    private readonly SongActions? _songs;
 
     // Each distinct item is enriched at most once (lazy, cached, background); the
     // resolver's per-provider cache makes a repeat cheap, this avoids re-kicking.
@@ -52,6 +53,9 @@ public sealed partial class QueueViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private string nowPlayingSubtitle = "";
     [ObservableProperty] private bool hasNowPlaying;
     [ObservableProperty] private Bitmap? nowPlayingArt;
+
+    /// <summary>The song playing now, for the now-playing card's right-click menu.</summary>
+    [ObservableProperty] private SongTarget? nowPlayingSong;
 
     // Cache the decoded now-playing seed art so the frequent Changed/rebuilds don't
     // re-decode the same bytes. Keyed by the bytes themselves, not the queue item: a radio
@@ -76,7 +80,7 @@ public sealed partial class QueueViewModel : ViewModelBase, IDisposable
     public ObservableCollection<QueueRowViewModel> Upcoming { get; } = new();
 
     /// <summary>A rolling window of what's coming from the active mix context.</summary>
-    public ObservableCollection<QueuePreview> ContextUpcoming { get; } = new();
+    public ObservableCollection<QueuePreviewRow> ContextUpcoming { get; } = new();
 
     [ObservableProperty] private bool hasUpcoming;
     [ObservableProperty] private bool hasContext;
@@ -96,11 +100,13 @@ public sealed partial class QueueViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private IAudioSourceFactory? selectedAddSource;
     private bool _suppressAdd;
 
-    public QueueViewModel(QueuePlayback queue, DialogManager? dialogs = null, MetadataResolver? resolver = null)
+    public QueueViewModel(QueuePlayback queue, DialogManager? dialogs = null, MetadataResolver? resolver = null,
+        SongActions? songs = null)
     {
         _queue = queue;
         _dialogs = dialogs;
         _resolver = resolver;
+        _songs = songs;
         ContentSources = SourceCatalog.All.Where(f => f is IContentSourceFactory).ToList();
 
         _queue.Model.Changed += OnModelChanged;
@@ -138,6 +144,8 @@ public sealed partial class QueueViewModel : ViewModelBase, IDisposable
         NowPlayingArt = snap.Current is { } cur
             ? (enriched ? _nowEnrichedArt : null) ?? DecodeArtCached(cur.Metadata.AlbumArt)
             : null;
+        var song = snap.Current is { } now ? Song.FromTrack(now.Metadata) : null;
+        if (song != NowPlayingSong?.Song) NowPlayingSong = _songs?.For(song);
 
         SyncUpcoming(snap.Explicit);
         HasUpcoming = Upcoming.Count > 0;
@@ -255,12 +263,17 @@ public sealed partial class QueueViewModel : ViewModelBase, IDisposable
     // so this is structural equality).
     private void SyncContext(IReadOnlyList<QueuePreview> peek)
     {
-        if (ContextUpcoming.SequenceEqual(peek)) return;
+        if (ContextUpcoming.Select(r => r.Preview).SequenceEqual(peek)) return;
         ContextUpcoming.Clear();
-        foreach (var p in peek) ContextUpcoming.Add(p);
+        foreach (var p in peek)
+        {
+            var song = p.Origin is { } origin ? Song.FromEntry(origin, p.Title, p.Subtitle) : null;
+            ContextUpcoming.Add(new QueuePreviewRow(p, _songs?.For(song)));
+        }
     }
 
     private QueueRowViewModel CreateRow(QueueItem item) => new(
+        _songs?.For(Song.FromTrack(item.Metadata)),
         item.Id,
         string.IsNullOrWhiteSpace(item.Metadata.Title) ? "Unknown track" : item.Metadata.Title,
         item.Metadata.Artist,
@@ -297,6 +310,8 @@ public sealed partial class QueueViewModel : ViewModelBase, IDisposable
                 if (!string.IsNullOrWhiteSpace(final.Title)) row.Title = final.Title;
                 if (!string.IsNullOrWhiteSpace(final.Artist)) row.Subtitle = final.Artist;
                 if (art != null) row.Thumbnail = art;
+                if (row.Song is { } target)
+                    row.Song = _songs?.For(target.Song with { Title = row.Title, Subtitle = row.Subtitle });
             });
         }
         catch (Exception ex) { Trace.WriteLine($"[hzn-queue-vm] enrich row: {ex.Message}"); }
@@ -375,6 +390,9 @@ public sealed partial class QueueRowViewModel : ViewModelBase
     [ObservableProperty] private string subtitle;
     [ObservableProperty] private Bitmap? thumbnail;
 
+    /// <summary>The track, for the row's right-click menu.</summary>
+    [ObservableProperty] private SongTarget? song;
+
     public bool HasSubtitle => !string.IsNullOrWhiteSpace(Subtitle);
     public bool HasThumbnail => Thumbnail != null;
 
@@ -384,10 +402,12 @@ public sealed partial class QueueRowViewModel : ViewModelBase
     public ICommand MoveDownCommand { get; }
 
     public QueueRowViewModel(
+        SongTarget? song,
         string id, string title, string subtitle, Bitmap? thumbnail,
         Action<string> playNow, Action<string> remove,
         Action<string> moveUp, Action<string> moveDown)
     {
+        this.song = song;
         Id = id;
         this.title = title;
         this.subtitle = subtitle;
@@ -400,4 +420,12 @@ public sealed partial class QueueRowViewModel : ViewModelBase
 
     partial void OnSubtitleChanged(string value) => OnPropertyChanged(nameof(HasSubtitle));
     partial void OnThumbnailChanged(Bitmap? value) => OnPropertyChanged(nameof(HasThumbnail));
+}
+
+/// <summary>A "Next From" row: the preview, and what plays it, for its right-click menu.</summary>
+public sealed record QueuePreviewRow(QueuePreview Preview, SongTarget? Song)
+{
+    public string Title => Preview.Title;
+    public string Subtitle => Preview.Subtitle;
+    public bool IsPlaceholder => Preview.IsPlaceholder;
 }

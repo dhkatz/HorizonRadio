@@ -131,8 +131,17 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         HasGame = game is not NoGameIntegration;
         ConnectionLabel = HasGame ? $"Not connected to {GameName}" : "Playing on this PC";
         Sources = new SourcesViewModel(playback, store, registry);
+
+        // Anywhere a song shows (History, search, the queue, the song playing now, a mix's entries)
+        // it can be added to the queue or a mix, through this one place. Mix changes go through the
+        // Mixes tab, so a mix open there shows them.
+        var songs = new SongActions(queue, mixStore, metaResolver, toasts);
+
         NowPlaying = new NowPlayingViewModel(playback, store, mixStore, mixSwitcher,
-            game.Output != null ? GameName : null, preview, toasts, DialogManager, lyrics, songSync);
+            game.Output != null ? GameName : null, preview, toasts, DialogManager, lyrics, songSync)
+        {
+            Songs = songs,
+        };
         Metadata = metadata;
         ToolsTab = new ToolsViewModel(registry, installers);
         Events = events;
@@ -140,21 +149,24 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         // Mix entries show as what they are (titles, artists, covers), looked up through the same
         // sources and metadata catalogs the queue uses, and kept on disk between sessions.
         Mixes = new MixesViewModel(mixStore, mixSwitcher, DialogManager,
-            new Core.Sources.Mixes.MixEntryDescriber(contentResolver, metaResolver, new Core.Sources.Mixes.MixEntryInfoStore()));
-        Queue = new QueueViewModel(queue, DialogManager, metaResolver);
+            new Core.Sources.Mixes.MixEntryDescriber(contentResolver, metaResolver, new Core.Sources.Mixes.MixEntryInfoStore()),
+            songs);
+        songs.Editor = Mixes;
+        songs.ShowMixes = () => SelectedWorkspaceIndex = 9;
+        Queue = new QueueViewModel(queue, DialogManager, metaResolver, songs);
 
         // Unified search: both the top-bar dropdown and the search page enqueue through
         // the shared SearchEnqueuer; submitting from the bar opens the page (index 11).
         // The shared context carries source names + the user's source priority so a merged
         // result row can label its sources and default Play to the preferred one.
-        var searchEnqueuer = new SearchEnqueuer(queue, toasts);
+        var searchEnqueuer = new SearchEnqueuer(queue, toasts) { Songs = songs };
         var searchContext = SearchSourceContext.Build(store);
         Search = new SearchViewModel(searchEnqueuer, searchContext);
         TopBar = new TopBarViewModel(searchEnqueuer, searchContext, ShowSearch);
 
         // History replays directly when it can; otherwise it re-searches the song on the
         // full search page (the same picker), so no-locator (radio) songs stay playable.
-        History = new HistoryViewModel(historyStore, queue, metaResolver, OpenSearchFor, toasts);
+        History = new HistoryViewModel(historyStore, queue, metaResolver, OpenSearchFor, toasts, songs);
 
         // The game's own pages plus the host's game-related ones (Events, when the game reports
         // any), under the game's name in the sidebar.

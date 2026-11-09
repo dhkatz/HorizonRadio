@@ -28,6 +28,7 @@ public sealed record SourceOption(SearchResult Result, string SourceId, string D
 public sealed partial class SearchResultRowViewModel : ViewModelBase
 {
     private readonly MergedResult _merged;
+    private readonly SongActions? _songs;
 
     /// <summary>The sources that returned this track (encounter order), for labels + picker.</summary>
     public IReadOnlyList<SourceOption> Sources { get; }
@@ -53,12 +54,14 @@ public sealed partial class SearchResultRowViewModel : ViewModelBase
             _selectedSource = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(SelectedSourceName));
+            OnPropertyChanged(nameof(Song));
         }
     }
 
     public SearchResultRowViewModel(MergedResult merged, SearchEnqueuer enqueuer, SearchSourceContext context)
     {
         _merged = merged;
+        _songs = enqueuer.Songs;
         ShowSourceLabels = context.ShowLabels;
         Sources = merged.Sources
             .Select(s => new SourceOption(s, s.SourceId, context.NameFor(s.SourceId)))
@@ -81,6 +84,11 @@ public sealed partial class SearchResultRowViewModel : ViewModelBase
     [ObservableProperty] private Bitmap? art;
 
     public bool HasArt => Art != null;
+
+    /// <summary>The selected source's hit as a song, for Add To Mix and the right-click menu.</summary>
+    public SongTarget? Song => _songs?.For(ViewModels.Song.FromEntry(
+        new ContentRef(SelectedSource.SourceId, SelectedSource.Result.Locator), Title,
+        HasSubtitle ? Subtitle : null));
 
     public ICommand AddCommand { get; }
     public ICommand PlayCommand { get; }

@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             xmlns:views="using:HorizonRadio.UI.Views"
              xmlns:material="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
              x:Class="HorizonRadio.UI.Views.SearchView"
@@ -96,7 +97,8 @@
             <ItemsControl ItemsSource="{Binding Results}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="{x:Type vm:SearchResultRowViewModel}">
-                        <Border Classes="resultRow" Padding="8" CornerRadius="6" Margin="0,0,0,2">
+                        <Border Classes="resultRow" Padding="8" CornerRadius="6" Margin="0,0,0,2"
+                                views:SongMenu.Target="{Binding Song}">
                             <Grid ColumnDefinitions="Auto,*,Auto,Auto" VerticalAlignment="Center"
                                   Background="Transparent">
                                 <!-- Art over a placeholder tile -->
@@ -152,7 +154,12 @@
                                     </Button>
                                     <Button Classes="Ghost" Padding="6" Command="{Binding AddCommand}"
                                             ToolTip.Tip="Add To Queue">
-                                        <material:MaterialIcon Kind="Plus" Width="18" Height="18"/>
+                                        <material:MaterialIcon Kind="PlaylistPlay" Width="18" Height="18"/>
+                                    </Button>
+                                    <Button Classes="Ghost" Padding="6" views:SongMenu.MixPicker="{Binding Song}"
+                                            IsVisible="{Binding Song, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                            ToolTip.Tip="Add To Mix">
+                                        <material:MaterialIcon Kind="PlaylistPlus" Width="18" Height="18"/>
                                     </Button>
                                 </StackPanel>
                             </Grid>

@@ -35,6 +35,7 @@ public sealed partial class MixesViewModel : ViewModelBase
     private readonly MixSwitcher _switcher;
     private readonly DialogManager? _dialogs;
     private readonly MixEntryDescriber? _describer;
+    private readonly SongActions? _songs;
 
     // One lookup per entry at a time, shared by every row showing it (the library card and the
     // editor). UI thread only.
@@ -77,12 +78,14 @@ public sealed partial class MixesViewModel : ViewModelBase
     private string? _editingId;
 
     public MixesViewModel(MixStore store, MixSwitcher switcher,
-                          DialogManager? dialogs = null, MixEntryDescriber? describer = null)
+                          DialogManager? dialogs = null, MixEntryDescriber? describer = null,
+                          SongActions? songs = null)
     {
         _store = store;
         _switcher = switcher;
         _dialogs = dialogs;
         _describer = describer;
+        _songs = songs;
         EntrySources = SourceCatalog.All.Where(f => f is IContentSourceFactory).ToList();
         newSource = EntrySources.Count > 0 ? EntrySources[0] : null;
 
@@ -200,6 +203,32 @@ public sealed partial class MixesViewModel : ViewModelBase
         EditEntries.Clear();
     }
 
+    /// <summary>Start a new mix with this entry in it (New Mix… on a song's menu).</summary>
+    public void NewMixWith(ContentRef entry, MixEntryInfo? known)
+    {
+        if (known != null) _describer?.Remember(entry, known);
+        _editingId = null;
+        OpenEditor("", [entry]);
+    }
+
+    /// <summary>Add an entry to the end of a saved mix (Add To Mix on a song's menu). When that mix
+    /// is open in the editor, the entry shows there too, so saving the editor keeps it.</summary>
+    public MixAddResult AddToMix(string mixId, ContentRef entry, MixEntryInfo? known)
+    {
+        if (_store.Get(mixId) is not { } mix) return MixAddResult.NoSuchMix;
+        var editing = IsEditing && _editingId == mixId;
+        if (mix.Entries.Any(e => SameEntry(e, entry)) || (editing && EditEntries.Any(r => SameEntry(r.Entry, entry))))
+            return MixAddResult.AlreadyInMix;
+
+        if (known != null) _describer?.Remember(entry, known);
+        _store.AddOrUpdate(mix with { Entries = [.. mix.Entries, entry] });
+        _store.SaveToDisk();
+        if (editing) EditEntries.Add(NewEntryRow(entry));
+        return MixAddResult.Added;
+    }
+
+    private static bool SameEntry(ContentRef a, ContentRef b) => a.SourceId == b.SourceId && a.Locator == b.Locator;
+
     private bool CanAddEntry => !string.IsNullOrWhiteSpace(NewLocator);
 
     /// <summary>Add what's in the add bar as an entry. It shows at once and fills in its title
@@ -213,7 +242,7 @@ public sealed partial class MixesViewModel : ViewModelBase
         if (source is null) { AddError = "Pick a source for this entry."; return; }
 
         var entry = new ContentRef(source.Id, locator);
-        if (EditEntries.Any(r => r.Entry.SourceId == entry.SourceId && r.Entry.Locator == entry.Locator))
+        if (EditEntries.Any(r => SameEntry(r.Entry, entry)))
         {
             AddError = "That's already in this mix.";
             return;
@@ -246,6 +275,7 @@ public sealed partial class MixesViewModel : ViewModelBase
         var source = SourceCatalog.Find(entry.SourceId);
         var row = new MixEntryRowViewModel(entry, source?.DisplayName ?? entry.SourceId,
             RemoveEntryRow, MoveEntryRow, r => LoadRow(r, force: true));
+        row.Song = _songs?.For(Song.FromEntry(entry, row.Title));
         LoadRow(row, force: false);
         return row;
     }
@@ -300,6 +330,7 @@ public sealed partial class MixesViewModel : ViewModelBase
     private void Show(MixEntryRowViewModel row, MixEntryInfo info)
     {
         row.Apply(info, Decode(info.Art));
+        row.Song = _songs?.For(Song.FromEntry(row.Entry, info.Title, info.Subtitle, info));
         OnPropertyChanged(nameof(EditSummary));
     }
 
@@ -514,6 +545,9 @@ public sealed partial class MixEntryRowViewModel : ViewModelBase
     [ObservableProperty] private int position;
     [ObservableProperty] private bool isFirst;
     [ObservableProperty] private bool isLast;
+
+    /// <summary>The entry as a song, for its Add To Queue button and right-click menu.</summary>
+    [ObservableProperty] private SongTarget? song;
 
     public bool HasThumbnail => Thumbnail != null;
     public bool HasError => Error != null;

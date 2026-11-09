@@ -27,6 +27,16 @@ public static class HistoryReplay
     private const string YouTubeSourceId = "youtube";
     private const string LocalSourceId = "local";
 
+    /// <summary>The entry that plays this song again (to queue it, or add it to a mix), named
+    /// after the song; null when its origin can't be re-addressed (a radio song).</summary>
+    public static Sources.ContentRef? OriginOf(Track track)
+    {
+        var (sourceId, locator) = DeriveOrigin(track.ExternalId);
+        return sourceId is null || locator is null
+            ? null
+            : new Sources.ContentRef(sourceId, locator, string.IsNullOrWhiteSpace(track.Title) ? null : track.Title.Trim());
+    }
+
     /// <summary>Derive the (queueable source id, locator) that replays this song, or
     /// (null, null) when the origin can't be re-addressed from its id alone.</summary>
     public static (string? SourceId, string? Locator) DeriveOrigin(string? externalId)

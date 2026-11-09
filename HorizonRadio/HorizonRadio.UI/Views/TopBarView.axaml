@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             xmlns:views="using:HorizonRadio.UI.Views"
              xmlns:material="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              mc:Ignorable="d" d:DesignWidth="1024" d:DesignHeight="52"
              x:Class="HorizonRadio.UI.Views.TopBarView"
@@ -84,7 +85,8 @@
                                           IsVisible="{Binding !IsSearching}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:SearchResultRowViewModel}">
-                                        <Border Background="Transparent" Padding="6" CornerRadius="6">
+                                        <Border Background="Transparent" Padding="6" CornerRadius="6"
+                                                views:SongMenu.Target="{Binding Song}">
                                             <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" VerticalAlignment="Center">
                                                 <!-- Art over a placeholder tile -->
                                                 <Border Grid.Column="0" Width="40" Height="40" CornerRadius="4"
@@ -119,7 +121,7 @@
                                                 <Button Grid.Column="4" Classes="Ghost" Padding="5"
                                                         Command="{Binding AddCommand}"
                                                         VerticalAlignment="Center" ToolTip.Tip="Add To Queue">
-                                                    <material:MaterialIcon Kind="Plus" Width="16" Height="16"/>
+                                                    <material:MaterialIcon Kind="PlaylistPlay" Width="16" Height="16"/>
                                                 </Button>
                                             </Grid>
                                         </Border>

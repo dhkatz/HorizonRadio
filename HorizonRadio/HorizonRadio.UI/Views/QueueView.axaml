@@ -3,7 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
-             xmlns:queue="using:HorizonRadio.Core.Sources.Queue"
+             xmlns:views="using:HorizonRadio.UI.Views"
              xmlns:material="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              mc:Ignorable="d" d:DesignWidth="300" d:DesignHeight="640"
              x:Class="HorizonRadio.UI.Views.QueueView"
@@ -98,7 +98,8 @@
                     <!-- Now playing -->
                     <StackPanel Spacing="4" IsVisible="{Binding HasNowPlaying}">
                         <TextBlock Text="Now Playing" FontSize="11" FontWeight="SemiBold" Opacity="0.6"/>
-                        <Border Classes="Card" Padding="10,8">
+                        <Border Classes="Card" Padding="10,8"
+                                views:SongMenu.Target="{Binding NowPlayingSong}">
                             <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
                                 <!-- Album art (when resolved) over a placeholder tile. -->
                                 <Border Grid.Column="0" Width="42" Height="42" CornerRadius="4"
@@ -132,7 +133,8 @@
                                 <DataTemplate DataType="{x:Type vm:QueueRowViewModel}">
                                     <!-- Double-click plays now. (Drag-to-reorder: follow-up.) -->
                                     <Border Classes="Card queueRow" Padding="8" Margin="0,0,0,6"
-                                            DoubleTapped="OnRowDoubleTapped">
+                                            DoubleTapped="OnRowDoubleTapped"
+                                            views:SongMenu.Target="{Binding Song}">
                                         <!-- Transparent background makes the WHOLE row a single hit surface, so
                                              hover (and the action reveal) fires anywhere on the row, not just over
                                              the title text. -->
@@ -194,8 +196,10 @@
                                    TextTrimming="CharacterEllipsis"/>
                         <ItemsControl ItemsSource="{Binding ContextUpcoming}">
                             <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="{x:Type queue:QueuePreview}">
-                                    <Grid ColumnDefinitions="Auto,*" Margin="2,0,2,8" VerticalAlignment="Center">
+                                <DataTemplate DataType="{x:Type vm:QueuePreviewRow}">
+                                    <Grid ColumnDefinitions="Auto,*" Margin="2,0,2,8" VerticalAlignment="Center"
+                                          Background="Transparent"
+                                          views:SongMenu.Target="{Binding Song}">
                                         <!-- A resolved track shows a note; an as-yet-unresolved
                                              entry (a whole folder/playlist) shows a list glyph. -->
                                         <Panel Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center">

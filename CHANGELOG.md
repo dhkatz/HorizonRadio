@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Add any song to the queue or a mix, from wherever it shows.** History rows, search results, and
+  a mix's entries have Add To Queue and Add To Mix buttons; right-click a song in the queue, the
+  Dashboard, or the player bar for the same menu. Add To Mix lists your mixes (ticking the ones that
+  already have the song) and New Mix…, which opens a new mix with the song in it. A radio song is
+  first identified and found on Spotify or YouTube, and that's what's added.
 - **Mix entries show what they are.** The mix editor shows each entry with its title, artist,
   and cover (a track), or its name, owner, track count, and cover (a Spotify or YouTube playlist,
   a Spotify album, a music folder, a radio station), with a "Looking up…" state while it loads and
