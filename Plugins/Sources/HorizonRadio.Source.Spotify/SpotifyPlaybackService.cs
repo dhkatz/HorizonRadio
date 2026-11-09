@@ -55,6 +55,9 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
     /// <summary>Spotify refused librespot a track's audio key this session. It refuses per
     /// account, so later tracks can skip librespot (and the second it takes to be refused).</summary>
     public bool AudioKeyRefused { get; private set; }
+
+    /// <summary>The librespot the next play would launch (<see cref="SpotifyPlayerChoice.BuildOf"/>).</summary>
+    public string? LibrespotBuild => SpotifyPlayerChoice.BuildOf(_options().ExecutablePath);
     private Action? _onPlaying;
     private bool _playingFired;
 

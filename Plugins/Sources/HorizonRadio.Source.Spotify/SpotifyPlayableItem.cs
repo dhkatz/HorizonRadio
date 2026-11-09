@@ -27,17 +27,19 @@ public sealed class SpotifyPlayableItem : PlayableItem
     private readonly SpotifyTrackInfo _info;
     private readonly SpotifyPlaybackService _playback;
     private readonly SoloistPlaybackService? _soloist;
+    private readonly SpotifyPlayerChoice? _choice;
     // This play went to Soloist: position and seek follow it.
     private volatile bool _viaSoloist;
     private byte[]? _art;
     private bool _artFetched;
 
     public SpotifyPlayableItem(SpotifyTrackInfo info, SpotifyPlaybackService playback,
-                               SoloistPlaybackService? soloist = null)
+                               SoloistPlaybackService? soloist = null, SpotifyPlayerChoice? choice = null)
     {
         _info = info;
         _playback = playback;
         _soloist = soloist ?? SpotifyRuntime.Soloist;
+        _choice = choice ?? SpotifyRuntime.PlayerChoice;
         Duration = info.Duration;
         Metadata = BuildTrack(art: null);
     }
@@ -98,19 +100,34 @@ public sealed class SpotifyPlayableItem : PlayableItem
             if (ctx.StartPosition?.Invoke(this) is { Ticks: > 0 } start) Seek(start);
         }
 
-        // Spotify refuses librespot per account: once it has this session, don't wait to be
-        // refused again.
+        // Spotify refuses librespot per account: once it has (and Soloist played instead), don't
+        // wait to be refused again until it's time to give librespot another try.
         var soloistReady = _soloist is { IsConfigured: true };
-        if (soloistReady && _playback.AudioKeyRefused)
+        var librespot = _playback.LibrespotBuild;
+        if (soloistReady && (_choice?.PreferSoloist(librespot) ?? _playback.AudioKeyRefused))
         {
+            if (_choice?.LibrespotRefusedAt is { } at)
+            {
+                Diagnostics.ProcessConsole.Append("spotify", "playing through Soloist: Spotify refused librespot " +
+                    $"{at.ToLocalTime():g}; librespot gets another try after {(at + SpotifyPlayerChoice.RecheckAfter).ToLocalTime():g}");
+            }
             await PlayWithSoloistAsync(ctx, OnPlaying, ct).ConfigureAwait(false);
             return;
+        }
+        if (soloistReady && _choice?.LibrespotRefusedAt is { } refusedAt)
+        {
+            Diagnostics.ProcessConsole.Append("spotify", "giving librespot another try (Spotify refused it " +
+                $"{refusedAt.ToLocalTime():g}); Soloist plays the track if it's refused again");
         }
 
         try
         {
             _viaSoloist = false;
-            await _playback.PlayTrackAsync(_info.Uri, _info.Duration, ctx, OnPlaying, ct).ConfigureAwait(false);
+            await _playback.PlayTrackAsync(_info.Uri, _info.Duration, ctx, () =>
+            {
+                _choice?.LibrespotPlayed();
+                OnPlaying();
+            }, ct).ConfigureAwait(false);
         }
         catch (SpotifyTrackUnavailableException ex) when (ex.AudioKeyRefused)
         {
@@ -121,7 +138,12 @@ public sealed class SpotifyPlayableItem : PlayableItem
                 throw;
             }
             Diagnostics.ProcessConsole.Append("spotify", "Spotify refused librespot the audio; playing it through Soloist");
-            await PlayWithSoloistAsync(ctx, OnPlaying, ct).ConfigureAwait(false);
+            await PlayWithSoloistAsync(ctx, () =>
+            {
+                // Soloist works where librespot doesn't: it goes first from now on.
+                _choice?.LibrespotRefused(librespot);
+                OnPlaying();
+            }, ct).ConfigureAwait(false);
         }
     }
 

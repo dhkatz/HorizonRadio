@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   asks you to pick "Horizon Radio (Soloist)" once in the Spotify app to log it in, and the track
   waits (up to 3 minutes) and plays once you have. This is against Spotify's
   developer terms and could get the key revoked.
+- **Soloist stays the Spotify player once librespot is refused.** When Spotify refuses librespot
+  and Soloist plays the track, later tracks go straight to Soloist, across restarts, so they
+  don't wait for librespot to be refused first. librespot gets another try once a day, and right
+  away after it's updated; when it plays again, it's the player again.
 - **Spotify Soloist in the Tools tab.** Installs Spotify's own Connect client straight from
   Spotify, checked against the checksum Spotify's servers give, and shows when Spotify has a
   newer build (each one stops working 90 days after release). The Spotify settings have a place
