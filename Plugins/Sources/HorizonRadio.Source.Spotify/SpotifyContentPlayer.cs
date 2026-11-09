@@ -12,7 +12,8 @@ namespace HorizonRadio.Core.Sources.Spotify;
 /// queue. Playback itself runs through the shared <see cref="SpotifyPlaybackService"/>;
 /// this only does the catalog lookups (which need the authed Web API client).
 /// </summary>
-public sealed class SpotifyContentPlayer(SpotifyConnection connection, SpotifyPlaybackService playback) : IContentPlayer
+public sealed class SpotifyContentPlayer(SpotifyConnection connection, SpotifyPlaybackService playback)
+    : IContentPlayer, IContentDescriber
 {
     public async Task<IReadOnlyList<PlayableItem>> EnumerateAsync(ContentRef content, CancellationToken ct)
     {
@@ -50,6 +51,43 @@ public sealed class SpotifyContentPlayer(SpotifyConnection connection, SpotifyPl
                 404 => $"Spotify couldn't find that {kind} (404) — check the link, or it may be private.",
                 429 => "Spotify is rate-limiting requests (429). Wait a moment and try again.",
                 _ => $"Spotify couldn't open that {kind}: {ex.Message}",
+            }, ex);
+        }
+    }
+
+    /// <summary>A playlist's or album's name, owner/artist, size, and cover. A track is left to
+    /// the host (null), which enumerates it like the queue does.</summary>
+    public async Task<ContentSummary?> DescribeAsync(ContentRef content, CancellationToken ct)
+    {
+        if (!SpotifyLinks.TryParse(content.Locator, out var link))
+            throw new InvalidOperationException(InvalidLocatorMessage);
+        if (link.Kind == SpotifyLinkKind.Track) return null;
+
+        var client = await connection.GetClientAsync(ct).ConfigureAwait(false)
+                     ?? throw new InvalidOperationException(
+                         "Spotify isn't connected. Connect your account in the Sources tab.");
+        try
+        {
+            if (link.Kind == SpotifyLinkKind.Album)
+            {
+                var album = await client.Albums.Get(link.Id, ct).ConfigureAwait(false);
+                return new ContentSummary(album.Name, JoinArtists(album.Artists), ContentKind.Album,
+                    album.TotalTracks, BestImage(album.Images));
+            }
+
+            var playlist = await client.Playlists.Get(link.Id, ct).ConfigureAwait(false);
+            return new ContentSummary(playlist.Name ?? "Spotify playlist", playlist.Owner?.DisplayName,
+                ContentKind.Playlist, playlist.Items?.Total, BestImage(playlist.Images));
+        }
+        catch (APIException ex)
+        {
+            var status = (int?)ex.Response?.StatusCode;
+            Log($"describe {link.Kind} {link.Id} failed: HTTP {status} — {ex.Message}");
+            throw new InvalidOperationException(status switch
+            {
+                403 => "Spotify won't share this playlist with a Development-Mode app.",
+                404 => "Spotify couldn't find that link. It may be private or removed.",
+                _ => $"Spotify couldn't open that link: {ex.Message}",
             }, ex);
         }
     }

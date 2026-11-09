@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Mix entries show what they are.** The mix editor shows each entry with its title, artist,
+  and cover (a track), or its name, owner, track count, and cover (a Spotify or YouTube playlist,
+  a Spotify album, a music folder, a radio station), with a "Looking up…" state while it loads and
+  a reason when a link can't be opened. Paste a link or a path into the new add bar and the source
+  is picked for you. Mix cards in the library show cover art and their first entries' titles.
+  What each entry turned out to be is kept in `%LOCALAPPDATA%\HorizonRadio\mix-entries`, so mixes
+  open at once next time. Plugin SDK: content players can describe a collection
+  (`IContentDescriber`), and content sources can recognise their own links
+  (`IContentSourceFactory.Recognizes`).
 - **Spotify tracks Spotify won't give librespot play through Spotify Soloist.** Spotify now
   refuses librespot the audio of some tracks, and for some accounts all of them. Once Soloist is
   installed (Tools tab) and your Soloist key is in the Spotify settings, those tracks play through

@@ -16,13 +16,34 @@ namespace HorizonRadio.Core.Sources.Radio;
 /// A station is a single infinite stream, so <see cref="EnumerateAsync"/> always yields
 /// exactly one <see cref="RadioPlayableItem"/>.
 /// </summary>
-public sealed class RadioContentPlayer(string ffmpegPath, RadioBrowserClient directory) : IContentPlayer
+public sealed class RadioContentPlayer(string ffmpegPath, RadioBrowserClient directory)
+    : IContentPlayer, IContentDescriber
 {
     public async Task<IReadOnlyList<PlayableItem>> EnumerateAsync(ContentRef content, CancellationToken ct)
     {
         var station = await ResolveStationAsync(content.Locator, directory, ct).ConfigureAwait(false);
         return [new RadioPlayableItem(station, ffmpegPath)];
     }
+
+    /// <summary>The station's name, where it broadcasts from, and its logo. A pasted stream URL
+    /// has only its address until it's tuned in.</summary>
+    public async Task<ContentSummary?> DescribeAsync(ContentRef content, CancellationToken ct)
+    {
+        var station = await ResolveStationAsync(content.Locator, directory, ct).ConfigureAwait(false);
+        var subtitle = string.Join(" · ", new[] { station.Country, FirstTags(station.Tags) }
+            .Where(s => !string.IsNullOrWhiteSpace(s)));
+        return new ContentSummary(
+            Title: station.Name,
+            Subtitle: subtitle.Length > 0 ? subtitle : "Live radio",
+            Kind: ContentKind.Station,
+            ArtUrl: string.IsNullOrWhiteSpace(station.FaviconUrl) ? null : station.FaviconUrl);
+    }
+
+    // radio-browser tags are a long comma list; a few read as a genre line.
+    private static string? FirstTags(string? tags) =>
+        string.IsNullOrWhiteSpace(tags)
+            ? null
+            : string.Join(", ", tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Take(3));
 
     private static async Task<RadioStation> ResolveStationAsync(string? locator, RadioBrowserClient directory, CancellationToken ct)
     {

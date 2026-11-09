@@ -137,7 +137,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ToolsTab = new ToolsViewModel(registry, installers);
         Events = events;
         Controls = controls;
-        Mixes = new MixesViewModel(mixStore, mixSwitcher, DialogManager, contentResolver);
+        // Mix entries show as what they are (titles, artists, covers), looked up through the same
+        // sources and metadata catalogs the queue uses, and kept on disk between sessions.
+        Mixes = new MixesViewModel(mixStore, mixSwitcher, DialogManager,
+            new Core.Sources.Mixes.MixEntryDescriber(contentResolver, metaResolver, new Core.Sources.Mixes.MixEntryInfoStore()));
         Queue = new QueueViewModel(queue, DialogManager, metaResolver);
 
         // Unified search: both the top-bar dropdown and the search page enqueue through
