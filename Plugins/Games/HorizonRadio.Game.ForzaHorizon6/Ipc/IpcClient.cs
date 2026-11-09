@@ -33,7 +33,7 @@ public sealed class IpcClient(string pipeName = IpcClient.DefaultPipeName) : IAs
     private NamedPipeClientStream? _activePipe;
     private readonly Lock _writeLock = new();
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-core] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-core] {msg}");
 
     public event Action? Connected;
     public event Action? Disconnected;

@@ -60,7 +60,7 @@ public sealed class SubprocessPcmSource(SubprocessPcmSource.Config config) : IAs
     private CancellationTokenSource? _cts;
     private long _pcmBytes;
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-subproc] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-subproc] {msg}");
 
     public bool IsRunning => _process is { HasExited: false };
 
@@ -113,11 +113,9 @@ public sealed class SubprocessPcmSource(SubprocessPcmSource.Config config) : IAs
                 ?? throw new InvalidOperationException($"failed to spawn {config.ExecutablePath}");
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
-        // Make sure the child dies if our process dies. ProcessStartInfo
-        // doesn't expose Win32 job objects, but Process.Kill(true) in
-        // the finally path is enough for the user-driven stop case.
-        // For host-crash scenarios we'd need a managed job-object
-        // wrapper — out of scope for the source migration.
+        // Make sure the child dies if our process dies, however it ends: Process.Kill(true) in the
+        // finally path covers a stop, the app's job object covers the app closing or crashing.
+        ChildProcesses.TieToApp(_process);
         Log($"started pid={_process.Id} cmd={config.ExecutablePath}");
 
         _stderrTask = Task.Run(() => DrainStderrAsync(_process, _cts.Token), _cts.Token);

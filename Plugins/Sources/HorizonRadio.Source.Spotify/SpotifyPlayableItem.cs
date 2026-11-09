@@ -44,7 +44,7 @@ public sealed class SpotifyPlayableItem : PlayableItem
     public override bool CanSeek => true;
     public override void Seek(TimeSpan position) => _ = _playback.SeekAsync(position);
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-spotify-item] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-spotify-item] {msg}");
 
     private Track BuildTrack(byte[]? art) => new(
         Title: _info.Title,

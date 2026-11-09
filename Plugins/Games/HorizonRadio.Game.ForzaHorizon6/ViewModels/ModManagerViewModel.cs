@@ -101,7 +101,7 @@ public sealed partial class ModManagerViewModel : ObservableObject
         {
             foreach (var d in Fh6Detection.Detect()) Detected.Add(d);
         }
-        catch (Exception ex) { Debug.WriteLine($"[hzn-mod-vm] detect failed: {ex.Message}"); }
+        catch (Exception ex) { Trace.WriteLine($"[hzn-mod-vm] detect failed: {ex.Message}"); }
 
         if (Detected.Count >= 1)
         {
@@ -171,6 +171,6 @@ public sealed partial class ModManagerViewModel : ObservableObject
     {
         if (string.IsNullOrEmpty(GamePath) || !Directory.Exists(GamePath)) return;
         try { Process.Start(new ProcessStartInfo { FileName = GamePath, UseShellExecute = true }); }
-        catch (Exception ex) { Debug.WriteLine($"[hzn-mod-vm] open folder: {ex.Message}"); }
+        catch (Exception ex) { Trace.WriteLine($"[hzn-mod-vm] open folder: {ex.Message}"); }
     }
 }

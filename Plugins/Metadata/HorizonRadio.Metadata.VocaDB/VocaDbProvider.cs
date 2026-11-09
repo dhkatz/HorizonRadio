@@ -50,7 +50,7 @@ public sealed class VocaDbProvider : IMetadataProvider
             _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "HorizonRadio/0.5");
     }
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-vocadb] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-vocadb] {msg}");
 
     public async Task<MetadataContribution?> ContributeAsync(MetadataQuery query, CancellationToken ct)
     {

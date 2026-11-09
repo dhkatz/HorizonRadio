@@ -54,7 +54,7 @@ public sealed class ModInstaller
         if (HasBundledDll && BuildOutputDllPath != null)
         {
             try { BundledDllStale = ComputeHash(BuildOutputDllPath) != BundledDllHash; }
-            catch (Exception ex) { Debug.WriteLine($"[hzn-install] build-output hash failed: {ex.Message}"); }
+            catch (Exception ex) { Trace.WriteLine($"[hzn-install] build-output hash failed: {ex.Message}"); }
         }
     }
 
@@ -89,7 +89,7 @@ public sealed class ModInstaller
         try { hash = ComputeHash(target); }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[hzn-install] hash failed: {ex.Message}");
+            Trace.WriteLine($"[hzn-install] hash failed: {ex.Message}");
             return InstallationStatus.PathInvalid;
         }
 

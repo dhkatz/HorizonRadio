@@ -80,7 +80,7 @@ public sealed class LyricsService : IAsyncDisposable
         {
             var lyrics = await provider.FindAsync(query, ct).ConfigureAwait(false);
             if (lyrics is { Lines.Count: 0 }) lyrics = null;
-            Debug.WriteLine($"[hzn-lyrics] {provider.Id}: {Describe(lyrics)} in {elapsed.ElapsedMilliseconds} ms");
+            Trace.WriteLine($"[hzn-lyrics] {provider.Id}: {Describe(lyrics)} in {elapsed.ElapsedMilliseconds} ms");
             return (lyrics, false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -127,7 +127,7 @@ public sealed class LyricsService : IAsyncDisposable
         foreach (var p in _providers)
         {
             try { await p.DisposeAsync().ConfigureAwait(false); }
-            catch (Exception ex) { Debug.WriteLine($"[hzn-lyrics] dispose {p.Id}: {ex.Message}"); }
+            catch (Exception ex) { Trace.WriteLine($"[hzn-lyrics] dispose {p.Id}: {ex.Message}"); }
         }
     }
 }

@@ -177,7 +177,7 @@ public sealed partial class HistoryViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[hzn-history-vm] enrich: {ex.Message}");
+            Trace.WriteLine($"[hzn-history-vm] enrich: {ex.Message}");
             Dispatcher.UIThread.Post(() => _enriched.Remove(row.Id)); // let a later pass retry
         }
         finally { EnrichmentThrottle.Gate.Release(); }
@@ -196,7 +196,7 @@ public sealed partial class HistoryViewModel : ViewModelBase
         UnifiedSearchResult result;
         try { result = await UnifiedSearch.SearchAsync(query, SearchLimit, ct: ct).ConfigureAwait(false); }
         catch (OperationCanceledException) { throw; }
-        catch (Exception ex) { Debug.WriteLine($"[hzn-history-vm] source search: {ex.Message}"); return ([], false); }
+        catch (Exception ex) { Trace.WriteLine($"[hzn-history-vm] source search: {ex.Message}"); return ([], false); }
 
         var sources = HistorySourceMatch.Select(song.Artist, song.Title, result.Results)
             .Select(r => new ReplaySource(r.SourceId, SourceCatalog.Find(r.SourceId)?.DisplayName ?? r.SourceId, r.Locator))

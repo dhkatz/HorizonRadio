@@ -317,7 +317,7 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[hzn-lyrics-vm] {ex.Message}");
+            Trace.WriteLine($"[hzn-lyrics-vm] {ex.Message}");
             if (!ct.IsCancellationRequested)
             {
                 _lookedUp = true;
@@ -386,7 +386,7 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[hzn-lyrics-vm] audio sync: {ex.Message}");
+            Trace.WriteLine($"[hzn-lyrics-vm] audio sync: {ex.Message}");
         }
         // Done without a match (none of the recordings was this song): say nothing more.
         Dispatcher.UIThread.Post(() =>
@@ -423,7 +423,7 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[hzn-lyrics-vm] refit: {ex.Message}");
+            Trace.WriteLine($"[hzn-lyrics-vm] refit: {ex.Message}");
         }
     }
 
@@ -551,7 +551,7 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
     {
         if (line == null || !CanSeek || _progress() is not { CanSeek: true } progress) return;
         try { _ = progress.SeekAsync(line.Line.Time); }
-        catch (Exception ex) { Debug.WriteLine($"[hzn-lyrics-vm] seek: {ex.Message}"); }
+        catch (Exception ex) { Trace.WriteLine($"[hzn-lyrics-vm] seek: {ex.Message}"); }
     }
 
     // "youtube:<id>" is how the YouTube source identifies its videos.

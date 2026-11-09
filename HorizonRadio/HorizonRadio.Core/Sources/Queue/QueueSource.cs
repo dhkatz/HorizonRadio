@@ -126,7 +126,7 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
         _model.InterruptRequested += OnInterrupt;
     }
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-queue] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-queue] {msg}");
 
     private static TaskCompletionSource NewSignal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
 

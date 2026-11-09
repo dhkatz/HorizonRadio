@@ -72,7 +72,7 @@ public sealed class SpotifySource(LibrespotOptions options) : IAudioSource, IPla
     // behavior instead of showing nothing).
     private bool _eventsWorking;
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-spotify] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-spotify] {msg}");
 
     public async Task StartAsync(IPcmSink sink, CancellationToken ct)
     {

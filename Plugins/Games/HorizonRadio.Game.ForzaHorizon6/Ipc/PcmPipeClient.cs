@@ -25,7 +25,7 @@ public sealed class PcmPipeClient(string pipeName = PcmPipeClient.DefaultPipeNam
     private NamedPipeClientStream? _pipe;
     private Task? _connectLoop;
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-core-pcm] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-core-pcm] {msg}");
 
     public bool IsConnected => _pipe?.IsConnected == true;
 

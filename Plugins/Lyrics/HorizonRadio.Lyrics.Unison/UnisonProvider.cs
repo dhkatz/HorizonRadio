@@ -46,7 +46,7 @@ public sealed class UnisonProvider : ILyricsProvider
         using var resp = await _http.GetAsync(url, ct).ConfigureAwait(false);
         if (resp.StatusCode == HttpStatusCode.NotFound)
         {
-            Debug.WriteLine($"[hzn-unison] not found: {url}");
+            Trace.WriteLine($"[hzn-unison] not found: {url}");
             return null; // "not found" is an answer
         }
         resp.EnsureSuccessStatusCode();

@@ -17,7 +17,7 @@ public sealed class WasapiDeviceWatcher : IAudioDeviceWatcher, IMMNotificationCl
 
     private WasapiDeviceWatcher(MMDeviceEnumerator enumerator) => _enumerator = enumerator;
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-speaker] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-speaker] {msg}");
 
     public event Action<string?>? DefaultDeviceChanged;
     public event Action<string, bool>? DeviceAvailabilityChanged;

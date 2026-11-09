@@ -71,7 +71,7 @@ public sealed class MixStore
             "HorizonRadio",
             "mixes.json");
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-mixes] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-mixes] {msg}");
 
     public static MixStore LoadFromDisk(string? path = null)
     {

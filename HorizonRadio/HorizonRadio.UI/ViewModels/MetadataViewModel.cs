@@ -154,7 +154,7 @@ public sealed partial class MetadataViewModel : ViewModelBase
         {
             HasError = true;
             StatusMessage = ex.Message;
-            Debug.WriteLine($"[hzn-meta-vm] apply: {ex}");
+            Trace.WriteLine($"[hzn-meta-vm] apply: {ex}");
         }
     }
 }

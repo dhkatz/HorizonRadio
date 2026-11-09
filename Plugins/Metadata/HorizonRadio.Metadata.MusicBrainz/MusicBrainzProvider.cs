@@ -40,7 +40,7 @@ public sealed class MusicBrainzProvider : IMetadataProvider
         }
     }
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-mb] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-mb] {msg}");
 
     public async Task<MetadataContribution?> ContributeAsync(MetadataQuery query, CancellationToken ct)
     {

@@ -134,7 +134,7 @@ public sealed partial class SearchViewModel : ViewModelBase, IDisposable
         catch (System.OperationCanceledException) { return; }
         catch (System.Exception ex)
         {
-            Debug.WriteLine($"[hzn-search] page search failed: {ex.Message}");
+            Trace.WriteLine($"[hzn-search] page search failed: {ex.Message}");
             if (cts.Token.IsCancellationRequested) return;
             IsSearching = false;
             HasError = true;

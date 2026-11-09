@@ -179,7 +179,7 @@ public sealed partial class SourcesViewModel : ViewModelBase
         {
             HasError = true;
             StatusMessage = ex.Message;
-            Debug.WriteLine($"[hzn-sources-vm] start failed: {ex}");
+            Trace.WriteLine($"[hzn-sources-vm] start failed: {ex}");
         }
     }
 
@@ -206,7 +206,7 @@ public sealed partial class SourcesViewModel : ViewModelBase
     {
         StatusMessage = "Stopping...";
         try { await _playback.StopAsync(); }
-        catch (Exception ex) { Debug.WriteLine($"[hzn-sources-vm] stop: {ex}"); }
+        catch (Exception ex) { Trace.WriteLine($"[hzn-sources-vm] stop: {ex}"); }
         StatusMessage = "Stopped";
         HasError = false;
     }
@@ -251,7 +251,7 @@ public sealed partial class SourcesViewModel : ViewModelBase
                 IsConnected = false;
                 ConnectionStatus = $"Connect failed: {ex.Message}";
             }
-            Debug.WriteLine($"[hzn-sources-vm] connect: {ex}");
+            Trace.WriteLine($"[hzn-sources-vm] connect: {ex}");
         }
     }
 

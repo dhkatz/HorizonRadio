@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Core.Sources;
 using HorizonRadio.Tools.FFmpeg;
 using HorizonRadio.Tools.YtDlp;
 
@@ -87,7 +88,9 @@ internal static class YouTubeReferenceAudio
             StandardErrorEncoding = System.Text.Encoding.UTF8,
         };
         foreach (var a in args) psi.ArgumentList.Add(a);
-        return Process.Start(psi) ?? throw new InvalidOperationException($"failed to start {exe}");
+        var process = Process.Start(psi) ?? throw new InvalidOperationException($"failed to start {exe}");
+        ChildProcesses.TieToApp(process);
+        return process;
     }
 
     private static void Kill(Process process)

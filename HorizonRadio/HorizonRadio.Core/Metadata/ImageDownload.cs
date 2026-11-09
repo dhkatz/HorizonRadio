@@ -29,7 +29,7 @@ public static class ImageDownload
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[hzn-art] {url}: {ex.Message}");
+            Trace.WriteLine($"[hzn-art] {url}: {ex.Message}");
             if (!ct.IsCancellationRequested)
             {
                 var what = ex is HttpRequestException { StatusCode: { } code } ? $"HTTP {(int)code}" : ex.GetType().Name;

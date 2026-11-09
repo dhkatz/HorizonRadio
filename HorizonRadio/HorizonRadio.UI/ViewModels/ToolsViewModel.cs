@@ -229,7 +229,7 @@ public sealed partial class ToolItemViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[hzn-tools-vm] install {_installer.Kind}: {ex}");
+            Trace.WriteLine($"[hzn-tools-vm] install {_installer.Kind}: {ex}");
             ErrorMessage = ex.Message;
             ProgressText = "Failed.";
             ProcessConsole.Append(_installer.Kind, $"install failed: {ex.Message}");
@@ -257,7 +257,7 @@ public sealed partial class ToolItemViewModel : ViewModelBase, IDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[hzn-tools-vm] uninstall {_installer.Kind}: {ex}");
+            Trace.WriteLine($"[hzn-tools-vm] uninstall {_installer.Kind}: {ex}");
             ErrorMessage = ex.Message;
         }
     }

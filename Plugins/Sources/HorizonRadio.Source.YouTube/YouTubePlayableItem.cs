@@ -75,7 +75,7 @@ public sealed class YouTubePlayableItem : PlayableItem
 
     public override TimeSpan Position => _subproc is { } subproc ? _startOffset + subproc.Elapsed : TimeSpan.Zero;
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-yt-item] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-yt-item] {msg}");
 
     public override Task PrepareAsync(CancellationToken ct) => PrepareOnceAsync(ResolveAsync, ct);
 

@@ -133,7 +133,7 @@ public sealed class PlaybackRouter : IPlaybackRouter, IAsyncDisposable
         _loop = Task.Run(RunAsync);
     }
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-router] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-router] {msg}");
 
     /// <summary>The engine. Read what's playing from it; change that only through the router.</summary>
     public SourceRunner Runner => _runner;

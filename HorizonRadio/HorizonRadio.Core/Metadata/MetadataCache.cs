@@ -71,7 +71,7 @@ public sealed class MetadataCache : IMetadataCache
         Directory.CreateDirectory(_root);
     }
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-cache] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-cache] {msg}");
 
     public static string Key(string enricherId, string query)
     {

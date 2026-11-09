@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Session logs on disk.** Everything the Console tab shows, plus the app's own diagnostic
+  lines (the queue, sources, metadata), is also written to
+  `%LOCALAPPDATA%\HorizonRadio\logs`, one file per session (the last 10 are kept), so a
+  problem can be looked into after it happened.
 - **Radio lyrics follow the song from its audio.** When a radio song has synced lyrics, Horizon
   Radio lines the station's audio up against a recording of the song (its video on YouTube or
   Niconico, from VocaDB or a search) and follows the lyrics from exactly where the song is, to a
@@ -141,6 +145,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A Spotify track Spotify won't play fails at once, with the reason.** When Spotify refuses
+  librespot the audio (it does for more and more accounts, librespot #1649), the track used to
+  hang for 15 seconds and fail with "the device may be unavailable". It now moves on within a
+  second, and the Console says Spotify refused the track's audio.
+- **librespot, ffmpeg and yt-dlp no longer outlive the app.** A librespot left running after the
+  app closed stayed logged in as the same Spotify Connect device and took the next session's
+  play commands, so Spotify tracks hung silently and were dropped. Tools now end with the app,
+  however it closes.
 - **Songs the app couldn't identify before get looked up again.** A song that matched nothing was
   remembered as a miss for two weeks, even after matching improved, so a radio song could stay
   unidentified long after the app learned to find it. Misses are now retried as soon as matching

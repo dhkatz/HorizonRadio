@@ -96,7 +96,7 @@ public sealed class SourceConfigStore
             "HorizonRadio",
             "sources.json");
 
-    private static void Log(string msg) => Debug.WriteLine($"[hzn-cfg] {msg}");
+    private static void Log(string msg) => Trace.WriteLine($"[hzn-cfg] {msg}");
 
     /// <summary>Read all values previously stored for <paramref name="sourceId"/>.
     /// Returns a fresh <see cref="ConfigValues"/> populated with schema defaults

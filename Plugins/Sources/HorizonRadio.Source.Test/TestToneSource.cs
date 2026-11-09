@@ -65,7 +65,7 @@ public sealed class TestToneSource(double frequencyHz = 440.0, double amplitude 
         var sw = Stopwatch.StartNew();
         var nextChunk = TimeSpan.Zero;
 
-        Debug.WriteLine($"[hzn-tone] starting {frequencyHz} Hz");
+        Trace.WriteLine($"[hzn-tone] starting {frequencyHz} Hz");
 
         while (!ct.IsCancellationRequested)
         {

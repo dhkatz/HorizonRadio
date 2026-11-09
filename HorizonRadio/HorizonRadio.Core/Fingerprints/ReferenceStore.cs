@@ -85,7 +85,7 @@ public sealed class ReferenceStore
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                Debug.WriteLine($"[hzn-sync] couldn't store a fingerprint: {ex.Message}");
+                Trace.WriteLine($"[hzn-sync] couldn't store a fingerprint: {ex.Message}");
             }
         }
     }
@@ -103,7 +103,7 @@ public sealed class ReferenceStore
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            Debug.WriteLine($"[hzn-sync] couldn't read stored fingerprints: {ex.Message}");
+            Trace.WriteLine($"[hzn-sync] couldn't read stored fingerprints: {ex.Message}");
             return [];
         }
     }
