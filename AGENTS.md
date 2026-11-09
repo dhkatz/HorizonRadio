@@ -37,6 +37,7 @@ HorizonRadio/   the app: UI (Avalonia), Core (headless engine), Core.Tests, Titl
 Plugins/        everything that plugs into Horizon Radio (.NET)
   HorizonRadio.Plugins.Abstractions/   the plugin SDK
   Games/  Lyrics/  Metadata/  Sources/  Tools/  one project per plugin
+    Sources/HorizonRadio.Source.Spotify/Native/   the audio tap DLL (CMake), loaded into Spotify Soloist
 Mods/           code that runs inside a game, one folder per game, any toolchain
   ForzaHorizon6/   the version.dll mod (CMake; Bridge/ + Tests/ + docs/)
 HorizonRadio.slnx   the .NET solution (the native mod builds separately with CMake)
@@ -67,6 +68,15 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   Console tab and the app's `Trace` lines are also written to
   `%LOCALAPPDATA%\HorizonRadio\logs` (`LogFile`, one file per session); log with
   `Trace.WriteLine`, not `Debug.WriteLine`, which no listener can capture.
+  Spotify playback uses librespot; for a track Spotify refuses librespot the audio of,
+  the Spotify plugin can play it through Spotify Soloist instead (Spotify's own Connect
+  client), taking what Soloist plays with `horizon_audio_tap.dll` (`Native/`, `AudioTap`):
+  loaded into Soloist, it patches the process's shared WASAPI vtables
+  (`IAudioClient`/`IAudioRenderClient`), copies each rendered block to
+  `\\.\pipe\HorizonRadio.tap.<pid>` and releases it marked silent, so Soloist plays
+  nothing out loud. `AudioTapConverter` turns its format (usually 48 kHz float) into the
+  pipeline's. Windows applies an app's mixer volume before any per-process capture, so
+  muting Soloist or capturing it from outside can't do this.
   A source factory is one of two kinds. A content source (`IContentSourceFactory`:
   local files, YouTube, Spotify links, internet radio) turns a locator into
   `PlayableItem`s and only ever plays through the queue (`QueuePlayback` +
@@ -382,3 +392,15 @@ cmake --build --preset windows-x64-analysis-debug
 The `analysis` preset flips on `CMAKE_CXX_CLANG_TIDY` so every TU is
 linted during compile. It's ~3× slower than a plain build; keep it
 off for the dev iteration loop.
+
+The Spotify plugin's audio tap (`Plugins/Sources/HorizonRadio.Source.Spotify/Native/`) is
+its own CMake project with the same presets and the same `.clang-format`/`.clang-tidy`
+(keep them in step with the mod's):
+
+```powershell
+cd Plugins/Sources/HorizonRadio.Source.Spotify/Native
+clang-format -i (rg --files include src Tests -g '*.cpp' -g '*.hpp')
+cmake --preset windows-x64; cmake --build --preset windows-x64-debug; ctest --preset windows-x64-debug
+cmake --build --preset windows-x64-release --target horizon_audio_tap   # what the plugin bundles
+cmake --preset windows-x64-analysis; cmake --build --preset windows-x64-analysis-debug --target horizon_audio_tap
+```
