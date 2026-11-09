@@ -47,6 +47,10 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
     // and read from the stderr-drain thread.
     private TaskCompletionSource? _trackStarted;
     private TaskCompletionSource? _trackEnded;
+    // Set when librespot reports the track unavailable; the result says whether Spotify
+    // refused its audio key (seen on stderr since the play began).
+    private TaskCompletionSource<bool>? _trackRefused;
+    private volatile bool _keyRefused;
     private Action? _onPlaying;
     private bool _playingFired;
 
@@ -136,6 +140,7 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
 
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var refused = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         // Reset position/duration BEFORE publishing the new _trackEnded, so a late
         // end_of_track for the *previous* track (delivered on the stderr thread in the
@@ -147,6 +152,8 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
         {
             _trackStarted = started;
             _trackEnded = ended;
+            _trackRefused = refused;
+            _keyRefused = false;
             _onPlaying = onPlaying;
             _playingFired = false;
         }
@@ -207,7 +214,18 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
                 // Give librespot a moment to actually start streaming before we trust the
                 // end signal — also guards against a stale end_of_track from a previous
                 // track racing the new play.
-                await WaitWithTimeoutAsync(started.Task, TimeSpan.FromSeconds(5), ct).ConfigureAwait(false);
+                await WaitWithTimeoutAsync(Task.WhenAny(started.Task, refused.Task), TimeSpan.FromSeconds(5), ct)
+                    .ConfigureAwait(false);
+
+                // librespot gave up on the track: asking again gets the same answer.
+                if (refused.Task.IsCompleted)
+                {
+                    var keyRefused = refused.Task.Result;
+                    Log(keyRefused
+                        ? "play: Spotify refused the track's audio key to librespot"
+                        : "play: librespot reports the track unavailable");
+                    throw new SpotifyTrackUnavailableException(trackUri, keyRefused);
+                }
 
                 confirmed = started.Task.IsCompleted || _routing.Frames > 0 || ctx.IsPaused();
                 if (confirmed || ct.IsCancellationRequested) break;
@@ -294,6 +312,7 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
             {
                 _trackStarted = null;
                 _trackEnded = null;
+                _trackRefused = null;
                 _onPlaying = null;
             }
 
@@ -456,6 +475,14 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
 
     private void OnStderr(string line)
     {
+        // librespot's own log: Spotify refusing the key that decrypts the track. It then
+        // reports the track "unavailable" (below).
+        if (line.Contains("audio key error", StringComparison.OrdinalIgnoreCase))
+        {
+            _keyRefused = true;
+            return;
+        }
+
         // "HZNEV <event> <track_id?> <position_ms?> <duration_ms?>"
         if (!line.StartsWith("HZNEV ", StringComparison.Ordinal)) return;
 
@@ -495,6 +522,11 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
                 // truly missed end is caught by the duration backstop or, failing that,
                 // the end-wait's stall watchdog.
                 if (ReachedEnd()) lock (_sync) { _trackEnded?.TrySetResult(); }
+                break;
+
+            case "unavailable":
+                // librespot couldn't load the track and gave up on it: no audio will come.
+                lock (_sync) { _trackRefused?.TrySetResult(_keyRefused); }
                 break;
         }
     }

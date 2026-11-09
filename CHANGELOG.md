@@ -145,6 +145,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A Spotify track Spotify won't play fails at once, with the reason.** When Spotify refuses
+  librespot the audio (it does for more and more accounts, librespot #1649), the track used to
+  hang for 15 seconds and fail with "the device may be unavailable". It now moves on within a
+  second, and the Console says Spotify refused the track's audio.
 - **librespot, ffmpeg and yt-dlp no longer outlive the app.** A librespot left running after the
   app closed stayed logged in as the same Spotify Connect device and took the next session's
   play commands, so Spotify tracks hung silently and were dropped. Tools now end with the app,
