@@ -26,6 +26,7 @@ public sealed class SoloistUnavailableException : Exception
 public sealed class SoloistPlaybackService : IAsyncDisposable
 {
     private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan TapTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan TrackTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan StallTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan RestoreTimeout = TimeSpan.FromSeconds(8);
@@ -232,58 +233,105 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
             var dll = _tapDll() ?? throw new SoloistUnavailableException(
                 "This build of Horizon Radio is missing horizon_audio_tap.dll, which Soloist playback needs.");
 
-            Directory.CreateDirectory(options.DataDirectory);
-            var portFile = Path.Combine(options.DataDirectory, "ws.port");
-            File.Delete(portFile); // a stale one from a crash would point at nothing
-
-            var psi = new ProcessStartInfo(options.ExecutablePath)
+            for (var attempt = 1; ; attempt++)
             {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                StandardOutputEncoding = Encoding.UTF8,
-                StandardErrorEncoding = Encoding.UTF8,
-            };
-            foreach (var arg in Soloist.BuildArgs(options)) psi.ArgumentList.Add(arg);
-            var process = Process.Start(psi) ?? throw new SoloistUnavailableException("Soloist didn't start.");
-            ChildProcesses.TieToApp(process);
-            process.OutputDataReceived += (_, e) => { if (e.Data is { Length: > 0 } line) ProcessConsole.Append("soloist", line); };
-            process.ErrorDataReceived += (_, e) => { if (e.Data is { Length: > 0 } line) ProcessConsole.Append("soloist", line); };
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-            _process = process;
-            _lifetime = new CancellationTokenSource();
-            Log($"started soloist pid={process.Id}");
-
-            // The tap goes in before Soloist opens any audio (it does when it first plays).
-            try
-            {
-                _tap = await AudioTap.AttachAsync(process, dll, ct).ConfigureAwait(false);
+                try
+                {
+                    await LaunchAsync(options, dll, ct).ConfigureAwait(false);
+                    return;
+                }
+                catch (TapException ex) when (attempt < 2)
+                {
+                    Log($"the audio tap didn't set up ({ex.Message}): restarting Soloist");
+                    await StopAsync().ConfigureAwait(false);
+                }
+                catch (TapException ex)
+                {
+                    await StopAsync().ConfigureAwait(false);
+                    throw new SoloistUnavailableException($"Couldn't take Soloist's audio: {ex.Message}", ex);
+                }
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                throw new SoloistUnavailableException($"Couldn't take Soloist's audio: {ex.Message}", ex);
-            }
-            _tap.Log += line => Log($"tap: {line}");
-            var lifetime = _lifetime.Token;
-            _ = Task.Run(() => _tap.RunAsync(_routing, lifetime), CancellationToken.None);
-
-            var port = await WaitForPortAsync(process, portFile, ct).ConfigureAwait(false);
-            _authKnown = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            var socket = new ClientWebSocket();
-            await socket.ConnectAsync(new Uri($"ws://127.0.0.1:{port}"), ct).ConfigureAwait(false);
-            _socket = socket;
-            _ = Task.Run(() => ReceiveAsync(socket, lifetime), CancellationToken.None);
-
-            try { await _authKnown.Task.WaitAsync(TimeSpan.FromSeconds(10), ct).ConfigureAwait(false); }
-            catch (TimeoutException) { throw new SoloistUnavailableException("Soloist didn't report whether it's logged in."); }
         }
         finally
         {
             _startGate.Release();
         }
     }
+
+    private async Task LaunchAsync(SoloistOptions options, string dll, CancellationToken ct)
+    {
+        Directory.CreateDirectory(options.DataDirectory);
+        var portFile = Path.Combine(options.DataDirectory, "ws.port");
+        File.Delete(portFile); // a stale one from a crash would point at nothing
+
+        var psi = new ProcessStartInfo(options.ExecutablePath)
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
+        };
+        foreach (var arg in Soloist.BuildArgs(options)) psi.ArgumentList.Add(arg);
+        var process = Process.Start(psi) ?? throw new SoloistUnavailableException("Soloist didn't start.");
+        ChildProcesses.TieToApp(process);
+        process.OutputDataReceived += (_, e) => { if (e.Data is { Length: > 0 } line) ProcessConsole.Append("soloist", line); };
+        process.ErrorDataReceived += (_, e) => { if (e.Data is { Length: > 0 } line) ProcessConsole.Append("soloist", line); };
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+        _process = process;
+        _lifetime = new CancellationTokenSource();
+        Log($"started soloist pid={process.Id}");
+
+        var lifetime = _lifetime.Token;
+
+        // The tap goes in once Soloist is up (its control port is open) and before it opens any
+        // audio, which it does on its first play: loading it at launch raced Soloist's own
+        // start (seen once: neither got going).
+        var port = await WaitForPortAsync(process, portFile, ct).ConfigureAwait(false);
+        await AttachTapAsync(process, dll, lifetime, ct).ConfigureAwait(false);
+
+        _authKnown = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var socket = new ClientWebSocket();
+        await socket.ConnectAsync(new Uri($"ws://127.0.0.1:{port}"), ct).ConfigureAwait(false);
+        _socket = socket;
+        _ = Task.Run(() => ReceiveAsync(socket, lifetime), CancellationToken.None);
+
+        try { await _authKnown.Task.WaitAsync(TimeSpan.FromSeconds(10), ct).ConfigureAwait(false); }
+        catch (TimeoutException) { throw new SoloistUnavailableException("Soloist didn't report whether it's logged in."); }
+    }
+
+    // Loads the tap and waits for it to take Soloist's audio; TapException when it doesn't (Soloist
+    // would play out loud).
+    private async Task AttachTapAsync(Process process, string dll, CancellationToken lifetime, CancellationToken ct)
+    {
+        AudioTap tap;
+        try
+        {
+            tap = await AudioTap.AttachAsync(process, dll, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new TapException(ex.Message, ex);
+        }
+        _tap = tap;
+        tap.Log += line => Log($"tap: {line}");
+        _ = Task.Run(() => tap.RunAsync(_routing, lifetime), CancellationToken.None);
+
+        bool hooked;
+        try
+        {
+            hooked = await tap.Hooked.WaitAsync(TapTimeout, ct).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            throw new TapException($"it stopped at \"{tap.LastLog ?? "loading"}\"");
+        }
+        if (!hooked) throw new TapException(tap.LastLog ?? "hooks not installed");
+    }
+
+    private sealed class TapException(string message, Exception? inner = null) : Exception(message, inner);
 
     // Soloist says whether it's logged in as soon as we connect, but a paired Soloist is still
     // restoring its session then (measured: logged in ~1 s later), so a "no" gets a few seconds to

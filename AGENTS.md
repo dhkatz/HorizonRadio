@@ -83,7 +83,8 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   librespot first; on `SpotifyTrackUnavailableException.AudioKeyRefused` (and for the rest
   of the session once that's happened) it plays through `SoloistPlaybackService`, which
   starts `soloist.exe` with the user's key (`Tools/HorizonRadio.Tools.Soloist`), loads the
-  tap before Soloist opens any audio, and drives it over its WebSocket API. Soloist has no
+  tap once Soloist is up (its control port open; loading it at launch raced Soloist's own start)
+  and before Soloist opens any audio (its first play), waits for the tap's hooks (`AudioTap.Hooked`), and drives it over its WebSocket API. Soloist has no
   "finished" event and autoplays a related track after a single one, and becoming the
   active device resumes its previous track, so `SoloistTrack` starts a track at the first
   `track_changed` after Soloist acknowledges the `play` and ends it at the next one (or an

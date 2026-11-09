@@ -161,6 +161,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Soloist could fail to start with "Couldn't take Soloist's audio".** The audio tap was loaded
+  the moment Soloist launched, and once neither got going. It now goes in once Soloist is up,
+  and if it still doesn't set up, Soloist is restarted once. The Console shows each step the tap
+  takes.
 - **Source settings save as you edit them.** The Sources tab only saved a source's settings
   when you pressed Play, Start or Connect there, so a setting typed in and then used from
   elsewhere (the Soloist key, then a track played from search) was never saved. When Spotify

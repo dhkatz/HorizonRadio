@@ -35,8 +35,19 @@ public sealed class AudioTap : IAsyncDisposable
         return File.Exists(path) ? path : null;
     }
 
-    /// <summary>Lines the tap logs (hooks installed or not); raised on the reading thread.</summary>
+    /// <summary>Lines the tap logs (its setup steps, then hooks installed or not); raised on the
+    /// reading thread.</summary>
     public event Action<string>? Log;
+
+    /// <summary>Completes once the tap has set up while <see cref="RunAsync"/> reads: true when it
+    /// takes the process's audio, false when it couldn't (the process plays out loud).</summary>
+    public Task<bool> Hooked => _hooked.Task;
+
+    /// <summary>The last line the tap logged: the step it's on while <see cref="Hooked"/> waits.</summary>
+    public string? LastLog => _lastLog;
+
+    private readonly TaskCompletionSource<bool> _hooked = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private volatile string? _lastLog;
 
     /// <summary>Frames delivered to the sink so far, at <see cref="Audio.AudioFormat.SampleRate"/>.</summary>
     public long FramesDelivered => Interlocked.Read(ref _framesOut);
@@ -91,7 +102,11 @@ public sealed class AudioTap : IAsyncDisposable
                 });
                 break;
             case KindLog:
-                Log?.Invoke(Encoding.UTF8.GetString(payload));
+                var line = Encoding.UTF8.GetString(payload);
+                _lastLog = line;
+                if (line == "hooks installed") _hooked.TrySetResult(true);
+                else if (line.StartsWith("hooks NOT installed", StringComparison.Ordinal)) _hooked.TrySetResult(false);
+                Log?.Invoke(line);
                 break;
         }
     }
