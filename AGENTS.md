@@ -80,9 +80,11 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   nothing out loud. `AudioTapConverter` turns its format (usually 48 kHz float) into the
   pipeline's. Windows applies an app's mixer volume before any per-process capture, so
   muting Soloist or capturing it from outside can't do this. `SpotifyPlayableItem` tries
-  librespot first; on `SpotifyTrackUnavailableException.AudioKeyRefused` (and for the rest
-  of the session once that's happened) it plays through `SoloistPlaybackService`, which
-  starts `soloist.exe` with the user's key (`Tools/HorizonRadio.Tools.Soloist`), loads the
+  librespot first; on `SpotifyTrackUnavailableException.AudioKeyRefused` it plays through
+  `SoloistPlaybackService`, and once Soloist has played a refused track, Soloist goes first
+  (`SpotifyPlayerChoice`, `spotify-player.json`, kept across sessions) until librespot is
+  due another try: a day later, or at once when its build changes. A play librespot delivers
+  puts it back first. `SoloistPlaybackService` starts `soloist.exe` with the user's key (`Tools/HorizonRadio.Tools.Soloist`), loads the
   tap once Soloist is up (its control port open; loading it at launch raced Soloist's own start)
   and before Soloist opens any audio (its first play), waits for the tap's hooks (`AudioTap.Hooked`), and drives it over its WebSocket API. Soloist has no
   "finished" event and autoplays a related track after a single one, and becoming the
