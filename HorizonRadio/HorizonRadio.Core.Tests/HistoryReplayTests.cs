@@ -1,4 +1,7 @@
 using HorizonRadio.Core.History;
+using HorizonRadio.Core.Models;
+using HorizonRadio.Core.Sources;
+using HorizonRadio.Core.Sources.Queue;
 using HorizonRadio.Core.Sources.Spotify;
 using HorizonRadio.Core.Sources.YouTube;
 
@@ -46,5 +49,32 @@ public class HistoryReplayTests
         var (sourceId, locator) = HistoryReplay.DeriveOrigin(externalId);
         Assert.Null(sourceId);
         Assert.Null(locator);
+    }
+
+    [Fact]
+    public void A_track_is_added_elsewhere_as_its_origin_named_after_the_song()
+    {
+        var track = new Track(" Melt ", "ryo", null, null, "youtube", "YouTube", ExternalId: "youtube:abc");
+
+        Assert.Equal(
+            new ContentRef(YouTubeSourceFactory.SourceId, "https://www.youtube.com/watch?v=abc", "Melt"),
+            HistoryReplay.OriginOf(track));
+    }
+
+    [Fact]
+    public void A_radio_song_has_no_origin_to_add()
+    {
+        var song = new Track("Melt", "ryo", null, null, "radio", "Radio", ExternalId: "radio:ryo - Melt");
+        Assert.Null(HistoryReplay.OriginOf(song));
+    }
+
+    [Fact]
+    public void Queue_previews_carry_what_plays_them()
+    {
+        var track = new Track("Song", "Artist", null, null, "local", "Local Files", ExternalId: @"local:C:\Music\Song.mp3");
+        Assert.Equal(new ContentRef("local", @"C:\Music\Song.mp3", "Song"), QueuePreview.ForTrack(track).Origin);
+
+        var entry = new ContentRef("spotify-driven", "spotify:playlist:abc", "Road Trip");
+        Assert.Equal(entry, QueuePreview.ForEntry(entry).Origin);
     }
 }

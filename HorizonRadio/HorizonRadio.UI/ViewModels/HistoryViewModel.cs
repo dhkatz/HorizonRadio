@@ -33,14 +33,12 @@ namespace HorizonRadio.UI.ViewModels;
 /// </summary>
 public sealed partial class HistoryViewModel : ViewModelBase
 {
-    // Per-source result ceiling for the playable-URL search (Spotify dev apps cap at 10).
-    private const int SearchLimit = 10;
-
     private readonly PlayHistoryStore? _store;
     private readonly QueuePlayback? _queue;
     private readonly MetadataResolver? _resolver;
     private readonly Action<string>? _openSearch;
     private readonly ToastManager? _toasts;
+    private readonly SongActions? _songs;
 
     // Rows whose enrichment has settled (art + verdict + any playable sources resolved). A row is
     // removed from here if its enrichment couldn't complete (no search source ready yet, or a
@@ -56,13 +54,15 @@ public sealed partial class HistoryViewModel : ViewModelBase
         QueuePlayback queue,
         MetadataResolver? resolver,
         Action<string>? openSearch,
-        ToastManager? toasts)
+        ToastManager? toasts,
+        SongActions? songs = null)
     {
         _store = store;
         _queue = queue;
         _resolver = resolver;
         _openSearch = openSearch;
         _toasts = toasts;
+        _songs = songs;
         _store.Changed += OnStoreChanged;
         Rebuild();
     }
@@ -108,7 +108,8 @@ public sealed partial class HistoryViewModel : ViewModelBase
         entry,
         play: PlayAsync,
         report: e => GitHubReport.OpenIssueDraft(e, _toasts),
-        remove: id => _store?.Remove(id));
+        remove: id => _store?.Remove(id),
+        song: e => _songs?.For(SongOf(e)));
 
     private void EnrichRows()
     {
@@ -150,7 +151,7 @@ public sealed partial class HistoryViewModel : ViewModelBase
                     // service (e.g. Spotify). Searching only when matched is what keeps a fuzzy
                     // title-only parse from latching onto the wrong artist's same-titled track.
                     var pvSources = HistorySourceMatch.FromPvs(resolved.Playables);
-                    var (searchHits, ran) = await FindSourcesAsync(final, CancellationToken.None).ConfigureAwait(false);
+                    var (searchHits, ran) = await SongSources.SearchAsync(final, CancellationToken.None).ConfigureAwait(false);
                     foundSources = HistorySourceMatch.Combine(pvSources, searchHits);
                     newState = HistoryMatchState.Matched;
                     // Settle when the search actually ran, or when we have PVs and there's no search
@@ -183,25 +184,14 @@ public sealed partial class HistoryViewModel : ViewModelBase
         finally { EnrichmentThrottle.Gate.Release(); }
     }
 
-    // Find a playable URL per service for an identified song. Searches the canonical name and keeps
-    // only the conservatively-matching hit per source (the multi-source set the picker offers).
-    // Returns ran = false when no search source was available or the search errored, so the caller
-    // can retry later rather than treating "couldn't search" as "no sources exist".
-    private static async Task<(IReadOnlyList<ReplaySource> Sources, bool Ran)> FindSourcesAsync(Track song, CancellationToken ct)
+    // A played song as something to add to the queue or a mix: its first playable source, else
+    // (a radio song nothing has been found for yet) its details, to find it when it's added.
+    private static Song SongOf(PlayHistoryEntry e)
     {
-        if (!UnifiedSearch.HasReadySource) return ([], false);
-        var query = $"{song.Artist} {song.Title}".Trim();
-        if (string.IsNullOrWhiteSpace(query)) return ([], true);
-
-        UnifiedSearchResult result;
-        try { result = await UnifiedSearch.SearchAsync(query, SearchLimit, ct: ct).ConfigureAwait(false); }
-        catch (OperationCanceledException) { throw; }
-        catch (Exception ex) { Trace.WriteLine($"[hzn-history-vm] source search: {ex.Message}"); return ([], false); }
-
-        var sources = HistorySourceMatch.Select(song.Artist, song.Title, result.Results)
-            .Select(r => new ReplaySource(r.SourceId, SourceCatalog.Find(r.SourceId)?.DisplayName ?? r.SourceId, r.Locator))
-            .ToList();
-        return (sources, true);
+        var title = string.IsNullOrWhiteSpace(e.Title) ? "Unknown track" : e.Title;
+        var artist = string.IsNullOrWhiteSpace(e.Artist) ? null : e.Artist;
+        var origin = e.Sources.Count > 0 ? new ContentRef(e.Sources[0].SourceId, e.Sources[0].Locator, title) : null;
+        return new Song(title, artist, origin, BuildSeed(e));
     }
 
     // Reconstruct a resolver seed from a stored entry. A Spotify uri (kept as a replay source) also
@@ -260,6 +250,7 @@ public sealed partial class HistoryRowViewModel : ViewModelBase
 {
     public PlayHistoryEntry Entry { get; }
     private readonly Func<PlayHistoryEntry, ReplaySource?, Task> _play;
+    private readonly Func<PlayHistoryEntry, SongTarget?> _song;
 
     public string Id => Entry.Id;
     public string Title { get; }
@@ -270,6 +261,9 @@ public sealed partial class HistoryRowViewModel : ViewModelBase
     [ObservableProperty] private Bitmap? thumbnail;
     [ObservableProperty] private HistoryMatchState matchState;
     [ObservableProperty] private IReadOnlyList<ReplaySourceOption> playSources = [];
+
+    /// <summary>The song, for its Add To Queue and Add To Mix buttons and right-click menu.</summary>
+    [ObservableProperty] private SongTarget? song;
 
     public bool HasThumbnail => Thumbnail != null;
     public bool HasSubtitle => !string.IsNullOrWhiteSpace(Subtitle);
@@ -288,10 +282,12 @@ public sealed partial class HistoryRowViewModel : ViewModelBase
         PlayHistoryEntry entry,
         Func<PlayHistoryEntry, ReplaySource?, Task> play,
         Action<PlayHistoryEntry> report,
-        Action<string> remove)
+        Action<string> remove,
+        Func<PlayHistoryEntry, SongTarget?> song)
     {
         Entry = entry;
         _play = play;
+        _song = song;
         Title = string.IsNullOrWhiteSpace(entry.Title) ? "Unknown track" : entry.Title;
         Subtitle = entry.Artist;
         SourceLabel = entry.SourceDisplay;
@@ -311,6 +307,8 @@ public sealed partial class HistoryRowViewModel : ViewModelBase
         PlaySources = Entry.Sources
             .Select(s => new ReplaySourceOption(s.SourceDisplay, new AsyncRelayCommand(() => _play(Entry, s))))
             .ToList();
+        // Sources found since (a radio song identified) change what Add To Queue adds.
+        Song = _song(Entry);
     }
 
     partial void OnThumbnailChanged(Bitmap? value) => OnPropertyChanged(nameof(HasThumbnail));

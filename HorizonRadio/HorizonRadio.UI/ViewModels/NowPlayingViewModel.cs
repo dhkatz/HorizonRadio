@@ -42,6 +42,13 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     [ObservableProperty] private Bitmap? albumArt;
     [ObservableProperty] private bool isConnected;
 
+    /// <summary>The song playing now, for the track card's right-click menu (here and in the
+    /// player bar); null when nothing is.</summary>
+    [ObservableProperty] private SongTarget? currentSong;
+
+    /// <summary>Adds songs to the queue or a mix (set by the shell).</summary>
+    public SongActions? Songs { get; set; }
+
     /// <summary>True once a source has actually emitted a track. The
     /// "Source: …" pill in the Now Playing card binds to this so the
     /// pill stays hidden during the empty-state placeholder, where
@@ -724,6 +731,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         SourceId = track.SourceId;
         SourceDisplay = track.SourceDisplay;
         AlbumArt = DecodeArt(track.AlbumArt);
+        CurrentSong = Songs?.For(Song.FromTrack(track, resolved: true));
         Lyrics.OnTrack(track);
 
         // Capabilities may have only just become known (e.g. YouTube finished
@@ -752,6 +760,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
             SourceDisplay = "—";
             SourceId = "";
             AlbumArt = null;
+            CurrentSong = null;
             Lyrics.Clear();
         }
 

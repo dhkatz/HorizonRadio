@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             xmlns:views="using:HorizonRadio.UI.Views"
              xmlns:material="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="640"
              x:Class="HorizonRadio.UI.Views.HistoryView"
@@ -47,7 +48,8 @@
             <ItemsControl ItemsSource="{Binding Items}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="{x:Type vm:HistoryRowViewModel}">
-                        <Border Classes="Card historyRow" Padding="10" Margin="0,0,0,8">
+                        <Border Classes="Card historyRow" Padding="10" Margin="0,0,0,8"
+                                views:SongMenu.Target="{Binding Song}">
                             <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center"
                                   Background="Transparent">
 
@@ -113,6 +115,16 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
+                                    <Button Classes="Ghost" Padding="6" Command="{Binding Song.AddToQueueCommand}"
+                                            IsVisible="{Binding Song, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                            ToolTip.Tip="Add To Queue">
+                                        <material:MaterialIcon Kind="PlaylistPlay" Width="16" Height="16"/>
+                                    </Button>
+                                    <Button Classes="Ghost" Padding="6" views:SongMenu.MixPicker="{Binding Song}"
+                                            IsVisible="{Binding Song, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                            ToolTip.Tip="Add To Mix">
+                                        <material:MaterialIcon Kind="PlaylistPlus" Width="16" Height="16"/>
+                                    </Button>
                                     <Button Classes="Ghost" Padding="6" Command="{Binding RemoveCommand}"
                                             ToolTip.Tip="Remove from history">
                                         <material:MaterialIcon Kind="Close" Width="16" Height="16"/>

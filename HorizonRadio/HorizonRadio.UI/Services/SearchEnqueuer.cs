@@ -19,6 +19,9 @@ public sealed class SearchEnqueuer
     private readonly QueuePlayback _queue;
     private readonly ToastManager? _toasts;
 
+    /// <summary>Adds a result to a mix (its rows' Add To Mix), when the shell has one.</summary>
+    public ViewModels.SongActions? Songs { get; init; }
+
     public SearchEnqueuer(QueuePlayback queue, ToastManager? toasts = null)
     {
         _queue = queue;

@@ -8,18 +8,20 @@ namespace HorizonRadio.Core.Sources.Queue;
 /// playlist can be huge, so we never expand it eagerly — instead the provider
 /// returns a rolling window of these: the already-resolved items of the current
 /// entry (exact title/artist) followed by one <see cref="IsPlaceholder"/> row per
-/// upcoming entry (a folder / playlist that hasn't been resolved yet).
+/// upcoming entry (a folder / playlist that hasn't been resolved yet). <see cref="Origin"/> is
+/// what plays the row again (to queue it or add it to a mix), when it can be re-addressed.
 /// </summary>
-public sealed record QueuePreview(string Title, string Subtitle, bool IsPlaceholder)
+public sealed record QueuePreview(string Title, string Subtitle, bool IsPlaceholder, ContentRef? Origin = null)
 {
     public static QueuePreview ForTrack(Track t) => new(
         string.IsNullOrWhiteSpace(t.Title) ? "Unknown track" : t.Title,
         string.IsNullOrWhiteSpace(t.Artist) ? "" : t.Artist,
-        IsPlaceholder: false);
+        IsPlaceholder: false,
+        History.HistoryReplay.OriginOf(t));
 
     public static QueuePreview ForEntry(ContentRef entry)
     {
         var source = SourceCatalog.Find(entry.SourceId)?.DisplayName ?? entry.SourceId;
-        return new(entry.DisplayName ?? entry.Locator, source, IsPlaceholder: true);
+        return new(entry.DisplayName ?? entry.Locator, source, IsPlaceholder: true, entry);
     }
 }

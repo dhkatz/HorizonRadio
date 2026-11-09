@@ -3,12 +3,14 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             xmlns:views="using:HorizonRadio.UI.Views"
              mc:Ignorable="d" d:DesignWidth="360" d:DesignHeight="200"
              x:Class="HorizonRadio.UI.Views.TrackInfoView"
              x:Name="Root"
              x:DataType="vm:NowPlayingViewModel">
 
-    <Panel>
+    <!-- Right-click the song for Add To Queue / Add To Mix (the Dashboard card and the player bar). -->
+    <Panel Background="Transparent" views:SongMenu.Target="{Binding CurrentSong}">
         <!-- Large layout (Dashboard): big art on the left, text on the right. -->
         <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,*"
               IsVisible="{Binding !#Root.Compact}">

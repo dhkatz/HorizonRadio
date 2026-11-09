@@ -51,6 +51,10 @@ public sealed class MixEntryDescriber(
         return info;
     }
 
+    /// <summary>Keep what's already known about an entry (a song added from where it was showing,
+    /// with its title and cover), so a mix shows it at once instead of looking it up.</summary>
+    public void Remember(ContentRef entry, MixEntryInfo info) => store?.Put(entry, info);
+
     /// <summary>Forget what's kept for any entry not in <paramref name="entries"/> (every
     /// entry of every mix), so removed entries don't linger on disk.</summary>
     public void KeepOnly(IEnumerable<ContentRef> entries) => store?.Prune(entries);
