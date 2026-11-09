@@ -165,6 +165,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Spotify playback through Soloist is sturdier.**
+  - When Soloist fails on a track before any audio (an expired build, for one), librespot plays it
+    instead of every track failing until the next daily check.
+  - With autoplay off, the end of a track is recognized from where it is now, so it no longer replays.
+  - A skipped track's late reply from Soloist can't end the next one.
+  - A track Soloist can't play fails at once.
+  - Soloist restarts when its audio stops arriving.
+  - Updating Soloist from the Tools tab works while it's running.
+- **librespot refusals are told apart from rate limits.** Spotify rate-limiting librespot no longer
+  counts as a refusal, and a late refusal from a skipped track no longer fails the next one.
+- **A secret setting that can't be decrypted is kept.** One encrypted for another Windows account
+  or PC is kept as stored until you enter a new one, instead of being erased on the next save.
+  Session log names include the process id.
 - **Soloist could fail to start with "Couldn't take Soloist's audio".** The audio tap was loaded
   the moment Soloist launched, and once neither got going. It now goes in once Soloist is up,
   and if it still doesn't set up, Soloist is restarted once. The Console shows each step the tap

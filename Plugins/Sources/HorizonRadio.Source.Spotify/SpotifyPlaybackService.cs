@@ -51,6 +51,9 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
     // refused its audio key (seen on stderr since the play began).
     private TaskCompletionSource<bool>? _trackRefused;
     private volatile bool _keyRefused;
+    // The track this play asked for and the one librespot is loading for it (a relink can
+    // differ): an "unavailable" for any other track is a late one from a skipped play.
+    private string? _requestedId, _loadingId;
 
     /// <summary>Spotify refused librespot a track's audio key this session. It refuses per
     /// account, so later tracks can skip librespot (and the second it takes to be refused).</summary>
@@ -161,6 +164,8 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
             _trackEnded = ended;
             _trackRefused = refused;
             _keyRefused = false;
+            _requestedId = trackUri.Split(':')[^1];
+            _loadingId = null;
             _onPlaying = onPlaying;
             _playingFired = false;
         }
@@ -483,11 +488,12 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
 
     private void OnStderr(string line)
     {
-        // librespot's own log: Spotify refusing the key that decrypts the track. It then
-        // reports the track "unavailable" (below).
-        if (line.Contains("audio key error", StringComparison.OrdinalIgnoreCase))
+        // librespot's own log: Spotify refusing the key that decrypts the track ("error audio
+        // key <seq> <code>"); it then reports the track "unavailable" (below). Code 2 is Spotify
+        // rate-limiting the requests, which passes; the others refuse the account.
+        if (AudioKeyErrorCode(line) is { } code)
         {
-            _keyRefused = true;
+            if (code != "2") _keyRefused = true;
             return;
         }
 
@@ -532,11 +538,35 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
                 if (ReachedEnd()) lock (_sync) { _trackEnded?.TrySetResult(); }
                 break;
 
+            case "loading" when parts.Length >= 3:
+                // A fresh load: what earlier tracks were refused doesn't count for it.
+                lock (_sync)
+                {
+                    _loadingId = parts[2];
+                    _keyRefused = false;
+                }
+                break;
+
             case "unavailable":
                 // librespot couldn't load the track and gave up on it: no audio will come.
-                lock (_sync) { _trackRefused?.TrySetResult(_keyRefused); }
+                lock (_sync)
+                {
+                    var id = parts.Length >= 3 ? parts[2] : null;
+                    if (id == null || id == _requestedId || id == _loadingId) _trackRefused?.TrySetResult(_keyRefused);
+                }
                 break;
         }
+    }
+
+    /// <summary>The code in librespot's "error audio key &lt;seq&gt; &lt;code&gt;" log line, or null
+    /// for any other line.</summary>
+    internal static string? AudioKeyErrorCode(string line)
+    {
+        const string Marker = "error audio key ";
+        var at = line.IndexOf(Marker, StringComparison.Ordinal);
+        if (at < 0) return null;
+        var fields = line[(at + Marker.Length)..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return fields.Length >= 2 ? fields[1] : null;
     }
 
     // True when playback has advanced to within a small margin of the track length

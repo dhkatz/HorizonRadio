@@ -83,7 +83,14 @@ public sealed class AudioTap : IAsyncDisposable
     public async Task RunAsync(IPcmSink sink, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(sink);
-        await ReadMessagesAsync(_pipe, (payload, kind) => Handle(kind, payload, sink), ct).ConfigureAwait(false);
+        try
+        {
+            await ReadMessagesAsync(_pipe, (payload, kind) => Handle(kind, payload, sink), ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _hooked.TrySetResult(false); // reading ended before the tap said it was set up
+        }
     }
 
     private void Handle(ushort kind, ReadOnlySpan<byte> payload, IPcmSink sink)

@@ -122,6 +122,11 @@ public sealed class SourceConfigStore
     // that was encrypted on disk, so a secret stays encrypted even if saved before its schema loads.
     private readonly Dictionary<string, HashSet<string>> _secretKeys = new();
 
+    // Secrets on disk this Windows user can't decrypt (sources.json copied from another account or
+    // PC, or the account's keys reset), kept as stored so a save doesn't erase them; a new value
+    // replaces one.
+    private readonly Dictionary<(string Source, string Key), string> _unreadable = new();
+
     private void MarkSecret(string sourceId, string key)
     {
         lock (_secretKeys)
@@ -210,6 +215,7 @@ public sealed class SourceConfigStore
                         {
                             store.MarkSecret(src.Name, prop.Name);
                             value = SecretText.Unprotect(text);
+                            if (value == null) store._unreadable[(src.Name, prop.Name)] = text;
                         }
                         bag[prop.Name] = value;
                     }
@@ -267,9 +273,7 @@ public sealed class SourceConfigStore
                     writer.WriteStartObject(sourceId);
                     foreach (var (k, v) in bag)
                     {
-                        var stored = v is string { Length: > 0 } plain && IsSecret(sourceId, k)
-                            ? SecretText.Protect(plain)
-                            : v;
+                        if (!TryStoredForm(sourceId, k, v, out var stored)) continue;
                         WriteValue(writer, k, stored);
                     }
                     writer.WriteEndObject();
@@ -281,6 +285,31 @@ public sealed class SourceConfigStore
         catch (Exception ex)
         {
             Log($"save failed: {ex.Message}");
+        }
+    }
+
+    // What a value is written as: a secret encrypted (or as it was, when it couldn't be read and
+    // nothing replaced it). False to leave it out: a secret that couldn't be encrypted is never
+    // written in plain text, and the rest of the settings still save.
+    private bool TryStoredForm(string sourceId, string key, object? value, out object? stored)
+    {
+        stored = value;
+        if (!IsSecret(sourceId, key)) return true;
+        if (value is not string { Length: > 0 } plain)
+        {
+            if (_unreadable.TryGetValue((sourceId, key), out var kept)) stored = kept;
+            return true;
+        }
+        _unreadable.Remove((sourceId, key));
+        try
+        {
+            stored = SecretText.Protect(plain);
+            return true;
+        }
+        catch (System.Security.Cryptography.CryptographicException ex)
+        {
+            Log($"a secret setting couldn't be encrypted, so it isn't saved: {ex.Message}");
+            return false;
         }
     }
 

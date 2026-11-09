@@ -94,6 +94,30 @@ public sealed class SecretSettingTests : IDisposable
     }
 
     [Fact]
+    public void A_secret_this_user_cant_decrypt_is_kept_until_replaced()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        // As if sources.json came from another Windows account: valid base64, not this user's DPAPI.
+        const string foreign = SecretText.Prefix + "AAECAwQFBgcICQ==";
+        File.WriteAllText(_path,
+            "{\"perSource\":{\"spotify-driven\":{\"soloistKey\":\"" + foreign + "\",\"deviceName\":\"Horizon Radio\"}}}");
+
+        var store = SourceConfigStore.LoadFromDisk(_path);
+        var values = store.Load("spotify-driven", Schema);
+        Assert.Null(values.GetString("soloistKey"));
+        values.Set("deviceName", "Renamed");
+        store.Save("spotify-driven", values);
+        store.SaveToDisk(_path);
+        Assert.Contains(foreign, File.ReadAllText(_path), StringComparison.Ordinal);
+
+        values.Set("soloistKey", "a-new-key");
+        store.Save("spotify-driven", values);
+        store.SaveToDisk(_path);
+        Assert.DoesNotContain(foreign, File.ReadAllText(_path), StringComparison.Ordinal);
+        Assert.Equal("a-new-key", SourceConfigStore.LoadFromDisk(_path).Load("spotify-driven", Schema).GetString("soloistKey"));
+    }
+
+    [Fact]
     public void A_secret_stays_encrypted_when_saved_before_its_settings_are_shown()
     {
         if (!OperatingSystem.IsWindows()) return;

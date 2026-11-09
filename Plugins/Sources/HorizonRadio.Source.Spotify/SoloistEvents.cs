@@ -58,9 +58,9 @@ internal sealed record SoloistEvent(
                 Message: Str(root, "message"),
                 Command: Str(root, "command"));
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
         {
-            return null;
+            return null; // not JSON, or a field of a shape we don't expect
         }
     }
 
@@ -97,17 +97,21 @@ internal sealed class SoloistTrack
     private static readonly TimeSpan EndSlack = TimeSpan.FromSeconds(2);
 
     private readonly Func<bool> _userPaused;
+    private readonly Func<long> _nowUnixMs;
     private long _positionMs, _stampMs;
     private double _speed;
 
     private readonly string _requested;
     private bool _acknowledged;
 
-    public SoloistTrack(string requestedUri, TimeSpan? duration, Func<bool> userPaused)
+    /// <param name="nowUnixMs">The clock Soloist's position anchors are on (Unix ms); the system's
+    /// unless a test drives it.</param>
+    public SoloistTrack(string requestedUri, TimeSpan? duration, Func<bool> userPaused, Func<long>? nowUnixMs = null)
     {
         _requested = requestedUri;
         Duration = duration;
         _userPaused = userPaused;
+        _nowUnixMs = nowUnixMs ?? (() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
     }
 
     public string? Uri { get; private set; }
@@ -191,8 +195,8 @@ internal sealed class SoloistTrack
         return SoloistTrackStep.None;
     }
 
-    private bool NearEnd() =>
-        Duration is { } d && TimeSpan.FromMilliseconds(_positionMs) >= d - EndSlack;
+    // Where the track is now, not at Soloist's last anchor: those come every several seconds.
+    private bool NearEnd() => Duration is { } d && PositionAt(_nowUnixMs()) >= d - EndSlack;
 
     private SoloistTrackStep End()
     {

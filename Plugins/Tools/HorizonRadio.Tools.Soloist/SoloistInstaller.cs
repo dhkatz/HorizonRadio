@@ -34,6 +34,7 @@ public sealed class SoloistInstaller : ToolInstallerBase
         ToolsPaths.EnsureDir(Kind);
         var targetDir = ToolsPaths.DirectoryFor(Kind);
         var tmpZip = Path.Combine(targetDir, "soloist.zip.tmp");
+        TryDelete(Path.Combine(targetDir, Soloist.ExeName + MovedAside)); // left by the last update
 
         using var http = CreateHttpClient(TimeSpan.FromMinutes(10));
         try
@@ -108,6 +109,26 @@ public sealed class SoloistInstaller : ToolInstallerBase
         return Convert.ToHexStringLower(hash);
     }
 
+    private const string MovedAside = ".old";
+
+    // A Soloist playing this session locks its exe against being overwritten, but not against
+    // being renamed: move it aside, and the new build runs from Soloist's next start.
+    private static void Replace(string tmp, string dst)
+    {
+        try
+        {
+            File.Move(tmp, dst, overwrite: true);
+            return;
+        }
+        catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && File.Exists(dst))
+        {
+        }
+        var aside = dst + MovedAside;
+        TryDelete(aside);
+        File.Move(dst, aside);
+        File.Move(tmp, dst);
+    }
+
     private static void Extract(string zipPath, string targetDir, CancellationToken ct)
     {
         using var archive = ZipFile.OpenRead(zipPath);
@@ -129,8 +150,7 @@ public sealed class SoloistInstaller : ToolInstallerBase
                 {
                     src.CopyTo(fs);
                 }
-                // A running Soloist locks its exe; the app stops it before updating.
-                File.Move(tmp, dst, overwrite: true);
+                Replace(tmp, dst);
             }
             finally
             {
