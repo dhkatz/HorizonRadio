@@ -114,6 +114,10 @@ internal sealed class SoloistTrack
     public TimeSpan? Duration { get; private set; }
     public bool Started => Uri != null;
     public bool IsPlaying { get; private set; }
+
+    /// <summary>Soloist says this track is paused (by anyone: the user here, the Spotify app, a
+    /// device handover).</summary>
+    public bool IsPaused { get; private set; }
     public bool Ended { get; private set; }
 
     /// <summary>Where the track is, from Soloist's last position anchor.</summary>
@@ -173,6 +177,7 @@ internal sealed class SoloistTrack
     private SoloistTrackStep OnStatus(string? status)
     {
         if (!Started) return SoloistTrackStep.None;
+        if (status is "playing" or "paused") IsPaused = status == "paused";
         switch (status)
         {
             case "playing" when !IsPlaying:

@@ -88,6 +88,9 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   active device resumes its previous track, so `SoloistTrack` starts a track at the first
   `track_changed` after Soloist acknowledges the `play` and ends it at the next one (or an
   idle/paused stop at the end), and audio only reaches the sink in between.
+  An unpaired Soloist holds the track while the user pairs it (`PairingNeeded`, a toast); pairing
+  hands the Spotify app's playback over, paused, so a pause the user didn't make here is undone
+  (and a play that hasn't started is re-sent).
   A source factory is one of two kinds. A content source (`IContentSourceFactory`:
   local files, YouTube, Spotify links, internet radio) turns a locator into
   `PlayableItem`s and only ever plays through the queue (`QueuePlayback` +
