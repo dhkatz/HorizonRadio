@@ -28,6 +28,7 @@ internal static class TestModuleInit
             new ToolDescriptor(ToolKind.YtDlp, "yt-dlp.exe"),
             new ToolDescriptor(ToolKind.Ffmpeg, "ffmpeg.exe"),
             new ToolDescriptor(ToolKind.Librespot, "librespot.exe"),
+            new ToolDescriptor(ToolKind.Soloist, "soloist.exe"),
             new ToolDescriptor(ToolKind.TitleModel, "title-model.gguf", IsData: true),
         ]);
 

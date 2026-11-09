@@ -31,6 +31,8 @@ public sealed class SpotifyContentSourceFactory : IContentSourceFactory, IAuthen
     public const string KeyCacheDir = "cacheDir";
     public const string KeyBitrate = "bitrate";
     public const string KeyNormalise = "normalise";
+    public const string KeySoloistKey = "soloistKey";
+    public const string KeySoloistExecutable = "soloistExecutable";
 
     private static readonly string[] BitrateOptions = ["auto", "96", "160", "320"];
 
@@ -101,6 +103,25 @@ public sealed class SpotifyContentSourceFactory : IContentSourceFactory, IAuthen
                 Label:       "Volume normalisation",
                 Default:     true,
                 Description: "Spotify's per-track ReplayGain. Keeps loud and quiet tracks consistent."),
+
+            new TextField(
+                Key:         KeySoloistKey,
+                Label:       "Spotify Soloist key",
+                IsSecret:    true,
+                Placeholder: "from developer.spotify.com/dashboard/soloist",
+                Description: "Spotify refuses librespot the audio of some tracks, for some accounts all of them. " +
+                             "With your own Soloist key (Premium), those tracks play through Spotify Soloist, " +
+                             "Spotify's own Connect client, instead: Horizon Radio takes its audio inside Soloist " +
+                             "so it plays in game, not out loud. That's against Spotify's developer terms and " +
+                             "could get the key revoked. Stored encrypted for your Windows account.")
+                { IsEnvironment = true },
+
+            new ToolField(
+                Key:         KeySoloistExecutable,
+                Label:       "soloist.exe path",
+                ToolKind:    Tools.ToolKind.Soloist,
+                Default:     ToolResolver.Discover(Tools.ToolKind.Soloist) ?? "",
+                Description: "Install via the Tools tab (downloaded from Spotify), or point at an existing soloist.exe."),
         ];
     }
 

@@ -67,7 +67,10 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   logged in as the same Connect device and takes the next session's plays. The
   Console tab and the app's `Trace` lines are also written to
   `%LOCALAPPDATA%\HorizonRadio\logs` (`LogFile`, one file per session); log with
-  `Trace.WriteLine`, not `Debug.WriteLine`, which no listener can capture.
+  `Trace.WriteLine`, not `Debug.WriteLine`, which no listener can capture. A
+  source setting that's a credential is a `TextField` with `IsSecret`:
+  `SourceConfigStore` writes it encrypted (`SecretText`, DPAPI for the Windows user,
+  `dpapi:<base64>`) and the form masks it.
   Spotify playback uses librespot; for a track Spotify refuses librespot the audio of,
   the Spotify plugin can play it through Spotify Soloist instead (Spotify's own Connect
   client), taking what Soloist plays with `horizon_audio_tap.dll` (`Native/`, `AudioTap`):

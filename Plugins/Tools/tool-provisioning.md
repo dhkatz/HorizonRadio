@@ -15,6 +15,16 @@ The app drives external binaries it doesn't contain:
   would actively rot.
 - **ffmpeg** — decoder. Third-party; tracks its upstream's current
   build.
+- **Spotify Soloist** — Spotify's own Connect client, for the Spotify
+  tracks librespot is refused. Third-party, **never bundled or hosted by
+  us**: Spotify asks that it isn't redistributed ("link users to this
+  page instead"), so the installer fetches Spotify's Windows build from
+  Spotify's own CDN when the user installs it. Spotify publishes no
+  checksum, but the CDN's `ETag` is the zip's MD5: the download is
+  checked against it, kept as `soloist.zip.md5`, and compared on the
+  freshness check (a HEAD request). Builds **stop running 90 days after
+  they're built** (exit code 10; `soloist.exe --version` prints the build
+  date), so staying on the latest matters more than for any other tool.
 
 We also wanted dev/nightly builds where "the app I'm running knows which
 tools it needs." The naive approach — "app built from commit `abcdef`
