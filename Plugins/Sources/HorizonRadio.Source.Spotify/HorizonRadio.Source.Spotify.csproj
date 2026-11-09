@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\HorizonRadio\HorizonRadio.Core\HorizonRadio.Core.csproj" />
     <ProjectReference Include="..\..\Tools\HorizonRadio.Tools.Librespot\HorizonRadio.Tools.Librespot.csproj" />
+    <ProjectReference Include="..\..\Tools\HorizonRadio.Tools.Soloist\HorizonRadio.Tools.Soloist.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -79,7 +79,15 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   `\\.\pipe\HorizonRadio.tap.<pid>` and releases it marked silent, so Soloist plays
   nothing out loud. `AudioTapConverter` turns its format (usually 48 kHz float) into the
   pipeline's. Windows applies an app's mixer volume before any per-process capture, so
-  muting Soloist or capturing it from outside can't do this.
+  muting Soloist or capturing it from outside can't do this. `SpotifyPlayableItem` tries
+  librespot first; on `SpotifyTrackUnavailableException.AudioKeyRefused` (and for the rest
+  of the session once that's happened) it plays through `SoloistPlaybackService`, which
+  starts `soloist.exe` with the user's key (`Tools/HorizonRadio.Tools.Soloist`), loads the
+  tap before Soloist opens any audio, and drives it over its WebSocket API. Soloist has no
+  "finished" event and autoplays a related track after a single one, and becoming the
+  active device resumes its previous track, so `SoloistTrack` starts a track at the first
+  `track_changed` after Soloist acknowledges the `play` and ends it at the next one (or an
+  idle/paused stop at the end), and audio only reaches the sink in between.
   A source factory is one of two kinds. A content source (`IContentSourceFactory`:
   local files, YouTube, Spotify links, internet radio) turns a locator into
   `PlayableItem`s and only ever plays through the queue (`QueuePlayback` +

@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Spotify tracks Spotify won't give librespot play through Spotify Soloist.** Spotify now
+  refuses librespot the audio of some tracks, and for some accounts all of them. Once Soloist is
+  installed (Tools tab) and your Soloist key is in the Spotify settings, those tracks play through
+  Soloist, Spotify's own Connect client, into the game like any other, and Soloist itself stays
+  silent. After the first refusal, later tracks go straight to Soloist. The first time, pick
+  "Horizon Radio (Soloist)" once in the Spotify app to log it in. This is against Spotify's
+  developer terms and could get the key revoked.
 - **Spotify Soloist in the Tools tab.** Installs Spotify's own Connect client straight from
   Spotify, checked against the checksum Spotify's servers give, and shows when Spotify has a
   newer build (each one stops working 90 days after release). The Spotify settings have a place
