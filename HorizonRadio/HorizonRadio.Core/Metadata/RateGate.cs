@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -22,12 +21,21 @@ public sealed class RateGate : IDisposable
     private readonly TimeSpan _minInterval;
     private readonly object _lock = new();
     private readonly LinkedList<Waiter> _queue = new();
-    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private readonly TimeProvider _time;
+    private readonly long _start;
     private TimeSpan? _lastGrant;
     private bool _pumping;
     private bool _disposed;
 
-    public RateGate(TimeSpan minInterval) => _minInterval = minInterval;
+    /// <param name="time">The clock it spaces callers by; the system's unless a test drives it.</param>
+    public RateGate(TimeSpan minInterval, TimeProvider? time = null)
+    {
+        _minInterval = minInterval;
+        _time = time ?? TimeProvider.System;
+        _start = _time.GetTimestamp();
+    }
+
+    private TimeSpan Elapsed => _time.GetElapsedTime(_start);
 
     private sealed class Waiter(PriorityTicket? ticket)
     {
@@ -83,9 +91,9 @@ public sealed class RateGate : IDisposable
                     _pumping = false;
                     return;
                 }
-                wait = _lastGrant is { } last ? last + _minInterval - _clock.Elapsed : TimeSpan.Zero;
+                wait = _lastGrant is { } last ? last + _minInterval - Elapsed : TimeSpan.Zero;
             }
-            if (wait > TimeSpan.Zero) await Task.Delay(wait).ConfigureAwait(false);
+            if (wait > TimeSpan.Zero) await Task.Delay(wait, _time).ConfigureAwait(false);
 
             Waiter? next;
             lock (_lock)
@@ -93,7 +101,7 @@ public sealed class RateGate : IDisposable
                 next = PickNext();
                 if (next == null) continue; // everyone queued gave up during the wait
                 _queue.Remove(next);
-                _lastGrant = _clock.Elapsed;
+                _lastGrant = Elapsed;
             }
             next.Registration.Dispose();
             next.Done.TrySetResult();
