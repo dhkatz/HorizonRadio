@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lines (the queue, sources, metadata), is also written to
   `%LOCALAPPDATA%\HorizonRadio\logs`, one file per session (the last 10 are kept), so a
   problem can be looked into after it happened.
+- **Groundwork for playing Spotify tracks librespot is refused.** A small native DLL
+  (`horizon_audio_tap.dll`, bundled with the app) can take the audio of Spotify Soloist, Spotify's
+  own Connect client, without it playing out loud. Not used yet: the Soloist fallback comes
+  next. The release build now also builds and bundles this DLL, and CI tests and lints it.
 - **Radio lyrics follow the song from its audio.** When a radio song has synced lyrics, Horizon
   Radio lines the station's audio up against a recording of the song (its video on YouTube or
   Niconico, from VocaDB or a search) and follows the lyrics from exactly where the song is, to a

@@ -1,0 +1,65 @@
+# Same checks as Mods/ForzaHorizon6/.clang-tidy (see its header for why each opt-out exists),
+# applied to the audio tap DLL. Keep the two in step.
+Checks: >
+  clang-analyzer-*,
+  bugprone-*,
+  modernize-*,
+  performance-*,
+  portability-*,
+  concurrency-*,
+  cppcoreguidelines-*,
+  misc-*,
+  readability-container-size-empty,
+  readability-delete-null-pointer,
+  readability-duplicate-include,
+  readability-inconsistent-declaration-parameter-name,
+  readability-misleading-indentation,
+  readability-non-const-parameter,
+  readability-redundant-*,
+  readability-static-accessed-through-instance,
+  -bugprone-easily-swappable-parameters,
+  -clang-analyzer-optin.core.EnumCastOutOfRange,
+  -clang-analyzer-optin.performance.Padding,
+  -cppcoreguidelines-avoid-c-arrays,
+  -cppcoreguidelines-avoid-const-or-ref-data-members,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -cppcoreguidelines-owning-memory,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-type-const-cast,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-type-union-access,
+  -cppcoreguidelines-pro-type-vararg,
+  -misc-include-cleaner,
+  -misc-misplaced-const,
+  -misc-no-recursion,
+  -misc-non-private-member-variables-in-classes,
+  -modernize-avoid-c-arrays,
+  -modernize-use-trailing-return-type,
+  -performance-enum-size,
+  -performance-no-int-to-ptr,
+  -portability-avoid-pragma-once,
+  -readability-function-cognitive-complexity,
+  -readability-identifier-length,
+  -readability-identifier-naming,
+  -readability-magic-numbers
+WarningsAsErrors: '*'
+# Matches the (absolute) header paths clang-tidy emits, e.g.
+# .../Mods/ForzaHorizon6/Bridge/include/horizon/.... Scoped to our own
+# include/horizon tree rather than a directory name so it can't accidentally
+# lint vendored or generated headers (FetchContent's _deps, build outputs).
+# Not ^-anchored: the path is absolute, so an anchor would match nothing and
+# silently un-lint everything.
+HeaderFilterRegex: '[/\\]include[/\\]horizon[/\\]'
+FormatStyle: file
+# /EHsc: parse with exceptions on. The MSVC build relies on its lenient default
+# (throw/try compile without /EHsc), but clang-tidy's clang-cl frontend treats
+# throw/try as hard errors unless exceptions are on, which would otherwise break
+# analysis of sigscan/ipc_server and every doctest TU.
+# -Wno-unused-command-line-argument: clang-cl ignores some MSVC-only flags CMake
+# passes (e.g. Release's /GL); WarningsAsErrors would otherwise promote that
+# benign notice to a failure.
+ExtraArgs: ['/EHsc', '-Wno-unused-command-line-argument']

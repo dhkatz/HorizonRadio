@@ -111,7 +111,8 @@
       into this app's build output (the FH6 plugin's version.dll; see
       HorizonRadio.Game.ForzaHorizon6.csproj), marked ExcludeFromSingleFile so it never lands
       inside the single-file exe. Copy it from the build output into PublishDir so the release
-      zip ships it next to the exe, where the Mods page installs it from. Tools are not bundled —
+      zip ships it next to the exe, where the Mods page installs it from. The Spotify plugin's audio
+      tap (horizon_audio_tap.dll, loaded into Spotify Soloist) travels the same way. Tools are not bundled —
       they install on demand from the Tools tab (Plugins/Tools/tool-provisioning.md).
     -->
     <Target Name="CopyBundledBinariesToPublish" AfterTargets="Publish"
@@ -119,6 +120,9 @@
       <Copy SourceFiles="$(OutDir)version.dll"
             DestinationFolder="$(PublishDir)"
             Condition="Exists('$(OutDir)version.dll')" />
+      <Copy SourceFiles="$(OutDir)horizon_audio_tap.dll"
+            DestinationFolder="$(PublishDir)"
+            Condition="Exists('$(OutDir)horizon_audio_tap.dll')" />
     </Target>
 
     <!--

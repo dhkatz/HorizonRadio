@@ -107,6 +107,13 @@ jobs:
         working-directory: Mods/ForzaHorizon6
         run: cmake --build --preset windows-x64-release
 
+      - name: Build horizon_audio_tap.dll (Release, x64)
+        if: steps.guard.outputs.skip != 'true'
+        working-directory: Plugins/Sources/HorizonRadio.Source.Spotify/Native
+        run: |
+          cmake --preset windows-x64
+          cmake --build --preset windows-x64-release --target horizon_audio_tap
+
       # Self-contained publish; version.dll is bundled by the csproj.
       # Tools (incl. librespot) are not bundled — they install on demand
       # from the Tools tab. ZipPublishOutput drops build/release/HorizonRadio.zip.
