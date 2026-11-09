@@ -403,6 +403,19 @@ public partial class App : Application
                 // App self-update check: surface a newer build via the About
                 // footer badge + a one-time launch toast. Dev builds no-op.
                 CheckAppUpdateAsync(vm);
+
+                // A Spotify track Soloist plays waits for the user to pair Soloist once; only
+                // they can (in the Spotify app), so say how.
+                if (_soloistPlayback != null)
+                {
+                    _soloistPlayback.PairingNeeded += device => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        vm.ToastManager.CreateToast("Pair Spotify Soloist")
+                            .WithContent($"Spotify won't play this track through librespot. In the Spotify app, " +
+                                         $"pick the device \"{device}\" once; the track plays when you have.")
+                            .WithDelay(30)
+                            .DismissOnClick()
+                            .ShowInfo());
+                }
             }
         }
 
