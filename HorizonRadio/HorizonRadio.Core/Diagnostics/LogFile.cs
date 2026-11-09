@@ -42,7 +42,8 @@ public static class LogFile
                 Directory.CreateDirectory(dir);
                 Prune(dir, KeepFiles - 1);
                 var stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
-                var path = Path.Combine(dir, $"{Prefix}{stamp}.log");
+                // The pid keeps two instances started in the same second out of each other's file.
+                var path = Path.Combine(dir, $"{Prefix}{stamp}-{Environment.ProcessId}.log");
                 _writer = new StreamWriter(new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
                 {
                     AutoFlush = true,

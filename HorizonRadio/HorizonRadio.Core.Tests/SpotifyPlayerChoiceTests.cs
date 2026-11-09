@@ -68,6 +68,22 @@ public sealed class SpotifyPlayerChoiceTests : IDisposable
     }
 
     [Fact]
+    public void A_refusal_dated_in_the_future_is_due_a_recheck()
+    {
+        Open().LibrespotRefused("build-1"); // saved while the clock was a day ahead
+        _now -= TimeSpan.FromDays(1);
+        Assert.False(Open().PreferSoloist("build-1"));
+    }
+
+    [Theory]
+    [InlineData("[2026-11-09T03:49:55Z ERROR librespot_core::audio_key] error audio key 0 1", "1")]
+    [InlineData("[2026-11-09T03:49:55Z ERROR librespot_core::audio_key] error audio key 3 2", "2")]
+    [InlineData("[2026-11-09T03:49:55Z WARN  librespot_playback::player] Unable to load key, continuing without decryption: Service unavailable { audio key error }", null)]
+    [InlineData("HZNEV unavailable 6UeSC8jEhf9XmUL8EX2rni", null)]
+    public void Reads_the_code_of_a_librespot_audio_key_error(string line, string? code) =>
+        Assert.Equal(code, SpotifyPlaybackService.AudioKeyErrorCode(line));
+
+    [Fact]
     public void A_damaged_file_means_no_preference()
     {
         Directory.CreateDirectory(_dir);

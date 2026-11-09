@@ -70,7 +70,8 @@ public sealed class SoloistTrackTests
     public void Stopping_at_the_end_is_the_end_but_a_pause_midway_is_not()
     {
         var paused = false;
-        var track = new SoloistTrack(Firestarter, TimeSpan.FromSeconds(187), () => paused);
+        long now = 1000;
+        var track = new SoloistTrack(Firestarter, TimeSpan.FromSeconds(187), () => paused, () => now);
         Feed(track, PlayAccepted, TrackChanged(Firestarter, 187000), Status("playing"), Position(60000, 1000, 1));
 
         paused = true;
@@ -78,6 +79,7 @@ public sealed class SoloistTrackTests
         paused = false;
         Assert.Equal(SoloistTrackStep.None, track.Apply(SoloistEvent.Parse(Status("paused"))!)); // not near the end
 
+        now = 2000;
         Feed(track, Status("playing"), Position(186000, 2000, 0));
         Assert.Equal(SoloistTrackStep.Ended, track.Apply(SoloistEvent.Parse(Status("paused"))!)); // autoplay off
     }
@@ -94,6 +96,18 @@ public sealed class SoloistTrackTests
 
         Assert.Equal(SoloistTrackStep.Playing, track.Apply(SoloistEvent.Parse(Status("playing"))!));
         Assert.False(track.IsPaused);
+    }
+
+    [Fact]
+    public void Stopping_at_the_end_counts_from_where_the_track_is_now_not_its_last_anchor()
+    {
+        // Soloist's last position anchor came ~7 s before the end (as in the trace above).
+        long now = 1000;
+        var track = new SoloistTrack(Firestarter, null, () => false, () => now);
+        Feed(track, PlayAccepted, TrackChanged(Firestarter, 187280), Status("playing"), Position(180003, 1000, 1));
+
+        now = 8000;
+        Assert.Equal(SoloistTrackStep.Ended, track.Apply(SoloistEvent.Parse(Status("paused"))!));
     }
 
     [Fact]

@@ -38,7 +38,10 @@ public sealed class SpotifyPlayerChoice
     {
         lock (_lock)
         {
-            return _refusal is { } r && r.Librespot == librespotBuild && _now() - r.At < RecheckAfter;
+            if (_refusal is not { } r || r.Librespot != librespotBuild) return false;
+            // A refusal from the future (the clock was ahead) is due a recheck, not a day's wait.
+            var age = _now() - r.At;
+            return age >= TimeSpan.Zero && age < RecheckAfter;
         }
     }
 

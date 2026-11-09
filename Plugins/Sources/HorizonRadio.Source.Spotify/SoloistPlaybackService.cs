@@ -34,6 +34,7 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
     private static readonly TimeSpan RetryInterval = TimeSpan.FromSeconds(4);
     private static readonly TimeSpan HandoverSettle = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan ResumeInterval = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan PlayAnswerTimeout = TimeSpan.FromSeconds(2);
 
     private readonly Func<SoloistOptions?> _options;
     private readonly Func<string?> _tapDll;
@@ -44,6 +45,10 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
 
     private Process? _process;
     private AudioTap? _tap;
+    private Task? _tapReading;
+    // "play" commands Soloist hasn't answered yet: a late answer to a skipped track's play must
+    // not count as the next track's.
+    private int _pendingPlays;
     private ClientWebSocket? _socket;
     private CancellationTokenSource? _lifetime;
     private TaskCompletionSource<bool>? _authKnown;
@@ -106,26 +111,28 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
         await EnsureStartedAsync(ct).ConfigureAwait(false);
         await WaitForLoginAsync(ct).ConfigureAwait(false);
 
+        await WaitForPlayAnswersAsync(ct).ConfigureAwait(false);
+
         var track = new SoloistTrack(trackUri, duration, ctx.IsPaused);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var playing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _routing.ResetFrames();
         lock (_sync)
         {
+            _routing.Target = null;
             _track = track;
             (_started, _playing, _ended) = (started, playing, ended);
             _onPlaying = onPlaying;
             _trackSink = new PauseAwareSink(ctx.Sink, ctx.IsPaused);
         }
-        _routing.ResetFrames();
-        _routing.Target = null;
         var pausedHere = false;
         try
         {
             if (!_isActive) await SendAsync("activate", ct).ConfigureAwait(false);
             await SendAsync("play", ct, ("uri", trackUri)).ConfigureAwait(false);
 
-            await WaitUntilPlayingAsync(trackUri, started.Task, playing.Task, ct).ConfigureAwait(false);
+            await WaitUntilPlayingAsync(trackUri, started.Task, playing.Task, ended.Task, ct).ConfigureAwait(false);
 
             // Until it ends: follow the user's pause, undo a pause from elsewhere (the Spotify app,
             // a handover: the queue is what plays here), and give up on a stream that's gone quiet.
@@ -167,9 +174,10 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
         finally
         {
             // Nothing more from this track (or the one Soloist autoplays after it) reaches the sink.
-            _routing.Target = null;
+            // Under the lock, so an event handled at this moment can't route it back.
             lock (_sync)
             {
+                _routing.Target = null;
                 _track = null;
                 _started = _playing = _ended = null;
                 _onPlaying = null;
@@ -190,7 +198,7 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
     // over when the user pairs (measured: our track, paused, a few ms after Soloist acknowledged
     // the play, and the device dropped and regained). So while no audio has come, put the track
     // back every few seconds.
-    private async Task WaitUntilPlayingAsync(string trackUri, Task started, Task playing, CancellationToken ct)
+    private async Task WaitUntilPlayingAsync(string trackUri, Task started, Task playing, Task ended, CancellationToken ct)
     {
         var clock = Stopwatch.StartNew();
         while (true)
@@ -200,10 +208,13 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
             {
                 try
                 {
-                    await playing.WaitAsync(left < RetryInterval ? left : RetryInterval, ct).ConfigureAwait(false);
-                    return;
+                    await Task.WhenAny(playing, ended).WaitAsync(left < RetryInterval ? left : RetryInterval, ct)
+                        .ConfigureAwait(false);
                 }
                 catch (TimeoutException) { }
+                if (playing.IsCompleted) return;
+                if (ended.IsCompleted)
+                    throw new InvalidOperationException("Soloist stopped the track before any audio came: it can't play it.");
             }
             if (clock.Elapsed >= TrackTimeout)
             {
@@ -218,6 +229,22 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
         }
     }
 
+    // Soloist answers commands in order but without saying which request an answer is for, so a
+    // new track waits (briefly) until earlier plays are answered.
+    private async Task WaitForPlayAnswersAsync(CancellationToken ct)
+    {
+        var clock = Stopwatch.StartNew();
+        while (Volatile.Read(ref _pendingPlays) > 0)
+        {
+            if (clock.Elapsed > PlayAnswerTimeout)
+            {
+                Volatile.Write(ref _pendingPlays, 0); // an answer that never came (or an error without one)
+                return;
+            }
+            await Task.Delay(25, ct).ConfigureAwait(false);
+        }
+    }
+
     // -- Soloist's process, tap and socket --
 
     private async Task EnsureStartedAsync(CancellationToken ct)
@@ -225,7 +252,11 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
         await _startGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            if (_process is { HasExited: false } && _socket is { State: WebSocketState.Open }) return;
+            if (_process is { HasExited: false } && _socket is { State: WebSocketState.Open }
+                && _tapReading is { IsCompleted: false })
+            {
+                return;
+            }
             await StopAsync().ConfigureAwait(false);
 
             var options = _options() ?? throw new SoloistUnavailableException(
@@ -317,7 +348,7 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
         }
         _tap = tap;
         tap.Log += line => Log($"tap: {line}");
-        _ = Task.Run(() => tap.RunAsync(_routing, lifetime), CancellationToken.None);
+        _tapReading = Task.Run(() => ReadTapAsync(tap, lifetime), CancellationToken.None);
 
         bool hooked;
         try
@@ -329,6 +360,26 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
             throw new TapException($"it stopped at \"{tap.LastLog ?? "loading"}\"");
         }
         if (!hooked) throw new TapException(tap.LastLog ?? "hooks not installed");
+    }
+
+    // Soloist's audio until the app stops it; if reading ends before that, the next play restarts
+    // Soloist (EnsureStartedAsync).
+    private async Task ReadTapAsync(AudioTap tap, CancellationToken lifetime)
+    {
+        try
+        {
+            await tap.RunAsync(_routing, lifetime).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or ObjectDisposedException)
+        {
+            Log($"tap: reading stopped: {ex.Message}");
+            return;
+        }
+        if (!lifetime.IsCancellationRequested) Log("tap: Soloist's audio pipe closed");
     }
 
     private sealed class TapException(string message, Exception? inner = null) : Exception(message, inner);
@@ -424,6 +475,11 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
             _authKnown?.TrySetResult(loggedIn);
         }
         if (e.IsActive is { } active) _isActive = active;
+        if (e.Type is "command_result" or "error" && e.Command == "play"
+            && Interlocked.Decrement(ref _pendingPlays) < 0)
+        {
+            Interlocked.Exchange(ref _pendingPlays, 0);
+        }
         if (e.Type == "error") Log($"error: {e.Message}");
         if (e.Type != "position_sync")
             Trace.WriteLine($"[hzn-soloist] event {e.Type} {e.Status ?? e.Command ?? ""} {e.Uri ?? ""}".TrimEnd());
@@ -462,7 +518,17 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
         foreach (var (name, value) in fields) body[name] = value;
         var bytes = JsonSerializer.SerializeToUtf8Bytes(body);
         await _sendGate.WaitAsync(ct).ConfigureAwait(false);
-        try { await socket.SendAsync(bytes, WebSocketMessageType.Text, true, ct).ConfigureAwait(false); }
+        var isPlay = command == "play";
+        if (isPlay) Interlocked.Increment(ref _pendingPlays);
+        try
+        {
+            await socket.SendAsync(bytes, WebSocketMessageType.Text, true, ct).ConfigureAwait(false);
+        }
+        catch when (isPlay)
+        {
+            Interlocked.Decrement(ref _pendingPlays);
+            throw;
+        }
         finally { _sendGate.Release(); }
     }
 
@@ -484,11 +550,22 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
         }
         if (_process != null)
         {
-            try { if (!_process.HasExited) _process.Kill(entireProcessTree: true); }
-            catch (InvalidOperationException) { }
+            try
+            {
+                if (!_process.HasExited)
+                {
+                    _process.Kill(entireProcessTree: true);
+                    // Gone before a restart reuses its data folder and port file.
+                    using var exit = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                    await _process.WaitForExitAsync(exit.Token).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or OperationCanceledException) { }
             _process.Dispose();
             _process = null;
         }
+        _tapReading = null;
+        _pendingPlays = 0;
         _loggedIn = false;
         _isActive = false;
     }
