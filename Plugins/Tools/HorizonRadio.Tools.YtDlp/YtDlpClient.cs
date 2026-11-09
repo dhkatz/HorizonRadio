@@ -312,6 +312,7 @@ public static class YtDlpClient
 
         using var proc = Process.Start(psi)
                          ?? throw new InvalidOperationException($"failed to spawn {exe}");
+        ChildProcesses.TieToApp(proc);
 
         // Kill the child (and its tree) if the caller cancels — otherwise a cancelled
         // search/resolve leaves yt-dlp running to completion (a process leak when, e.g.,

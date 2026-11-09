@@ -145,6 +145,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **librespot, ffmpeg and yt-dlp no longer outlive the app.** A librespot left running after the
+  app closed stayed logged in as the same Spotify Connect device and took the next session's
+  play commands, so Spotify tracks hung silently and were dropped. Tools now end with the app,
+  however it closes.
 - **Songs the app couldn't identify before get looked up again.** A song that matched nothing was
   remembered as a miss for two weeks, even after matching improved, so a radio song could stay
   unidentified long after the app learned to find it. Misses are now retried as soon as matching
