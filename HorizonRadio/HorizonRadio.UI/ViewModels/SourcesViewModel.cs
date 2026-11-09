@@ -20,7 +20,7 @@ namespace HorizonRadio.UI.ViewModels;
 /// (auto-rendered from the factory's schema), then Play or Start it. A content
 /// source plays its quick-play locator through the queue, like quick play and
 /// search; a self-driven source starts through the playback router, which owns the
-/// engine. Persists the last-selected source + last-used config across runs.
+/// engine. Persists the last-selected source, and each field as it's edited.
 /// </summary>
 public sealed partial class SourcesViewModel : ViewModelBase
 {
@@ -132,6 +132,12 @@ public sealed partial class SourcesViewModel : ViewModelBase
             if (field.Key == contentKey) continue;
             var fvm = ConfigFieldViewModel.For(field, _registry);
             if (stored.TryGetValue(field.Key, out var v)) fvm.SetValue(v);
+            // Save as the user edits: a setting other code reads (the Soloist key, a tool
+            // path) must take effect without pressing Play here first.
+            fvm.PropertyChanged += (_, _) =>
+            {
+                if (ReferenceEquals(SelectedFactory, factory)) SnapshotAndPersist();
+            };
             CurrentSchema.Add(fvm);
         }
         HasNoSchema = CurrentSchema.Count == 0;

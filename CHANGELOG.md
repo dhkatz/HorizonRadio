@@ -160,6 +160,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Source settings save as you edit them.** The Sources tab only saved a source's settings
+  when you pressed Play, Start or Connect there, so a setting typed in and then used from
+  elsewhere (the Soloist key, then a track played from search) was never saved. When Spotify
+  refuses librespot a track and Soloist can't take over, the Console now says what's missing.
 - **Secret settings are encrypted.** A setting that's a credential (the Soloist key) is stored
   encrypted for your Windows account instead of in plain text in `sources.json`, and its box
   shows dots instead of the text.

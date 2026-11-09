@@ -63,7 +63,13 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
     }
 
     /// <summary>A key, soloist.exe and the tap are all there: refused tracks can play here.</summary>
-    public bool IsConfigured => _options() != null && _tapDll() != null;
+    public bool IsConfigured => NotReadyReason == null;
+
+    /// <summary>What's missing for <see cref="IsConfigured"/>, or null when nothing is.</summary>
+    public string? NotReadyReason =>
+        _options() == null ? "add a Spotify Soloist key in the Spotify settings and install Soloist from the Tools tab"
+        : _tapDll() == null ? $"this build doesn't include {AudioTap.DllName}"
+        : null;
 
     public TimeSpan Position
     {

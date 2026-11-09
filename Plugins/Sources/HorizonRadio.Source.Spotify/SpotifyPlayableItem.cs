@@ -112,8 +112,14 @@ public sealed class SpotifyPlayableItem : PlayableItem
             _viaSoloist = false;
             await _playback.PlayTrackAsync(_info.Uri, _info.Duration, ctx, OnPlaying, ct).ConfigureAwait(false);
         }
-        catch (SpotifyTrackUnavailableException ex) when (ex.AudioKeyRefused && soloistReady)
+        catch (SpotifyTrackUnavailableException ex) when (ex.AudioKeyRefused)
         {
+            if (!soloistReady)
+            {
+                Diagnostics.ProcessConsole.Append("spotify", "Spotify refused librespot the audio; no Soloist fallback: "
+                    + (_soloist?.NotReadyReason ?? "Soloist isn't available in this build"));
+                throw;
+            }
             Diagnostics.ProcessConsole.Append("spotify", "Spotify refused librespot the audio; playing it through Soloist");
             await PlayWithSoloistAsync(ctx, OnPlaying, ct).ConfigureAwait(false);
         }
