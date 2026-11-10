@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Friends: see when your friends are online and what they're listening to (Friends).** One of you
+  shows a code on the Friends page and the other types it; you're then friends on all your PCs.
+  Each sees the other online (or when they were last seen) and the song they're playing. You
+  connect to each other directly, with no account and no server of ours, and each side proves who
+  it is with a key only its owner's PCs have. Pairing your PCs (Devices) makes them all the same
+  you to your friends.
 - **Keep your settings, mixes and history in step between your PCs (Settings → Devices).** Choose
   Show Code on one PC and type the code on the other: they pair, then keep their mixes, play
   history and synced settings (lyrics, shuffle, the search order, the metadata providers' order,

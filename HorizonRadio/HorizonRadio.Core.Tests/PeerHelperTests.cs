@@ -233,11 +233,14 @@ public sealed class PeerHelperIntegrationTests : IDisposable
     {
         if (!HelperBuilt()) return;
         var karaoke = new Core.Settings.Setting<bool>("test.karaoke", Core.Settings.SettingScope.Synced, true);
+        var networks = new List<SharedPeerNetwork>();
         Core.Devices.MyDevices Device(string name, Core.Settings.SettingsStore settings)
         {
             settings.Set(Core.Devices.DeviceSettings.Name, name);
-            return new Core.Devices.MyDevices(settings, async ct =>
-                await PeerHelper.StartAsync(Path.Combine(_dir.Path, name + ".key"), PeerDiscovery.Lan, ct: ct),
+            var network = new SharedPeerNetwork(async ct =>
+                await PeerHelper.StartAsync(Path.Combine(_dir.Path, name + ".key"), PeerDiscovery.Lan, ct: ct));
+            networks.Add(network);
+            return new Core.Devices.MyDevices(settings, network.GetAsync,
                 presenceInterval: TimeSpan.FromSeconds(2), sendDelay: TimeSpan.FromMilliseconds(50));
         }
         var desktopSettings = Core.Settings.SettingsStore.CreateInMemory();
@@ -255,6 +258,10 @@ public sealed class PeerHelperIntegrationTests : IDisposable
         var end = DateTime.UtcNow.AddSeconds(15);
         while (laptopSettings.Get(karaoke) && DateTime.UtcNow < end) await Task.Delay(50);
         Assert.False(laptopSettings.Get(karaoke));
+
+        await desktop.DisposeAsync();
+        await laptop.DisposeAsync();
+        foreach (var network in networks) await network.DisposeAsync();
     }
 
     [Fact]

@@ -56,6 +56,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public ControlsViewModel Controls { get; }
     public MixesViewModel Mixes { get; }
     public DevicesViewModel Devices { get; }
+    public FriendsViewModel Friends { get; }
     public ConsoleViewModel Console { get; } = new();
     public AboutViewModel About { get; } = new();
 
@@ -98,6 +99,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Controls = new ControlsViewModel();
         Mixes = new MixesViewModel();
         Devices = new DevicesViewModel();
+        Friends = new FriendsViewModel();
         Queue = new QueueViewModel();
         TopBar = new TopBarViewModel();
         Search = new SearchViewModel();
@@ -123,10 +125,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                                ToastManager toasts,
                                DialogManager dialogManager,
                                DevicesViewModel devices,
+                               FriendsViewModel friends,
                                Core.Lyrics.LyricsService? lyrics = null,
                                Core.Fingerprints.LiveSongSync? songSync = null)
     {
         Devices = devices;
+        Friends = friends;
         ToastManager = toasts;
         DialogManager = dialogManager;
         _game = game;
@@ -218,7 +222,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     // 0 = Now Playing, 1 = Sources, 2 = Metadata, 5 = Tools, 7 = Console, 8 = Controls,
     // 9 = Mixes, 10 = About, 11 = Search, 12 = History, 13 = a game page (SelectedGamePage),
-    // 14 = Settings → Game, 15 = Settings → Devices.
+    // 14 = Settings → Game, 15 = Settings → Devices, 16 = Friends.
     // Retired: 3, 4 (Stats, Mods: now the FH6 plugin's pages) and 6 (Events: a game page now).
     [ObservableProperty] private int selectedWorkspaceIndex;
 
@@ -237,6 +241,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public bool IsGamePageWorkspace => SelectedWorkspaceIndex == GamePageWorkspace;
     public bool IsGameSettingsWorkspace => SelectedWorkspaceIndex == 14;
     public bool IsDevicesWorkspace => SelectedWorkspaceIndex == 15;
+    public bool IsFriendsWorkspace => SelectedWorkspaceIndex == 16;
 
     public string CurrentRoute => SelectedWorkspaceIndex switch
     {
@@ -252,6 +257,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         GamePageWorkspace => SelectedGamePage?.Route ?? "now-playing",
         14 => "game-settings",
         15 => "devices",
+        16 => "friends",
         _ => "now-playing",
     };
 
@@ -280,6 +286,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsGamePageWorkspace));
         OnPropertyChanged(nameof(IsGameSettingsWorkspace));
         OnPropertyChanged(nameof(IsDevicesWorkspace));
+        OnPropertyChanged(nameof(IsFriendsWorkspace));
         OnPropertyChanged(nameof(CurrentRoute));
         UpdateGamePageSelection();
 
@@ -305,6 +312,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [RelayCommand] private void ShowHistory() => SelectedWorkspaceIndex = 12;
     [RelayCommand] private void ShowGameSettings() => SelectedWorkspaceIndex = 14;
     [RelayCommand] private void ShowDevices() => SelectedWorkspaceIndex = 15;
+    [RelayCommand] private void ShowFriends() => SelectedWorkspaceIndex = 16;
 
     [RelayCommand]
     private void ShowGamePage(GamePageItem? page)

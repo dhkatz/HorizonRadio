@@ -117,6 +117,17 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   the group are ignored. The helper starts only once the PC is paired or starts pairing. Anything
   that shows or uses a synced setting has to follow it changing underneath (`Watch`, or the store's
   `Changed`), since another PC can change it at any time.
+- **Friends (`Core/Friends/`)** — `Friends` over the same helper as your devices
+  (`SharedPeerNetwork`: started when either needs it; each feature ignores the other's messages).
+  You are an `Identity`: an ECDSA P-256 key (`identity.key`, secret; handed to a PC when it pairs,
+  so all your PCs are one you) and a name (`identity.name`, synced). Adding a friend runs the same
+  code exchange as pairing (`PairingCode.TopicFor("friend")`) and keeps their public key as a synced
+  setting (`friend.<user id>`), so they're a friend on all your PCs. Presence: each PC advertises
+  `presence/<user id>`; a friend's PC finds it, connects, and each side sends a hello signed over
+  both connections' peer ids, verified against the key kept for that friend; only then is its
+  `friend.status` (what it's playing, from the runner's track) taken in. On exit the app tells the
+  helper to stop first (`SharedPeerNetwork.Stop`), so friends see it leave at once rather than when
+  the connection times out.
 - **Lyrics (`Plugins/Lyrics/`, `Core/Lyrics/`)** — each `ILyricsPlugin` contributes
   one `ILyricsProvider` (Unison, LRCLIB, and VocaDB, whose metadata plugin is also a
   lyrics plugin; when VocaDB has the song but no lyrics it reads the Vocaloid Lyrics

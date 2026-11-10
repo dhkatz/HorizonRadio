@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Channels;
+using HorizonRadio.Core.Friends;
 using HorizonRadio.Core.IO;
 using HorizonRadio.Core.Peers;
 using HorizonRadio.Core.Settings;
@@ -224,6 +225,8 @@ public sealed class MyDevices : IAsyncDisposable
 
                     var now = _time.GetUtcNow();
                     _settings.Set(DeviceSettings.GroupKey, answer.GroupKey);
+                    // Your devices are all you to your friends.
+                    if (answer.IdentityKey is { Length: > 0 } identity) _settings.Set(IdentitySettings.Key, identity);
                     _settings.Set(DeviceSettings.Devices, DeviceList.Merge(answer.Devices ?? [], [new DeviceRecord(network.PeerId, Name, now)]));
                     MarkSeen(host.PeerId, PeerPath.Direct);
                     var joined = _settings.Get(DeviceSettings.Devices).First(d => d.PeerId == host.PeerId);
@@ -487,9 +490,11 @@ public sealed class MyDevices : IAsyncDisposable
                 MarkSeen(from, null);
                 await OnSyncAsync(from, message).ConfigureAwait(false);
                 break;
-            default:
-                Log($"ignored a {message.Type} from {from}, which isn't one of your devices");
+            case DeviceMessage.Sync:
+                Log($"ignored a sync from {from}, which isn't one of your devices");
                 break;
+            default:
+                break; // another feature's message (friends)
         }
     }
 
@@ -521,6 +526,7 @@ public sealed class MyDevices : IAsyncDisposable
             Name = Name,
             Proof = code.Proof("welcome", network.PeerId, from),
             GroupKey = _settings.Get(DeviceSettings.GroupKey),
+            IdentityKey = IdentityKeyToShare(),
             Devices = _settings.Get(DeviceSettings.Devices),
         }.ToJson()).ConfigureAwait(false);
         SetStatus($"Paired with {name}.");
@@ -528,6 +534,12 @@ public sealed class MyDevices : IAsyncDisposable
         EnsurePresence();
         // The other devices hear of the new one.
         await UpdateDevicesAsync([]).ConfigureAwait(false);
+    }
+
+    private string? IdentityKeyToShare()
+    {
+        Identity.GetOrCreate(_settings);
+        return _settings.Get(IdentitySettings.Key);
     }
 
     private async Task OnSyncAsync(string from, DeviceMessage sync)
@@ -721,8 +733,11 @@ public sealed class MyDevices : IAsyncDisposable
 
     private static void Log(string message) => Trace.WriteLine($"[hzn-devices] {message}");
 
+    private int _disposed;
+
     public async ValueTask DisposeAsync()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
         _settings.Changed -= OnSettingChanged;
         await _stop.CancelAsync().ConfigureAwait(false);
         _work.Writer.TryComplete();
@@ -732,8 +747,7 @@ public sealed class MyDevices : IAsyncDisposable
             try { await _presence.ConfigureAwait(false); }
             catch (OperationCanceledException) { }
         }
-        if (_network is IAsyncDisposable network) await network.DisposeAsync().ConfigureAwait(false);
-        _stop.Dispose();
+        _stop.Dispose(); // the network is shared: whoever made it stops it
         _starting.Dispose();
     }
 }

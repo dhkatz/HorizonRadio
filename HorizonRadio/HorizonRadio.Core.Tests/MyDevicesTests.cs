@@ -136,6 +136,7 @@ public sealed class MyDevicesTests : IAsyncDisposable
 
         // The laptop shuts down; the desktop changes a setting meanwhile.
         await laptop.Devices.DisposeAsync();
+        await laptop.Peer()!.DisposeAsync();
         await Eventually(() => desktop.Devices.Devices.Single(d => d.Name == "Laptop").Path == PeerPath.None, "the laptop to go offline");
         desktop.Settings.Set(Karaoke, false);
 
