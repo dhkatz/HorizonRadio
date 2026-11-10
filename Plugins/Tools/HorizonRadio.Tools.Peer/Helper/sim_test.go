@@ -285,3 +285,32 @@ func startService(t *testing.T, h host.Host, disc ...discovery) *testService {
 }
 
 func (s *testService) do(c command) { s.in <- c }
+
+// crashableHost is a public host whose crash drops its socket without a word:
+// its peers' connections to it look alive until they time out, as when a
+// process is killed or a PC loses power.
+func (n *simNet) crashableHost(listen string, opts ...libp2p.Option) (host.Host, func()) {
+	n.t.Helper()
+	src := &sourceIP{}
+	var sock net.PacketConn
+	quic := libp2p.QUICReuse(
+		quicreuse.NewConnManager,
+		quicreuse.OverrideSourceIPSelector(func() (quicreuse.SourceIPSelector, error) { return src, nil }),
+		quicreuse.OverrideListenUDP(func(_ string, addr *net.UDPAddr) (net.PacketConn, error) {
+			src.ip.Store(&addr.IP)
+			n.router.SetAddrPubliclyReachable(addr)
+			c := simnet.NewSimConn(addr)
+			c.SetUpPacketReceiver(n.router)
+			n.router.AddNode(addr, c)
+			sock = c
+			return c, nil
+		}))
+	h, err := libp2p.New(append([]libp2p.Option{
+		quic,
+		libp2p.ListenAddrs(ma.StringCast(listen)),
+		libp2p.ResourceManager(&network.NullResourceManager{}),
+	}, opts...)...)
+	require.NoError(n.t, err)
+	n.t.Cleanup(func() { _ = h.Close() })
+	return h, func() { _ = sock.Close() }
+}

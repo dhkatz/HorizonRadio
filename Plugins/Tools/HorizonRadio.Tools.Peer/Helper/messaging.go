@@ -13,6 +13,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	msmux "github.com/multiformats/go-multistream"
 )
 
 const (
@@ -28,12 +29,18 @@ const (
 // messages to a peer arrive in the order they were sent. Delivery is at most
 // once: a message in flight when a connection drops is lost, so the protocols
 // above catch up when they reconnect.
+//
+// Replies go back over the connection the peer last messaged on. A peer that
+// restarted (crashed, or was killed) leaves its old connection looking alive
+// here until it times out, and a stream on it goes nowhere; the restarted peer
+// messages over its new connection, so that's the one to answer on.
 type messenger struct {
 	h       host.Host
 	deliver func(from peer.ID, msg []byte)
 
-	mu   sync.Mutex
-	outs map[peer.ID]*outbox
+	mu     sync.Mutex
+	outs   map[peer.ID]*outbox
+	latest map[peer.ID]network.Conn // the connection each peer last messaged on
 }
 
 type outbox struct {
@@ -42,7 +49,7 @@ type outbox struct {
 }
 
 func newMessenger(h host.Host, deliver func(peer.ID, []byte)) *messenger {
-	m := &messenger{h: h, deliver: deliver, outs: map[peer.ID]*outbox{}}
+	m := &messenger{h: h, deliver: deliver, outs: map[peer.ID]*outbox{}, latest: map[peer.ID]network.Conn{}}
 	h.SetStreamHandler(messageProtocol, m.receive)
 	return m
 }
@@ -77,15 +84,18 @@ func (m *messenger) send(ctx context.Context, p peer.ID, msg []byte) error {
 	defer o.mu.Unlock()
 	var err error
 	for range 2 { // a stream found broken is replaced once
-		// A stream on a relayed connection moves to the direct one once there is
-		// one: the relay cuts its connection after 2 minutes.
-		if o.s != nil && o.s.Conn().Stat().Limited && bestPath(m.h, p) == "direct" {
+		preferred := m.preferredConn(p)
+		if o.s != nil && m.stale(o.s, p, preferred) {
 			_ = o.s.Close()
 			o.s = nil
 		}
 		if o.s == nil {
 			sctx, cancel := context.WithTimeout(network.WithAllowLimitedConn(ctx, "message"), writeTimeout)
-			o.s, err = m.h.NewStream(sctx, p, messageProtocol)
+			if preferred != nil {
+				o.s, err = openOn(sctx, preferred)
+			} else {
+				o.s, err = m.h.NewStream(sctx, p, messageProtocol)
+			}
 			cancel()
 			if err != nil {
 				o.s = nil
@@ -102,9 +112,53 @@ func (m *messenger) send(ctx context.Context, p peer.ID, msg []byte) error {
 	return err
 }
 
+// preferredConn is the connection p last messaged on, while it's open and
+// isn't a relayed one with a direct one beside it.
+func (m *messenger) preferredConn(p peer.ID) network.Conn {
+	m.mu.Lock()
+	c := m.latest[p]
+	m.mu.Unlock()
+	if c == nil || c.IsClosed() || (c.Stat().Limited && bestPath(m.h, p) == "direct") {
+		return nil
+	}
+	return c
+}
+
+// stale says a stream to p should be replaced: its connection closed, p has
+// since messaged on another one, or it's on a relay (which cuts it after 2
+// minutes) while a direct connection exists.
+func (m *messenger) stale(s network.Stream, p peer.ID, preferred network.Conn) bool {
+	c := s.Conn()
+	return c.IsClosed() ||
+		(preferred != nil && c != preferred) ||
+		(c.Stat().Limited && bestPath(m.h, p) == "direct")
+}
+
+// openOn opens a message stream on one particular connection.
+func openOn(ctx context.Context, c network.Conn) (network.Stream, error) {
+	s, err := c.NewStream(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.SetProtocol(messageProtocol); err != nil {
+		_ = s.Reset()
+		return nil, err
+	}
+	_ = s.SetDeadline(time.Now().Add(writeTimeout))
+	if err := msmux.SelectProtoOrFail(messageProtocol, s); err != nil {
+		_ = s.Reset()
+		return nil, err
+	}
+	_ = s.SetDeadline(time.Time{})
+	return s, nil
+}
+
 func (m *messenger) receive(s network.Stream) {
 	defer s.Close()
 	from := s.Conn().RemotePeer()
+	m.mu.Lock()
+	m.latest[from] = s.Conn()
+	m.mu.Unlock()
 	r := bufio.NewReader(s)
 	for {
 		msg, err := readFrame(r)
