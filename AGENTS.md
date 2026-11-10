@@ -108,7 +108,9 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   HMAC, one attempt per code), the group (`DeviceSettings`: a shared group key, secret, from which
   the devices' meeting topic is derived; the device list, merged newest-first with removals kept),
   and sync: on meeting, each sends every synced setting (`SettingsStore.SyncedSettings`) and merges
-  the other's (`MergeSynced`), then sends changes as they happen. Messages from a peer that isn't in
+  the other's (`MergeSynced`), then sends changes as they happen. Other data rides along as an
+  `IDeviceData` (mixes: `MixSync`, over `MixStore.SyncedMixes`/`MergeSynced`, each mix timed, a
+  deleted one kept as `removed`), touched only on its owner's thread. Messages from a peer that isn't in
   the group are ignored. The helper starts only once the PC is paired or starts pairing. Anything
   that shows or uses a synced setting has to follow it changing underneath (`Watch`, or the store's
   `Changed`), since another PC can change it at any time.
