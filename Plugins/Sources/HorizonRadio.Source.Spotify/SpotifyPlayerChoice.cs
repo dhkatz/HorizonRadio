@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using HorizonRadio.Core.IO;
 
 namespace HorizonRadio.Core.Sources.Spotify;
 
@@ -14,8 +15,7 @@ public sealed class SpotifyPlayerChoice
 {
     public static readonly TimeSpan RecheckAfter = TimeSpan.FromHours(24);
 
-    public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HorizonRadio", "spotify-player.json");
+    public static string DefaultPath => AppPaths.In("spotify-player.json");
 
     private readonly string _path;
     private readonly Func<DateTimeOffset> _now;

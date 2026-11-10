@@ -38,10 +38,7 @@ public sealed class MetadataConfigStore
     private readonly Dictionary<string, Dictionary<string, object?>> _perProvider = new();
 
     private static string DefaultPath =>
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "HorizonRadio",
-            "metadata-config.json");
+        AppPaths.In("metadata-config.json");
 
     private static void Log(string msg) => Trace.WriteLine($"[hzn-meta-cfg] {msg}");
 

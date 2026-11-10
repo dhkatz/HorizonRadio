@@ -49,8 +49,8 @@ public sealed class SpotifySourceFactory : ISelfDrivenSourceFactory
             new TextField(
                 Key:         KeyDeviceName,
                 Label:       "Cast device name",
-                Default:     "Horizon Radio",
-                Placeholder: "Horizon Radio",
+                Default:     Librespot.DefaultDeviceName,
+                Placeholder: Librespot.DefaultDeviceName,
                 Description: "Shown in your Spotify app's Connect device list."),
 
             new DirectoryField(

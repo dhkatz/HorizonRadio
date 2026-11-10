@@ -53,8 +53,7 @@ public sealed class ReferenceStore
     private readonly Lock _lock = new();
 
     public ReferenceStore(string? directory = null) =>
-        _directory = directory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HorizonRadio", "fingerprints");
+        _directory = directory ?? AppPaths.In("fingerprints");
 
     /// <summary>What a song is stored under: its artist and title, the way they're written aside.</summary>
     public static string SongKey(string artist, string title) =>

@@ -423,12 +423,13 @@ public partial class App : Application
     }
 
     // Switching games rewires the audio pipeline, events, and pages, which are built once at
-    // startup: relaunch with the new choice (already saved) and shut this instance down.
+    // startup: relaunch with the new choice (already saved) and shut this instance down. The new
+    // instance gets the same arguments, so it runs as the same profile.
     private static void Restart(IClassicDesktopStyleApplicationLifetime desktop)
     {
         if (Environment.ProcessPath is { } exe)
         {
-            try { System.Diagnostics.Process.Start(exe); }
+            try { System.Diagnostics.Process.Start(exe, desktop.Args ?? []); }
             catch (Exception ex) { System.Diagnostics.Trace.WriteLine($"[hzn-app] restart failed: {ex.Message}"); }
         }
         desktop.Shutdown();

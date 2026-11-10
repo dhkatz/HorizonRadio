@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using HorizonRadio.Core.IO;
 using HorizonRadio.Core.Tools;
 
 namespace HorizonRadio.Tools.Soloist;
@@ -33,7 +34,7 @@ public static partial class Soloist
     public const string ExeName = "soloist.exe";
 
     /// <summary>The Connect device Soloist shows in the Spotify app (librespot is "Horizon Radio").</summary>
-    public const string DefaultDeviceName = "Horizon Radio (Soloist)";
+    public static string DefaultDeviceName => AppPaths.Label("Horizon Radio (Soloist)");
 
     /// <summary>Spotify's own download link for the Windows build. Spotify asks that Soloist isn't
     /// redistributed, so the app fetches it from here on the user's request rather than shipping it.</summary>
@@ -51,8 +52,7 @@ public static partial class Soloist
     public const int ExpiredExitCode = 10;
 
     /// <summary>Soloist's pairing, settings and audio cache, kept with the app's data.</summary>
-    public static string DefaultDataDir => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HorizonRadio", "soloist");
+    public static string DefaultDataDir => AppPaths.In("soloist");
 
     /// <summary>The installed soloist.exe (managed tools dir, or next to the app), or null.</summary>
     public static string? DiscoverExe() => ToolResolver.Discover(ToolKind.Soloist);

@@ -29,9 +29,7 @@ public sealed class MixEntryInfoStore
     /// <c>%LOCALAPPDATA%\HorizonRadio\mix-entries</c>.</param>
     public MixEntryInfoStore(string? dir = null)
     {
-        _dir = dir ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "HorizonRadio", "mix-entries");
+        _dir = dir ?? AppPaths.In("mix-entries");
     }
 
     private string IndexPath => Path.Combine(_dir, "index.json");
