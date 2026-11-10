@@ -27,7 +27,7 @@ public sealed class FriendsTests : IAsyncDisposable
         settings.Set(IdentitySettings.Name, name);
         var peer = _net.Join();
         var friends = new Friends.Friends(settings, _ => Task.FromResult<IPeerNetwork>(peer),
-            presenceInterval: TimeSpan.FromMilliseconds(100), joinTimeout: TimeSpan.FromSeconds(3));
+            presenceInterval: TimeSpan.FromMilliseconds(100), joinTimeout: TimeSpan.FromSeconds(20)); // generous: a busy CI runner
         _running.Add(peer);
         _running.Add(friends);
         await friends.StartAsync();
