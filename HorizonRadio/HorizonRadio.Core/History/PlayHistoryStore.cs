@@ -15,7 +15,9 @@ namespace HorizonRadio.Core.History;
 /// <see cref="MaxEntries"/> (oldest evicted), so the file stays small — no album art is stored
 /// (the list re-enriches art on demand). Mutations raise <see cref="Changed"/> so the History
 /// tab stays in sync; saving is the caller's call via <see cref="SaveToDisk"/>
-/// (<see cref="PlayHistoryService"/> debounces it).
+/// (<see cref="PlayHistoryService"/> debounces it). A song removed, and when the history was last
+/// cleared, are kept too (<c>"removed"</c>, <c>"clearedBefore"</c>), so your devices can keep their
+/// histories in step (<see cref="SyncedHistory"/>, <see cref="MergeSynced"/>).
 ///
 /// File shape:
 /// <code>
@@ -40,6 +42,11 @@ public sealed class PlayHistoryStore
 
     private readonly object _lock = new();
     private readonly List<PlayHistoryEntry> _entries = new(); // newest first
+    private readonly Dictionary<string, DateTimeOffset> _removed = new(StringComparer.Ordinal); // id → when
+    private DateTimeOffset? _clearedBefore;
+
+    /// <summary>How many removed songs are remembered (so another device doesn't bring them back).</summary>
+    private const int MaxRemoved = 2000;
 
     /// <summary>Raised after any add/remove/clear/match-state change, on the mutating thread.</summary>
     public event Action? Changed;
@@ -65,16 +72,100 @@ public sealed class PlayHistoryStore
     public void Remove(string id)
     {
         bool removed;
-        lock (_lock) removed = _entries.RemoveAll(e => e.Id == id) > 0;
+        lock (_lock)
+        {
+            removed = _entries.RemoveAll(e => e.Id == id) > 0;
+            if (removed) RememberRemovedLocked(id, DateTimeOffset.UtcNow);
+        }
         if (removed) Changed?.Invoke();
     }
 
     public void Clear()
     {
         bool any;
-        lock (_lock) { any = _entries.Count > 0; _entries.Clear(); }
+        lock (_lock)
+        {
+            any = _entries.Count > 0;
+            _entries.Clear();
+            _removed.Clear();
+            _clearedBefore = DateTimeOffset.UtcNow;
+        }
         if (any) Changed?.Invoke();
     }
+
+    /// <summary>The history as another of your devices needs it: the songs (all, or the
+    /// <paramref name="newest"/>), the ones removed, and when it was last cleared.</summary>
+    public SyncedHistory SyncedHistory(int? newest = null)
+    {
+        lock (_lock)
+        {
+            return new SyncedHistory(
+                [.. _entries.Take(newest ?? _entries.Count)],
+                [.. _removed.Keys],
+                _clearedBefore);
+        }
+    }
+
+    /// <summary>
+    /// Take in another device's history: songs not here (and not removed here) are added in the
+    /// order they were played, songs removed there go, and a later clearing there drops what was
+    /// played before it. A song already here stays as it is. Raises <see cref="Changed"/> once if
+    /// anything changed, and returns whether it did.
+    /// </summary>
+    public bool MergeSynced(SyncedHistory theirs)
+    {
+        ArgumentNullException.ThrowIfNull(theirs);
+        var changed = false;
+        lock (_lock)
+        {
+            if (theirs.ClearedBefore is { } cleared && (_clearedBefore == null || cleared > _clearedBefore))
+            {
+                _clearedBefore = cleared;
+                changed |= _entries.RemoveAll(e => e.PlayedAt < cleared) > 0;
+            }
+            foreach (var id in theirs.Removed)
+            {
+                if (string.IsNullOrEmpty(id) || _removed.ContainsKey(id)) continue;
+                RememberRemovedLocked(id, DateTimeOffset.UtcNow);
+                changed |= _entries.RemoveAll(e => e.Id == id) > 0;
+            }
+            var known = _entries.Select(e => e.Id).ToHashSet(StringComparer.Ordinal);
+            var added = false;
+            foreach (var entry in theirs.Entries)
+            {
+                if (_removed.ContainsKey(entry.Id) || (_clearedBefore is { } before && entry.PlayedAt < before) || !known.Add(entry.Id)) continue;
+                _entries.Add(entry);
+                added = true;
+            }
+            if (added)
+            {
+                _entries.Sort((a, b) => b.PlayedAt.CompareTo(a.PlayedAt));
+                if (_entries.Count > MaxEntries) _entries.RemoveRange(MaxEntries, _entries.Count - MaxEntries);
+                changed = true;
+            }
+        }
+        if (changed) Changed?.Invoke();
+        return changed;
+    }
+
+    private void RememberRemovedLocked(string id, DateTimeOffset at)
+    {
+        _removed[id] = at;
+        if (_removed.Count <= MaxRemoved) return;
+        foreach (var oldest in _removed.OrderBy(r => r.Value).Take(_removed.Count - MaxRemoved).Select(r => r.Key).ToList())
+            _removed.Remove(oldest);
+    }
+
+    /// <summary>A song as JSON, as the file keeps it.</summary>
+    internal static JsonElement ToJson(PlayHistoryEntry entry)
+    {
+        using var ms = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(ms)) WriteEntry(writer, entry);
+        return JsonDocument.Parse(ms.ToArray()).RootElement.Clone();
+    }
+
+    /// <summary>A song from JSON, or null when it isn't one.</summary>
+    internal static PlayHistoryEntry? FromJson(JsonElement json) => TryReadEntry(json);
 
     /// <summary>Update one entry's identification verdict once its catalog lookup resolves.
     /// No-op (no event) if the entry is gone or the state is unchanged.</summary>
@@ -131,6 +222,17 @@ public sealed class PlayHistoryStore
                 if (store._entries.Count > MaxEntries)
                     store._entries.RemoveRange(MaxEntries, store._entries.Count - MaxEntries);
             }
+            if (root.TryGetProperty("removed", out var removed) && removed.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in removed.EnumerateArray())
+                {
+                    if (ReadString(item, "id") is { Length: > 0 } id
+                        && DateTimeOffset.TryParse(ReadString(item, "at"), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var at))
+                        store._removed[id] = at;
+                }
+            }
+            if (DateTimeOffset.TryParse(ReadString(root, "clearedBefore"), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var cleared))
+                store._clearedBefore = cleared;
         }
         catch (Exception ex)
         {
@@ -154,46 +256,21 @@ public sealed class PlayHistoryStore
             {
                 writer.WriteStartObject();
                 writer.WriteStartArray("entries");
-                foreach (var e in _entries)
-                {
-                    writer.WriteStartObject();
-                    writer.WriteString("id", e.Id);
-                    writer.WriteString("playedAt", e.PlayedAt.ToString("o", CultureInfo.InvariantCulture));
-                    writer.WriteString("title", e.Title);
-                    writer.WriteString("artist", e.Artist);
-                    if (e.Album != null) writer.WriteString("album", e.Album);
-                    if (e.Year is { } y) writer.WriteNumber("year", y);
-                    writer.WriteString("sourceId", e.SourceId);
-                    writer.WriteString("sourceDisplay", e.SourceDisplay);
-                    writer.WriteString("matchState", e.MatchState.ToString());
-                    if (e.Sources.Count > 0)
-                    {
-                        writer.WriteStartArray("sources");
-                        foreach (var s in e.Sources)
-                        {
-                            writer.WriteStartObject();
-                            writer.WriteString("sourceId", s.SourceId);
-                            writer.WriteString("display", s.SourceDisplay);
-                            writer.WriteString("locator", s.Locator);
-                            writer.WriteEndObject();
-                        }
-                        writer.WriteEndArray();
-                    }
-                    if (e.Candidates.Count > 0)
-                    {
-                        writer.WriteStartArray("candidates");
-                        foreach (var c in e.Candidates)
-                        {
-                            writer.WriteStartObject();
-                            if (c.Artist != null) writer.WriteString("artist", c.Artist);
-                            writer.WriteString("title", c.Title);
-                            writer.WriteEndObject();
-                        }
-                        writer.WriteEndArray();
-                    }
-                    writer.WriteEndObject();
-                }
+                foreach (var e in _entries) WriteEntry(writer, e);
                 writer.WriteEndArray();
+                if (_removed.Count > 0)
+                {
+                    writer.WriteStartArray("removed");
+                    foreach (var (id, at) in _removed)
+                    {
+                        writer.WriteStartObject();
+                        writer.WriteString("id", id);
+                        writer.WriteString("at", at.ToString("o", CultureInfo.InvariantCulture));
+                        writer.WriteEndObject();
+                    }
+                    writer.WriteEndArray();
+                }
+                if (_clearedBefore is { } cleared) writer.WriteString("clearedBefore", cleared.ToString("o", CultureInfo.InvariantCulture));
                 writer.WriteEndObject();
             }
             bytes = ms.ToArray();
@@ -209,6 +286,46 @@ public sealed class PlayHistoryStore
         {
             Log($"save failed: {ex.Message}");
         }
+    }
+
+    private static void WriteEntry(Utf8JsonWriter writer, PlayHistoryEntry e)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("id", e.Id);
+        writer.WriteString("playedAt", e.PlayedAt.ToString("o", CultureInfo.InvariantCulture));
+        writer.WriteString("title", e.Title);
+        writer.WriteString("artist", e.Artist);
+        if (e.Album != null) writer.WriteString("album", e.Album);
+        if (e.Year is { } y) writer.WriteNumber("year", y);
+        writer.WriteString("sourceId", e.SourceId);
+        writer.WriteString("sourceDisplay", e.SourceDisplay);
+        writer.WriteString("matchState", e.MatchState.ToString());
+        if (e.Sources.Count > 0)
+        {
+            writer.WriteStartArray("sources");
+            foreach (var s in e.Sources)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("sourceId", s.SourceId);
+                writer.WriteString("display", s.SourceDisplay);
+                writer.WriteString("locator", s.Locator);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+        }
+        if (e.Candidates.Count > 0)
+        {
+            writer.WriteStartArray("candidates");
+            foreach (var c in e.Candidates)
+            {
+                writer.WriteStartObject();
+                if (c.Artist != null) writer.WriteString("artist", c.Artist);
+                writer.WriteString("title", c.Title);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+        }
+        writer.WriteEndObject();
     }
 
     private static PlayHistoryEntry? TryReadEntry(JsonElement item)
@@ -274,3 +391,7 @@ public sealed class PlayHistoryStore
     private static string? ReadString(JsonElement e, string key)
         => e.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 }
+
+/// <summary>A play history as it goes between your devices: songs, the ids of songs removed, and
+/// when it was last cleared (everything played before then is gone).</summary>
+public sealed record SyncedHistory(IReadOnlyList<PlayHistoryEntry> Entries, IReadOnlyList<string> Removed, DateTimeOffset? ClearedBefore);

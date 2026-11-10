@@ -315,12 +315,12 @@ public partial class App : Application
 
                 var gameSettings = new GameSettingsViewModel(gamePlugins, settings, chosenGameId);
                 gameSettings.RestartRequested += () => Restart(desktop);
-                // Your devices: paired PCs keep their synced settings and mixes in step over the peer
+                // Your devices: paired PCs keep their synced settings, mixes and history in step over the peer
                 // helper, which starts only once this PC is paired (or starts pairing). The mix store
                 // belongs to the UI thread, so merges run there.
                 var myDevices = new MyDevices(settings, async ct =>
                     await PeerHelper.StartAsync(PeerHelper.DefaultKeyPath, Core.Peers.PeerDiscovery.All, ct: ct),
-                    data: [new MixSync(mixStore, action => Dispatcher.UIThread.InvokeAsync(action).GetTask())]);
+                    data: [new MixSync(mixStore, action => Dispatcher.UIThread.InvokeAsync(action).GetTask()), new HistorySync(_historyStore)]);
                 _ = myDevices.StartAsync();
                 var devicesVm = new DevicesViewModel(myDevices);
 
