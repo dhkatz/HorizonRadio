@@ -97,7 +97,6 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
     {
         if (_mixes == null) return;
         var mixes = _mixes.All;
-        var reaped = false;
 
         for (var i = MixRows.Count - 1; i >= 0; i--)
         {
@@ -108,7 +107,7 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
             if (m == null)
             {
                 // Mix deleted: drop its row and reap any orphaned bindings to it.
-                reaped |= _store.ClearBindingsForAction(row.Action);
+                _store.ClearBindingsForAction(row.Action);
                 row.Dispose();
                 MixRows.RemoveAt(i);
             }
@@ -129,8 +128,6 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
             row.Controller.SetDevice(SelectedController);
             MixRows.Add(row);
         }
-
-        if (reaped) _store.SaveToDisk();
     }
 
     private void OnDevicesChanged() => Dispatcher.UIThread.Post(RefreshControllers);
@@ -313,7 +310,6 @@ public sealed partial class BindingSlot : ViewModelBase, IDisposable
             if (binding.Kind == InputKind.Keyboard && binding.Code == KeyboardKeys.Escape)
                 return;
             _store.Bind(binding, _action);
-            _store.SaveToDisk();
             _binding = binding;
             Label = binding.Label;
             Glyph = InputGlyphProvider.Resolve(binding);
@@ -342,7 +338,6 @@ public sealed partial class BindingSlot : ViewModelBase, IDisposable
     private void Clear()
     {
         _store.ClearSlot(_action, Slot);
-        _store.SaveToDisk();
         _binding = null;
         Label = "";
         Glyph = null;

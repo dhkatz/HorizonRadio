@@ -30,11 +30,11 @@ public static class HorizonCoreServiceCollectionExtensions
     {
         services.AddSingleton(settings);
         services.AddSingleton(_ => new SourceConfigStore(settings));
-        services.AddSingleton(_ => MetadataConfigStore.LoadFromDisk());
+        services.AddSingleton(_ => new MetadataConfigStore(settings));
         services.AddSingleton(_ => MixStore.LoadFromDisk());
         services.AddSingleton(_ => PlayHistoryStore.LoadFromDisk());
-        services.AddSingleton(_ => EventRuleStore.LoadFromDisk());
-        services.AddSingleton(_ => InputBindingStore.LoadFromDisk());
+        services.AddSingleton(_ => new EventRuleStore(settings));
+        services.AddSingleton(_ => new InputBindingStore(settings));
         services.AddSingleton(_ => new MetadataCache());
 
         // Resolves a mix entry to playable content from the source config; non-disposable and its

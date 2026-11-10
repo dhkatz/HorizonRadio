@@ -1,40 +1,47 @@
-using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
 using System.Linq;
-using System.Text.Json;
+using System.Text.Json.Serialization;
 using HorizonRadio.Core.Events;
-using HorizonRadio.Core.IO;
+using HorizonRadio.Core.Settings;
 
 namespace HorizonRadio.Core.Input;
 
 /// <summary>
-/// Persists input→action bindings to
-/// <c>%LOCALAPPDATA%\HorizonRadio\controls-config.json</c>. Same hand-editable
-/// shape and threading contract as <see cref="EventRuleStore"/>: reads are
-/// lock-free (the input service matches from backend threads), writes come
-/// from the UI thread. Keyed by <see cref="InputBinding.Key"/> so a binding is
-/// matched by physical identity, not by its display label.
-///
-/// File shape:
-/// <code>
-/// { "bindings": [
-///     { "kind": "Keyboard", "code": 57, "label": "Space",
-///       "action": { "type": "TogglePause" } } ] }
-/// </code>
+/// The input→action bindings (the Controls tab), kept in the <see cref="SettingsStore"/> as one
+/// synced list, <see cref="Bindings"/> (one setting rather than one per binding, since a binding
+/// replaces others: one action per slot, one action per input). Reads are lock-free (the input
+/// service matches from backend threads); writes come from the UI thread and are saved at once.
+/// Keyed by <see cref="InputBinding.Key"/> so a binding is matched by physical identity, not by its
+/// display label.
 /// </summary>
 public sealed class InputBindingStore
 {
+    /// <summary>Every binding: <c>{ "kind": "Keyboard", "code": 57, "label": "Space",
+    /// "action": { "type": "TogglePause" } }</c>.</summary>
+    internal static readonly Setting<StoredBinding[]> Bindings = new("controls.bindings", SettingScope.Synced, []);
+
     private sealed record Entry(InputBinding Binding, EventAction Action);
 
-    private readonly ConcurrentDictionary<string, Entry> _byKey = new();
+    private readonly SettingsStore _settings;
+    private readonly Lock _writeLock = new();
+    private volatile IReadOnlyDictionary<string, Entry> _byKey;
 
-    private static string DefaultPath =>
-        AppPaths.In("controls-config.json");
+    /// <summary>A store kept in memory only (tests, the designer).</summary>
+    public InputBindingStore() : this(SettingsStore.CreateInMemory())
+    {
+    }
 
-    private static void Log(string msg) => Trace.WriteLine($"[hzn-controls-cfg] {msg}");
+    public InputBindingStore(SettingsStore settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        _settings = settings;
+        _byKey = Read();
+        // A change made elsewhere (another device, later) replaces what's matched against.
+        settings.Changed += key =>
+        {
+            if (key == Bindings.Key) _byKey = Read();
+        };
+    }
 
     /// <summary>The action bound to <paramref name="binding"/>'s physical
     /// identity, or <see cref="EventAction.None"/> if unbound.</summary>
@@ -67,110 +74,80 @@ public sealed class InputBindingStore
     public void Bind(InputBinding binding, EventAction action)
     {
         var slot = SlotOf(binding);
-        foreach (var stale in _byKey
-                     .Where(kv => (kv.Value.Action == action && SlotOf(kv.Value.Binding) == slot)
-                                  || kv.Key == binding.Key)
-                     .Select(kv => kv.Key).ToList())
-            _byKey.TryRemove(stale, out _);
-        _byKey[binding.Key] = new Entry(binding, action);
+        Update(all =>
+        {
+            foreach (var stale in all
+                         .Where(kv => (kv.Value.Action == action && SlotOf(kv.Value.Binding) == slot)
+                                      || kv.Key == binding.Key)
+                         .Select(kv => kv.Key).ToList())
+                all.Remove(stale);
+            all[binding.Key] = new Entry(binding, action);
+        });
     }
 
     /// <summary>Remove the binding mapped to <paramref name="action"/> in
     /// <paramref name="slot"/>.</summary>
-    public void ClearSlot(EventAction action, string slot)
+    public void ClearSlot(EventAction action, string slot) => Update(all =>
     {
-        foreach (var stale in _byKey
+        foreach (var stale in all
                      .Where(kv => kv.Value.Action == action && SlotOf(kv.Value.Binding) == slot)
                      .Select(kv => kv.Key).ToList())
-            _byKey.TryRemove(stale, out _);
-    }
+            all.Remove(stale);
+    });
 
     /// <summary>Remove every binding mapped to <paramref name="action"/> (any slot).
     /// Reaps orphaned bindings when the thing they target — e.g. a profile — is
     /// deleted. Returns true if anything was removed.</summary>
     public bool ClearBindingsForAction(EventAction action)
     {
-        var stale = _byKey.Where(kv => kv.Value.Action == action).Select(kv => kv.Key).ToList();
-        foreach (var key in stale) _byKey.TryRemove(key, out _);
-        return stale.Count > 0;
-    }
-
-    public static InputBindingStore LoadFromDisk(string? path = null)
-    {
-        path ??= DefaultPath;
-        var store = new InputBindingStore();
-        try
+        var removed = false;
+        Update(all =>
         {
-            if (!File.Exists(path)) return store;
-            using var stream = File.OpenRead(path);
-            using var doc = JsonDocument.Parse(stream);
-            if (!doc.RootElement.TryGetProperty("bindings", out var arr) ||
-                arr.ValueKind != JsonValueKind.Array)
-                return store;
-
-            foreach (var item in arr.EnumerateArray())
-            {
-                if (item.ValueKind != JsonValueKind.Object) continue;
-                if (!item.TryGetProperty("kind", out var k) ||
-                    !Enum.TryParse<InputKind>(k.GetString(), out var kind)) continue;
-                if (!item.TryGetProperty("code", out var c) || c.ValueKind != JsonValueKind.Number) continue;
-
-                var device = item.TryGetProperty("device", out var d) && d.ValueKind == JsonValueKind.String
-                    ? d.GetString() : null;
-                var label = item.TryGetProperty("label", out var l) && l.ValueKind == JsonValueKind.String
-                    ? l.GetString() ?? "" : "";
-                var glyphId = item.TryGetProperty("glyphId", out var g) && g.ValueKind == JsonValueKind.String
-                    ? g.GetString() : null;
-                ControllerStyle? style = item.TryGetProperty("style", out var s) && s.ValueKind == JsonValueKind.String
-                    && Enum.TryParse<ControllerStyle>(s.GetString(), out var parsedStyle) ? parsedStyle : null;
-
-                if (!item.TryGetProperty("action", out var a) || a.ValueKind != JsonValueKind.Object) continue;
-                var typeStr = a.TryGetProperty("type", out var t) ? t.GetString() : null;
-                if (typeStr == null || !Enum.TryParse<EventActionType>(typeStr, out var type)) continue;
-                var param = a.TryGetProperty("param", out var p) && p.ValueKind == JsonValueKind.String
-                    ? p.GetString() : null;
-
-                var binding = new InputBinding(kind, device, c.GetInt32(), label, glyphId, style);
-                store._byKey[binding.Key] = new Entry(binding, new EventAction(type, param));
-            }
-        }
-        catch (Exception ex) { Log($"load failed: {ex.Message}"); }
-        return store;
+            foreach (var key in all.Where(kv => kv.Value.Action == action).Select(kv => kv.Key).ToList())
+                removed |= all.Remove(key);
+        });
+        return removed;
     }
 
-    public void SaveToDisk(string? path = null)
+    // Apply a change to a copy, publish it for the readers, and store it.
+    private void Update(Action<Dictionary<string, Entry>> change)
     {
-        path ??= DefaultPath;
-        try
+        lock (_writeLock)
         {
-            AtomicFile.Write(path, stream =>
-            {
-                using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
-                writer.WriteStartObject();
-                writer.WriteStartArray("bindings");
-                foreach (var e in _byKey.Values)
-                {
-                    writer.WriteStartObject();
-                    writer.WriteString("kind", e.Binding.Kind.ToString());
-                    if (!string.IsNullOrEmpty(e.Binding.Device))
-                        writer.WriteString("device", e.Binding.Device);
-                    writer.WriteNumber("code", e.Binding.Code);
-                    writer.WriteString("label", e.Binding.Label);
-                    if (!string.IsNullOrEmpty(e.Binding.GlyphId))
-                        writer.WriteString("glyphId", e.Binding.GlyphId);
-                    if (e.Binding.Style is { } st)
-                        writer.WriteString("style", st.ToString());
-                    writer.WriteStartObject("action");
-                    writer.WriteString("type", e.Action.Type.ToString());
-                    if (!string.IsNullOrEmpty(e.Action.Param))
-                        writer.WriteString("param", e.Action.Param);
-                    writer.WriteEndObject();
-                    writer.WriteEndObject();
-                }
-                writer.WriteEndArray();
-                writer.WriteEndObject();
-            });
+            var all = new Dictionary<string, Entry>(_byKey, StringComparer.Ordinal);
+            change(all);
+            _byKey = all;
+            _settings.Set(Bindings, [.. all.Values.Select(e => StoredBinding.From(e.Binding, e.Action))]);
         }
-        catch (Exception ex) { Log($"save failed: {ex.Message}"); }
     }
+
+    private Dictionary<string, Entry> Read()
+    {
+        var all = new Dictionary<string, Entry>(StringComparer.Ordinal);
+        foreach (var stored in _settings.Get(Bindings))
+        {
+            if (stored.Action is null) continue;
+            var binding = stored.ToBinding();
+            all[binding.Key] = new Entry(binding, stored.Action);
+        }
+        return all;
+    }
+}
+
+/// <summary>An <see cref="InputBinding"/> and its action as <see cref="InputBindingStore.Bindings"/>
+/// stores them.</summary>
+internal sealed record StoredBinding(
+    InputKind Kind,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Device,
+    int Code,
+    string Label,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? GlyphId,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ControllerStyle? Style,
+    EventAction Action)
+{
+    public static StoredBinding From(InputBinding b, EventAction action) =>
+        new(b.Kind, string.IsNullOrEmpty(b.Device) ? null : b.Device, b.Code, b.Label ?? "",
+            string.IsNullOrEmpty(b.GlyphId) ? null : b.GlyphId, b.Style, action);
+
+    public InputBinding ToBinding() => new(Kind, Device, Code, Label ?? "", GlyphId, Style);
 }

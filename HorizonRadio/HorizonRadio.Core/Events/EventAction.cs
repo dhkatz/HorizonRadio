@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace HorizonRadio.Core.Events;
 
 /// <summary>What an event rule does when its event fires.</summary>
@@ -19,9 +21,12 @@ public enum EventActionType
 
 /// <summary>
 /// A configured action. <see cref="Param"/> carries the target for the
-/// action types that need one (source id, volume level).
+/// action types that need one (source id, volume level). Stored in settings as
+/// <c>{ "type": "SetVolume", "param": "0.3" }</c>.
 /// </summary>
-public sealed record EventAction(EventActionType Type, string? Param = null)
+public sealed record EventAction(
+    EventActionType Type,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Param = null)
 {
     public static readonly EventAction None = new(EventActionType.None);
 }

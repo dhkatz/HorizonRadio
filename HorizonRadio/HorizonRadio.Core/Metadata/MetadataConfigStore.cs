@@ -1,205 +1,77 @@
-using System.Diagnostics;
-using System.Text.Json;
-using HorizonRadio.Core.IO;
+using System.Linq;
+using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources.Config;
 
 namespace HorizonRadio.Core.Metadata;
 
 /// <summary>
-/// Persists the user's metadata-provider choice + per-provider config
-/// to <c>%LOCALAPPDATA%\HorizonRadio\metadata-config.json</c>. Same
-/// shape as <see cref="SourceConfigStore"/> but lives in its own file
-/// because credentials (Spotify client secret) should be obvious in
-/// the filesystem, not tucked into sources.json.
+/// The metadata providers' configuration, kept in the <see cref="SettingsStore"/>: the order and
+/// overrides (<see cref="MetadataSettings"/>), and each provider's form, one setting per field
+/// (<c>metadata.provider.&lt;provider id&gt;.&lt;field key&gt;</c>, device-only; a credential such as
+/// Spotify's client secret is a <see cref="SettingScope.Secret"/>).
 /// </summary>
 public sealed class MetadataConfigStore
 {
-    /// <summary>Legacy single-provider selection; still read for migration into
-    /// <see cref="Order"/> on first load of an old config.</summary>
-    public string? SelectedProviderId { get; set; }
+    private const string Prefix = "metadata.provider.";
 
-    /// <summary>Enabled provider ids in user priority order (the source is implicit
-    /// and always highest unless a field is forced to a provider).</summary>
-    public List<string> Order { get; } = new();
+    /// <summary>The scope of a provider's field that isn't a secret.</summary>
+    public const SettingScope FieldScope = SettingScope.Device;
 
-    /// <summary>Provider ids this config has already been offered. A newly-shipped
-    /// default provider (e.g. iTunes) is auto-enabled once for existing users, then
-    /// recorded here so disabling it later sticks rather than being re-added each launch.</summary>
-    public List<string> Introduced { get; } = new();
+    private readonly ConfigFormSettings _forms;
 
-    /// <summary>Per-field forced provider overrides ("always Spotify for Art").</summary>
-    public Dictionary<MetadataField, string> Forced { get; } = new();
-
-    /// <summary>When the optional local title-extraction model runs. Default <see
-    /// cref="TitleModelMode.Escalate"/> (model only on a shaky deterministic parse); has no
-    /// effect until a model is installed via the Tools tab.</summary>
-    public TitleModelMode TitleModelMode { get; set; } = TitleModelMode.Escalate;
-
-    private readonly Dictionary<string, Dictionary<string, object?>> _perProvider = new();
-
-    private static string DefaultPath =>
-        AppPaths.In("metadata-config.json");
-
-    private static void Log(string msg) => Trace.WriteLine($"[hzn-meta-cfg] {msg}");
-
-    public ConfigValues Load(string providerId, IReadOnlyList<ConfigField> schema)
+    /// <summary>A store kept in memory only (tests, the designer).</summary>
+    public MetadataConfigStore() : this(SettingsStore.CreateInMemory())
     {
-        var values = new ConfigValues();
-        if (_perProvider.TryGetValue(providerId, out var stored))
-        {
-            foreach (var (k, v) in stored) values.Set(k, v);
-        }
-        values.ApplyDefaults(schema);
-        return values;
     }
 
-    public void Save(string providerId, ConfigValues values)
+    /// <summary>Opens the configuration in <paramref name="settings"/>, enabling any newly shipped
+    /// default provider (see <see cref="MetadataSettings.Introduced"/>). Needs the catalog
+    /// (<see cref="MetadataCatalog.Initialize"/>) filled first.</summary>
+    public MetadataConfigStore(SettingsStore settings)
     {
-        _perProvider[providerId] = new Dictionary<string, object?>(values.AsReadOnly());
+        _forms = new ConfigFormSettings(settings, Prefix, FieldScope);
+        EnableNewDefaultProviders();
     }
 
-    public static MetadataConfigStore LoadFromDisk(string? path = null)
+    public SettingsStore Settings => _forms.Settings;
+
+    /// <summary>The setting a provider's field is kept under.</summary>
+    public static string KeyFor(string providerId, string fieldKey) => $"{Prefix}{providerId}.{fieldKey}";
+
+    /// <inheritdoc cref="MetadataSettings.Order"/>
+    public IReadOnlyList<string> Order
     {
-        path ??= DefaultPath;
-        var store = new MetadataConfigStore();
-        try
-        {
-            // Fresh install: enable the keyless providers by default (so enrichment
-            // works out of the box) and mark every known provider introduced. An
-            // explicit "disable all" later persists an empty order to the now-existing file.
-            if (!File.Exists(path))
-            {
-                store.Order.AddRange(MetadataCatalog.DefaultEnabledOrder);
-                foreach (var f in MetadataCatalog.All) store.Introduced.Add(f.Id);
-                return store;
-            }
-            using var stream = File.OpenRead(path);
-            using var doc = JsonDocument.Parse(stream);
-            var root = doc.RootElement;
-
-            if (root.TryGetProperty("selected", out var sel) && sel.ValueKind == JsonValueKind.String)
-                store.SelectedProviderId = sel.GetString();
-
-            if (root.TryGetProperty("order", out var ord) && ord.ValueKind == JsonValueKind.Array)
-                foreach (var el in ord.EnumerateArray())
-                    if (el.ValueKind == JsonValueKind.String && el.GetString() is { Length: > 0 } id)
-                        store.Order.Add(id);
-
-            if (root.TryGetProperty("introduced", out var intro) && intro.ValueKind == JsonValueKind.Array)
-                foreach (var el in intro.EnumerateArray())
-                    if (el.ValueKind == JsonValueKind.String && el.GetString() is { Length: > 0 } id)
-                        store.Introduced.Add(id);
-
-            if (root.TryGetProperty("forced", out var forced) && forced.ValueKind == JsonValueKind.Object)
-                foreach (var prop in forced.EnumerateObject())
-                    if (prop.Value.ValueKind == JsonValueKind.String &&
-                        Enum.TryParse<MetadataField>(prop.Name, out var field) &&
-                        prop.Value.GetString() is { Length: > 0 } pid)
-                        store.Forced[field] = pid;
-
-            if (root.TryGetProperty("titleModelMode", out var tmm) && tmm.ValueKind == JsonValueKind.String &&
-                Enum.TryParse<TitleModelMode>(tmm.GetString(), ignoreCase: true, out var mode))
-                store.TitleModelMode = mode;
-
-            // Migrate a legacy single-provider selection into the ordered list.
-            if (store.Order.Count == 0 &&
-                store.SelectedProviderId is { Length: > 0 } legacy &&
-                legacy != "none")
-                store.Order.Add(legacy);
-
-            if (root.TryGetProperty("perProvider", out var per) && per.ValueKind == JsonValueKind.Object)
-            {
-                foreach (var prov in per.EnumerateObject())
-                {
-                    if (prov.Value.ValueKind != JsonValueKind.Object) continue;
-                    var bag = new Dictionary<string, object?>();
-                    foreach (var prop in prov.Value.EnumerateObject())
-                        bag[prop.Name] = JsonToObject(prop.Value);
-                    store._perProvider[prov.Name] = bag;
-                }
-            }
-
-            store.EnableNewDefaultProviders();
-        }
-        catch (Exception ex) { Log($"load failed: {ex.Message}"); }
-        return store;
+        get => Settings.Get(MetadataSettings.Order);
+        set => Settings.Set(MetadataSettings.Order, [.. value]);
     }
 
-    /// <summary>One-time-per-provider migration: enable a newly-shipped default provider
-    /// (e.g. iTunes) for an existing config that predates it. The new providers are
-    /// APPENDED (lowest priority) so the user's existing ordering is never disturbed — a
-    /// user who put Spotify first keeps Spotify first. Every known provider is then recorded
-    /// as introduced, so a later user-disable sticks rather than being re-applied each launch.</summary>
+    /// <inheritdoc cref="MetadataSettings.Forced"/>
+    public IReadOnlyDictionary<MetadataField, string> Forced
+    {
+        get => Settings.Get(MetadataSettings.Forced);
+        set => Settings.Set(MetadataSettings.Forced, new Dictionary<MetadataField, string>(value));
+    }
+
+    /// <inheritdoc cref="MetadataSettings.TitleModel"/>
+    public TitleModelMode TitleModelMode => Settings.Get(MetadataSettings.TitleModel);
+
+    /// <inheritdoc cref="ConfigFormSettings.Load"/>
+    public ConfigValues Load(string providerId, IReadOnlyList<ConfigField> schema) => _forms.Load(providerId, schema);
+
+    /// <inheritdoc cref="ConfigFormSettings.Save"/>
+    public void Save(string providerId, ConfigValues values) => _forms.Save(providerId, values);
+
+    // A default provider shipped since the user last saw the list is added at the end (lowest
+    // priority), so their own order is never disturbed; every known provider is then recorded as
+    // offered, so disabling one later sticks.
     private void EnableNewDefaultProviders()
     {
-        foreach (var id in MetadataCatalog.DefaultEnabledOrder)
-            if (!Introduced.Contains(id) && !Order.Contains(id))
-                Order.Add(id);
+        var introduced = Settings.Get(MetadataSettings.Introduced);
+        var order = Order;
+        var added = MetadataCatalog.DefaultEnabledOrder.Where(id => !introduced.Contains(id) && !order.Contains(id)).ToList();
+        if (added.Count > 0) Order = [.. order, .. added];
 
-        foreach (var f in MetadataCatalog.All)
-            if (!Introduced.Contains(f.Id)) Introduced.Add(f.Id);
-    }
-
-    public void SaveToDisk(string? path = null)
-    {
-        path ??= DefaultPath;
-        try
-        {
-            AtomicFile.Write(path, stream =>
-            {
-                using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
-                writer.WriteStartObject();
-                if (SelectedProviderId != null) writer.WriteString("selected", SelectedProviderId);
-
-                writer.WriteStartArray("order");
-                foreach (var id in Order) writer.WriteStringValue(id);
-                writer.WriteEndArray();
-
-                writer.WriteStartArray("introduced");
-                foreach (var id in Introduced) writer.WriteStringValue(id);
-                writer.WriteEndArray();
-
-                writer.WriteStartObject("forced");
-                foreach (var (field, pid) in Forced) writer.WriteString(field.ToString(), pid);
-                writer.WriteEndObject();
-
-                writer.WriteString("titleModelMode", TitleModelMode.ToString());
-
-                writer.WriteStartObject("perProvider");
-                foreach (var (provId, bag) in _perProvider)
-                {
-                    writer.WriteStartObject(provId);
-                    foreach (var (k, v) in bag) WriteValue(writer, k, v);
-                    writer.WriteEndObject();
-                }
-                writer.WriteEndObject();
-                writer.WriteEndObject();
-            });
-        }
-        catch (Exception ex) { Log($"save failed: {ex.Message}"); }
-    }
-
-    private static object? JsonToObject(JsonElement el) => el.ValueKind switch
-    {
-        JsonValueKind.String => el.GetString(),
-        JsonValueKind.True => true,
-        JsonValueKind.False => false,
-        JsonValueKind.Number => el.TryGetInt64(out var i) ? i : el.GetDouble(),
-        JsonValueKind.Null => null,
-        _ => el.GetRawText(),
-    };
-
-    private static void WriteValue(Utf8JsonWriter w, string name, object? v)
-    {
-        switch (v)
-        {
-            case null: w.WriteNull(name); break;
-            case string s: w.WriteString(name, s); break;
-            case bool b: w.WriteBoolean(name, b); break;
-            case int i: w.WriteNumber(name, i); break;
-            case long l: w.WriteNumber(name, l); break;
-            case double d: w.WriteNumber(name, d); break;
-            default: w.WriteString(name, v.ToString() ?? ""); break;
-        }
+        var offered = MetadataCatalog.All.Select(f => f.Id).Where(id => !introduced.Contains(id)).ToList();
+        if (offered.Count > 0) Settings.Set(MetadataSettings.Introduced, [.. introduced, .. offered]);
     }
 }

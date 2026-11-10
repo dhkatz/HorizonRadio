@@ -2,12 +2,16 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Games;
+using HorizonRadio.Core.Input;
 using HorizonRadio.Core.IO;
 using HorizonRadio.Core.Lyrics;
+using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Plugins;
 using HorizonRadio.Core.Sources;
@@ -17,44 +21,86 @@ namespace HorizonRadio.Core.Settings;
 
 /// <summary>
 /// Brings the settings kept in per-feature files before <see cref="SettingsStore"/> into it, once
-/// (when <c>settings.json</c> doesn't exist yet):
+/// per file:
 /// <list type="bullet">
 /// <item><c>sources.json</c>: the app-level preferences, and each source's form
 /// (<c>perSource</c> → <c>source.&lt;id&gt;.&lt;key&gt;</c>, its encrypted secrets as they are).</item>
 /// <item><c>plugin-settings.json</c>: each plugin's own keys (→ <c>plugin.&lt;id&gt;.&lt;key&gt;</c>).</item>
 /// <item><c>diagnostics\settings.json</c>: whether metadata tracing is on.</item>
+/// <item><c>metadata-config.json</c>: the providers' order and overrides, and each provider's form
+/// (→ <c>metadata.provider.&lt;id&gt;.&lt;key&gt;</c>; a credential, stored in the clear there,
+/// becomes a secret when its form first loads).</item>
+/// <item><c>events-config.json</c>: the event rules (→ <c>event.&lt;kind&gt;</c>).</item>
+/// <item><c>controls-config.json</c>: the input bindings (→ <c>controls.bindings</c>).</item>
 /// </list>
-/// The old files are left as they were, so a previous build still finds them.
+/// The files handled are recorded (<see cref="Imported"/>), so a file added to this list later is
+/// still brought into an existing <c>settings.json</c>. The old files are left as they were.
 /// </summary>
 internal static class LegacySettingsImport
 {
-    /// <summary>Import what's in <paramref name="directory"/>. True if anything was imported.</summary>
-    public static bool Import(SettingsStore store, string directory)
+    /// <summary>The files handled so far (whether or not they existed), by name.</summary>
+    internal static readonly Setting<string[]> Imported = new("settings.imported", SettingScope.Device, []);
+
+    private static readonly (string File, Func<SettingsStore, JsonElement, bool> Import)[] Files =
+    [
+        ("sources.json", ImportSources),
+        ("plugin-settings.json", ImportPlugins),
+        (Path.Combine("diagnostics", "settings.json"), ImportDiagnostics),
+        ("metadata-config.json", ImportMetadata),
+        ("events-config.json", ImportEvents),
+        ("controls-config.json", ImportControls),
+    ];
+
+    // A settings.json written before Imported was recorded had brought in the first three.
+    private const int FilesBeforeImported = 3;
+
+    /// <summary>Import the files in <paramref name="directory"/> not handled yet.
+    /// <paramref name="firstRun"/>: there was no <c>settings.json</c>. True if anything was imported
+    /// (the store should be saved now).</summary>
+    public static bool Import(SettingsStore store, string directory, bool firstRun)
     {
-        var any = false;
-        any |= ImportFile(Path.Combine(directory, "sources.json"), root => ImportSources(store, root));
-        any |= ImportFile(Path.Combine(directory, "plugin-settings.json"), root => ImportPlugins(store, root));
-        any |= ImportFile(Path.Combine(directory, "diagnostics", "settings.json"), root =>
-            root.TryGetProperty("enabled", out var on) && on.ValueKind == JsonValueKind.True
-            && Put(store, MetadataTrace.EnabledSetting, on));
-        return any;
+        string[] done = firstRun || store.IsSet(Imported.Key)
+            ? store.Get(Imported)
+            : [.. Files.Take(FilesBeforeImported).Select(f => f.File)];
+        var handled = done.ToList();
+        var imported = false;
+        foreach (var (file, import) in Files)
+        {
+            if (done.Contains(file, StringComparer.OrdinalIgnoreCase)) continue;
+            var outcome = ImportFile(Path.Combine(directory, file), root => import(store, root));
+            if (outcome == Outcome.Unreadable) continue; // tried again next time
+            handled.Add(file);
+            imported |= outcome == Outcome.Imported;
+        }
+
+        // A first run with nothing to bring over writes nothing; otherwise what was handled is
+        // recorded (saved with the next change, or now, after an import).
+        if (firstRun && !imported) return false;
+        if (handled.Count != done.Length || !store.IsSet(Imported.Key)) Put(store, Imported, [.. handled]);
+        return imported;
     }
 
-    private static bool ImportFile(string path, Func<JsonElement, bool> import)
+    private enum Outcome { Imported, Nothing, Unreadable }
+
+    private static Outcome ImportFile(string path, Func<JsonElement, bool> import)
     {
-        if (!File.Exists(path)) return false;
+        if (!File.Exists(path)) return Outcome.Nothing;
         try
         {
             using var doc = JsonDocument.Parse(File.ReadAllBytes(path));
-            if (doc.RootElement.ValueKind != JsonValueKind.Object) return false;
-            var imported = import(doc.RootElement);
-            if (imported) Trace.WriteLine($"[hzn-settings] imported {path}");
-            return imported;
+            if (doc.RootElement.ValueKind != JsonValueKind.Object || !import(doc.RootElement)) return Outcome.Nothing;
+            Trace.WriteLine($"[hzn-settings] imported {path}");
+            return Outcome.Imported;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Trace.WriteLine($"[hzn-settings] couldn't read {path}: {ex.Message}");
+            return Outcome.Unreadable;
+        }
+        catch (JsonException ex)
         {
             Trace.WriteLine($"[hzn-settings] couldn't import {path}: {ex.Message}");
-            return false;
+            return Outcome.Nothing;
         }
     }
 
@@ -119,9 +165,108 @@ internal static class LegacySettingsImport
         return any;
     }
 
+    private static bool ImportDiagnostics(SettingsStore store, JsonElement root) =>
+        root.TryGetProperty("enabled", out var on) && on.ValueKind == JsonValueKind.True
+        && Put(store, MetadataTrace.EnabledSetting, on);
+
+    private static bool ImportMetadata(SettingsStore store, JsonElement root)
+    {
+        var any = false;
+        var order = Strings(root, "order");
+        // The single provider picked before there was an order.
+        if (order is not { Length: > 0 } && root.TryGetProperty("selected", out var selected)
+            && StringOrNull(selected) is { Length: > 0 } legacy && legacy != MetadataCatalog.NoneId)
+            order = [legacy];
+        if (order != null) any |= Put(store, MetadataSettings.Order, order);
+        if (Strings(root, "introduced") is { } introduced) any |= Put(store, MetadataSettings.Introduced, introduced);
+
+        if (root.TryGetProperty("forced", out var forced) && forced.ValueKind == JsonValueKind.Object)
+        {
+            var byField = new Dictionary<MetadataField, string>();
+            foreach (var prop in forced.EnumerateObject())
+            {
+                if (Enum.TryParse<MetadataField>(prop.Name, out var field) && StringOrNull(prop.Value) is { Length: > 0 } id)
+                    byField[field] = id;
+            }
+            if (byField.Count > 0) any |= Put(store, MetadataSettings.Forced, byField);
+        }
+
+        if (root.TryGetProperty("titleModelMode", out var mode)
+            && Enum.TryParse<TitleModelMode>(StringOrNull(mode), ignoreCase: true, out var titleModel))
+            any |= Put(store, MetadataSettings.TitleModel, titleModel);
+
+        if (root.TryGetProperty("perProvider", out var perProvider) && perProvider.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var provider in perProvider.EnumerateObject())
+            {
+                if (provider.Value.ValueKind != JsonValueKind.Object) continue;
+                foreach (var field in provider.Value.EnumerateObject())
+                {
+                    if (field.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array) continue;
+                    store.Import(MetadataConfigStore.KeyFor(provider.Name, field.Name), field.Value, MetadataConfigStore.FieldScope);
+                    any = true;
+                }
+            }
+        }
+        return any;
+    }
+
+    private static bool ImportEvents(SettingsStore store, JsonElement root)
+    {
+        if (!root.TryGetProperty("rules", out var rules) || rules.ValueKind != JsonValueKind.Object) return false;
+        var any = false;
+        foreach (var rule in rules.EnumerateObject())
+        {
+            if (rule.Value.ValueKind != JsonValueKind.Object || !rule.Value.TryGetProperty("type", out var t)) continue;
+            // Mixes were called profiles.
+            var typeName = StringOrNull(t) switch
+            {
+                "SwitchProfile" => nameof(EventActionType.SwitchMix),
+                "NextProfile" => nameof(EventActionType.NextMix),
+                "PreviousProfile" => nameof(EventActionType.PreviousMix),
+                var other => other,
+            };
+            if (!Enum.TryParse<EventActionType>(typeName, out var type) || type == EventActionType.None) continue;
+            var param = rule.Value.TryGetProperty("param", out var p) ? StringOrNull(p) : null;
+            any |= Put(store, EventRuleStore.RuleFor(rule.Name), new EventAction(type, param));
+        }
+        return any;
+    }
+
+    private static bool ImportControls(SettingsStore store, JsonElement root)
+    {
+        if (!root.TryGetProperty("bindings", out var items) || items.ValueKind != JsonValueKind.Array) return false;
+        var bindings = new List<StoredBinding>();
+        foreach (var item in items.EnumerateArray())
+        {
+            // Stored the same way; a binding that doesn't read is skipped, as it was.
+            if (item.ValueKind != JsonValueKind.Object || !item.TryGetProperty("code", out var code) || code.ValueKind != JsonValueKind.Number)
+                continue;
+            try
+            {
+                if (item.Deserialize<StoredBinding>(SettingsStore.ValueJson) is { Action: { } } binding) bindings.Add(binding);
+            }
+            catch (JsonException)
+            {
+            }
+        }
+        return bindings.Count > 0 && Put(store, InputBindingStore.Bindings, [.. bindings]);
+    }
+
+    private static string[]? Strings(JsonElement root, string name) =>
+        root.TryGetProperty(name, out var array) && array.ValueKind == JsonValueKind.Array
+            ? [.. array.EnumerateArray().Select(StringOrNull).OfType<string>().Where(s => s.Length > 0)]
+            : null;
+
+    private static string? StringOrNull(JsonElement value) =>
+        value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
     private static bool Put(SettingsStore store, Setting setting, JsonElement value)
     {
         store.Import(setting.Key, value, setting.Scope);
         return true;
     }
+
+    private static bool Put<T>(SettingsStore store, Setting<T> setting, T value) =>
+        Put(store, setting, JsonSerializer.SerializeToElement(value, SettingsStore.ValueJson));
 }
