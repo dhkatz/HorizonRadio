@@ -24,7 +24,9 @@ public sealed class MyDevicesTests : IAsyncDisposable
     private sealed record Device(MyDevices Devices, SettingsStore Settings, Func<MemoryPeer?> Peer);
 
     // A device: its settings, and a helper that starts when MyDevices first needs it.
-    private async Task<Device> NewDevice(string name, SettingsStore? settings = null, string? peerId = null)
+    // joinTimeout: how long joining looks for a code. Generous, since stretching the code's key on both
+    // sides takes a while on a busy CI runner; short only where a test waits it out.
+    private async Task<Device> NewDevice(string name, SettingsStore? settings = null, string? peerId = null, TimeSpan? joinTimeout = null)
     {
         settings ??= SettingsStore.CreateInMemory();
         settings.Set(DeviceSettings.Name, name);
@@ -33,7 +35,7 @@ public sealed class MyDevicesTests : IAsyncDisposable
         {
             peer = _net.Join(peerId ?? settings.Get(DeviceSettings.Self));
             return Task.FromResult<IPeerNetwork>(peer);
-        }, presenceInterval: TimeSpan.FromMilliseconds(100), sendDelay: TimeSpan.FromMilliseconds(10), joinTimeout: TimeSpan.FromSeconds(3));
+        }, presenceInterval: TimeSpan.FromMilliseconds(100), sendDelay: TimeSpan.FromMilliseconds(10), joinTimeout: joinTimeout ?? TimeSpan.FromSeconds(20));
         _running.Add(devices);
         await devices.StartAsync();
         return new Device(devices, settings, () => peer);
@@ -99,7 +101,7 @@ public sealed class MyDevicesTests : IAsyncDisposable
     public async Task A_wrong_code_is_refused_and_uses_the_code_up()
     {
         var desktop = await NewDevice("Desktop");
-        var laptop = await NewDevice("Laptop");
+        var laptop = await NewDevice("Laptop", joinTimeout: TimeSpan.FromSeconds(6)); // waits it out below
         var code = (await desktop.Devices.StartPairingAsync()).ToString();
         // Same meeting place (the first group), wrong secret.
         var wrong = code[..5] + (code[5] == 'A' ? 'B' : 'A') + code[6..];
