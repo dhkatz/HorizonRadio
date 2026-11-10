@@ -47,3 +47,8 @@ public sealed class Setting<T>(string key, SettingScope scope, T defaultValue) :
 {
     public T Default { get; } = defaultValue;
 }
+
+/// <summary>A synced setting as it goes between the user's devices: its value (null when it was
+/// removed) and when it last changed (<see cref="SettingsStore.SyncedSettings"/>,
+/// <see cref="SettingsStore.MergeSynced"/>).</summary>
+public sealed record SyncedSetting(string Key, System.Text.Json.JsonElement? Value, DateTimeOffset Modified);

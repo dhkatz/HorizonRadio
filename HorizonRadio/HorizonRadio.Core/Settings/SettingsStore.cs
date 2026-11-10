@@ -26,7 +26,8 @@ namespace HorizonRadio.Core.Settings;
 /// }
 /// </code>
 /// Each value carries its <see cref="SettingScope"/> and when it was last changed, so syncing your
-/// devices can tell what may leave this machine and which side changed a setting last. A secret is
+/// devices can tell what may leave this machine and which side changed a setting last. A removed
+/// synced setting stays as <c>{ "removed": true, … }</c> with the time it was removed. A secret is
 /// encrypted on disk and read back in the clear.
 ///
 /// Thread-safe. A change raises <see cref="Changed"/> (on the thread that made it) and is saved a
@@ -164,18 +165,21 @@ public sealed class SettingsStore : IDisposable
                 if (old.Scope == scope && old.Value is { } current && JsonElement.DeepEquals(current, value)) return;
                 if (old.Unreadable != null && scope == SettingScope.Secret && IsBlank(value)) return;
             }
-            _entries[key] = new Entry(value.Clone(), scope, _time.GetUtcNow(), Unreadable: null);
+            _entries[key] = new Entry(value.Clone(), scope, Now(), Unreadable: null);
             ScheduleSaveLocked();
         }
         AfterChange(key);
     }
 
-    /// <summary>Forget <paramref name="key"/>. False when it wasn't set.</summary>
+    /// <summary>Forget <paramref name="key"/>. False when it wasn't set. A synced setting leaves a
+    /// note of when it was removed, so syncing doesn't bring back another device's older value.</summary>
     public bool Remove(string key)
     {
         lock (_lock)
         {
-            if (!_entries.Remove(key)) return false;
+            if (!_entries.TryGetValue(key, out var old) || old.IsRemoved) return false;
+            if (old.Scope == SettingScope.Synced) _entries[key] = Entry.Removed(Now());
+            else _entries.Remove(key);
             ScheduleSaveLocked();
         }
         AfterChange(key);
@@ -187,20 +191,20 @@ public sealed class SettingsStore : IDisposable
     {
         lock (_lock)
         {
-            return [.. _entries.Keys.Where(k => k.StartsWith(prefix, StringComparison.Ordinal)).Order(StringComparer.Ordinal)];
+            return [.. _entries.Where(e => !e.Value.IsRemoved && e.Key.StartsWith(prefix, StringComparison.Ordinal)).Select(e => e.Key).Order(StringComparer.Ordinal)];
         }
     }
 
     /// <summary>The scope <paramref name="key"/> was stored with, or null when it isn't stored.</summary>
     public SettingScope? ScopeOf(string key)
     {
-        lock (_lock) return _entries.TryGetValue(key, out var e) ? e.Scope : null;
+        lock (_lock) return _entries.TryGetValue(key, out var e) && !e.IsRemoved ? e.Scope : null;
     }
 
     /// <summary>When <paramref name="key"/> last changed, or null when it isn't stored.</summary>
     public DateTimeOffset? ModifiedAt(string key)
     {
-        lock (_lock) return _entries.TryGetValue(key, out var e) ? e.Modified : null;
+        lock (_lock) return _entries.TryGetValue(key, out var e) && !e.IsRemoved ? e.Modified : null;
     }
 
     /// <summary>Call <paramref name="onChange"/> with the setting's new value whenever it changes.
@@ -251,7 +255,7 @@ public sealed class SettingsStore : IDisposable
     {
         lock (_lock)
         {
-            _entries[key] = Decode(key, stored, scope, _time.GetUtcNow());
+            _entries[key] = Decode(key, stored, scope, Now());
             _dirty = true;
         }
     }
@@ -260,6 +264,65 @@ public sealed class SettingsStore : IDisposable
     {
         _dirty = true;
         if (!_disposed) _saveTimer?.Change(_saveDelay, Timeout.InfiniteTimeSpan);
+    }
+
+    /// <summary>Every synced setting as it stands here, removed ones included (with no value), for
+    /// another of the user's devices to merge (<see cref="MergeSynced"/>).</summary>
+    public IReadOnlyList<SyncedSetting> SyncedSettings()
+    {
+        lock (_lock)
+        {
+            return [.. _entries
+                .Where(e => e.Value.Scope == SettingScope.Synced)
+                .OrderBy(e => e.Key, StringComparer.Ordinal)
+                .Select(e => new SyncedSetting(e.Key, e.Value.Value, e.Value.Modified))];
+        }
+    }
+
+    /// <summary>
+    /// Bring in synced settings from another of the user's devices. Each one changed there later than
+    /// here replaces this device's (a removal too); on a tie the larger value wins, so two devices
+    /// merging each other's settings end up the same. A setting this device keeps to itself
+    /// (<see cref="SettingScope.Device"/>, <see cref="SettingScope.Secret"/>) is never replaced.
+    /// Raises <see cref="Changed"/> for each setting whose value changed, and returns those keys.
+    /// </summary>
+    public IReadOnlyList<string> MergeSynced(IEnumerable<SyncedSetting> remote)
+    {
+        ArgumentNullException.ThrowIfNull(remote);
+        var changed = new List<string>();
+        lock (_lock)
+        {
+            var any = false;
+            foreach (var setting in remote)
+            {
+                if (string.IsNullOrWhiteSpace(setting.Key)) continue;
+                var known = _entries.TryGetValue(setting.Key, out var local);
+                if (known && (local!.Scope != SettingScope.Synced || !Newer(setting, local))) continue;
+                _entries[setting.Key] = setting.Value is { } value
+                    ? new Entry(value.Clone(), SettingScope.Synced, setting.Modified, Unreadable: null)
+                    : Entry.Removed(setting.Modified);
+                any = true;
+                // A removal of something never set here changes nothing anyone can read.
+                if (setting.Value != null || (known && !local!.IsRemoved)) changed.Add(setting.Key);
+            }
+            if (any) ScheduleSaveLocked();
+        }
+        foreach (var key in changed) AfterChange(key);
+        return changed;
+    }
+
+    private static bool Newer(SyncedSetting remote, Entry local)
+    {
+        if (remote.Modified != local.Modified) return remote.Modified > local.Modified;
+        return string.CompareOrdinal(remote.Value?.GetRawText() ?? "", local.Value?.GetRawText() ?? "") > 0;
+    }
+
+    // When a change happens, to the millisecond: what the file keeps, so a time read back from it
+    // (or from another device) compares equal to the one set.
+    private DateTimeOffset Now()
+    {
+        var now = _time.GetUtcNow();
+        return now.AddTicks(-(now.Ticks % TimeSpan.TicksPerMillisecond));
     }
 
     // A change after Dispose (a slider moved during shutdown) is written at once: there's no timer.
@@ -280,13 +343,16 @@ public sealed class SettingsStore : IDisposable
             if (!doc.RootElement.TryGetProperty("settings", out var all) || all.ValueKind != JsonValueKind.Object) return;
             foreach (var prop in all.EnumerateObject())
             {
-                if (prop.Value.ValueKind != JsonValueKind.Object || !prop.Value.TryGetProperty("value", out var value)) continue;
+                if (prop.Value.ValueKind != JsonValueKind.Object) continue;
                 var scope = prop.Value.TryGetProperty("scope", out var s) ? ParseScope(s.GetString()) : SettingScope.Device;
                 var modified = prop.Value.TryGetProperty("modified", out var m)
                     && DateTimeOffset.TryParse(m.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var at)
                     ? at
                     : DateTimeOffset.UnixEpoch;
-                _entries[prop.Name] = Decode(prop.Name, value, scope, modified);
+                if (scope == SettingScope.Synced && prop.Value.TryGetProperty("removed", out var removed) && removed.ValueKind == JsonValueKind.True)
+                    _entries[prop.Name] = Entry.Removed(modified);
+                else if (prop.Value.TryGetProperty("value", out var value))
+                    _entries[prop.Name] = Decode(prop.Name, value, scope, modified);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
@@ -325,10 +391,18 @@ public sealed class SettingsStore : IDisposable
                 writer.WriteStartObject("settings");
                 foreach (var (key, entry) in entries)
                 {
-                    if (!TryStoredForm(key, entry, out var stored)) continue;
+                    JsonElement stored = default;
+                    if (!entry.IsRemoved && !TryStoredForm(key, entry, out stored)) continue;
                     writer.WriteStartObject(key);
-                    writer.WritePropertyName("value");
-                    stored.WriteTo(writer);
+                    if (entry.IsRemoved)
+                    {
+                        writer.WriteBoolean("removed", true);
+                    }
+                    else
+                    {
+                        writer.WritePropertyName("value");
+                        stored.WriteTo(writer);
+                    }
                     writer.WriteString("scope", FormatScope(entry.Scope));
                     writer.WriteString("modified", entry.Modified.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture));
                     writer.WriteEndObject();
@@ -382,8 +456,14 @@ public sealed class SettingsStore : IDisposable
 
     private static void Log(string message) => Trace.WriteLine($"[hzn-settings] {message}");
 
-    // Value is null only for a secret this user can't decrypt (Unreadable holds it as stored).
-    private sealed record Entry(JsonElement? Value, SettingScope Scope, DateTimeOffset Modified, string? Unreadable);
+    // Value is null for a secret this user can't decrypt (Unreadable holds it as stored), and for a
+    // synced setting that was removed (kept so a sync knows when).
+    private sealed record Entry(JsonElement? Value, SettingScope Scope, DateTimeOffset Modified, string? Unreadable)
+    {
+        public bool IsRemoved => Value == null && Unreadable == null;
+
+        public static Entry Removed(DateTimeOffset at) => new(null, SettingScope.Synced, at, Unreadable: null);
+    }
 
     private sealed class Subscription(Action dispose) : IDisposable
     {
