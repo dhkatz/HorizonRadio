@@ -186,6 +186,20 @@ public sealed class SettingsStore : IDisposable
         return true;
     }
 
+    /// <summary>Change whether <paramref name="key"/> syncs (<see cref="SettingScope.Device"/> ↔
+    /// <see cref="SettingScope.Synced"/>), keeping its value and when it last changed, so the change
+    /// of scope isn't a change of value another device would take. Secrets stay secrets.</summary>
+    public void Rescope(string key, SettingScope scope)
+    {
+        if (scope == SettingScope.Secret) throw new ArgumentException("A setting can't become a secret.", nameof(scope));
+        lock (_lock)
+        {
+            if (!_entries.TryGetValue(key, out var entry) || entry.IsRemoved || entry.Scope == scope || entry.Scope == SettingScope.Secret) return;
+            _entries[key] = entry with { Scope = scope };
+            ScheduleSaveLocked();
+        }
+    }
+
     /// <summary>The keys that start with <paramref name="prefix"/>, in order.</summary>
     public IReadOnlyList<string> KeysWithPrefix(string prefix)
     {

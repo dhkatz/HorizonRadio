@@ -405,7 +405,9 @@ using var watch = settings.Watch(LyricsSettings.Karaoke, on => ...);
   schema) is one setting per field (`ConfigFormSettings`): each source's is
   `source.<id>.<field>` (`SourceConfigStore`), each metadata provider's
   `metadata.provider.<id>.<field>` (`MetadataConfigStore`), both device-only with secret fields
-  as secrets. Each plugin's settings are `plugin.<id>.<key>` (`PluginSettings`, device-only),
+  as secrets. Each plugin's settings are `plugin.<id>.<key>` (`PluginSettings`): device-only unless the plugin
+  names the keys that are preferences (`IPluginContext.GetSettings(id, synced)`; FH6's station
+  assignments and switch mode are), and it follows changes through `IPluginSettings.Changed`;
   each event rule `event.<kind>` (`EventRuleStore`), and the input bindings one list,
   `controls.bindings` (`InputBindingStore`), since a binding replaces others.
 - Enums are stored by name. Every write is saved without being asked: there are no

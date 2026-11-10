@@ -12,4 +12,13 @@ public interface IPluginSettings
 
     /// <summary>Store <paramref name="value"/>, or remove the key when <see langword="null"/>.</summary>
     void SetValue(string key, string? value);
+
+    /// <summary>A key changed: written here, or (a synced key, see
+    /// <see cref="IPluginContext.GetSettings(string, System.Func{string, bool})"/>) on another of the
+    /// user's PCs. Raised on any thread.</summary>
+    event System.Action<string>? Changed
+    {
+        add { }
+        remove { }
+    }
 }
