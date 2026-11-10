@@ -1,6 +1,6 @@
 using HorizonRadio.Core.Audio;
+using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources;
-using HorizonRadio.Core.Sources.Config;
 
 namespace HorizonRadio.Core.Tests;
 
@@ -85,18 +85,27 @@ public class PreviewControllerTests
     /// (the "UI thread") that <see cref="Drain"/> runs.</summary>
     private sealed class Harness
     {
-        // Concurrent: the volume debounce timer posts from a pool thread.
-        private readonly System.Collections.Concurrent.ConcurrentQueue<Action> _posted = new();
+        private readonly Queue<Action> _posted = new();
 
         public Harness(bool enabled = false, string? deviceId = null)
+            : this(Preset(enabled, deviceId))
         {
-            var store = new SourceConfigStore { PreviewEnabled = enabled, PreviewDeviceId = deviceId };
-            Controller = new PreviewController(Tee, store, _posted.Enqueue, Speaker, Watcher, () =>
-            {
-                Saves++;
-                SaveThreadId = Environment.CurrentManagedThreadId;
-            });
+        }
+
+        public Harness(SettingsStore settings)
+        {
+            Settings = settings;
+            Settings.Changed += _ => SettingChanges++;
+            Controller = new PreviewController(Tee, settings, _posted.Enqueue, Speaker, Watcher);
             Controller.StateChanged += () => StateChanges++;
+        }
+
+        private static SettingsStore Preset(bool enabled, string? deviceId)
+        {
+            var settings = SettingsStore.CreateInMemory();
+            settings.Set(PreviewSettings.Enabled, enabled);
+            settings.Set(PreviewSettings.Device, deviceId);
+            return settings;
         }
 
         public FakeSpeaker Speaker { get; } = new();
@@ -105,9 +114,9 @@ public class PreviewControllerTests
         public TeePcmSink Tee => _tee ??= new TeePcmSink(Game);
         private TeePcmSink? _tee;
         public PreviewController Controller { get; }
+        public SettingsStore Settings { get; }
         public int StateChanges { get; set; }
-        public int Saves { get; private set; }
-        public int SaveThreadId { get; private set; }
+        public int SettingChanges { get; private set; }
         public int Posted => _posted.Count;
 
         public void Drain()
@@ -216,12 +225,13 @@ public class PreviewControllerTests
     {
         var h = new Harness();
         h.Controller.SelectDevice(Headphones);
+        var changes = h.SettingChanges;
 
         h.Controller.SelectDevice(Headphones);
         h.Controller.SetEnabled(true);
 
         Assert.Equal(1, h.Speaker.Opens);
-        Assert.Equal(1, h.Saves); // persisted once, not per re-confirmation
+        Assert.Equal(changes, h.SettingChanges); // nothing to persist on a re-confirmation
     }
 
     [Fact]
@@ -414,46 +424,21 @@ public class PreviewControllerTests
         Assert.Equal(TeeRoute.PrimaryOnly, h.Tee.Route);
     }
 
-    // Waits for the volume debounce timer (a pool thread) to post its flush.
-    private static void WaitForPost(Harness h)
-    {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
-        while (h.Posted == 0)
-        {
-            Assert.True(DateTime.UtcNow < deadline, "the volume save was never posted");
-            Thread.Sleep(20);
-        }
-    }
-
     [Fact]
-    public void The_debounced_volume_save_runs_via_post_not_on_the_timer_thread()
+    public void Volume_and_device_are_kept_in_the_settings()
     {
         var h = new Harness();
-        var saves = h.Saves;
-
+        h.Controller.SelectDevice(Headphones);
         h.Controller.SetVolume(0.4);
-        WaitForPost(h);
 
-        // The timer only posted the save; it didn't write the store on its own thread.
-        Assert.Equal(saves, h.Saves);
+        Assert.True(h.Settings.Get(PreviewSettings.Enabled));
+        Assert.Equal(Headphones, h.Settings.Get(PreviewSettings.Device));
+        Assert.Equal(0.4, h.Settings.Get(PreviewSettings.Volume));
 
-        h.Drain();
-
-        Assert.Equal(saves + 1, h.Saves);
-        Assert.Equal(Environment.CurrentManagedThreadId, h.SaveThreadId);
-    }
-
-    [Fact]
-    public void A_volume_save_posted_before_dispose_does_nothing_after_it()
-    {
-        var h = new Harness();
-        h.Controller.SetVolume(0.4);
-        WaitForPost(h);
-
-        h.Controller.Dispose(); // flushes the pending volume itself
-        var saves = h.Saves;
-        h.Drain();
-
-        Assert.Equal(saves, h.Saves);
+        // The next start picks up where this one left off.
+        var next = new Harness(h.Settings);
+        Assert.True(next.Controller.Enabled);
+        Assert.Equal(Headphones, next.Controller.DeviceId);
+        Assert.Equal(0.4, next.Controller.Volume);
     }
 }

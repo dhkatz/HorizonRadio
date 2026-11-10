@@ -2,7 +2,7 @@ namespace HorizonRadio.Plugins.Abstractions;
 
 /// <summary>
 /// A plugin's own persisted settings: flat string key/value pairs the host stores for it (e.g. the
-/// FH6 plugin's default target station). Writes are saved immediately. Keys are the plugin's
+/// FH6 plugin's station assignments). Writes are saved by the host shortly after. Keys are the plugin's
 /// business; values are opaque to the host.
 /// </summary>
 public interface IPluginSettings

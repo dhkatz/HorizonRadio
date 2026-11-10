@@ -2,7 +2,7 @@ using HorizonRadio.Core.Events;
 using HorizonRadio.Core.History;
 using HorizonRadio.Core.Input;
 using HorizonRadio.Core.Metadata;
-using HorizonRadio.Core.Plugins;
+using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,16 +24,18 @@ namespace HorizonRadio.Core;
 /// </summary>
 public static class HorizonCoreServiceCollectionExtensions
 {
-    public static IServiceCollection AddHorizonCore(this IServiceCollection services)
+    /// <param name="settings">The app's settings, opened before the container (startup reads them
+    /// first). The caller owns it: the container doesn't dispose an instance it was given.</param>
+    public static IServiceCollection AddHorizonCore(this IServiceCollection services, SettingsStore settings)
     {
-        services.AddSingleton(_ => SourceConfigStore.LoadFromDisk());
+        services.AddSingleton(settings);
+        services.AddSingleton(_ => new SourceConfigStore(settings));
         services.AddSingleton(_ => MetadataConfigStore.LoadFromDisk());
         services.AddSingleton(_ => MixStore.LoadFromDisk());
         services.AddSingleton(_ => PlayHistoryStore.LoadFromDisk());
         services.AddSingleton(_ => EventRuleStore.LoadFromDisk());
         services.AddSingleton(_ => InputBindingStore.LoadFromDisk());
         services.AddSingleton(_ => new MetadataCache());
-        services.AddSingleton(_ => PluginSettingsStore.LoadFromDisk());
 
         // Resolves a mix entry to playable content from the source config; non-disposable and its
         // only dependency (the source config store) is registered above, so it's safe to own here.

@@ -21,6 +21,7 @@ using HorizonRadio.Core.Metadata.VocaDb;
 using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Plugins;
+using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Local;
@@ -34,7 +35,6 @@ using HorizonRadio.Core.Tools;
 using HorizonRadio.Plugins.Abstractions;
 using HorizonRadio.TitleModel;
 using HorizonRadio.Tools.Librespot;
-
 using HorizonRadio.Tools.Soloist;
 using HorizonRadio.UI.Services;
 using HorizonRadio.UI.Tools;
@@ -85,7 +85,10 @@ public partial class App : Application
             // Everything the Console tab shows, and the app's own debug lines, also go to a file per
             // session (%LOCALAPPDATA%\HorizonRadio\logs), so a failure can be read afterwards.
             HorizonRadio.Core.Diagnostics.LogFile.Start();
-            HorizonRadio.Core.Diagnostics.MetadataTrace.RestoreFromSettings();
+            // Every setting the app keeps, in one file (settings.json); the first run on it brings
+            // over the older per-feature files. Saved shortly after each change, and at exit.
+            var settings = SettingsStore.Open();
+            HorizonRadio.Core.Diagnostics.MetadataTrace.RestoreFromSettings(settings);
 
             // Discover the source plugins by scanning the loaded plugin assemblies (rather than naming
             // each here) before anything resolves a source from the catalog — the seam the install
@@ -99,9 +102,9 @@ public partial class App : Application
             // here directly since this is their only composition root. Built inside the desktop branch
             // so the XAML designer (which never enters here) is unaffected.
             var services = new ServiceCollection();
-            services.AddHorizonCore();
+            services.AddHorizonCore(settings);
             services.AddSingleton<ToolRegistry>();
-            services.AddSingleton<IPluginContext>(sp => new HostPluginContext(sp.GetRequiredService<MetadataCache>(), sp.GetRequiredService<PluginSettingsStore>()));
+            services.AddSingleton<IPluginContext>(sp => new HostPluginContext(sp.GetRequiredService<MetadataCache>(), settings));
             var provider = services.BuildServiceProvider();
 
             _store = provider.GetRequiredService<SourceConfigStore>();
@@ -110,22 +113,21 @@ public partial class App : Application
             // for a plain player). It's wired into the audio pipeline, events, and pages at startup,
             // so switching games restarts the app (Settings → Game).
             var pluginContext = provider.GetRequiredService<IPluginContext>();
-            var pluginSettings = provider.GetRequiredService<PluginSettingsStore>();
             var gamePlugins = PluginDiscovery.DiscoverPlugins<IGamePlugin>();
             // Before any game is built: its settings must already hold anything migrated into them.
             // Saving drops the legacy fields so the migration can't re-apply later.
             var migratedMixes = provider.GetRequiredService<MixStore>();
-            var migrated = LegacySettingsMigration.MigrateStations(_store, migratedMixes, pluginSettings);
-            if (migrated.ConfigChanged) _store.SaveToDisk();
+            var migrated = LegacySettingsMigration.MigrateStations(settings, migratedMixes);
             if (migrated.MixesChanged) migratedMixes.SaveToDisk();
 
             var gameIds = gamePlugins.Select(g => g.Id).ToList();
-            var gameId = GameSelection.Resolve(_store.GameId, gameIds, [.. gameIds.Where(pluginSettings.HasSettings)]);
+            var savedGameId = settings.Get(GameSelection.Chosen);
+            var gameId = GameSelection.Resolve(savedGameId, gameIds, [.. gameIds.Where(id => PluginSettings.HasSettings(settings, id))]);
             if (gameId == null)
             {
                 // First run (or the saved game was uninstalled): ask before building anything
                 // game-related, then carry on with the choice.
-                var firstRun = new FirstRunViewModel(gamePlugins, _store);
+                var firstRun = new FirstRunViewModel(gamePlugins, settings);
                 var picker = new FirstRunWindow { DataContext = firstRun };
                 firstRun.Chosen += id =>
                 {
@@ -137,11 +139,7 @@ public partial class App : Application
             else
             {
                 // Remember a defaulted choice (an existing user's game) so it's explicit from now on.
-                if (_store.GameId != gameId)
-                {
-                    _store.GameId = gameId;
-                    _store.SaveToDisk();
-                }
+                if (savedGameId != gameId) settings.Set(GameSelection.Chosen, gameId);
                 Compose(gameId, showNow: false);
             }
 
@@ -155,7 +153,7 @@ public partial class App : Application
                 // Tee the pipeline so the active source can play to the game
                 // and (optionally) to local speakers for in-app test playback.
                 var tee = new TeePcmSink(_game.Output);
-                _preview = new PreviewController(tee, _store, a => Dispatcher.UIThread.Post(a));
+                _preview = new PreviewController(tee, settings, a => Dispatcher.UIThread.Post(a));
 
                 _runner = new SourceRunner(tee);
 
@@ -313,7 +311,7 @@ public partial class App : Application
                 dialogManager.Register<QuickPlayDialogView, QuickPlayDialogViewModel>();
                 dialogManager.Register<QueueAddModeDialogView, QueueAddModeDialogViewModel>();
 
-                var gameSettings = new GameSettingsViewModel(gamePlugins, _store, chosenGameId);
+                var gameSettings = new GameSettingsViewModel(gamePlugins, settings, chosenGameId);
                 gameSettings.RestartRequested += () => Restart(desktop);
                 var vm = new MainWindowViewModel(router, _store, mixStore, mixSwitcher, queuePlayback, _historyStore, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, _game, gameSettings, toasts, dialogManager, lyrics, songSync);
                 var mainWindow = new MainWindow { DataContext = vm };
@@ -391,6 +389,7 @@ public partial class App : Application
                     if (_game != null) await _game.DisposeAsync();
                     // Dispose the container last — it owns the leaf singletons (stores + cache).
                     await provider.DisposeAsync();
+                    settings.Dispose(); // writes any change still waiting to be saved
                     HorizonRadio.Core.Diagnostics.LogFile.Stop();
                 };
 

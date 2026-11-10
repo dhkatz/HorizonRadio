@@ -1,5 +1,5 @@
 using HorizonRadio.Core.Plugins;
-using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Game.ForzaHorizon6;
 
@@ -14,30 +14,26 @@ public class PluginSettingsTests
     public void Settings_persist_per_plugin()
     {
         using var dir = TempDir.Create();
-        var path = Path.Combine(dir.Path, "plugin-settings.json");
+        var path = Path.Combine(dir.Path, SettingsStore.FileName);
 
-        var store = PluginSettingsStore.LoadFromDisk(path);
-        store.For("fh6").SetValue("station", "Horizon XS");
-        store.For("other").SetValue("station", "Elsewhere");
+        using (var store = SettingsStore.Open(path))
+        {
+            PluginSettings.For(store, "fh6").SetValue("station", "Horizon XS");
+            PluginSettings.For(store, "other").SetValue("station", "Elsewhere");
+        }
 
-        var reloaded = PluginSettingsStore.LoadFromDisk(path);
-        Assert.Equal("Horizon XS", reloaded.For("fh6").GetValue("station"));
-        Assert.Equal("Elsewhere", reloaded.For("other").GetValue("station"));
+        using (var reloaded = SettingsStore.Open(path))
+        {
+            Assert.Equal("Horizon XS", PluginSettings.For(reloaded, "fh6").GetValue("station"));
+            Assert.Equal("Elsewhere", PluginSettings.For(reloaded, "other").GetValue("station"));
+            Assert.Equal(SettingScope.Device, reloaded.ScopeOf(PluginSettings.KeyFor("fh6", "station")));
 
-        // null removes the key.
-        reloaded.For("fh6").SetValue("station", null);
-        Assert.Null(PluginSettingsStore.LoadFromDisk(path).For("fh6").GetValue("station"));
-    }
-
-    [Fact]
-    public void Missing_or_corrupt_file_yields_empty_settings()
-    {
-        using var dir = TempDir.Create();
-        var path = Path.Combine(dir.Path, "plugin-settings.json");
-        Assert.Null(PluginSettingsStore.LoadFromDisk(path).For("fh6").GetValue("station"));
-
-        File.WriteAllText(path, "{ not json");
-        Assert.Null(PluginSettingsStore.LoadFromDisk(path).For("fh6").GetValue("station"));
+            // null removes the key.
+            PluginSettings.For(reloaded, "fh6").SetValue("station", null);
+        }
+        using var again = SettingsStore.Open(path);
+        Assert.Null(PluginSettings.For(again, "fh6").GetValue("station"));
+        Assert.Equal("Elsewhere", PluginSettings.For(again, "other").GetValue("station"));
     }
 
     // Writes a pre-plugin mixes.json where mix "drive" overrode Horizon Pulse.
@@ -55,15 +51,15 @@ public class PluginSettingsTests
     public void Legacy_station_settings_become_FH6_station_assignments()
     {
         using var dir = TempDir.Create();
-        var plugins = PluginSettingsStore.CreateInMemory();
-        var config = new SourceConfigStore { TargetStation = "Horizon XS" };
+        var settings = SettingsStore.CreateInMemory();
+        settings.Set(LegacySettingsMigration.TargetStation, "Horizon XS");
 
-        var result = LegacySettingsMigration.MigrateStations(config, LegacyMixes(dir), plugins);
+        var result = LegacySettingsMigration.MigrateStations(settings, LegacyMixes(dir));
 
         Assert.True(result.ConfigChanged);
         Assert.True(result.MixesChanged);
-        Assert.Null(config.TargetStation);
-        var map = new StationMap(plugins.For("fh6"));
+        Assert.False(settings.IsSet(LegacySettingsMigration.TargetStation.Key));
+        var map = new StationMap(PluginSettings.For(settings, "fh6"));
         Assert.Equal(StationAssignment.Player, map.Get("Horizon XS"));               // the old default
         Assert.Equal(StationAssignment.ForMix("drive"), map.Get("Horizon Pulse"));  // the old override
         Assert.Equal(StationAssignment.Game, map.Get("Horizon Wave"));
@@ -73,12 +69,13 @@ public class PluginSettingsTests
     public void Legacy_migration_keeps_existing_assignments_and_drops_any_station()
     {
         using var dir = TempDir.Create();
-        var plugins = PluginSettingsStore.CreateInMemory();
-        new StationMap(plugins.For("fh6")).Set("Horizon Pulse", StationAssignment.Player);
+        var settings = SettingsStore.CreateInMemory();
+        new StationMap(PluginSettings.For(settings, "fh6")).Set("Horizon Pulse", StationAssignment.Player);
+        settings.Set(LegacySettingsMigration.TargetStation, "Any station");
 
-        LegacySettingsMigration.MigrateStations(new SourceConfigStore { TargetStation = "Any station" }, LegacyMixes(dir), plugins);
+        LegacySettingsMigration.MigrateStations(settings, LegacyMixes(dir));
 
-        var map = new StationMap(plugins.For("fh6"));
+        var map = new StationMap(PluginSettings.For(settings, "fh6"));
         Assert.Equal(StationAssignment.Player, map.Get("Horizon Pulse")); // kept, not overwritten by the mix
         Assert.Equal(["Horizon Pulse"], map.TargetStations);              // "Any station" assigned nothing
     }
@@ -86,8 +83,7 @@ public class PluginSettingsTests
     [Fact]
     public void Nothing_to_migrate()
     {
-        var result = LegacySettingsMigration.MigrateStations(
-            new SourceConfigStore(), new MixStore(), PluginSettingsStore.CreateInMemory());
+        var result = LegacySettingsMigration.MigrateStations(SettingsStore.CreateInMemory(), new MixStore());
         Assert.False(result.Any);
     }
 }

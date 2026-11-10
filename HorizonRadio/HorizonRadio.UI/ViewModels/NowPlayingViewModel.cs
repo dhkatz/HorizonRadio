@@ -156,7 +156,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         _playback = playback;
         _runner = playback.Runner;
         var queue = playback.Player;
-        Lyrics = new LyricsViewModel(lyrics, () => _runner?.ActiveSource as IPlaybackProgress, store, songSync);
+        Lyrics = new LyricsViewModel(lyrics, () => _runner?.ActiveSource as IPlaybackProgress, store.Settings, songSync);
         _store = store;
         _mixes = mixes;
         _switcher = switcher;
@@ -253,7 +253,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         // Reflect the persisted preference (the runner already applied it to the
         // source as it started). Suppress so this sync doesn't re-persist/apply.
         _suppressShuffle = true;
-        IsShuffleEnabled = _store?.Shuffle ?? false;
+        IsShuffleEnabled = _store?.Settings.Get(PlaybackSettings.Shuffle) ?? false;
         _suppressShuffle = false;
 
         if (_transport != null) _transport.PausedChanged += OnPausedChanged;
@@ -355,11 +355,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         // Persist as a global preference, and hand it to the router: it applies it live to
         // what's playing (keeps the current track, shuffles the rest) and to every channel as
         // it starts or comes back, so a station parked meanwhile follows it too.
-        if (_store != null)
-        {
-            _store.Shuffle = value;
-            _store.SaveToDisk();
-        }
+        _store?.Settings.Set(PlaybackSettings.Shuffle, value);
         if (_playback != null) _ = ApplyShuffleAsync(_playback, value);
     }
 

@@ -160,7 +160,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         // The shared context carries source names + the user's source priority so a merged
         // result row can label its sources and default Play to the preferred one.
         var searchEnqueuer = new SearchEnqueuer(queue, toasts) { Songs = songs };
-        var searchContext = SearchSourceContext.Build(store);
+        var searchContext = SearchSourceContext.Build(store.Settings);
         Search = new SearchViewModel(searchEnqueuer, searchContext);
         TopBar = new TopBarViewModel(searchEnqueuer, searchContext, ShowSearch);
 

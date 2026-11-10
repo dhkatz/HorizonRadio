@@ -4,6 +4,7 @@ using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Games;
+using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Plugins.Abstractions;
 
@@ -41,11 +42,11 @@ public sealed partial class GameChoiceViewModel : ViewModelBase
 /// </summary>
 public sealed partial class FirstRunViewModel : ViewModelBase
 {
-    private readonly SourceConfigStore? _store;
+    private readonly SettingsStore? _settings;
 
-    public FirstRunViewModel(IEnumerable<IGamePlugin> games, SourceConfigStore store)
+    public FirstRunViewModel(IEnumerable<IGamePlugin> games, SettingsStore settings)
     {
-        _store = store;
+        _settings = settings;
         Choice = new GameChoiceViewModel(games, null);
         Choice.PropertyChanged += (_, e) =>
         {
@@ -66,9 +67,8 @@ public sealed partial class FirstRunViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanContinue))]
     private void Continue()
     {
-        if (Choice.Selected is not { } option || _store == null) return;
-        _store.GameId = option.Id;
-        _store.SaveToDisk();
+        if (Choice.Selected is not { } option || _settings == null) return;
+        _settings.Set(GameSelection.Chosen, option.Id);
         Chosen?.Invoke(option.Id);
     }
 }
@@ -79,11 +79,11 @@ public sealed partial class FirstRunViewModel : ViewModelBase
 /// </summary>
 public sealed partial class GameSettingsViewModel : ViewModelBase
 {
-    private readonly SourceConfigStore? _store;
+    private readonly SettingsStore? _settings;
 
-    public GameSettingsViewModel(IEnumerable<IGamePlugin> games, SourceConfigStore store, string currentId)
+    public GameSettingsViewModel(IEnumerable<IGamePlugin> games, SettingsStore settings, string currentId)
     {
-        _store = store;
+        _settings = settings;
         CurrentId = currentId;
         Choice = new GameChoiceViewModel(games, currentId);
         CurrentName = Choice.Options.FirstOrDefault(o => o.Id == currentId)?.Name ?? currentId;
@@ -117,9 +117,10 @@ public sealed partial class GameSettingsViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(HasChange))]
     private void Switch()
     {
-        if (Choice.Selected is not { } option || _store == null) return;
-        _store.GameId = option.Id;
-        _store.SaveToDisk();
+        if (Choice.Selected is not { } option || _settings == null) return;
+        _settings.Set(GameSelection.Chosen, option.Id);
+        // Written now: the restart starts the new process before this one has exited.
+        _settings.Flush();
         RestartRequested?.Invoke();
     }
 }

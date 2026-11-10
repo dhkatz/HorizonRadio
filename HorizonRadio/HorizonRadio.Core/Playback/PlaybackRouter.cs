@@ -126,7 +126,7 @@ public sealed class PlaybackRouter : IPlaybackRouter, IAsyncDisposable
         MixContexts = (mix, shuffle) => new MixContextProvider(mix, resolver, shuffle);
 
         // The persisted preference; SetShuffleAsync keeps the runner in step from here on.
-        _runner.Shuffle = config.Shuffle;
+        _runner.Shuffle = config.Settings.Get(PlaybackSettings.Shuffle);
         Player = new QueuePlayback(runner, config, resolver, () => Send(new PlayerHasWork { Done = NewDone() }));
 
         _mixes.Changed += OnMixesChanged;

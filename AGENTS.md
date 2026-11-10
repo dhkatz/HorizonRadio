@@ -69,8 +69,8 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   `%LOCALAPPDATA%\HorizonRadio\logs` (`LogFile`, one file per session); log with
   `Trace.WriteLine`, not `Debug.WriteLine`, which no listener can capture. A
   source setting that's a credential is a `TextField` with `IsSecret`:
-  `SourceConfigStore` writes it encrypted (`SecretText`, DPAPI for the Windows user,
-  `dpapi:<base64>`) and the form masks it.
+  `SourceConfigStore` keeps it as a secret setting (see [Settings](#settings)), written
+  encrypted (`SecretText`, DPAPI for the Windows user, `dpapi:<base64>`), and the form masks it.
   Spotify playback uses librespot; for a track Spotify refuses librespot the audio of,
   the Spotify plugin can play it through Spotify Soloist instead (Spotify's own Connect
   client), taking what Soloist plays with `horizon_audio_tap.dll` (`Native/`, `AudioTap`):
@@ -140,7 +140,7 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   not a different start.
   Fingerprints are stored per song (`ReferenceStore`, `%LOCALAPPDATA%\HorizonRadio\fingerprints`),
   so a song is downloaded once. With matching off or no match, radio lyrics follow the
-  title change and can be nudged earlier/later (`lyricsRadioOffset`).
+  title change and can be nudged earlier/later (`LyricsSettings.RadioOffset`).
 - **Metadata matching (`Core/Metadata/`)** — every catalog plugin scores results with
   `SearchTerms.MatchScore`, which only accepts a song whose name and artist agree with the
   query. A query with no artist, or one naming only a singing voice
@@ -156,7 +156,7 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   audio output, its event sources, connection state, and optional capabilities
   (station targeting, in-game volume, now-playing display). The app talks to the
   active game only through that interface, and exactly one runs at a time.
-  The active game is a user setting (`sources.json` `"game"`: a plugin id or
+  The active game is a user setting (`GameSelection.Chosen`: a plugin id or
   `"none"`). `NoGameIntegration` (Core) is the built-in "No Game": no output (local
   speakers become the only destination), no events, pages, or capabilities.
   `GameSelection.Resolve` picks the startup game: the saved one, else a game the
@@ -173,7 +173,7 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
     `…Views.FooView`) in the plugin's own assembly. FH6 contributes Mods and
     Stats. Plugin UI packages must match the UI project's versions.
   - A game owns its game-specific settings, persisted per plugin
-    (`IPluginContext.GetSettings(id)` → `plugin-settings.json`). FH6's Stations
+    (`IPluginContext.GetSettings(id)` → `plugin.<id>.<key>` in the settings store). FH6's Stations
     page assigns each station the game's music, the app's player, or a mix
     (`StationMap`); as the player tunes, the plugin routes the app's playback
     through `IGameHost.Playback` (`PlaybackRouter`). Mixes stay game-agnostic.
@@ -331,6 +331,35 @@ HorizonRadio.UI.exe --profile test
 Downloaded tools stay shared (`AppPaths.SharedRoot\tools`). A profile's window title and its
 Spotify Connect devices are marked with its name (`AppPaths.Label`: "Horizon Radio [test]"). Only
 one instance can drive FH6 (the mod's pipes take one client), so pick "No Game" for the other.
+
+### Settings
+
+Every setting lives in one file, `settings.json` in `AppPaths.Root`, behind one store
+(`Core/Settings/SettingsStore.cs`). A setting is declared next to the code that owns it, with a
+key, a scope and a default, and read and written through the store:
+
+```csharp
+public static readonly Setting<bool> Karaoke = new("lyrics.karaoke", SettingScope.Synced, true);
+
+settings.Get(LyricsSettings.Karaoke);
+settings.Set(LyricsSettings.Karaoke, false);   // saved ~300 ms later; Changed fires now
+using var watch = settings.Watch(LyricsSettings.Karaoke, on => ...);
+```
+
+- **Scope** says what syncing your devices may do with it: `Synced` (a preference that
+  follows you), `Device` (a path, an audio device, the game installed here), `Secret`
+  (text, encrypted with DPAPI, never leaves the machine). Pick it when declaring a setting.
+- Each value is stored with its scope and the time it last changed, for last-writer-wins
+  sync. A setting that's unset reads as its default and isn't written.
+- Keys only known at run time use the raw members (`TryGetRaw`, `SetRaw`,
+  `KeysWithPrefix`): each source's form is `source.<id>.<field>` (`SourceConfigStore`), each
+  plugin's settings `plugin.<id>.<key>` (`PluginSettings`, device-only).
+- The store is opened before anything else at startup (`App`), registered in DI, and
+  disposed last, which writes anything still pending.
+- `settings.json` replaced `sources.json`, `plugin-settings.json` and
+  `diagnostics\settings.json`. The first run without it imports them once
+  (`LegacySettingsImport`) and leaves them in place. The metadata, event and controls
+  configs move over next.
 
 ## In-game title injection — and re-deriving it after a game update
 
