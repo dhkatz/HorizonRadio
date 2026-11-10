@@ -1,0 +1,4 @@
+# gofmt wants LF; keep core.autocrlf from checking Go sources out with CRLF.
+*.go text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
