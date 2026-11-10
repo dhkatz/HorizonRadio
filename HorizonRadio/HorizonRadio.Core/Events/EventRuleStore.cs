@@ -24,7 +24,14 @@ public sealed class EventRuleStore
     {
         ArgumentNullException.ThrowIfNull(settings);
         _settings = settings;
+        settings.Changed += key =>
+        {
+            if (key.StartsWith(Prefix, StringComparison.Ordinal)) Changed?.Invoke(key[Prefix.Length..]);
+        };
     }
+
+    /// <summary>The action for an event kind changed, here or on another of your devices.</summary>
+    public event Action<string>? Changed;
 
     /// <summary>The setting the action for <paramref name="kind"/> is kept under.</summary>
     public static Setting<EventAction?> RuleFor(string kind) => new(Prefix + kind, SettingScope.Synced, null);

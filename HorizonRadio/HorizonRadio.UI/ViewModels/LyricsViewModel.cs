@@ -189,6 +189,13 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
         isKaraoke = prefs?.Get(LyricsSettings.Karaoke) ?? LyricsSettings.Karaoke.Default;
         isAudioSyncEnabled = prefs?.Get(LyricsSettings.AudioSync) ?? LyricsSettings.AudioSync.Default;
         radioOffset = prefs?.Get(LyricsSettings.RadioOffset) ?? LyricsSettings.RadioOffset.Default;
+        if (prefs != null)
+        {
+            // Another of your devices can change these (Devices): follow it.
+            _ = prefs.Watch(LyricsSettings.Karaoke, on => Dispatcher.UIThread.Post(() => IsKaraoke = on));
+            _ = prefs.Watch(LyricsSettings.AudioSync, on => Dispatcher.UIThread.Post(() => IsAudioSyncEnabled = on));
+            _ = prefs.Watch(LyricsSettings.RadioOffset, by => Dispatcher.UIThread.Post(() => RadioOffset = by));
+        }
         // Fast enough for a smooth fill; it only runs while a song's lyrics are up.
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
         _timer.Tick += (_, _) => Tick();

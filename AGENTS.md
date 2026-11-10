@@ -101,6 +101,17 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   source (`ISelfDrivenSourceFactory`: Spotify Connect, the test tone) is started
   through the playback router (`PlaybackRouter.StartSourceAsync`) as the player's
   content.
+- **Your devices (`Core/Devices/`, `Core/Peers/`)** — paired PCs keep their synced settings in
+  step, peer to peer, over the helper (`PeerHelper`, behind `IPeerNetwork`; tests use
+  `MemoryPeerNetwork`). `MyDevices` owns it: pairing (a 12-character `PairingCode`: the first four
+  pick the meeting topic, the other eight are a secret both sides prove with a PBKDF2-stretched
+  HMAC, one attempt per code), the group (`DeviceSettings`: a shared group key, secret, from which
+  the devices' meeting topic is derived; the device list, merged newest-first with removals kept),
+  and sync: on meeting, each sends every synced setting (`SettingsStore.SyncedSettings`) and merges
+  the other's (`MergeSynced`), then sends changes as they happen. Messages from a peer that isn't in
+  the group are ignored. The helper starts only once the PC is paired or starts pairing. Anything
+  that shows or uses a synced setting has to follow it changing underneath (`Watch`, or the store's
+  `Changed`), since another PC can change it at any time.
 - **Lyrics (`Plugins/Lyrics/`, `Core/Lyrics/`)** — each `ILyricsPlugin` contributes
   one `ILyricsProvider` (Unison, LRCLIB, and VocaDB, whose metadata plugin is also a
   lyrics plugin; when VocaDB has the song but no lyrics it reads the Vocaloid Lyrics

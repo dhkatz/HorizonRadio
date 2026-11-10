@@ -158,6 +158,9 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         var queue = playback.Player;
         Lyrics = new LyricsViewModel(lyrics, () => _runner?.ActiveSource as IPlaybackProgress, store.Settings, songSync);
         _store = store;
+        // Another of your devices can turn shuffle on or off (Devices): follow it, which also
+        // hands it to the router (OnIsShuffleEnabledChanged).
+        _ = store.Settings.Watch(PlaybackSettings.Shuffle, on => Dispatcher.UIThread.Post(() => IsShuffleEnabled = on));
         _mixes = mixes;
         _switcher = switcher;
         _queue = queue;

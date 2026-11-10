@@ -1,6 +1,44 @@
 using System.Text.Json;
 
-namespace HorizonRadio.Tools.Peer;
+namespace HorizonRadio.Core.Peers;
+
+/// <summary>
+/// The peer-to-peer network as the app's features use it (the helper process implements it;
+/// tests use an in-memory one): peers find each other by topic, connect, and exchange JSON
+/// messages, in order per peer and at most once each. A message's sender is authenticated by
+/// the network: <see cref="PeerMessage.PeerId"/> is who sent it.
+/// </summary>
+public interface IPeerNetwork
+{
+    /// <summary>This peer's ID: how other peers address it.</summary>
+    string PeerId { get; }
+
+    /// <summary>Be findable under <paramref name="topic"/> until <see cref="UnadvertiseAsync"/>.
+    /// Only those who know the topic can find it.</summary>
+    Task AdvertiseAsync(string topic, CancellationToken ct = default);
+
+    Task UnadvertiseAsync(string topic, CancellationToken ct = default);
+
+    /// <summary>Each peer found under <paramref name="topic"/>, once, until
+    /// <paramref name="timeout"/> or the caller stops.</summary>
+    IAsyncEnumerable<FoundPeer> FindAsync(string topic, TimeSpan timeout, CancellationToken ct = default);
+
+    /// <summary>Connect to a peer by the addresses found for it (or those already known).</summary>
+    Task<PeerPath> ConnectAsync(string peerId, IReadOnlyList<string>? addresses = null, CancellationToken ct = default);
+
+    /// <summary>Send a message to a connected peer. Throws <see cref="PeerNetworkException"/>
+    /// when it can't (not connected, too big).</summary>
+    Task SendAsync(string peerId, JsonElement message, CancellationToken ct = default);
+
+    /// <summary>A message arrived (raised on the network's thread: keep handlers short).</summary>
+    event Action<PeerMessage>? MessageReceived;
+
+    /// <summary>A peer connected to, or heard from, changed path.</summary>
+    event Action<PeerPathChange>? PathChanged;
+
+    /// <summary>The network stopped (the helper exited).</summary>
+    event Action? Exited;
+}
 
 /// <summary>How the helper finds peers by topic.</summary>
 [Flags]
@@ -36,5 +74,5 @@ public sealed record PeerMessage(string PeerId, JsonElement Message);
 /// <summary>A peer the app connected to or heard from changed path.</summary>
 public sealed record PeerPathChange(string PeerId, PeerPath Path);
 
-/// <summary>The helper refused or failed a command.</summary>
-public sealed class PeerHelperException(string message) : Exception(message);
+/// <summary>The network refused or failed a request.</summary>
+public sealed class PeerNetworkException(string message) : Exception(message);

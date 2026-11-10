@@ -44,6 +44,11 @@ public sealed partial class EventsViewModel : ViewModelBase, IDisposable
         }
 
         if (executor != null) executor.Handled += OnHandled;
+        // A rule changed on another of your devices (Devices) shows here too.
+        rules.Changed += kind => Dispatcher.UIThread.Post(() =>
+        {
+            foreach (var row in Groups.SelectMany(g => g.Rows).Where(r => r.Info.Kind == kind)) row.Reload();
+        });
     }
 
     private void OnHandled(GameEvent e, EventAction action)
@@ -124,6 +129,9 @@ public sealed partial class EventRuleRow : ViewModelBase
     {
         _rules.SetAction(Info.Kind, value.Action);
     }
+
+    /// <summary>Show the saved choice again (it changed elsewhere).</summary>
+    public void Reload() => SelectedOption = Match(Options, _rules.GetAction(Info.Kind));
 
     private static EventActionOption Match(IReadOnlyList<EventActionOption> options, EventAction action)
     {

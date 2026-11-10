@@ -83,6 +83,15 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
             service.ControllerDevicesChanged += OnDevicesChanged;
         }
         if (_mixes != null) _mixes.Changed += OnMixesChanged;
+        // Bindings changed on another of your devices (Devices) show here too.
+        store.Changed += () => Dispatcher.UIThread.Post(() =>
+        {
+            foreach (var row in Rows.Concat(MixRows))
+            {
+                row.Keyboard.Reload();
+                row.Controller.Reload();
+            }
+        });
         RefreshControllers();
         RefreshMixRows();
     }
@@ -287,8 +296,11 @@ public sealed partial class BindingSlot : ViewModelBase, IDisposable
 
     private string Slot => InputBindingStore.SlotOf(_category, _device);
 
-    private void Reload()
+    /// <summary>Show the slot's saved binding (it may have changed elsewhere). Not while listening
+    /// for one: the capture shows its own result.</summary>
+    public void Reload()
     {
+        if (IsListening) return;
         _binding = _store.GetBindingForSlot(_action, Slot);
         Label = _binding?.Label ?? "";
         Glyph = InputGlyphProvider.Resolve(_binding);
