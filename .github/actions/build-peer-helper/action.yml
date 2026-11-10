@@ -1,0 +1,24 @@
+name: Build the peer helper
+description: >
+  Build horizon-peer.exe (Plugins/Tools/HorizonRadio.Tools.Peer/Helper, Go) into the helper's
+  build/ folder, where HorizonRadio.Tools.Peer.csproj picks it up and bundles it next to the app.
+  A composite action because build.yml, nightly.yml and publish.yml all bundle it.
+
+runs:
+  using: composite
+  steps:
+    # go.mod pins the toolchain (`toolchain` line); setup-go installs that one.
+    - name: Set up Go
+      uses: actions/setup-go@v6
+      with:
+        go-version-file: Plugins/Tools/HorizonRadio.Tools.Peer/Helper/go.mod
+        cache-dependency-path: Plugins/Tools/HorizonRadio.Tools.Peer/Helper/go.sum
+
+    - name: Build horizon-peer.exe
+      shell: pwsh
+      working-directory: Plugins/Tools/HorizonRadio.Tools.Peer/Helper
+      env:
+        GOOS: windows
+        GOARCH: amd64
+        CGO_ENABLED: '0'
+      run: go build -trimpath -ldflags "-s -w" -o build/horizon-peer.exe .

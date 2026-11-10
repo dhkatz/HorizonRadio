@@ -102,6 +102,7 @@
       <ProjectReference Include="..\..\Plugins\Games\HorizonRadio.Game.ForzaHorizon6\HorizonRadio.Game.ForzaHorizon6.csproj" />
       <ProjectReference Include="..\..\Plugins\Tools\HorizonRadio.Tools.FFmpeg\HorizonRadio.Tools.FFmpeg.csproj" />
       <ProjectReference Include="..\..\Plugins\Tools\HorizonRadio.Tools.Librespot\HorizonRadio.Tools.Librespot.csproj" />
+      <ProjectReference Include="..\..\Plugins\Tools\HorizonRadio.Tools.Peer\HorizonRadio.Tools.Peer.csproj" />
       <ProjectReference Include="..\..\Plugins\Tools\HorizonRadio.Tools.Soloist\HorizonRadio.Tools.Soloist.csproj" />
       <ProjectReference Include="..\..\Plugins\Tools\HorizonRadio.Tools.TitleModel\HorizonRadio.Tools.TitleModel.csproj" />
       <ProjectReference Include="..\HorizonRadio.TitleModel\HorizonRadio.TitleModel.csproj" />
@@ -124,6 +125,9 @@
       <Copy SourceFiles="$(OutDir)horizon_audio_tap.dll"
             DestinationFolder="$(PublishDir)"
             Condition="Exists('$(OutDir)horizon_audio_tap.dll')" />
+      <Copy SourceFiles="$(OutDir)horizon-peer.exe"
+            DestinationFolder="$(PublishDir)"
+            Condition="Exists('$(OutDir)horizon-peer.exe')" />
     </Target>
 
     <!--

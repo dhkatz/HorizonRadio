@@ -50,8 +50,11 @@ messages. The LAN discovery and the commands are tested over loopback.
 
 ```powershell
 cd Plugins/Tools/HorizonRadio.Tools.Peer/Helper
-go build -trimpath -ldflags "-s -w" -o ../../../../build/peer/horizon-peer.exe .
+go build -trimpath -ldflags "-s -w" -o build/horizon-peer.exe .
 ```
+
+`HorizonRadio.Tools.Peer.csproj` bundles `build/horizon-peer.exe` next to the app when it's there
+(CI builds it first: `.github/actions/build-peer-helper`). The app's client is `PeerHelper`.
 
 `go.mod` pins the toolchain (`toolchain go1.27.3`); Go 1.26.0 crashed in go-libp2p's
 dialer with a memory fault. `go build -tags debug` adds pprof on `127.0.0.1:6061`.

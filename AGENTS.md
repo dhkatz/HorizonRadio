@@ -287,6 +287,24 @@ Remove-Item Env:MSBuildAdditionalSdkResolversFolder -ErrorAction SilentlyContinu
 dotnet build HorizonRadio\HorizonRadio.UI\HorizonRadio.UI.csproj -c Release
 ```
 
+### The peer helper (Go)
+
+Multiplayer and device sync run over `horizon-peer.exe`, a go-libp2p helper in
+`Plugins/Tools/HorizonRadio.Tools.Peer/Helper/` (Go; `go.mod` pins the toolchain). Like the
+native DLLs it builds separately, and `HorizonRadio.Tools.Peer.csproj` bundles it next to the
+app when it's been built:
+
+```powershell
+cd Plugins/Tools/HorizonRadio.Tools.Peer/Helper
+go build -trimpath -ldflags "-s -w" -o build/horizon-peer.exe .
+go test ./...      # peers on go-libp2p's simulated network (NAT, relay, hole punching)
+```
+
+The app drives it through `PeerHelper` (JSON lines over stdin/stdout; the protocol is in the
+helper's README). Without Go the app still builds, and `PeerHelperIntegrationTests` don't run
+locally (CI builds the helper first, and fails them if it's missing). Before pushing Go changes,
+`gofmt -l .` must print nothing and `go vet ./...` must pass; CI also runs the tests with `-race`.
+
 ### librespot
 
 `librespot.exe` is no longer compiled in-tree. CI builds it (see

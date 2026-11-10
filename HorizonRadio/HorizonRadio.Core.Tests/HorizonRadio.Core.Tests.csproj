@@ -37,6 +37,7 @@
     <ProjectReference Include="..\..\Plugins\Sources\HorizonRadio.Source.Spotify\HorizonRadio.Source.Spotify.csproj" />
     <ProjectReference Include="..\..\Plugins\Sources\HorizonRadio.Source.Test\HorizonRadio.Source.Test.csproj" />
     <ProjectReference Include="..\..\Plugins\Sources\HorizonRadio.Source.YouTube\HorizonRadio.Source.YouTube.csproj" />
+    <ProjectReference Include="..\..\Plugins\Tools\HorizonRadio.Tools.Peer\HorizonRadio.Tools.Peer.csproj" />
     <ProjectReference Include="..\..\Plugins\Tools\HorizonRadio.Tools.Soloist\HorizonRadio.Tools.Soloist.csproj" />
   </ItemGroup>
 

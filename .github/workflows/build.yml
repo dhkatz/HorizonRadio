@@ -77,6 +77,11 @@ jobs:
           cmake --preset windows-x64
           cmake --build --preset windows-x64-release --target horizon_audio_tap
 
+      # The peer helper (Go), bundled next to the exe like the DLLs above. The C# tests run it
+      # (PeerHelperIntegrationTests), so it has to exist before they do.
+      - name: Build horizon-peer.exe
+        uses: ./.github/actions/build-peer-helper
+
       # C# side runs after the Release C++ output (version.dll) is on disk
       # so the UI's <None Include> item picks it up.
       - name: Build C# UI
@@ -104,6 +109,12 @@ jobs:
                   "Check HorizonRadio.Source.Spotify.csproj's _AudioTapDllPath and the tap's Release build."
           }
           Write-Host "OK: $tap"
+          $peer = 'HorizonRadio/HorizonRadio.UI/bin/Debug/net10.0/horizon-peer.exe'
+          if (-not (Test-Path $peer)) {
+            throw "horizon-peer.exe was not copied into the UI build output ($peer). " +
+                  "Check HorizonRadio.Tools.Peer.csproj's _PeerHelperPath and the helper's Go build."
+          }
+          Write-Host "OK: $peer"
 
       - name: Upload version.dll artifact
         uses: actions/upload-artifact@v4
@@ -111,6 +122,39 @@ jobs:
           name: version-dll
           path: Mods/ForzaHorizon6/build/Release/version.dll
           if-no-files-found: error
+
+  # The peer helper's Go code: formatting, vet, and its tests (peers on go-libp2p's simulated
+  # network) with the race detector, which needs cgo, so on Linux.
+  go:
+    name: Go (peer helper)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: Plugins/Tools/HorizonRadio.Tools.Peer/Helper
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: Plugins/Tools/HorizonRadio.Tools.Peer/Helper/go.mod
+          cache-dependency-path: Plugins/Tools/HorizonRadio.Tools.Peer/Helper/go.sum
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then echo "Not gofmt'd:"; echo "$unformatted"; exit 1; fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test (race detector)
+        run: go test -race -count=1 ./...
+
+      - name: Cross-build for Windows
+        run: GOOS=windows GOARCH=amd64 go build -o /dev/null .
 
   # `dotnet format` loads and analyzes the whole solution (~40 s), so it runs beside the build
   # rather than ahead of it. No MSVC environment here, so no Platform variable to clear.
