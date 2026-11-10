@@ -23,14 +23,24 @@ import (
 type nodeOptions struct {
 	keyPath      string
 	forcePrivate bool
+	// amino joins the public IPFS network (the Amino DHT): it finds relays
+	// among the DHT's peers when it's behind NAT. Without it the node only
+	// reaches peers it's given addresses for (the LAN).
+	amino  bool
+	events *events
 }
 
-// node is a libp2p host on the public IPFS network (the Amino DHT): it finds
-// relays among the DHT's peers when it's behind NAT, and hole punches out of
-// relayed connections.
+// node is a libp2p host that hole punches out of relayed connections, on the
+// public IPFS network when amino is set.
 type node struct {
-	host host.Host
-	dht  *dual.DHT
+	host   host.Host
+	dht    *dual.DHT // nil without amino
+	events *events
+
+	// bootstrapped closes once the DHT can be searched (at once without amino);
+	// bootErr says why it can't.
+	bootstrapped chan struct{}
+	bootErr      error
 }
 
 func defaultKeyPath() string {
@@ -66,7 +76,13 @@ func loadOrCreateKey(path string) (crypto.PrivKey, error) {
 	return sk, nil
 }
 
+// startNode starts the host and, with amino, the DHT, which bootstraps in the
+// background (see node.bootstrapped).
 func startNode(ctx context.Context, opts nodeOptions) (*node, error) {
+	if opts.events == nil {
+		opts.events = stdout
+	}
+	ev := opts.events
 	sk, err := loadOrCreateKey(opts.keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("identity key: %w", err)
@@ -115,8 +131,10 @@ func startNode(ctx context.Context, opts nodeOptions) (*node, error) {
 		),
 		libp2p.NATPortMap(),
 		libp2p.EnableAutoNATv2(),
-		libp2p.EnableHolePunching(holepunch.WithTracer(holePunchTracer{})),
-		libp2p.EnableAutoRelayWithPeerSource(relayCandidates),
+		libp2p.EnableHolePunching(holepunch.WithTracer(holePunchTracer{ev})),
+	}
+	if opts.amino {
+		libp2pOpts = append(libp2pOpts, libp2p.EnableAutoRelayWithPeerSource(relayCandidates))
 	}
 	if opts.forcePrivate {
 		// Act as if behind NAT even when reachable, to exercise relay + hole punching.
@@ -128,7 +146,14 @@ func startNode(ctx context.Context, opts nodeOptions) (*node, error) {
 		return nil, fmt.Errorf("libp2p host: %w", err)
 	}
 	self.Store(&h)
-	watchHostEvents(ctx, h)
+	watchHostEvents(ctx, h, ev)
+
+	n := &node{host: h, events: ev, bootstrapped: make(chan struct{})}
+	if !opts.amino {
+		close(n.bootstrapped)
+		ev.emit("started", map[string]any{"peer_id": h.ID().String(), "listen": addrStrings(h.Network().ListenAddresses())})
+		return n, nil
+	}
 
 	d, err := dual.New(h,
 		dual.DHTOption(
@@ -141,19 +166,29 @@ func startNode(ctx context.Context, opts nodeOptions) (*node, error) {
 		return nil, fmt.Errorf("dht: %w", err)
 	}
 	kdht.Store(d)
+	n.dht = d
 
-	emit("started", map[string]any{"peer_id": h.ID().String(), "listen": addrStrings(h.Network().ListenAddresses())})
-	if err := bootstrap(ctx, h, d); err != nil {
-		_ = d.Close()
-		_ = h.Close()
-		return nil, err
+	ev.emit("started", map[string]any{"peer_id": h.ID().String(), "listen": addrStrings(h.Network().ListenAddresses())})
+	go func() {
+		defer close(n.bootstrapped)
+		n.bootErr = bootstrap(ctx, h, d, ev)
+	}()
+	return n, nil
+}
+
+// waitBootstrapped waits until the DHT can be searched.
+func (n *node) waitBootstrapped(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-n.bootstrapped:
+		return n.bootErr
 	}
-	return &node{host: h, dht: d}, nil
 }
 
 // bootstrap connects to the public bootstrap peers and waits until the DHT's
 // routing table has enough peers to search with.
-func bootstrap(ctx context.Context, h host.Host, d *dual.DHT) error {
+func bootstrap(ctx context.Context, h host.Host, d *dual.DHT, ev *events) error {
 	start := time.Now()
 	connected := 0
 	for _, info := range dht.GetDefaultBootstrapPeerAddrInfos() {
@@ -174,7 +209,7 @@ func bootstrap(ctx context.Context, h host.Host, d *dual.DHT) error {
 		case <-time.After(500 * time.Millisecond):
 		}
 	}
-	emit("bootstrapped", map[string]any{
+	ev.emit("bootstrapped", map[string]any{
 		"bootstrap_peers_connected": connected,
 		"routing_table":             d.WAN.RoutingTable().Size(),
 		"seconds":                   time.Since(start).Seconds(),
@@ -186,14 +221,16 @@ func bootstrap(ctx context.Context, h host.Host, d *dual.DHT) error {
 }
 
 func (n *node) close() {
-	_ = n.dht.Close()
+	if n.dht != nil {
+		_ = n.dht.Close()
+	}
 	_ = n.host.Close()
 }
 
 // watchHostEvents reports what the host learns about its own reachability:
 // AutoNAT's verdict, the NAT's mapping behaviour, and the addresses (public,
 // port-mapped, IPv6, relay) it can be reached on.
-func watchHostEvents(ctx context.Context, h host.Host) {
+func watchHostEvents(ctx context.Context, h host.Host, ev *events) {
 	sub, err := h.EventBus().Subscribe([]any{
 		new(event.EvtLocalReachabilityChanged),
 		new(event.EvtNATDeviceTypeChanged),
@@ -201,7 +238,7 @@ func watchHostEvents(ctx context.Context, h host.Host) {
 		new(event.EvtAutoRelayAddrsUpdated),
 	})
 	if err != nil {
-		emit("error", map[string]any{"error": err.Error()})
+		ev.emit("error", map[string]any{"error": err.Error()})
 		return
 	}
 	go func() {
@@ -214,23 +251,23 @@ func watchHostEvents(ctx context.Context, h host.Host) {
 				if !ok {
 					return
 				}
-				switch ev := e.(type) {
+				switch x := e.(type) {
 				case event.EvtLocalReachabilityChanged:
-					emit("reachability", map[string]any{"reachability": ev.Reachability.String()})
+					ev.emit("reachability", map[string]any{"reachability": x.Reachability.String()})
 				case event.EvtNATDeviceTypeChanged:
-					emit("nat_type", map[string]any{"protocol": ev.TransportProtocol.String(), "type": ev.NatDeviceType.String()})
+					ev.emit("nat_type", map[string]any{"protocol": x.TransportProtocol.String(), "type": x.NatDeviceType.String()})
 				case event.EvtLocalAddressesUpdated:
-					emit("addresses", map[string]any{"addrs": addrStrings(h.Addrs())})
+					ev.emit("addresses", map[string]any{"addrs": addrStrings(h.Addrs())})
 				case event.EvtAutoRelayAddrsUpdated:
-					emit("relay_addresses", map[string]any{"addrs": addrStrings(ev.RelayAddrs)})
+					ev.emit("relay_addresses", map[string]any{"addrs": addrStrings(x.RelayAddrs)})
 				}
 			}
 		}
 	}()
 }
 
-type holePunchTracer struct{}
+type holePunchTracer struct{ events *events }
 
-func (holePunchTracer) Trace(evt *holepunch.Event) {
-	emit("hole_punch", map[string]any{"remote": evt.Remote.String(), "type": evt.Type, "detail": evt.Evt})
+func (t holePunchTracer) Trace(evt *holepunch.Event) {
+	t.events.emit("hole_punch", map[string]any{"remote": evt.Remote.String(), "type": evt.Type, "detail": evt.Evt})
 }
