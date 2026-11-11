@@ -109,8 +109,11 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   the devices' meeting topic is derived; the device list, merged newest-first with removals kept),
   and sync: on meeting, each sends every synced setting (`SettingsStore.SyncedSettings`) and merges
   the other's (`MergeSynced`), then sends changes as they happen. Other data rides along as an
-  `IDeviceData` (mixes: `MixSync`, over `MixStore.SyncedMixes`/`MergeSynced`, each mix timed, a
-  deleted one kept as `removed`), touched only on its owner's thread. Messages from a peer that isn't in
+  `IDeviceData`, exported whole when devices meet and in part on a change, in pieces small enough
+  for one message (a relayed connection carries 128 KB in all): mixes (`MixSync`, over
+  `MixStore.SyncedMixes`/`MergeSynced`, each mix timed, a deleted one kept as `removed`, touched
+  only on the UI thread) and history (`HistorySync`: plays are only added, so it merges as a union
+  by id, 100 per message; removed ids and the last clearing are kept). Messages from a peer that isn't in
   the group are ignored. The helper starts only once the PC is paired or starts pairing. Anything
   that shows or uses a synced setting has to follow it changing underneath (`Watch`, or the store's
   `Changed`), since another PC can change it at any time.

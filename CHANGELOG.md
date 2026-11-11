@@ -9,10 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Keep your settings and mixes in step between your PCs (Settings → Devices).** Choose Show
-  Code on one PC and type the code on the other: they pair, then keep their mixes and synced
-  settings (lyrics, shuffle, the search order, the metadata providers' order, event rules and
-  controls) the same, the newest change of each winning; a mix deleted on one goes from all. A PC that was off catches up when it's back. They connect to each other directly
+- **Keep your settings, mixes and history in step between your PCs (Settings → Devices).** Choose
+  Show Code on one PC and type the code on the other: they pair, then keep their mixes, play
+  history and synced settings (lyrics, shuffle, the search order, the metadata providers' order,
+  event rules and controls) the same, the newest change of each winning. A mix deleted, a song
+  removed from History, or History cleared on one goes from all. A PC that was off catches up when it's back. They connect to each other directly
   over the IPFS network or your local network, with no account and no server of ours; folders,
   audio devices, the game, logins and keys stay on each PC. A code is good for 10 minutes and one
   try. Devices can be renamed, removed, or leave.

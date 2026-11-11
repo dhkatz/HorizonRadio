@@ -595,20 +595,35 @@ public sealed class MyDevices : IAsyncDisposable
         RaiseChanged();
     }
 
-    private async Task SendFullSyncAsync(string peerId, bool reply) => await TrySendAsync(peerId, new DeviceMessage
+    // Everything: the device list and settings in one message, then each kind of data in its parts.
+    private async Task SendFullSyncAsync(string peerId, bool reply)
     {
-        Type = DeviceMessage.Sync,
-        Devices = _settings.Get(DeviceSettings.Devices),
-        Settings = [.. _settings.SyncedSettings().Select(WireSetting.From)],
-        Data = await ExportAsync(_data).ConfigureAwait(false),
-        Reply = reply,
-    }.ToJson()).ConfigureAwait(false);
+        await TrySendAsync(peerId, new DeviceMessage
+        {
+            Type = DeviceMessage.Sync,
+            Devices = _settings.Get(DeviceSettings.Devices),
+            Settings = [.. _settings.SyncedSettings().Select(WireSetting.From)],
+            Reply = reply,
+        }.ToJson()).ConfigureAwait(false);
+        foreach (var message in await DataMessagesAsync(_data, full: true).ConfigureAwait(false))
+            await TrySendAsync(peerId, message).ConfigureAwait(false);
+    }
 
-    private static async Task<Dictionary<string, System.Text.Json.JsonElement>?> ExportAsync(IEnumerable<IDeviceData> parts)
+    private static async Task<List<System.Text.Json.JsonElement>> DataMessagesAsync(IEnumerable<IDeviceData> parts, bool full)
     {
-        var data = new Dictionary<string, System.Text.Json.JsonElement>(StringComparer.Ordinal);
-        foreach (var part in parts) data[part.Name] = await part.ExportAsync().ConfigureAwait(false);
-        return data.Count > 0 ? data : null;
+        var messages = new List<System.Text.Json.JsonElement>();
+        foreach (var part in parts)
+        {
+            foreach (var chunk in await part.ExportAsync(full).ConfigureAwait(false))
+            {
+                messages.Add(new DeviceMessage
+                {
+                    Type = DeviceMessage.Sync,
+                    Data = new Dictionary<string, System.Text.Json.JsonElement>(StringComparer.Ordinal) { [part.Name] = chunk },
+                }.ToJson());
+            }
+        }
+        return messages;
     }
 
     private async Task TrySendAsync(string peerId, System.Text.Json.JsonElement message)
@@ -673,12 +688,15 @@ public sealed class MyDevices : IAsyncDisposable
         }
         if (Connected().Length == 0) return; // nobody to tell: they catch up when they meet
         var changes = _settings.SyncedSettings().Where(s => keys.Contains(s.Key)).Select(WireSetting.From).ToArray();
-        var data = await ExportAsync(_data.Where(p => parts.Contains(p.Name))).ConfigureAwait(false);
-        if (changes.Length == 0 && data == null) return;
-        var message = new DeviceMessage { Type = DeviceMessage.Sync, Settings = changes.Length > 0 ? changes : null, Data = data }.ToJson();
+        var messages = await DataMessagesAsync(_data.Where(p => parts.Contains(p.Name)), full: false).ConfigureAwait(false);
+        if (changes.Length > 0) messages.Insert(0, new DeviceMessage { Type = DeviceMessage.Sync, Settings = changes }.ToJson());
+        if (messages.Count == 0) return;
         _work.Writer.TryWrite(async () =>
         {
-            foreach (var peer in Connected()) await TrySendAsync(peer, message).ConfigureAwait(false);
+            foreach (var peer in Connected())
+            {
+                foreach (var message in messages) await TrySendAsync(peer, message).ConfigureAwait(false);
+            }
         });
     }
 
