@@ -367,8 +367,12 @@ using var watch = settings.Watch(LyricsSettings.Karaoke, on => ...);
 - **Scope** says what syncing your devices may do with it: `Synced` (a preference that
   follows you), `Device` (a path, an audio device, the game installed here), `Secret`
   (text, encrypted with DPAPI, never leaves the machine). Pick it when declaring a setting.
-- Each value is stored with its scope and the time it last changed, for last-writer-wins
-  sync. A setting that's unset reads as its default and isn't written.
+- Each value is stored with its scope and the time it last changed (to the millisecond), for
+  last-writer-wins sync: `SyncedSettings()` hands another device every synced setting, and
+  `MergeSynced` takes in the ones changed there later (a tie goes to the larger value, so both
+  sides agree; Device and Secret settings never move). A removed synced setting is kept as
+  `"removed": true` with its time, so a sync can't bring an older value back. A setting that's
+  unset reads as its default and isn't written.
 - Keys only known at run time use the raw members (`TryGetRaw`, `SetRaw`,
   `KeysWithPrefix`) or a `Setting<T>` built for the key. A settings form (a `ConfigField`
   schema) is one setting per field (`ConfigFormSettings`): each source's is
