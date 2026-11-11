@@ -3,6 +3,7 @@ using HorizonRadio.Core.Friends;
 using HorizonRadio.Core.Party;
 using HorizonRadio.Core.Peers;
 using HorizonRadio.Core.Settings;
+using HorizonRadio.Core.Sources.Queue;
 
 namespace HorizonRadio.Core.Tests;
 
@@ -89,6 +90,44 @@ public sealed class ListeningPartyTests : IAsyncDisposable
         await Task.Delay(500);
         var off = alex.Player.Current!.Position - sam.Host.Position;
         Assert.True(off.Duration() < TimeSpan.FromMilliseconds(250), $"Alex is {off.TotalMilliseconds:0} ms off Sam");
+    }
+
+    [Fact]
+    public async Task A_guest_shares_the_hosts_queue_and_changes_it_through_the_host()
+    {
+        var sam = await NewPerson("Sam");
+        var alex = await NewPerson("Alex");
+        await BecomeFriends(sam, alex);
+        await sam.Party.StartHostingAsync();
+        sam.Host.SetQueue(new PartyQueueList([Song("q1"), Song("q2", "World is Mine")], "Sam's Mix",
+            [new PartyUpcoming("Tell Your World", "livetune", false, null)]));
+        await Eventually(() => alex.Friends.All.Single().IsHosting, "Alex to see Sam hosting");
+        await alex.Party.JoinAsync(UserIdOf(sam, alex));
+
+        // Joining, Alex's queue is the party's, and shows Sam's.
+        await Eventually(() => alex.Player.Owner != null && alex.Player.Mirrored?.Songs.Count == 2, "Alex to see Sam's queue");
+        Assert.Equal("Sam's Mix", alex.Player.Mirrored!.From);
+        Assert.Equal("Tell Your World", alex.Player.Mirrored.Next.Single().Title);
+
+        sam.Host.SetQueue(new PartyQueueList([Song("q2", "World is Mine")], "Sam's Mix", []));
+        await Eventually(() => alex.Player.Mirrored?.Songs.Count == 1, "Alex to see Sam's queue change");
+
+        // What Alex does to the queue is asked of Sam, in order.
+        var owner = alex.Player.Owner!;
+        owner.Add([new FakeItem("Ghost Rule")], playNow: true);
+        owner.Move("q2", -1);
+        owner.Remove("q2");
+        owner.Skip();
+        await Eventually(() => sam.Host.Changes.Count == 4, "Sam to be asked four things");
+        var changes = sam.Host.Changes;
+        Assert.Equal([PartyQueueChange.Add, PartyQueueChange.Move, PartyQueueChange.Remove, PartyQueueChange.Skip], changes.Select(c => c.Op));
+        Assert.Equal("Ghost Rule", changes[0].Songs!.Single().Title);
+        Assert.True(changes[0].PlayNow);
+        Assert.Equal(("q2", -1), (changes[1].Id, changes[1].By));
+
+        // Leaving gives Alex their own queue back.
+        await alex.Party.LeaveAsync();
+        Assert.Null(alex.Player.Owner);
     }
 
     [Fact]
@@ -298,8 +337,39 @@ public sealed class ListeningPartyTests : IAsyncDisposable
         private TimeSpan _base;
         private DateTime _since;
         private bool _paused;
+        private PartyQueueList _queue = PartyQueueList.Empty;
+        private readonly List<PartyQueueChange> _changes = [];
 
         public event Action? Changed;
+
+        public PartyQueueList Queue
+        {
+            get
+            {
+                lock (_lock) return _queue;
+            }
+        }
+
+        /// <summary>What guests asked of the queue, in order.</summary>
+        public IReadOnlyList<PartyQueueChange> Changes
+        {
+            get
+            {
+                lock (_lock) return [.. _changes];
+            }
+        }
+
+        public Task ChangeQueueAsync(PartyQueueChange change)
+        {
+            lock (_lock) _changes.Add(change);
+            return Task.CompletedTask;
+        }
+
+        public void SetQueue(PartyQueueList queue)
+        {
+            lock (_lock) _queue = queue;
+            Changed?.Invoke();
+        }
 
         public TimeSpan Position
         {
@@ -366,6 +436,22 @@ public sealed class ListeningPartyTests : IAsyncDisposable
 
         public Track? Playing { get; private set; }
         public Func<PartySong, bool> Has { get; set; } = _ => true;
+
+        /// <summary>The host, while the queue is the party's.</summary>
+        public IQueueOwner? Owner { get; private set; }
+
+        /// <summary>The host's queue, as last sent.</summary>
+        public PartyQueueList? Mirrored { get; private set; }
+
+        public void ShareQueue(IQueueOwner host) => Owner = host;
+
+        public void MirrorQueue(PartyQueueList queue) => Mirrored = queue;
+
+        public void UnshareQueue()
+        {
+            Owner = null;
+            Mirrored = null;
+        }
         public Func<PartySong, string?> CantPlay { get; set; } = _ => null;
         public int Plays { get; private set; }
         public int Seeks { get; private set; }

@@ -143,6 +143,16 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   It follows pause before anything else (a paused queue never starts its next song), seeks when more
   than 0.6 s off, and logs how far off it is every 10 s (`[hzn-party] in step with the host to …`).
   A station (`PlayableItem.LiveOrigin`) is tuned into, not followed.
+  The queue is shared, as in a jam: the host's is the party's. The host sends it (`party.queue`,
+  `IPartyHostSource.Queue`: its explicit songs keyed by queue item id, plus its mix's name and a peek)
+  whenever it changes. A guest's `QueueModel` is shared (`QueueModel.Share`): its own songs and mix
+  are set aside until `Unshare`, the host's list is shown (`Mirror`), and every user change (add,
+  remove, move, play now, clear, Next, Previous) goes to the owner (`IQueueOwner`), which the party
+  sends to the host as `party.ask` and the host applies to its own queue (`ChangeQueueAsync`). A
+  shared queue's engine only plays what the party puts on (`PlayNext`), but loads the host's next
+  song ahead. A song from the other side is a `PartySongItem`: found on this PC
+  (`PartySongFinder`: the same source, else search by title and artist) the first time it's loaded
+  ahead, looked up for the list, or played, then played as what was found.
 - **Lyrics (`Plugins/Lyrics/`, `Core/Lyrics/`)** — each `ILyricsPlugin` contributes
   one `ILyricsProvider` (Unison, LRCLIB, and VocaDB, whose metadata plugin is also a
   lyrics plugin; when VocaDB has the song but no lyrics it reads the Vocaloid Lyrics

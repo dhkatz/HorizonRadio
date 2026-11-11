@@ -14,6 +14,12 @@ namespace HorizonRadio.Core.Sources.Queue;
 /// single infinite context (<see cref="IQueueContext"/>, a mix) that refills the tail
 /// forever. The model holds the data; the engine drives it.
 ///
+/// A listening party's guest shares its host's queue instead (<see cref="Share"/>): its own is set
+/// aside until it leaves, what the user does to the queue is asked of the host
+/// (<see cref="IQueueOwner"/>), and the list shown is the host's (<see cref="Mirror"/>). The engine
+/// then plays only what the party puts on (<see cref="PlayNext"/>), and loads the host's next song
+/// ahead.
+///
 /// Thread-safety: UI-thread callers mutate via the public methods; the engine
 /// thread consumes via the internal ones. All access is under <see cref="_lock"/>;
 /// events are raised after the lock is released so handlers can call back in.
@@ -26,6 +32,15 @@ public sealed class QueueModel
     private string? _contextMixId;
     private QueueItem? _current;
     private bool _currentFromContext;
+
+    // Sharing a party host's queue: the user's own queue set aside, and the host's as it was last sent.
+    private IQueueOwner? _shared;
+    private List<QueueItem> _own = new();
+    private IQueueContext? _ownContext;
+    private string? _ownContextMixId;
+    private IReadOnlyList<QueueItem> _mirror = Array.Empty<QueueItem>();
+    private string? _mirrorFrom;
+    private IReadOnlyList<QueuePreview> _mirrorNext = Array.Empty<QueuePreview>();
 
     // Moves on whenever what should play next changes under the engine: a jump, or a new
     // context. The engine notes the generation it picked at, so it can tell a jump it already
@@ -56,6 +71,9 @@ public sealed class QueueModel
     /// <summary>The active context generator, or null. The engine pulls from it
     /// and the sidebar peeks it; both guard their own access.</summary>
     public IQueueContext? Context { get { lock (_lock) return _context; } }
+
+    /// <summary>Whose queue the user is changing while it's shared (<see cref="Share"/>); else null.</summary>
+    public IQueueOwner? Owner { get { lock (_lock) return _shared; } }
 
     /// <summary>See <see cref="_generation"/>.</summary>
     internal int Generation { get { lock (_lock) return _generation; } }
@@ -90,7 +108,13 @@ public sealed class QueueModel
     /// it; with none, the context the next track would come from.</summary>
     internal (QueueItem? Item, IQueueContext? Context) PeekNext()
     {
-        lock (_lock) return _explicit.Count > 0 ? (_explicit[0], null) : (null, _context);
+        lock (_lock)
+        {
+            if (_explicit.Count > 0) return (_explicit[0], null);
+            // Sharing: the host's next song, which the party will put on.
+            if (_shared != null) return (_mirror.FirstOrDefault(q => q.Id != _current?.Id), null);
+            return (null, _context);
+        }
     }
 
     internal void NotifyChanged() => Changed?.Invoke();
@@ -104,11 +128,18 @@ public sealed class QueueModel
     // -- UI-side mutation --
 
     /// <summary>Append resolved items to the explicit ("next in queue") zone, returning
-    /// the ids of the items added (in order) — callers use the first to "play now"
-    /// (see <see cref="JumpToExplicit"/>). Empty if nothing was added.</summary>
-    public IReadOnlyList<string> AppendExplicit(IEnumerable<PlayableItem> items)
+    /// the ids of the items added (in order). <paramref name="playNow"/> plays the first now
+    /// (see <see cref="JumpToExplicit"/>). Empty if nothing was added, or when the queue is shared
+    /// (its owner is asked to add them).</summary>
+    public IReadOnlyList<string> AppendExplicit(IEnumerable<PlayableItem> items, bool playNow = false)
     {
         var ids = new List<string>();
+        if (Owner is { } shared)
+        {
+            var asked = items.ToList();
+            if (asked.Count > 0) shared.Add(asked, playNow);
+            return ids;
+        }
         lock (_lock)
         {
             foreach (var it in items)
@@ -121,11 +152,17 @@ public sealed class QueueModel
         if (ids.Count == 0) return ids;
         Changed?.Invoke();
         WorkAvailable?.Invoke();
+        if (playNow) JumpToExplicit(ids[0]);
         return ids;
     }
 
     public void RemoveExplicit(string id)
     {
+        if (Owner is { } shared)
+        {
+            shared.Remove(id);
+            return;
+        }
         bool removed;
         lock (_lock) removed = _explicit.RemoveAll(q => q.Id == id) > 0;
         if (removed) Changed?.Invoke();
@@ -136,6 +173,11 @@ public sealed class QueueModel
     public void MoveExplicitTo(string id, string targetId)
     {
         if (id == targetId) return;
+        if (Owner is { } shared)
+        {
+            shared.MoveTo(id, targetId);
+            return;
+        }
         var moved = false;
         lock (_lock)
         {
@@ -155,6 +197,11 @@ public sealed class QueueModel
     /// clamped to the list bounds.</summary>
     public void MoveExplicit(string id, int delta)
     {
+        if (Owner is { } shared)
+        {
+            shared.Move(id, delta);
+            return;
+        }
         var moved = false;
         lock (_lock)
         {
@@ -172,6 +219,11 @@ public sealed class QueueModel
     /// skipped) and interrupt the current track so the engine picks it up next.</summary>
     public void JumpToExplicit(string id)
     {
+        if (Owner is { } shared)
+        {
+            shared.PlayNow(id);
+            return;
+        }
         bool found;
         lock (_lock)
         {
@@ -186,10 +238,12 @@ public sealed class QueueModel
     }
 
     /// <summary>Play <paramref name="item"/> now, ahead of the rest of the queue, which stays as it
-    /// was: what's on is interrupted and the engine picks this next. Returns the queued item.</summary>
-    public QueueItem PlayNext(PlayableItem item, Func<TimeSpan>? joinAt = null)
+    /// was: what's on is interrupted and the engine picks this next. Returns the queued item, whose id
+    /// is <paramref name="id"/> when given. A shared queue plays it too: this is how the party puts
+    /// its songs on.</summary>
+    public QueueItem PlayNext(PlayableItem item, Func<TimeSpan>? joinAt = null, string? id = null)
     {
-        var queued = new QueueItem(item) { JoinAt = joinAt };
+        var queued = new QueueItem(item, id: id) { JoinAt = joinAt };
         lock (_lock)
         {
             _explicit.Insert(0, queued);
@@ -203,6 +257,11 @@ public sealed class QueueModel
 
     public void ClearExplicit()
     {
+        if (Owner is { } shared)
+        {
+            shared.Clear();
+            return;
+        }
         bool any;
         lock (_lock) { any = _explicit.Count > 0; _explicit.Clear(); }
         if (any) Changed?.Invoke();
@@ -212,10 +271,20 @@ public sealed class QueueModel
     /// explicit zone is empty. <paramref name="replaceNow"/> interrupts the current
     /// track so a station switch takes effect immediately rather than after the
     /// playing track ends. Either way, a track the old context is still resolving is
-    /// dropped: the next one comes from the new context.</summary>
+    /// dropped: the next one comes from the new context. While the queue is shared, it's the user's
+    /// own context that's set, for when they leave.</summary>
     public void SetContext(IQueueContext? provider, string? mixId, bool replaceNow = false)
     {
-        lock (_lock) { _context = provider; _contextMixId = mixId; _generation++; }
+        lock (_lock)
+        {
+            if (_shared != null)
+            {
+                _ownContext = provider;
+                _ownContextMixId = mixId;
+                return;
+            }
+            _context = provider; _contextMixId = mixId; _generation++;
+        }
         Changed?.Invoke();
         if (provider != null) WorkAvailable?.Invoke();
         if (replaceNow) InterruptRequested?.Invoke();
@@ -231,6 +300,59 @@ public sealed class QueueModel
         Changed?.Invoke();
     }
 
+    // -- sharing a party host's queue --
+
+    /// <summary>Share <paramref name="owner"/>'s queue: the user's own (its songs and mix) is set
+    /// aside until <see cref="Unshare"/>, and what they do to the queue is asked of the owner. What's
+    /// playing plays on.</summary>
+    public void Share(IQueueOwner owner)
+    {
+        lock (_lock)
+        {
+            if (_shared == null)
+            {
+                _own = new List<QueueItem>(_explicit);
+                _explicit.Clear();
+                (_ownContext, _ownContextMixId) = (_context, _contextMixId);
+                (_context, _contextMixId) = (null, null);
+                _generation++;
+            }
+            _shared = owner;
+        }
+        Changed?.Invoke();
+    }
+
+    /// <summary>Stop sharing: the user's own queue comes back, after what's playing.</summary>
+    public void Unshare()
+    {
+        lock (_lock)
+        {
+            if (_shared == null) return;
+            _shared = null;
+            _explicit.Clear(); // the party's songs not yet on
+            _explicit.AddRange(_own);
+            _own = new List<QueueItem>();
+            (_context, _contextMixId) = (_ownContext, _ownContextMixId);
+            (_ownContext, _ownContextMixId) = (null, null);
+            (_mirror, _mirrorFrom, _mirrorNext) = (Array.Empty<QueueItem>(), null, Array.Empty<QueuePreview>());
+            _generation++;
+        }
+        Changed?.Invoke();
+        if (HasWork) WorkAvailable?.Invoke();
+    }
+
+    /// <summary>The shared queue as its owner sent it: its songs (ids are the owner's), where the
+    /// rest comes from, and a look at what that plays next. Ignored when not sharing.</summary>
+    public void Mirror(IReadOnlyList<QueueItem> items, string? from, IReadOnlyList<QueuePreview> next)
+    {
+        lock (_lock)
+        {
+            if (_shared == null) return;
+            (_mirror, _mirrorFrom, _mirrorNext) = (items.ToList(), from, next.ToList());
+        }
+        Changed?.Invoke();
+    }
+
     public QueueSnapshot Snapshot(int contextPeek = 50)
     {
         QueueItem? current;
@@ -242,6 +364,12 @@ public sealed class QueueModel
         {
             current = _current;
             fromContext = _currentFromContext;
+            if (_shared != null)
+            {
+                // The song playing can still be in the list the host last sent.
+                return new QueueSnapshot(current, fromContext, _mirror.Where(q => q.Id != current?.Id).ToList(), _mirrorFrom,
+                    _mirrorNext.Take(contextPeek).ToList(), Shared: true);
+            }
             snapshot = new List<QueueItem>(_explicit);
             context = _context;
             name = context?.DisplayName;

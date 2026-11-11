@@ -12,19 +12,29 @@ namespace HorizonRadio.Core.Party;
 /// started, so guests wait for it rather than run ahead while it loads. Between songs nothing is
 /// playing (not the last song, paused, which would pause the guests). On a self-driven source
 /// (Spotify Connect) it's the track that source reports.
+///
+/// The queue is the party's: guests see it and change it as the host can. A song a guest adds is
+/// found on this PC when it's loaded ahead or played (<see cref="PartySongItem"/>).
 /// </summary>
 public sealed class PlayerPartySource : IPartyHostSource, IDisposable
 {
+    // Guests are shown this much of the queue (a message has to stay small).
+    private const int MaxQueued = 100;
+    private const int MaxUpcoming = 10;
+
     private readonly SourceRunner _runner;
     private readonly QueuePlayback _queue;
+    private readonly PartySongFinder _finder;
     private readonly Lock _lock = new();
     private volatile Track? _track;
     private ITransportControls? _transport;
 
-    public PlayerPartySource(SourceRunner runner, QueuePlayback queue)
+    /// <param name="finder">Finds the songs guests add (default: on this PC's sources).</param>
+    public PlayerPartySource(SourceRunner runner, QueuePlayback queue, PartySongFinder? finder = null)
     {
         _runner = runner;
         _queue = queue;
+        _finder = finder ?? new PartySongFinder(queue);
         _runner.TrackChanged += OnTrackChanged;
         _runner.ActiveSourceChanged += OnActiveSourceChanged;
         _queue.Model.Changed += Raise;
@@ -52,8 +62,7 @@ public sealed class PlayerPartySource : IPartyHostSource, IDisposable
                             [new PartySource(station.SourceId, station.Locator)]),
                         null, paused);
                 }
-                return new PartyNow(new PartySong(item.Id, meta.Title, meta.Artist, Ms(item.Item.Duration), false, SourcesOf(meta)),
-                    started ? item.Item.Position : null, paused || !started);
+                return new PartyNow(PartySongs.Of(item.Item, item.Id), started ? item.Item.Position : null, paused || !started);
             }
 
             if (_track is not { Resolvable: true } track || string.IsNullOrWhiteSpace(track.Title)) return null;
@@ -65,9 +74,55 @@ public sealed class PlayerPartySource : IPartyHostSource, IDisposable
         }
     }
 
+    public PartyQueueList Queue
+    {
+        get
+        {
+            var snap = _queue.Model.Snapshot(MaxUpcoming);
+            return new PartyQueueList(
+                [.. snap.Explicit.Take(MaxQueued).Select(q => PartySongs.Of(q.Item, q.Id))],
+                snap.ContextName,
+                [.. snap.ContextPeek.Select(p => new PartyUpcoming(p.Title, p.Subtitle, p.IsPlaceholder,
+                    p.Origin is { } o ? new PartySource(o.SourceId, o.Locator) : null))]);
+        }
+    }
+
+    public async Task ChangeQueueAsync(PartyQueueChange change)
+    {
+        var model = _queue.Model;
+        switch (change.Op)
+        {
+            case PartyQueueChange.Add when change.Songs is { Count: > 0 } songs:
+                model.AppendExplicit(songs.Select(s => new PartySongItem(s, _finder)), change.PlayNow);
+                await _queue.EnsureActiveAsync().ConfigureAwait(false);
+                break;
+            case PartyQueueChange.Remove when change.Id is { } id:
+                model.RemoveExplicit(id);
+                break;
+            case PartyQueueChange.MoveTo when change.Id is { } id && change.To is { } to:
+                model.MoveExplicitTo(id, to);
+                break;
+            case PartyQueueChange.Move when change.Id is { } id:
+                model.MoveExplicit(id, change.By);
+                break;
+            case PartyQueueChange.Play when change.Id is { } id:
+                model.JumpToExplicit(id);
+                await _queue.EnsureActiveAsync().ConfigureAwait(false);
+                break;
+            case PartyQueueChange.Clear:
+                model.ClearExplicit();
+                break;
+            case PartyQueueChange.Skip when _runner.ActiveSource is ITransportControls { CanSkipNext: true } transport:
+                await transport.NextAsync().ConfigureAwait(false);
+                break;
+            case PartyQueueChange.Back when _runner.ActiveSource is ITransportControls { CanSkipPrevious: true } transport:
+                await transport.PreviousAsync().ConfigureAwait(false);
+                break;
+        }
+    }
+
     // Where the song can be played again: its own origin (a Spotify uri, a YouTube video, a file).
-    private static PartySource[] SourcesOf(Track track) =>
-        HistoryReplay.OriginOf(track) is { } origin ? [new PartySource(origin.SourceId, origin.Locator)] : [];
+    private static PartySource[] SourcesOf(Track track) => PartySongs.SourcesOf(track);
 
     private static long? Ms(TimeSpan? duration) => duration is { } d ? (long)d.TotalMilliseconds : null;
 
@@ -112,17 +167,26 @@ public sealed class PlayerPartySource : IPartyHostSource, IDisposable
 }
 
 /// <summary>
-/// A guest's player: the queue. A party song plays next, ahead of what's queued (which stays), from
-/// where the host is the moment it starts. It's played from the host's own source when that works
-/// here (the same Spotify track, YouTube video or station); otherwise this PC's sources are searched
-/// for it by title and artist, and a song nothing here has is skipped. A song a source here has but
-/// can't play (its tools aren't installed, say) is reported as that, not as missing.
+/// A guest's player: the queue. While in a party the queue is the host's: the guest's own is set
+/// aside, the host's songs are shown (each found here when it's loaded ahead, as the next song, or
+/// looked up for the list), and what the user does to the queue is asked of the host. The party puts
+/// each song on as the host plays it, from where the host is the moment it starts. It's played from
+/// the host's own source when that works here (the same Spotify track, YouTube video or station);
+/// otherwise this PC's sources are searched for it by title and artist, and a song nothing here has
+/// is skipped. A song a source here has but can't play (its tools aren't installed, say) is reported
+/// as that, not as missing.
 /// </summary>
 public sealed class QueuePartyPlayer : IPartyPlayer
 {
+    // Songs the host has queued, kept a while after they leave its list: a song is taken off the
+    // list as it starts, and the guest may hear that before it hears the song is on.
+    private const int KeepSongs = 200;
+
     private readonly QueuePlayback _queue;
-    private readonly Func<PartySong, CancellationToken, Task<IReadOnlyList<PartySource>>> _search;
-    private readonly Func<string, IAudioSourceFactory?> _find;
+    private readonly PartySongFinder _finder;
+    private readonly Lock _lock = new();
+    private readonly Dictionary<string, QueueItem> _songs = new(StringComparer.Ordinal);
+    private readonly List<string> _order = []; // _songs' keys, oldest first
     private volatile QueueItem? _item;
     private volatile string? _key;
 
@@ -130,70 +194,68 @@ public sealed class QueuePartyPlayer : IPartyPlayer
     /// <param name="find">A source by id (default: <see cref="SourceCatalog.Find"/>).</param>
     public QueuePartyPlayer(QueuePlayback queue, Func<PartySong, CancellationToken, Task<IReadOnlyList<PartySource>>>? search = null,
         Func<string, IAudioSourceFactory?>? find = null)
+        : this(queue, new PartySongFinder(queue, search, find))
+    {
+    }
+
+    public QueuePartyPlayer(QueuePlayback queue, PartySongFinder finder)
     {
         _queue = queue;
-        _search = search ?? SearchAsync;
-        _find = find ?? SourceCatalog.Find;
+        _finder = finder;
     }
 
     public async Task<bool> PlayAsync(PartySong song, Func<TimeSpan> startAt, CancellationToken ct)
     {
-        var tried = new HashSet<PartySource>();
-        var failed = new List<(IAudioSourceFactory Source, Exception Error)>();
-        if (await TryAsync(song, song.Sources, startAt, tried, failed, ct).ConfigureAwait(false)) return true;
-        if (!song.Live) // a station is tuned into, not found by name
-        {
-            var found = await _search(song, ct).ConfigureAwait(false);
-            if (await TryAsync(song, found, startAt, tried, failed, ct).ConfigureAwait(false)) return true;
-        }
-        if (failed.Count == 0) return false; // nothing here has it
-        throw new PartyException(WhyNot(song, failed));
+        // A song from the party's queue was likely found, and loaded, ahead.
+        PartySongItem entry;
+        lock (_lock) entry = _songs.TryGetValue(song.Key, out var queued) ? (PartySongItem)queued.Item : new PartySongItem(song, _finder);
+        if (await entry.FindAsync(ct).ConfigureAwait(false) is not { } found) return false;
+        var item = await _queue.PlayNowAsync(found, song.Live ? null : startAt, song.Key, ct).ConfigureAwait(false);
+        _key = song.Key;
+        _item = item;
+        return true;
     }
 
-    // A source here had the song but couldn't play it. A missing tool is the one the user can fix.
-    private static string WhyNot(PartySong song, List<(IAudioSourceFactory Source, Exception Error)> failed)
-    {
-        foreach (var (source, error) in failed)
-        {
-            if (error is not MissingToolException { ToolKinds: { Count: > 0 } tools }) continue;
-            return $"Can't play \"{song.Title}\" here: {source.DisplayName} needs {SourceRequirements.HumanJoin(tools)}. " +
-                   $"Install {(tools.Count > 1 ? "them" : "it")} from the Tools tab.";
-        }
-        return $"Couldn't play \"{song.Title}\" from {failed[0].Source.DisplayName} here.";
-    }
+    public void ShareQueue(IQueueOwner host) => _queue.Model.Share(host);
 
-    private async Task<bool> TryAsync(PartySong song, IEnumerable<PartySource> sources, Func<TimeSpan> startAt,
-        HashSet<PartySource> tried, List<(IAudioSourceFactory, Exception)> failed, CancellationToken ct)
+    public void MirrorQueue(PartyQueueList queue)
     {
-        foreach (var source in sources)
+        var items = new List<QueueItem>(queue.Songs.Count);
+        lock (_lock)
         {
-            if (!tried.Add(source) || _find(source.SourceId) is not IContentSourceFactory factory) continue;
-            if (source.SourceId == "local" && !File.Exists(source.Locator)) continue; // the host's file, not ours
-            try
+            foreach (var song in queue.Songs)
             {
-                var item = await _queue.PlayNowAsync(factory, source.Locator, song.Live ? null : startAt, ct).ConfigureAwait(false);
-                _key = song.Key;
-                _item = item;
-                Log($"\"{song.Title}\" from {source.SourceId}");
-                return true;
+                if (!_songs.TryGetValue(song.Key, out var item))
+                {
+                    _songs[song.Key] = item = new QueueItem(new PartySongItem(song, _finder), id: song.Key);
+                    _order.Add(song.Key);
+                }
+                items.Add(item);
             }
-            catch (OperationCanceledException)
+            var listed = queue.Songs.Select(s => s.Key).ToHashSet(StringComparer.Ordinal);
+            for (var i = 0; _songs.Count > KeepSongs && i < _order.Count;)
             {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                Log($"\"{song.Title}\" from {source.SourceId} didn't play: {ex.Message}");
-                failed.Add((factory, ex));
+                if (listed.Contains(_order[i]))
+                {
+                    i++;
+                    continue;
+                }
+                _songs.Remove(_order[i]);
+                _order.RemoveAt(i);
             }
         }
-        return false;
+        _queue.Model.Mirror(items, queue.From, [.. queue.Next.Select(n => new QueuePreview(n.Title, n.Subtitle, n.Placeholder,
+            n.Source is { } s ? new ContentRef(s.SourceId, s.Locator) : null))]);
     }
 
-    private static async Task<IReadOnlyList<PartySource>> SearchAsync(PartySong song, CancellationToken ct)
+    public void UnshareQueue()
     {
-        var (found, _) = await SongSources.SearchAsync(new Track(song.Title, song.Artist, null, null, "", ""), ct).ConfigureAwait(false);
-        return [.. found.Select(s => new PartySource(s.SourceId, s.Locator))];
+        _queue.Model.Unshare();
+        lock (_lock)
+        {
+            _songs.Clear();
+            _order.Clear();
+        }
     }
 
     public PartyPlayerState? Current
@@ -211,4 +273,24 @@ public sealed class QueuePartyPlayer : IPartyPlayer
     public Task SetPausedAsync(bool paused) => _queue.ActiveEngine?.SetPausedAsync(paused) ?? Task.CompletedTask;
 
     private static void Log(string message) => Trace.WriteLine($"[hzn-party] {message}");
+}
+
+/// <summary>Songs as a party tells them.</summary>
+internal static class PartySongs
+{
+    /// <summary>A queued item as a party's song, keyed <paramref name="key"/>: what's known of it, and
+    /// where it plays from. A song a guest added that isn't found here yet is as the guest told it.</summary>
+    public static PartySong Of(PlayableItem item, string key)
+    {
+        if (item is PartySongItem { Found: null } told) return told.Song with { Key = key };
+        var meta = item.Metadata;
+        IEnumerable<PartySource> sources = item.LiveOrigin is { } live ? [new PartySource(live.SourceId, live.Locator)] : SourcesOf(meta);
+        if (item is PartySongItem added) sources = sources.Concat(added.Song.Sources).Distinct();
+        return new PartySong(key, meta.Title, meta.Artist, item.Duration is { } d ? (long)d.TotalMilliseconds : null,
+            item.LiveOrigin != null, [.. sources]);
+    }
+
+    /// <summary>Where a track can be played again: its own origin (a Spotify uri, a YouTube video, a file).</summary>
+    public static PartySource[] SourcesOf(Track track) =>
+        HistoryReplay.OriginOf(track) is { } origin ? [new PartySource(origin.SourceId, origin.Locator)] : [];
 }

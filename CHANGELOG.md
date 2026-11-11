@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A listening party shares one queue, as in a jam (Friends, Queue).** In a party, everyone's queue
+  is the host's: a guest's queue shows it (as "Party Queue") in place of their own, which comes back
+  when they leave. Anyone in the party can add songs to it, remove them, move them, play one now,
+  clear it, and skip forward or back, and everyone sees the change. A song a guest adds is played by
+  the host from the same source when it can (the same YouTube video or Spotify track), else found by
+  title and artist. Each guest finds the host's next song on their own PC while the current one
+  plays, and with YouTube downloads it, so it starts at once when the host gets to it.
 - **The next song loads while one plays, and YouTube songs download ahead (Queue, YouTube).** While
   a song plays, the player gets the next one ready, from the queue or the mix. A YouTube song is
   downloaded whole, so it starts the moment the one before it ends (no more seconds of yt-dlp

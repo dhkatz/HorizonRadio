@@ -22,9 +22,10 @@ internal sealed class FakeItem : PlayableItem
     private int _plays;
     private int _playing;
 
-    public FakeItem(string title, TimeSpan? duration = null)
+    /// <param name="externalId">Its id where it came from ("youtube:…"), so it can be found again.</param>
+    public FakeItem(string title, TimeSpan? duration = null, string? externalId = null)
     {
-        Metadata = new Track(title, "", null, null, "test", "Test");
+        Metadata = new Track(title, "", null, null, "test", "Test", externalId);
         Duration = duration;
     }
 
@@ -216,4 +217,31 @@ internal static class Eventually
             await Task.Delay(10);
         }
     }
+}
+
+/// <summary>Whose queue a shared one is: writes down what it's asked, in order.</summary>
+internal sealed class RecordingQueueOwner : IQueueOwner
+{
+    private readonly List<string> _asked = new();
+
+    public IReadOnlyList<string> Asked
+    {
+        get { lock (_asked) return [.. _asked]; }
+    }
+
+    private void Note(string what)
+    {
+        lock (_asked) _asked.Add(what);
+    }
+
+    public void Add(IReadOnlyList<PlayableItem> items, bool playNow) =>
+        Note($"add {string.Join(", ", items.Select(i => i.Metadata.Title))}{(playNow ? " now" : "")}");
+
+    public void Remove(string id) => Note($"remove {id}");
+    public void MoveTo(string id, string targetId) => Note($"move {id} to {targetId}");
+    public void Move(string id, int delta) => Note($"move {id} by {delta}");
+    public void PlayNow(string id) => Note($"play {id}");
+    public void Clear() => Note("clear");
+    public void Skip() => Note("skip");
+    public void Back() => Note("back");
 }

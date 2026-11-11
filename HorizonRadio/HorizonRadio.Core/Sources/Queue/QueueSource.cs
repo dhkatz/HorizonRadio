@@ -262,11 +262,12 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
         get { lock (_gate) return !_pauseLocked; }
     }
 
-    // Live, so adding to the queue enables Next straight away.
+    // Live, so adding to the queue enables Next straight away. A shared queue's owner decides.
     public bool CanSkipNext
     {
         get
         {
+            if (_model.Owner != null) return true;
             lock (_gate)
             {
                 if (_future.Count > 0) return true;
@@ -277,7 +278,11 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
 
     public bool CanSkipPrevious
     {
-        get { lock (_gate) return _past.Count > 0; }
+        get
+        {
+            if (_model.Owner != null) return true;
+            lock (_gate) return _past.Count > 0;
+        }
     }
 
     public bool IsPaused => _paused;
@@ -338,15 +343,18 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
         return true;
     }
 
+    // A shared queue's skips are its owner's: the party puts on what comes of them.
     public Task NextAsync()
     {
-        Request(Intent.Forward);
+        if (_model.Owner is { } shared) shared.Skip();
+        else Request(Intent.Forward);
         return Task.CompletedTask;
     }
 
     public Task PreviousAsync()
     {
-        Request(Intent.Back);
+        if (_model.Owner is { } shared) shared.Back();
+        else Request(Intent.Back);
         return Task.CompletedTask;
     }
 

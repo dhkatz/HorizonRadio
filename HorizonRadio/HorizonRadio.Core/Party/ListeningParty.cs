@@ -1,6 +1,9 @@
 using System.Diagnostics;
+using System.Text.Json;
 using System.Threading.Channels;
 using HorizonRadio.Core.Friends;
+using HorizonRadio.Core.Sources;
+using HorizonRadio.Core.Sources.Queue;
 
 namespace HorizonRadio.Core.Party;
 
@@ -16,6 +19,11 @@ namespace HorizonRadio.Core.Party;
 /// each song (<see cref="IPartyPlayer"/>) from that point, follows pause, and seeks when it has
 /// drifted. A station is tuned into rather than followed. A guest's own pause stands until the host
 /// pauses or resumes.
+///
+/// The queue is shared, as in a jam: the host's is the party's. The host sends it to its guests when
+/// it changes, and a guest's queue shows it in place of the guest's own (set aside until it leaves).
+/// What a guest does to the queue (add, remove, move, play now, clear, skip, back) is asked of the
+/// host, which does it to its own queue.
 ///
 /// Everything runs on one loop; <see cref="Changed"/> is raised off the UI thread.
 /// </summary>
@@ -33,6 +41,7 @@ public sealed class ListeningParty : IAsyncDisposable
     private readonly Channel<Func<Task>> _work = Channel.CreateUnbounded<Func<Task>>(new UnboundedChannelOptions { SingleReader = true });
     private readonly Lock _lock = new();
     private readonly PartyClock _clock = new();
+    private readonly HostAsks _asks;
     private Task? _loop;
     private Task? _ticker;
 
@@ -41,6 +50,7 @@ public sealed class ListeningParty : IAsyncDisposable
     private readonly Dictionary<string, string> _guests = new(StringComparer.Ordinal); // peer → user id
     private PartyNow? _sentNow;
     private long _sentAt; // our clock when _sentNow was read
+    private string? _sentQueue; // as JSON, to tell when it changed
     private long _seq;
 
     private string? _hostPeer;
@@ -73,6 +83,7 @@ public sealed class ListeningParty : IAsyncDisposable
         _heartbeat = heartbeat ?? TimeSpan.FromSeconds(5);
         _tolerance = tolerance ?? TimeSpan.FromMilliseconds(600);
         _joinTimeout = joinTimeout ?? TimeSpan.FromSeconds(15);
+        _asks = new HostAsks(this);
     }
 
     /// <summary>The party changed: who's in it, what it's playing, or a problem.</summary>
@@ -105,6 +116,7 @@ public sealed class ListeningParty : IAsyncDisposable
         _role = PartyRole.Hosting;
         _problem = null;
         _sentNow = null;
+        _sentQueue = null;
         _friends.SetHosting(true);
         Log("hosting");
         Publish();
@@ -130,8 +142,18 @@ public sealed class ListeningParty : IAsyncDisposable
         if (_role != PartyRole.Hosting || _guests.Count == 0) return;
         var now = _host.Now;
         var at = NowMs();
-        if (!force && !ShouldSend(now, at)) return;
-        await BroadcastAsync(now, at).ConfigureAwait(false);
+        if (force || ShouldSend(now, at)) await BroadcastAsync(now, at).ConfigureAwait(false);
+        await BroadcastQueueAsync().ConfigureAwait(false);
+    }
+
+    private async Task BroadcastQueueAsync()
+    {
+        var queue = _host.Queue;
+        var json = JsonSerializer.Serialize(queue, PartyMessage.Json);
+        if (json == _sentQueue) return;
+        _sentQueue = json;
+        var message = new PartyMessage { Type = PartyMessage.QueueChanged, Queue = queue };
+        foreach (var guest in _guests.Keys.ToList()) await SendAsync(guest, message).ConfigureAwait(false);
     }
 
     // Whether the guests need telling: a new song, pause or resume, a jump in position, or it's been a while.
@@ -181,7 +203,23 @@ public sealed class ListeningParty : IAsyncDisposable
         var at = NowMs();
         var now = _host.Now;
         await SendAsync(from.PeerId, StateMessage(now, at)).ConfigureAwait(false);
+        await SendAsync(from.PeerId, new PartyMessage { Type = PartyMessage.QueueChanged, Queue = _host.Queue }).ConfigureAwait(false);
         Publish();
+    }
+
+    private async Task OnAskAsync(FriendPeerMessage from, PartyQueueChange change)
+    {
+        var what = change.Songs is { } songs ? $" {songs.Count} song{(songs.Count == 1 ? "" : "s")}" : "";
+        Log($"{_friends.NameOf(from.UserId)} asked to {change.Op}{what}");
+        try
+        {
+            await _host.ChangeQueueAsync(change).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Log($"changing the queue failed: {ex.Message}");
+        }
+        await HostTickAsync(force: false).ConfigureAwait(false);
     }
 
     // ---- Joining -------------------------------------------------------------------------------
@@ -249,6 +287,7 @@ public sealed class ListeningParty : IAsyncDisposable
         _welcome?.TrySetException(new PartyException(why ?? "You left the party."));
         _welcome = null;
         _problem = why;
+        _player.UnshareQueue();
         if (tellHost && host != null) await SendAsync(host, new PartyMessage { Type = PartyMessage.Leave }).ConfigureAwait(false);
         Log(why ?? "left the party");
         Publish();
@@ -423,6 +462,7 @@ public sealed class ListeningParty : IAsyncDisposable
                 break;
             case PartyMessage.Welcome when fromHost:
                 _role = PartyRole.Guest;
+                _player.ShareQueue(_asks);
                 _welcome?.TrySetResult();
                 _welcome = null;
                 Log($"joined {_friends.NameOf(from.UserId)}'s party");
@@ -430,6 +470,12 @@ public sealed class ListeningParty : IAsyncDisposable
                 break;
             case PartyMessage.State when fromHost:
                 await OnStateAsync(message).ConfigureAwait(false);
+                break;
+            case PartyMessage.QueueChanged when fromHost && _role == PartyRole.Guest && message.Queue is { } queue:
+                _player.MirrorQueue(queue);
+                break;
+            case PartyMessage.Ask when _role == PartyRole.Hosting && _guests.ContainsKey(from.PeerId) && message.Change is { } change:
+                await OnAskAsync(from, change).ConfigureAwait(false);
                 break;
             case PartyMessage.Closed or PartyMessage.End when fromHost:
                 await LeaveCoreAsync(tellHost: false, $"{_friends.NameOf(from.UserId) ?? "Your friend"} isn't hosting anymore.").ConfigureAwait(false);
@@ -445,6 +491,49 @@ public sealed class ListeningParty : IAsyncDisposable
     });
 
     private void OnHostChanged() => _work.Writer.TryWrite(() => HostTickAsync(force: false));
+
+    // A guest asks the host to change the party's queue.
+    private void Ask(PartyQueueChange change) => _work.Writer.TryWrite(async () =>
+    {
+        if (_role != PartyRole.Guest || _hostPeer is not { } host) return;
+        Log($"asking the host to {change.Op}");
+        await SendAsync(host, new PartyMessage { Type = PartyMessage.Ask, Change = change }).ConfigureAwait(false);
+    });
+
+    /// <summary>What a guest's user does to the party's queue, asked of the host.</summary>
+    private sealed class HostAsks(ListeningParty party) : IQueueOwner
+    {
+        // Small enough messages for a relayed connection.
+        private const int SongsPerMessage = 50;
+
+        public void Add(IReadOnlyList<PlayableItem> items, bool playNow)
+        {
+            var songs = items.Select(item => PartySongs.Of(item, "")).ToList();
+            for (var i = 0; i < songs.Count; i += SongsPerMessage)
+            {
+                party.Ask(new PartyQueueChange
+                {
+                    Op = PartyQueueChange.Add,
+                    Songs = songs.GetRange(i, Math.Min(SongsPerMessage, songs.Count - i)),
+                    PlayNow = playNow && i == 0,
+                });
+            }
+        }
+
+        public void Remove(string id) => party.Ask(new PartyQueueChange { Op = PartyQueueChange.Remove, Id = id });
+
+        public void MoveTo(string id, string targetId) => party.Ask(new PartyQueueChange { Op = PartyQueueChange.MoveTo, Id = id, To = targetId });
+
+        public void Move(string id, int delta) => party.Ask(new PartyQueueChange { Op = PartyQueueChange.Move, Id = id, By = delta });
+
+        public void PlayNow(string id) => party.Ask(new PartyQueueChange { Op = PartyQueueChange.Play, Id = id });
+
+        public void Clear() => party.Ask(new PartyQueueChange { Op = PartyQueueChange.Clear });
+
+        public void Skip() => party.Ask(new PartyQueueChange { Op = PartyQueueChange.Skip });
+
+        public void Back() => party.Ask(new PartyQueueChange { Op = PartyQueueChange.Back });
+    }
 
     private async Task<bool> SendAsync(string peerId, PartyMessage message)
     {
