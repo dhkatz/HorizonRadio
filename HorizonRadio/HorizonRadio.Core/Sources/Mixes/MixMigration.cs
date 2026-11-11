@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
+using HorizonRadio.Core.IO;
 
 namespace HorizonRadio.Core.Sources.Mixes;
 
@@ -17,10 +18,7 @@ namespace HorizonRadio.Core.Sources.Mixes;
 public static class MixMigration
 {
     private static string DefaultProfilesPath =>
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "HorizonRadio",
-            "profiles.json");
+        AppPaths.In("profiles.json");
 
     private static void Log(string msg) => Trace.WriteLine($"[hzn-mix-migrate] {msg}");
 

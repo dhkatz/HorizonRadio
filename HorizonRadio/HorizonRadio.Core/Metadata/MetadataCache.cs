@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using HorizonRadio.Core.IO;
 
 namespace HorizonRadio.Core.Metadata;
 
@@ -62,9 +63,7 @@ public sealed class MetadataCache : IMetadataCache
                          Func<DateTimeOffset>? now = null, int? matchVersion = null)
     {
         _matchVersion = matchVersion ?? CurrentMatchVersion;
-        _root = root ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "HorizonRadio", "metadata");
+        _root = root ?? AppPaths.In("metadata");
         _retryTtl = retryTtl ?? DefaultRetryTtl;
         _cacheVersion = cacheVersion ?? CurrentCacheVersion;
         _now = now ?? (() => DateTimeOffset.UtcNow);

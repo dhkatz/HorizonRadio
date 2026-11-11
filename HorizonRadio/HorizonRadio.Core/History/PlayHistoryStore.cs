@@ -104,10 +104,7 @@ public sealed class PlayHistoryStore
     }
 
     private static string DefaultPath =>
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "HorizonRadio",
-            "history.json");
+        AppPaths.In("history.json");
 
     private static void Log(string msg) => Trace.WriteLine($"[hzn-history] {msg}");
 

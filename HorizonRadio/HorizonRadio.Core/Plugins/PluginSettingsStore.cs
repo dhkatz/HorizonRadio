@@ -14,10 +14,7 @@ namespace HorizonRadio.Core.Plugins;
 /// </summary>
 public sealed class PluginSettingsStore
 {
-    public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "HorizonRadio",
-        "plugin-settings.json");
+    public static string DefaultPath => AppPaths.In("plugin-settings.json");
 
     private readonly string? _path; // null = in-memory only
     private readonly Lock _lock = new();

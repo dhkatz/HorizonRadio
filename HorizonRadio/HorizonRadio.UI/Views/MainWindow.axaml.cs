@@ -6,6 +6,7 @@ using Avalonia.Data;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Styling;
+using HorizonRadio.Core.IO;
 
 namespace HorizonRadio.UI.Views;
 
@@ -14,6 +15,8 @@ public partial class MainWindow : ShadUI.Window
     public MainWindow()
     {
         InitializeComponent();
+        // A profile's window says so, so two instances side by side can be told apart.
+        Title = AppPaths.Label(Title ?? "Horizon Radio");
     }
 
     // Spotify-style single top bar: inject the unified search box into the centre of

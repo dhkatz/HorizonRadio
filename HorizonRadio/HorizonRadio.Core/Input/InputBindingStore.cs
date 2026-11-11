@@ -32,10 +32,7 @@ public sealed class InputBindingStore
     private readonly ConcurrentDictionary<string, Entry> _byKey = new();
 
     private static string DefaultPath =>
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "HorizonRadio",
-            "controls-config.json");
+        AppPaths.In("controls-config.json");
 
     private static void Log(string msg) => Trace.WriteLine($"[hzn-controls-cfg] {msg}");
 

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using HorizonRadio.Core.IO;
 
 namespace HorizonRadio.Core.Tools;
 
@@ -19,9 +20,9 @@ namespace HorizonRadio.Core.Tools;
 /// </summary>
 public static class ToolsPaths
 {
-    public static string Root => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "HorizonRadio", "tools");
+    /// <summary>Shared by every profile (<see cref="AppPaths.SharedRoot"/>): a second profile
+    /// shouldn't download the same tools again.</summary>
+    public static string Root => Path.Combine(AppPaths.SharedRoot, "tools");
 
     public static string DirectoryFor(string kind) => Path.Combine(Root, kind);
 

@@ -66,10 +66,7 @@ public sealed class MixStore
     }
 
     private static string DefaultPath =>
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "HorizonRadio",
-            "mixes.json");
+        AppPaths.In("mixes.json");
 
     private static void Log(string msg) => Trace.WriteLine($"[hzn-mixes] {msg}");
 

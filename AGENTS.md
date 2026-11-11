@@ -315,6 +315,23 @@ $env:FH6_DIR = "C:\...\ForzaHorizon6"   # once
 .\deploy.ps1 -NoBuild   # copy the existing build only
 ```
 
+### Profiles: two instances on one machine
+
+Every file the app keeps (settings, history, mixes, caches, logins, logs) lives under one
+root, `AppPaths.Root` (`Core/IO/AppPaths.cs`): `%LOCALAPPDATA%\HorizonRadio`. Build new
+paths with `AppPaths.In(...)`, never from `SpecialFolder.LocalApplicationData`. Started with
+`--profile <name>`, the app uses `HorizonRadio\profiles\<name>` instead, so a second instance
+with its own settings and logins can run beside the first (testing multiplayer on one
+machine):
+
+```powershell
+HorizonRadio.UI.exe --profile test
+```
+
+Downloaded tools stay shared (`AppPaths.SharedRoot\tools`). A profile's window title and its
+Spotify Connect devices are marked with its name (`AppPaths.Label`: "Horizon Radio [test]"). Only
+one instance can drive FH6 (the mod's pipes take one client), so pick "No Game" for the other.
+
 ## In-game title injection — and re-deriving it after a game update
 
 The DLL writes our title/artist into the game's now-playing metadata block. The

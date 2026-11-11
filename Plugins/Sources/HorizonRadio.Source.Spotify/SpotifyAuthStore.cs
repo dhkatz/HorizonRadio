@@ -28,9 +28,7 @@ public sealed class SpotifyAuthStore
 
     public SpotifyAuthStore(string? path = null)
     {
-        _path = path ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "HorizonRadio", "spotify-auth.dat");
+        _path = path ?? AppPaths.In("spotify-auth.dat");
     }
 
     private static void Log(string msg) => Trace.WriteLine($"[hzn-spotify-auth] {msg}");

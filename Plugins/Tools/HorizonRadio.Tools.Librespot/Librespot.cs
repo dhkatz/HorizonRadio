@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using HorizonRadio.Core.IO;
 using HorizonRadio.Core.Tools;
 
 namespace HorizonRadio.Tools.Librespot;
@@ -23,12 +24,12 @@ public sealed record LibrespotOptions
 /// </summary>
 public static class Librespot
 {
-    public const string DefaultDeviceName = "Horizon Radio";
+    /// <summary>The Connect device the user sees, marked with the profile when there is one
+    /// (<see cref="AppPaths.Label"/>), so two instances' devices can be told apart.</summary>
+    public static string DefaultDeviceName => AppPaths.Label("Horizon Radio");
 
     /// <summary>librespot's login + audio cache (so it stays logged in across restarts).</summary>
-    public static string DefaultCacheDir => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "HorizonRadio", "librespot");
+    public static string DefaultCacheDir => AppPaths.In("librespot");
 
     /// <summary>Locate a librespot.exe next to the app, in the managed tools dir, or in
     /// a dev build output. Null if none found.</summary>

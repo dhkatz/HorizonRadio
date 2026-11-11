@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Threading;
+using HorizonRadio.Core.IO;
 using HorizonRadio.Core.Models;
 
 namespace HorizonRadio.Core.Diagnostics;
@@ -46,9 +47,7 @@ public static class MetadataTrace
     /// <summary>True while a trace file is open and capturing.</summary>
     public static bool Enabled { get; private set; }
 
-    public static string Directory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "HorizonRadio", "diagnostics");
+    public static string Directory => AppPaths.In("diagnostics");
 
     private static string SettingsPath => Path.Combine(Directory, "settings.json");
 

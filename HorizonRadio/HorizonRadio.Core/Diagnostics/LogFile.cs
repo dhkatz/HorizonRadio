@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using HorizonRadio.Core.IO;
 
 namespace HorizonRadio.Core.Diagnostics;
 
@@ -23,8 +24,7 @@ public static class LogFile
     private static StreamWriter? _writer;
     private static Listener? _listener;
 
-    public static string DefaultDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HorizonRadio", "logs");
+    public static string DefaultDirectory => AppPaths.In("logs");
 
     /// <summary>The file this session writes to, or null when not started.</summary>
     public static string? CurrentPath { get; private set; }

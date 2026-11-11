@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Run a second copy of the app with its own settings: `--profile <name>`.** Started with
+  `--profile test`, Horizon Radio keeps everything (settings, history, mixes, logins, caches,
+  logs) in `%LOCALAPPDATA%\HorizonRadio\profiles\test` instead, so two copies can run side by
+  side without touching each other's data. Downloaded tools are shared. The window title and the
+  Spotify Connect devices show the profile ("Horizon Radio [test]").
 - **Add any song to the queue or a mix, from wherever it shows.** History rows, search results, and
   a mix's entries have Add To Queue and Add To Mix buttons; right-click a song in the queue, the
   Dashboard, or the player bar for the same menu. Add To Mix lists your mixes (ticking the ones that

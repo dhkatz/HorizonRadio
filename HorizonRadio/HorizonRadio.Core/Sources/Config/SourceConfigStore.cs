@@ -95,10 +95,7 @@ public sealed class SourceConfigStore
     private readonly object _saveLock = new();
 
     private static string DefaultPath =>
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "HorizonRadio",
-            "sources.json");
+        AppPaths.In("sources.json");
 
     private static void Log(string msg) => Trace.WriteLine($"[hzn-cfg] {msg}");
 

@@ -27,10 +27,7 @@ public sealed class EventRuleStore
     private readonly ConcurrentDictionary<string, EventAction> _rules = new();
 
     private static string DefaultPath =>
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "HorizonRadio",
-            "events-config.json");
+        AppPaths.In("events-config.json");
 
     private static void Log(string msg) => Trace.WriteLine($"[hzn-events-cfg] {msg}");
 
