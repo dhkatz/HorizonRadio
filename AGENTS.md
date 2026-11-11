@@ -47,6 +47,10 @@ The rule: **`Plugins/` integrates with Horizon Radio; `Mods/` integrates with a 
 A game plugin (`Plugins/Games/HorizonRadio.Game.<Game>`) pairs with its mod
 (`Mods/<Game>`) by name.
 
+**Target layout:** the .NET projects are moving to SDK, Sdk.UI, Core, Platform, UI and Cli, in
+the steps listed in [`docs/modular-architecture.md`](docs/modular-architecture.md). Read it before
+adding a project, an API plugins call, OS-specific code, or logic in a view model.
+
 ## Architecture
 
 ```

@@ -1,0 +1,111 @@
+# Modular architecture
+
+Where the .NET side of Horizon Radio is heading, and the order we're getting there in. The
+app is moving from "one UI project that wires everything, a Core that plugins reach into" to
+a small set of projects with one direction of dependency, so that:
+
+- plugins build against a small, stable SDK instead of the whole engine;
+- the engine runs without the window (a headless player, a CLI);
+- macOS and Linux can be supported by adding platform code, not by untangling Windows code.
+
+`AGENTS.md` describes the code as it is today; this file describes the target. Each step of the
+[roadmap](#roadmap) moves code toward it, so check the roadmap to see which parts already exist.
+
+## Projects
+
+| Project | What it is | References |
+|---|---|---|
+| `HorizonRadio.Sdk` | The plugin contract: plugin, source, metadata, lyrics, game and tool interfaces, the plain models they pass (`Track`, `PlayableItem`, `ConfigField`…), and helpers that need nothing beyond .NET. | nothing of ours |
+| `HorizonRadio.Sdk.UI` | The app's look: color tokens, text styles, shared row styles, and the controls pages are built from (`PageHeader`, `SectionCard`, `Notice`, `EmptyState`, `PathPicker`…). | Avalonia, ShadUI, Material.Icons |
+| `HorizonRadio.Core` | The engine: playback, queue, mixes, history, metadata, lyrics, settings, devices, friends, party; the command list every front end drives; the interfaces it reaches the OS through; and starting an instance (`Core/Hosting/`: plugin discovery, startup order, the control endpoint). | `Sdk` |
+| `HorizonRadio.Platform` | The OS behind Core's interfaces: audio output, secret storage, child processes, app folders. One project, a folder per OS, picked at run time. | `Core` |
+| `HorizonRadio.UI` | The Avalonia front end: views and view models, plus app-only components that need the app's view models (`SongRow`, `ArtTile`). | `Core`, `Platform`, `Sdk.UI`, plugins |
+| `HorizonRadio.Cli` | `hzr`, the command-line front end. | `Core`, `Platform`, plugins |
+| `Plugins/*` | Sources, metadata, lyrics, tools, games. A plugin may reference another plugin it builds on (Spotify on librespot). | `Sdk`, plus `Sdk.UI` for plugins with pages |
+
+```
+HorizonRadio.UI  ─┬─ Core ── Sdk
+                  ├─ Platform ── Core
+                  ├─ Sdk.UI
+                  └─ Plugins/* ── Sdk (+ Sdk.UI for pages)
+HorizonRadio.Cli ─┬─ Core
+                  ├─ Platform
+                  └─ Plugins/*
+```
+
+## Rules
+
+Each rule says where a kind of code goes; the reason follows it.
+
+- **A plugin references `HorizonRadio.Sdk*` and other plugins.** What a plugin needs from the
+  host (app folders, launching processes, logging, the tool resolver, diagnostics) comes through
+  `IPluginContext`, so a test host, the CLI, or another OS can supply its own.
+- **A plugin registers its own services.** Spotify builds its connection and players itself;
+  the host only discovers plugins and runs them, so it never names a plugin's internals.
+- **A view model only translates between the engine and the screen.** Logic the CLI would also
+  need is a Core service the view model calls (`MixPlayer.PlayAsync(mix, mode)`), and a question
+  the UI asks the user (replace or add?) is a parameter of that service.
+- **Core and the SDK stay OS-neutral.** OS-specific code lives in `HorizonRadio.Platform` behind
+  an interface Core declares, marked `[SupportedOSPlatform]` so the platform analyzer flags an
+  unguarded call.
+- **Pages build from `Sdk.UI`.** Colors come from its tokens, text from its styles, repeated
+  layouts from its controls, so the app and plugin pages look and behave the same.
+- **Commands are plain service methods**, plus a small catalog of named actions for key
+  bindings, event rules and the control endpoint. No mediator or command-bus framework.
+
+## Front ends and the control endpoint
+
+One instance of the engine runs per profile: the window, or `hzr serve` (headless). The running
+instance opens a local control endpoint (a Unix domain socket, which .NET supports on every OS;
+newline-delimited JSON, like the mod's IPC and the peer helper), takes commands from the
+command list, and streams events (what's playing, queue changes). `hzr` sends its command
+through the endpoint when an instance is running, and otherwise runs it in-process, starting a
+headless instance for playback commands. With an instance running, everything goes through it:
+only one process may write the settings, mixes and history, drive the game, or be the Spotify
+device.
+
+## Operating systems
+
+- **Plugins** declare the OSes they run on with `[SupportedOSPlatform]` on the plugin class;
+  discovery skips a plugin this OS can't run (the FH6 integration is Windows-only).
+- **Tools** are downloaded per runtime identifier (OS and architecture, `osx-arm64`): each
+  installer detects the platform and fetches the matching build, and a tool with no build for
+  the platform shows as not available.
+- **Sources** follow their tools: a source copes with a missing tool already, so it rarely needs
+  its own declaration.
+
+## Later, by design
+
+These are agreed but wait until something needs them:
+
+- The window attaching to a running headless instance (so music keeps playing with the window
+  closed). View models reach the engine through interfaces, which keeps this a transport change.
+- Splitting a game plugin into its engine and its pages (`Game.ForzaHorizon6` and
+  `Game.ForzaHorizon6.UI`), so a headless instance loads no Avalonia. Needed once the CLI loads
+  game plugins.
+- Splitting `HorizonRadio.Platform` per OS, once a dependency forces it (Windows media controls
+  need the `net10.0-windows` target).
+
+## Roadmap
+
+Each step leaves the app working and lands as its own PR or short stack.
+
+1. [ ] Move `Plugins/HorizonRadio.Plugins.Abstractions` to `HorizonRadio/HorizonRadio.Sdk`, with
+   its types in `HorizonRadio.Sdk.*` namespaces.
+2. [ ] `HorizonRadio.Sdk.UI`: color tokens and text styles; the app and FH6 reference it, and
+   hard-coded colors go.
+3. [ ] `Sdk.UI` controls: page layout (`PageHeader`, `SectionCard`, `SettingRow`), status
+   (`Notice`, `EmptyState`, `StatusAvatar`, `StatusDot`), `PathPicker`, the shared row and
+   icon-button styles; app-only `SongRow` and `ArtTile`.
+4. [ ] A confirm service (in the SDK for plugins, used by the app) and confirmation on every
+   destructive action.
+5. [ ] Host services on `IPluginContext`; plugin helpers move into the SDK; plugins drop their
+   Core reference.
+6. [ ] Plugins register their own services; `App.axaml.cs` stops naming plugin internals.
+7. [ ] `Core/Hosting/`: the startup sequence, plugin discovery, plugin context, game host and
+   tool registry move out of `HorizonRadio.UI`.
+8. [ ] Platform interfaces in Core; `HorizonRadio.Platform` with the Windows implementations.
+9. [ ] Workflows move from view models into Core services; the command list.
+10. [ ] The control endpoint.
+11. [ ] `hzr`: remote commands, then `hzr serve`.
+12. [ ] OS declarations for plugins and per-platform tool downloads; macOS and Linux platform code.
