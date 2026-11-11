@@ -128,6 +128,21 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   `friend.status` (what it's playing, from the runner's track) taken in. On exit the app tells the
   helper to stop first (`SharedPeerNetwork.Stop`), so friends see it leave at once rather than when
   the connection times out.
+- **Listening parties (`Core/Party/`)** — `ListeningParty`, over the friends' verified connections
+  (`Friends` passes any non-`friend.*` message from a proven friend's PC on as `PeerMessage`, and a
+  friend's status carries whether they're hosting). The host tells its guests its player's state
+  (`IPartyHostSource`; the app's is `PlayerPartySource`): the song (`PartySong`: a key per play, the
+  host's own source for it, a station as `Live`), the position read at a time on the host's clock,
+  and pause. It sends on a new song, a pause, a position jump (a seek), and every 5 s. On the queue a
+  song is the item in play (`QueueSource.PlayingNow`), paused until it has started so guests wait
+  while it loads, and nothing between songs (not the last one, paused). A guest learns the host's
+  clock from ping/pong round trips (`PartyClock`, the fastest kept) and plays each song through
+  `IPartyPlayer` (the app's is `QueuePartyPlayer`): the host's source if it works here, else this
+  PC's search by title and artist, played next ahead of the queue (`QueueModel.PlayNext`) from where
+  the host is the moment it starts (`QueueItem.JoinAt`, evaluated through `PumpContext.StartPosition`).
+  It follows pause before anything else (a paused queue never starts its next song), seeks when more
+  than 0.6 s off, and logs how far off it is every 10 s (`[hzn-party] in step with the host to …`).
+  A station (`PlayableItem.LiveOrigin`) is tuned into, not followed.
 - **Lyrics (`Plugins/Lyrics/`, `Core/Lyrics/`)** — each `ILyricsPlugin` contributes
   one `ILyricsProvider` (Unison, LRCLIB, and VocaDB, whose metadata plugin is also a
   lyrics plugin; when VocaDB has the song but no lyrics it reads the Vocaloid Lyrics

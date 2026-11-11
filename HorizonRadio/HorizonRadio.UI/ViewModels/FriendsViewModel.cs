@@ -9,18 +9,21 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Devices;
 using HorizonRadio.Core.Friends;
+using HorizonRadio.Core.Party;
 using HorizonRadio.Core.Peers;
 using HorizonRadio.Core.Settings;
 
 namespace HorizonRadio.UI.ViewModels;
 
 /// <summary>
-/// The Friends page: add a friend (show a code, or type theirs) and see who's online and what
-/// they're listening to. Follows <see cref="Friends"/>, whose events arrive off the UI thread.
+/// The Friends page: add a friend (show a code, or type theirs), see who's online and what
+/// they're listening to, and host or join a listening party. Follows <see cref="Friends"/> and
+/// <see cref="ListeningParty"/>, whose events arrive off the UI thread.
 /// </summary>
 public sealed partial class FriendsViewModel : ViewModelBase
 {
     private readonly Core.Friends.Friends _friends;
+    private readonly ListeningParty? _party;
     private readonly DispatcherTimer _clock;
 
     public ObservableCollection<FriendRow> Friends { get; } = new();
@@ -32,14 +35,26 @@ public sealed partial class FriendsViewModel : ViewModelBase
     [ObservableProperty] private string? status;
     [ObservableProperty] private bool isBusy;
     [ObservableProperty] private bool hasFriends;
+    [ObservableProperty] private PartyRole partyRole;
+    [ObservableProperty] private string partyTitle = "";
+    [ObservableProperty] private string partyDetail = "";
+    [ObservableProperty] private string? partyProblem;
 
     public bool IsShowingCode => InviteCode != null;
     public bool HasStatus => !string.IsNullOrEmpty(Status);
+    public bool HasParty => _party != null;
+    public bool CanStartParty => PartyRole == PartyRole.None;
+    public bool IsHostingParty => PartyRole == PartyRole.Hosting;
+    public bool IsInParty => PartyRole is PartyRole.Joining or PartyRole.Guest;
+    public bool HasPartyDetail => !string.IsNullOrEmpty(PartyDetail);
+    public bool HasPartyProblem => !string.IsNullOrEmpty(PartyProblem);
 
-    public FriendsViewModel(Core.Friends.Friends friends)
+    public FriendsViewModel(Core.Friends.Friends friends, ListeningParty? party = null)
     {
         _friends = friends;
+        _party = party;
         _friends.Changed += () => Dispatcher.UIThread.Post(Refresh);
+        if (_party != null) _party.Changed += () => Dispatcher.UIThread.Post(Refresh);
         _clock = new DispatcherTimer(TimeSpan.FromSeconds(15), DispatcherPriority.Background, (_, _) => Refresh());
         _clock.Start();
         MyName = friends.MyName;
@@ -56,6 +71,17 @@ public sealed partial class FriendsViewModel : ViewModelBase
 
     partial void OnStatusChanged(string? value) => OnPropertyChanged(nameof(HasStatus));
 
+    partial void OnPartyRoleChanged(PartyRole value)
+    {
+        OnPropertyChanged(nameof(CanStartParty));
+        OnPropertyChanged(nameof(IsHostingParty));
+        OnPropertyChanged(nameof(IsInParty));
+    }
+
+    partial void OnPartyDetailChanged(string value) => OnPropertyChanged(nameof(HasPartyDetail));
+
+    partial void OnPartyProblemChanged(string? value) => OnPropertyChanged(nameof(HasPartyProblem));
+
     private void Refresh()
     {
         Status = _friends.Status;
@@ -70,7 +96,23 @@ public sealed partial class FriendsViewModel : ViewModelBase
             InviteCode = null;
         }
 
-        var rows = _friends.All.Select(f => new FriendRow(f, RemoveAsync)).ToList();
+        var party = _party?.View ?? PartyView.None;
+        PartyRole = party.Role;
+        PartyProblem = party.Problem;
+        var song = party.Song is { } s ? $"{s.Title}{(string.IsNullOrWhiteSpace(s.Artist) ? "" : " · " + s.Artist)}" : null;
+        (PartyTitle, PartyDetail) = party.Role switch
+        {
+            PartyRole.Hosting => ("You're hosting a party.",
+                (party.Guests.Count == 0 ? "Nobody has joined yet." : "Listening along: " + string.Join(", ", party.Guests) + ".")
+                + (song != null ? $" Playing {song}." : "")),
+            PartyRole.Joining => ($"Joining {party.HostName}'s party…", ""),
+            PartyRole.Guest => ($"You're listening along with {party.HostName}.",
+                song == null ? "Nothing's playing right now." : party.Finding ? $"Finding {song}…" : $"Playing {song}."),
+            _ => ("Host a party and your friends can join it to hear what you play, in time with you.", ""),
+        };
+
+        var joined = party.Role is PartyRole.Joining or PartyRole.Guest ? party.HostName : null;
+        var rows = _friends.All.Select(f => new FriendRow(f, RemoveAsync, _party != null && f.IsHosting && f.Name != joined ? JoinAsync : null)).ToList();
         HasFriends = rows.Count > 0;
         if (!rows.Select(r => r.Key).SequenceEqual(Friends.Select(r => r.Key)))
         {
@@ -117,6 +159,33 @@ public sealed partial class FriendsViewModel : ViewModelBase
         MyName = _friends.MyName;
     }
 
+    [RelayCommand]
+    private async Task StartPartyAsync() => await RunAsync(async () =>
+    {
+        await _party!.StartHostingAsync();
+        Refresh();
+    });
+
+    [RelayCommand]
+    private async Task EndPartyAsync() => await RunAsync(async () =>
+    {
+        await _party!.StopHostingAsync();
+        Refresh();
+    });
+
+    [RelayCommand]
+    private async Task LeavePartyAsync() => await RunAsync(async () =>
+    {
+        await _party!.LeaveAsync();
+        Refresh();
+    });
+
+    private async Task JoinAsync(FriendRow row) => await RunAsync(async () =>
+    {
+        await _party!.JoinAsync(row.UserId);
+        Refresh();
+    });
+
     private async Task RemoveAsync(FriendRow row) => await RunAsync(async () =>
     {
         await _friends.RemoveAsync(row.UserId);
@@ -131,7 +200,7 @@ public sealed partial class FriendsViewModel : ViewModelBase
         {
             await action();
         }
-        catch (Exception ex) when (ex is PairingException or PeerNetworkException or FileNotFoundException or TimeoutException or IOException)
+        catch (Exception ex) when (ex is PairingException or PartyException or PeerNetworkException or FileNotFoundException or TimeoutException or IOException)
         {
             Status = ex is FileNotFoundException
                 ? "The peer-to-peer helper isn't installed with this build, so friends can't connect."
@@ -147,13 +216,16 @@ public sealed partial class FriendsViewModel : ViewModelBase
 /// <summary>One friend in the list.</summary>
 public sealed class FriendRow : ViewModelBase
 {
-    public FriendRow(FriendStatus friend, Func<FriendRow, Task> remove)
+    /// <param name="join">Joins their party; null when there's none to join.</param>
+    public FriendRow(FriendStatus friend, Func<FriendRow, Task> remove, Func<FriendRow, Task>? join = null)
     {
         UserId = friend.UserId;
         Name = friend.Name;
         IsOnline = friend.IsOnline;
         State = Describe(friend);
         RemoveCommand = new AsyncRelayCommand(() => remove(this));
+        CanJoin = join != null;
+        JoinCommand = new AsyncRelayCommand(() => join?.Invoke(this) ?? Task.CompletedTask);
     }
 
     public string UserId { get; }
@@ -161,17 +233,20 @@ public sealed class FriendRow : ViewModelBase
     public bool IsOnline { get; }
     public double IconOpacity => IsOnline ? 1.0 : 0.4;
     public string State { get; }
+    public bool CanJoin { get; }
     public IAsyncRelayCommand RemoveCommand { get; }
+    public IAsyncRelayCommand JoinCommand { get; }
 
-    public string Key => $"{UserId}|{Name}|{State}";
+    public string Key => $"{UserId}|{Name}|{State}|{CanJoin}";
 
     private static string Describe(FriendStatus f)
     {
         if (f.IsOnline)
         {
-            return f.Listening is { } l
+            var listening = f.Listening is { } l
                 ? $"Listening to {l.Title}{(string.IsNullOrWhiteSpace(l.Artist) ? "" : " · " + l.Artist)} ({l.Source})"
                 : "Online";
+            return f.IsHosting ? "Hosting a party · " + listening : listening;
         }
         return f.LastSeen is { } seen ? $"Offline · last seen {Ago(seen)}" : "Offline";
     }

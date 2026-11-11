@@ -244,6 +244,32 @@ public class QueueSourceTests
     }
 
     [Fact]
+    public async Task Play_next_plays_at_once_from_where_it_joins_and_keeps_the_queue()
+    {
+        var first = new FakeItem("first");
+        var later = new FakeItem("later");
+        var model = new QueueModel();
+        model.AppendExplicit([first, later]);
+        await using var src = await StartedAsync(model);
+        await Eventually.Until(() => first.Plays == 1, "the first track");
+
+        // A party's song: where it starts is worked out as it starts, after it has loaded.
+        var joining = new FakeItem("party") { HoldStart = FakeItem.NewSignal() };
+        var hostAt = TimeSpan.FromSeconds(30);
+        model.PlayNext(joining, () => hostAt);
+        await Eventually.Until(() => joining.Plays == 1, "the party's song to start loading");
+        hostAt = TimeSpan.FromSeconds(33); // the host played on while it loaded
+        joining.HoldStart.TrySetResult();
+        await Eventually.Until(() => joining.StartPositions.Count == 1, "it to start");
+        Assert.Equal(TimeSpan.FromSeconds(33), joining.StartPositions[0]);
+        Assert.Equal(["later"], model.Snapshot().Explicit.Select(q => q.Metadata.Title)); // still queued
+
+        await src.RestartAsync(); // a restart is from the top
+        await Eventually.Until(() => joining.StartPositions.Count == 2, "the restart");
+        Assert.Equal(TimeSpan.Zero, joining.StartPositions[1]);
+    }
+
+    [Fact]
     public async Task A_mix_switch_while_the_context_is_still_resolving_takes_effect_at_once()
     {
         var oldMix = new FakeContext("old");

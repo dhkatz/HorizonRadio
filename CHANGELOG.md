@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Listening parties: friends hear what you play, in time with you (Friends).** Choose Start Party
+  on the Friends page; your friends see you hosting and can choose Join Party. Their player then
+  plays your songs from where you are in them, pauses and plays with you, and puts itself back in
+  step when it drifts (or when you skip ahead). A guest plays each song from the same source when it
+  can there (the same Spotify track, YouTube video or file), and otherwise finds it by title and
+  artist on their own sources; one they can't find is skipped until your next song. A station is
+  tuned into rather than followed. Leaving, or the host ending the party or going offline, leaves the
+  guest's music playing.
 - **Friends: see when your friends are online and what they're listening to (Friends).** One of you
   shows a code on the Friends page and the other types it; you're then friends on all your PCs.
   Each sees the other online (or when they were last seen) and the song they're playing. You

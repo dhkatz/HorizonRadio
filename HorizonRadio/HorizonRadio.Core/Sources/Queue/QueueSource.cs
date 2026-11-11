@@ -353,6 +353,14 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
         get { lock (_gate) return _phase is Playing playing ? playing.Item.Item : null; }
     }
 
+    /// <summary>The item being played, and whether it has begun (so its position means
+    /// something); null between tracks, while the next is picked. Unlike the model's
+    /// <see cref="QueueModel.Current"/>, which shows the last track until the next one is on.</summary>
+    public (QueueItem Item, bool Started)? PlayingNow
+    {
+        get { lock (_gate) return _phase is Playing playing ? (playing.Item, playing.Started) : null; }
+    }
+
     public TimeSpan? Duration => ItemPlaying?.Duration;
     public TimeSpan Position => ItemPlaying?.Position ?? TimeSpan.Zero;
     public TimeSpan? SongPosition => ItemPlaying?.SongPosition;
@@ -563,9 +571,10 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
             Sink = sink,
             IsPaused = () => _paused,
             ResumeGate = _resumeGate,
-            // Only this play starts mid-way, and only where it was asked to: a restart or a step
-            // back onto the same item is a new play from the top.
-            StartPosition = _ => playing.StartAt,
+            // Only this play starts mid-way, and only where it was asked to (resuming a park, or
+            // the first play of an item joining one under way elsewhere): a restart or a step back
+            // onto the same item is a new play from the top.
+            StartPosition = _ => playing.StartAt > TimeSpan.Zero ? playing.StartAt : playing.Item.TakeJoinAt(),
             OnStarted = item => OnItemUpdated(playing, item, started: true),
             // A live item (radio) changed song mid-play: republish so enrichment re-runs.
             OnMetadataUpdated = item => OnItemUpdated(playing, item, started: false),

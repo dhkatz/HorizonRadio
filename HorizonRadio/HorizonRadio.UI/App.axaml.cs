@@ -328,7 +328,12 @@ public partial class App : Application
                 // Your friends, over the same helper: they see what you're playing, and you them.
                 var friends = new Core.Friends.Friends(settings, peers.GetAsync);
                 _ = friends.StartAsync();
-                var friendsVm = new FriendsViewModel(friends);
+                // Listening parties between friends: hosting tells guests what the player is doing;
+                // a guest's queue plays the host's songs from where the host is.
+                var partyHost = new Core.Party.PlayerPartySource(_runner, queuePlayback);
+                var party = new Core.Party.ListeningParty(friends, partyHost, new Core.Party.QueuePartyPlayer(queuePlayback));
+                party.Start();
+                var friendsVm = new FriendsViewModel(friends, party);
 
                 var vm = new MainWindowViewModel(router, _store, mixStore, mixSwitcher, queuePlayback, _historyStore, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, _game, gameSettings, toasts, dialogManager, devicesVm, friendsVm, lyrics, songSync);
                 var mainWindow = new MainWindow { DataContext = vm };
@@ -413,6 +418,8 @@ public partial class App : Application
                     if (_spotifyConnection != null) await _spotifyConnection.DisposeAsync();
                     // After the runner, so nothing is still sending audio to the game.
                     if (_game != null) await _game.DisposeAsync();
+                    await party.DisposeAsync();
+                    partyHost.Dispose();
                     await friends.DisposeAsync();
                     await myDevices.DisposeAsync();
                     await peers.DisposeAsync(); // stops the peer helper

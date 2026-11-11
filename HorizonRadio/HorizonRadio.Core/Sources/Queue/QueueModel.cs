@@ -178,6 +178,22 @@ public sealed class QueueModel
         InterruptRequested?.Invoke();
     }
 
+    /// <summary>Play <paramref name="item"/> now, ahead of the rest of the queue, which stays as it
+    /// was: what's on is interrupted and the engine picks this next. Returns the queued item.</summary>
+    public QueueItem PlayNext(PlayableItem item, Func<TimeSpan>? joinAt = null)
+    {
+        var queued = new QueueItem(item) { JoinAt = joinAt };
+        lock (_lock)
+        {
+            _explicit.Insert(0, queued);
+            _generation++;
+        }
+        Changed?.Invoke();
+        WorkAvailable?.Invoke();
+        InterruptRequested?.Invoke();
+        return queued;
+    }
+
     public void ClearExplicit()
     {
         bool any;
