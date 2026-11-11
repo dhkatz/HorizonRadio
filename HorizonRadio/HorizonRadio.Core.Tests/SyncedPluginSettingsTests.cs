@@ -87,9 +87,10 @@ public sealed class SyncedPluginSettingsTests
         desktopMap.Mode = StationSwitchMode.Live;
         laptop.MergeSynced(desktop.SyncedSettings());
 
-        await Eventually(() => laptopMap.Get(station) == StationAssignment.ForMix("drive") && laptopMap.Mode == StationSwitchMode.Live,
-            "the laptop's map to take the desktop's assignment and mode");
-        Assert.True(raised > 0);
+        // The map takes the change on a pool thread and raises Changed after it, so wait for both.
+        await Eventually(() => laptopMap.Get(station) == StationAssignment.ForMix("drive") && laptopMap.Mode == StationSwitchMode.Live
+                && Volatile.Read(ref raised) > 0,
+            "the laptop's map to take the desktop's assignment and mode, and say so");
     }
 
     [Fact]
