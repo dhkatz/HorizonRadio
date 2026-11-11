@@ -352,14 +352,22 @@ using var watch = settings.Watch(LyricsSettings.Karaoke, on => ...);
 - Each value is stored with its scope and the time it last changed, for last-writer-wins
   sync. A setting that's unset reads as its default and isn't written.
 - Keys only known at run time use the raw members (`TryGetRaw`, `SetRaw`,
-  `KeysWithPrefix`): each source's form is `source.<id>.<field>` (`SourceConfigStore`), each
-  plugin's settings `plugin.<id>.<key>` (`PluginSettings`, device-only).
+  `KeysWithPrefix`) or a `Setting<T>` built for the key. A settings form (a `ConfigField`
+  schema) is one setting per field (`ConfigFormSettings`): each source's is
+  `source.<id>.<field>` (`SourceConfigStore`), each metadata provider's
+  `metadata.provider.<id>.<field>` (`MetadataConfigStore`), both device-only with secret fields
+  as secrets. Each plugin's settings are `plugin.<id>.<key>` (`PluginSettings`, device-only),
+  each event rule `event.<kind>` (`EventRuleStore`), and the input bindings one list,
+  `controls.bindings` (`InputBindingStore`), since a binding replaces others.
+- Enums are stored by name. Every write is saved without being asked: there are no
+  `SaveToDisk` calls for settings.
 - The store is opened before anything else at startup (`App`), registered in DI, and
   disposed last, which writes anything still pending.
-- `settings.json` replaced `sources.json`, `plugin-settings.json` and
-  `diagnostics\settings.json`. The first run without it imports them once
-  (`LegacySettingsImport`) and leaves them in place. The metadata, event and controls
-  configs move over next.
+- `settings.json` replaced `sources.json`, `plugin-settings.json`, `metadata-config.json`,
+  `events-config.json`, `controls-config.json` and `diagnostics\settings.json`.
+  `LegacySettingsImport` brings each file over once, records which it has handled
+  (`settings.imported`, so a file added to its list later still comes over), and leaves
+  them in place. History, mixes and the caches are data, not settings, and keep their files.
 
 ## In-game title injection — and re-deriving it after a game update
 

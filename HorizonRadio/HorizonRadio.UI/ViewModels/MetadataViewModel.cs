@@ -127,21 +127,20 @@ public sealed partial class MetadataViewModel : ViewModelBase
         {
             // Persist every provider's config (so creds stick even when disabled),
             // and the enabled ones — in their current display order — as the chain.
-            _store.Order.Clear();
+            var order = new List<string>();
             foreach (var row in Providers)
             {
                 var values = new ConfigValues();
                 foreach (var f in row.Fields) values.Set(f.Key, f.GetValue());
                 _store.Save(row.Id, values);
-                if (row.IsEnabled) _store.Order.Add(row.Id);
+                if (row.IsEnabled) order.Add(row.Id);
             }
+            _store.Order = order;
 
-            _store.Forced.Clear();
+            var forced = new Dictionary<MetadataField, string>();
             foreach (var fr in Fields)
-                if (fr.Selected?.ProviderId is { } pid) _store.Forced[fr.Field] = pid;
-
-            _store.SelectedProviderId = null; // superseded by Order
-            _store.SaveToDisk();
+                if (fr.Selected?.ProviderId is { } pid) forced[fr.Field] = pid;
+            _store.Forced = forced;
 
             var (contributors, policy) = MetadataCatalog.BuildPipeline(_store, _context);
             _resolver.Configure(contributors, policy);

@@ -41,10 +41,12 @@ public sealed class SettingsStore : IDisposable
     private static readonly TimeSpan DefaultSaveDelay = TimeSpan.FromMilliseconds(300);
 
     // NaN and infinity are written as "NaN" / "Infinity" rather than refused: a setting that ends
-    // up one shouldn't fail the save of every other.
-    private static readonly JsonSerializerOptions ValueJson = new(JsonSerializerDefaults.Web)
+    // up one shouldn't fail the save of every other. Enums are stored by name, which survives a
+    // reordering and reads well in the file.
+    internal static readonly JsonSerializerOptions ValueJson = new(JsonSerializerDefaults.Web)
     {
         NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() },
     };
 
     private readonly string? _path; // null = in memory only
@@ -71,9 +73,9 @@ public sealed class SettingsStore : IDisposable
     public static string DefaultPath => AppPaths.In(FileName);
 
     /// <summary>
-    /// Load the settings file at <paramref name="path"/> (default <see cref="DefaultPath"/>). A missing
-    /// file is a first run on this format: the settings kept in the older per-feature files beside it
-    /// are brought over (<see cref="LegacySettingsImport"/>), which leaves those files as they were.
+    /// Load the settings file at <paramref name="path"/> (default <see cref="DefaultPath"/>). The
+    /// settings kept in the older per-feature files beside it are brought over once
+    /// (<see cref="LegacySettingsImport"/>), which leaves those files as they were.
     /// An unreadable file is set aside as <c>settings.json.bad</c> rather than overwritten.
     /// </summary>
     public static SettingsStore Open(string? path = null) => Open(path ?? DefaultPath, DefaultSaveDelay, TimeProvider.System);
@@ -81,14 +83,9 @@ public sealed class SettingsStore : IDisposable
     internal static SettingsStore Open(string path, TimeSpan saveDelay, TimeProvider time)
     {
         var store = new SettingsStore(path, saveDelay, time);
-        if (File.Exists(path))
-        {
-            store.Load(path);
-        }
-        else if (LegacySettingsImport.Import(store, Path.GetDirectoryName(path) ?? "."))
-        {
-            store.Flush();
-        }
+        var exists = File.Exists(path);
+        if (exists) store.Load(path);
+        if (LegacySettingsImport.Import(store, Path.GetDirectoryName(path) ?? ".", firstRun: !exists)) store.Flush();
         return store;
     }
 
@@ -303,9 +300,9 @@ public sealed class SettingsStore : IDisposable
 
     private static Entry Decode(string key, JsonElement stored, SettingScope scope, DateTimeOffset modified)
     {
-        if (scope == SettingScope.Secret && stored.ValueKind == JsonValueKind.String && SecretText.IsProtected(stored.GetString()))
+        if (scope == SettingScope.Secret && stored.ValueKind == JsonValueKind.String && stored.GetString() is { } text && SecretText.IsProtected(text))
         {
-            var plain = SecretText.Unprotect(stored.GetString());
+            var plain = SecretText.Unprotect(text);
             if (plain == null)
             {
                 Log($"secret '{key}' can't be decrypted by this Windows user: kept as stored");

@@ -106,11 +106,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Settings live in one file, `settings.json`.** The app's preferences, each source's
-  settings, plugin settings and the diagnostics switch used to be spread over `sources.json`,
-  `plugin-settings.json` and `diagnostics\settings.json`. The first start of this version copies
-  them across once and leaves the old files as they were. Each setting now records whether it
-  may follow you to your other machines, ready for syncing your devices. Secrets, such as the
-  Soloist key, stay encrypted.
+  settings, plugin settings, the metadata providers, event rules, controller and keyboard
+  bindings and the diagnostics switch used to be spread over `sources.json`,
+  `plugin-settings.json`, `metadata-config.json`, `events-config.json`, `controls-config.json`
+  and `diagnostics\settings.json`. The first start of this version copies them across once and
+  leaves the old files as they were. Each setting now records whether it may follow you to your
+  other machines, ready for syncing your devices. Secrets, such as the Soloist key, stay
+  encrypted, and the Spotify metadata client secret, which was stored in plain text, is now
+  encrypted too.
 
 - **Play on the Sources tab now plays through the queue.** Local folders, YouTube links,
   Spotify links and radio stations start right away from the queue, the same as Play in

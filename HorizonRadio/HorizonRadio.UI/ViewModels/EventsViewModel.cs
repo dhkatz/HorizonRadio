@@ -123,7 +123,6 @@ public sealed partial class EventRuleRow : ViewModelBase
     partial void OnSelectedOptionChanged(EventActionOption value)
     {
         _rules.SetAction(Info.Kind, value.Action);
-        _rules.SaveToDisk();
     }
 
     private static EventActionOption Match(IReadOnlyList<EventActionOption> options, EventAction action)

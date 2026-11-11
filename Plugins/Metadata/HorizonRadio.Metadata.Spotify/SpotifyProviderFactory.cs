@@ -33,7 +33,7 @@ public sealed class SpotifyProviderFactory : IMetadataProviderFactory
             Default:     "",
             Placeholder: "required only if Client ID is set",
             IsSecret:    true,
-            Description: "Pairs with the Client ID above (client-credentials flow). Stored unencrypted in your config file; treat the file like any other credential store."),
+            Description: "Pairs with the Client ID above (client-credentials flow). Stored encrypted for your Windows user, and never synced to your other devices."),
     ];
 
     public IMetadataProvider Create(ConfigValues values, IPluginContext context)
