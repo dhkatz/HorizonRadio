@@ -293,6 +293,7 @@ public sealed class ListeningParty : IAsyncDisposable
         _ = Task.Run(async () =>
         {
             bool ok;
+            string? why = null;
             try
             {
                 ok = await _player.PlayAsync(song, ExpectedPosition, cts.Token).ConfigureAwait(false);
@@ -301,26 +302,38 @@ public sealed class ListeningParty : IAsyncDisposable
             {
                 return;
             }
+            catch (PartyException ex)
+            {
+                Log($"playing \"{song.Title}\" failed: {ex.Message}");
+                ok = false;
+                why = ex.Message;
+            }
             catch (Exception ex)
             {
                 Log($"playing \"{song.Title}\" failed: {ex.Message}");
                 ok = false;
+                why = $"Couldn't play \"{song.Title}\" here.";
             }
             _work.Writer.TryWrite(() =>
             {
-                Played(song, ok);
+                Played(song, ok, why);
                 return Task.CompletedTask;
             });
         }, CancellationToken.None);
     }
 
-    private void Played(PartySong song, bool ok)
+    // why: the player's reason a song it has couldn't play; null when nothing here has it.
+    private void Played(PartySong song, bool ok, string? why)
     {
         if (song.Key != _playingKey) return;
         _finding = false;
         _played = ok;
         _settleUntil = NowMs() + 2000; // let it start before judging where it is
-        if (!ok) _problem = $"Couldn't find \"{song.Title}\"{(song.Artist.Length > 0 ? " by " + song.Artist : "")} here. Waiting for the next song.";
+        if (!ok)
+        {
+            _problem = (why ?? $"Couldn't find \"{song.Title}\"{(song.Artist.Length > 0 ? " by " + song.Artist : "")} here.") +
+                       " Waiting for the next song.";
+        }
         Publish();
     }
 

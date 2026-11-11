@@ -115,37 +115,59 @@ public sealed class PlayerPartySource : IPartyHostSource, IDisposable
 /// A guest's player: the queue. A party song plays next, ahead of what's queued (which stays), from
 /// where the host is the moment it starts. It's played from the host's own source when that works
 /// here (the same Spotify track, YouTube video or station); otherwise this PC's sources are searched
-/// for it by title and artist, and a song nothing here has is skipped.
+/// for it by title and artist, and a song nothing here has is skipped. A song a source here has but
+/// can't play (its tools aren't installed, say) is reported as that, not as missing.
 /// </summary>
 public sealed class QueuePartyPlayer : IPartyPlayer
 {
     private readonly QueuePlayback _queue;
     private readonly Func<PartySong, CancellationToken, Task<IReadOnlyList<PartySource>>> _search;
+    private readonly Func<string, IAudioSourceFactory?> _find;
     private volatile QueueItem? _item;
     private volatile string? _key;
 
     /// <param name="search">Finds a song on this PC's sources (default: <see cref="SongSources.SearchAsync"/>).</param>
-    public QueuePartyPlayer(QueuePlayback queue, Func<PartySong, CancellationToken, Task<IReadOnlyList<PartySource>>>? search = null)
+    /// <param name="find">A source by id (default: <see cref="SourceCatalog.Find"/>).</param>
+    public QueuePartyPlayer(QueuePlayback queue, Func<PartySong, CancellationToken, Task<IReadOnlyList<PartySource>>>? search = null,
+        Func<string, IAudioSourceFactory?>? find = null)
     {
         _queue = queue;
         _search = search ?? SearchAsync;
+        _find = find ?? SourceCatalog.Find;
     }
 
     public async Task<bool> PlayAsync(PartySong song, Func<TimeSpan> startAt, CancellationToken ct)
     {
         var tried = new HashSet<PartySource>();
-        if (await TryAsync(song, song.Sources, startAt, tried, ct).ConfigureAwait(false)) return true;
-        if (song.Live) return false; // a station is tuned into, not found by name
-        var found = await _search(song, ct).ConfigureAwait(false);
-        return await TryAsync(song, found, startAt, tried, ct).ConfigureAwait(false);
+        var failed = new List<(IAudioSourceFactory Source, Exception Error)>();
+        if (await TryAsync(song, song.Sources, startAt, tried, failed, ct).ConfigureAwait(false)) return true;
+        if (!song.Live) // a station is tuned into, not found by name
+        {
+            var found = await _search(song, ct).ConfigureAwait(false);
+            if (await TryAsync(song, found, startAt, tried, failed, ct).ConfigureAwait(false)) return true;
+        }
+        if (failed.Count == 0) return false; // nothing here has it
+        throw new PartyException(WhyNot(song, failed));
+    }
+
+    // A source here had the song but couldn't play it. A missing tool is the one the user can fix.
+    private static string WhyNot(PartySong song, List<(IAudioSourceFactory Source, Exception Error)> failed)
+    {
+        foreach (var (source, error) in failed)
+        {
+            if (error is not MissingToolException { ToolKinds: { Count: > 0 } tools }) continue;
+            return $"Can't play \"{song.Title}\" here: {source.DisplayName} needs {SourceRequirements.HumanJoin(tools)}. " +
+                   $"Install {(tools.Count > 1 ? "them" : "it")} from the Tools tab.";
+        }
+        return $"Couldn't play \"{song.Title}\" from {failed[0].Source.DisplayName} here.";
     }
 
     private async Task<bool> TryAsync(PartySong song, IEnumerable<PartySource> sources, Func<TimeSpan> startAt,
-        HashSet<PartySource> tried, CancellationToken ct)
+        HashSet<PartySource> tried, List<(IAudioSourceFactory, Exception)> failed, CancellationToken ct)
     {
         foreach (var source in sources)
         {
-            if (!tried.Add(source) || SourceCatalog.Find(source.SourceId) is not IContentSourceFactory factory) continue;
+            if (!tried.Add(source) || _find(source.SourceId) is not IContentSourceFactory factory) continue;
             if (source.SourceId == "local" && !File.Exists(source.Locator)) continue; // the host's file, not ours
             try
             {
@@ -162,6 +184,7 @@ public sealed class QueuePartyPlayer : IPartyPlayer
             catch (Exception ex)
             {
                 Log($"\"{song.Title}\" from {source.SourceId} didn't play: {ex.Message}");
+                failed.Add((factory, ex));
             }
         }
         return false;

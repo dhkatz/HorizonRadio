@@ -39,8 +39,9 @@ public sealed record PartyPlayerState(string Key, TimeSpan Position, bool Starte
 public interface IPartyPlayer
 {
     /// <summary>Play <paramref name="song"/> now, starting where <paramref name="startAt"/> says the
-    /// moment it starts (so the time spent finding it isn't lost). False when it can't be played
-    /// here: none of the host's sources work here, and no source here has it.</summary>
+    /// moment it starts (so the time spent finding it isn't lost). False when no source here has it.
+    /// Throws <see cref="PartyException"/>, saying why for the page, when a source here has it but
+    /// can't play it (its tools aren't installed, say).</summary>
     Task<bool> PlayAsync(PartySong song, Func<TimeSpan> startAt, CancellationToken ct);
 
     /// <summary>The party's song, while it's what the player is on; else null.</summary>
@@ -70,7 +71,7 @@ public sealed record PartyView(PartyRole Role, string? HostName, IReadOnlyList<s
     public static readonly PartyView None = new(PartyRole.None, null, [], null, false, null);
 }
 
-/// <summary>Joining a party failed.</summary>
+/// <summary>Joining a party, or playing its song, failed; the message is for the page.</summary>
 public sealed class PartyException(string message) : Exception(message);
 
 // What a party's host and guests say to each other, over the friends' verified connections:

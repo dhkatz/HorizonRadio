@@ -200,6 +200,16 @@ public sealed class ListeningPartyTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task A_song_the_guest_has_but_cant_play_says_why_not_that_it_wasnt_found()
+    {
+        var (sam, alex) = await PartyOfTwo();
+        alex.Player.CantPlay = s => s.Key == "yt" ? "Can't play \"Melt\" here: YouTube needs yt-dlp." : null;
+        sam.Host.Play(Song("yt", "Melt"));
+        await Eventually(() => alex.Party.View.Problem != null, "Alex to hear why");
+        Assert.Equal("Can't play \"Melt\" here: YouTube needs yt-dlp. Waiting for the next song.", alex.Party.View.Problem);
+    }
+
+    [Fact]
     public async Task Ending_the_party_tells_the_guests_and_their_music_plays_on()
     {
         var (sam, alex) = await PartyOfTwo();
@@ -356,6 +366,7 @@ public sealed class ListeningPartyTests : IAsyncDisposable
 
         public Track? Playing { get; private set; }
         public Func<PartySong, bool> Has { get; set; } = _ => true;
+        public Func<PartySong, string?> CantPlay { get; set; } = _ => null;
         public int Plays { get; private set; }
         public int Seeks { get; private set; }
 
@@ -363,6 +374,7 @@ public sealed class ListeningPartyTests : IAsyncDisposable
         {
             await Task.Delay(150, ct); // finding it
             if (!Has(song)) return false;
+            if (CantPlay(song) is { } why) throw new PartyException(why);
             _ = clock; // the party works out startAt on its own clock
             lock (_lock)
             {

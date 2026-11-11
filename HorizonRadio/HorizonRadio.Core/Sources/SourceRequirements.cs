@@ -70,7 +70,7 @@ public static class SourceRequirements
     }
 
     /// <summary>"a", "a and b", or "a, b, and c".</summary>
-    private static string HumanJoin(IReadOnlyList<string> items) => items.Count switch
+    internal static string HumanJoin(IReadOnlyList<string> items) => items.Count switch
     {
         1 => items[0],
         2 => $"{items[0]} and {items[1]}",
