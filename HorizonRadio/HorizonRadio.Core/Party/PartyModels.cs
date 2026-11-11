@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using HorizonRadio.Core.Sources.Queue;
 
 namespace HorizonRadio.Core.Party;
 
@@ -18,14 +19,64 @@ public sealed record PartySong(string Key, string Title, string Artist, long? Du
 /// started), and whether it's paused.</summary>
 public sealed record PartyNow(PartySong Song, TimeSpan? Position, bool Paused);
 
-/// <summary>The host's side: what its player is doing.</summary>
+/// <summary>A look ahead at what the host's mix plays next: a song, or an entry (a playlist) not
+/// listed yet.</summary>
+public sealed record PartyUpcoming(string Title, string Subtitle, bool Placeholder, PartySource? Source);
+
+/// <summary>The party's queue, the host's, as its guests see it: the songs queued, each keyed by its
+/// place in the host's queue (the key it has when it plays), then where the rest comes from (the
+/// host's mix) and a look at that.</summary>
+public sealed record PartyQueueList(IReadOnlyList<PartySong> Songs, string? From, IReadOnlyList<PartyUpcoming> Next)
+{
+    public static readonly PartyQueueList Empty = new([], null, []);
+}
+
+/// <summary>A guest asking the host to change the party's queue: what the guest's user did to it.
+/// Ids are the host's.</summary>
+public sealed record PartyQueueChange
+{
+    public required string Op { get; init; }
+
+    /// <summary>The song acted on.</summary>
+    public string? Id { get; init; }
+
+    /// <summary>Move to where this song is.</summary>
+    public string? To { get; init; }
+
+    /// <summary>Move by this many places.</summary>
+    public int By { get; init; }
+
+    /// <summary>Songs to add, from the guest's sources.</summary>
+    public IReadOnlyList<PartySong>? Songs { get; init; }
+
+    /// <summary>Play the first song added now.</summary>
+    public bool PlayNow { get; init; }
+
+    public const string Add = "add";
+    public const string Remove = "remove";
+    public const string MoveTo = "move-to";
+    public const string Move = "move";
+    public const string Play = "play";
+    public const string Clear = "clear";
+    public const string Skip = "skip";
+    public const string Back = "back";
+}
+
+/// <summary>The host's side: what its player is doing, and its queue, which is the party's.</summary>
 public interface IPartyHostSource
 {
     /// <summary>What's playing, or null when nothing is.</summary>
     PartyNow? Now { get; }
 
-    /// <summary>The song, the pause or the position changed (a seek). Optional: the party also
-    /// looks every second.</summary>
+    /// <summary>The queue, as guests are shown it.</summary>
+    PartyQueueList Queue { get; }
+
+    /// <summary>Do what a guest asked to the queue: everyone in a party can add, remove, move, play
+    /// now and skip.</summary>
+    Task ChangeQueueAsync(PartyQueueChange change);
+
+    /// <summary>The song, the pause, the position (a seek) or the queue changed. Optional: the party
+    /// also looks every second.</summary>
     event Action? Changed;
 }
 
@@ -50,6 +101,17 @@ public interface IPartyPlayer
     Task SeekAsync(TimeSpan position);
 
     Task SetPausedAsync(bool paused);
+
+    /// <summary>Joined: the queue is the host's now, and what the user does to it is asked of the host
+    /// through <paramref name="host"/>. The user's own queue is set aside until
+    /// <see cref="UnshareQueue"/>.</summary>
+    void ShareQueue(IQueueOwner host);
+
+    /// <summary>The host's queue, as it was sent.</summary>
+    void MirrorQueue(PartyQueueList queue);
+
+    /// <summary>Left: the user's own queue comes back.</summary>
+    void UnshareQueue();
 }
 
 public enum PartyRole
@@ -82,6 +144,8 @@ public sealed class PartyException(string message) : Exception(message);
 //                                                host's clock (Unix ms) when positionMs was read
 //   party.ping     guest → host                  { t0 }: the guest's clock
 //   party.pong     host → guest                  { t0, at }: the host's clock when it answered
+//   party.queue    host → guests                 { queue }: the party's queue, when it changes
+//   party.ask      guest → host                  { change }: change the queue
 //   party.leave    guest → host
 //   party.end      host → guests                 the host stopped hosting
 internal sealed record PartyMessage
@@ -93,6 +157,8 @@ internal sealed record PartyMessage
     public long At { get; init; }
     public bool Paused { get; init; }
     public long T0 { get; init; }
+    public PartyQueueList? Queue { get; init; }
+    public PartyQueueChange? Change { get; init; }
 
     public const string Join = "party.join";
     public const string Welcome = "party.welcome";
@@ -102,8 +168,10 @@ internal sealed record PartyMessage
     public const string Pong = "party.pong";
     public const string Leave = "party.leave";
     public const string End = "party.end";
+    public const string QueueChanged = "party.queue";
+    public const string Ask = "party.ask";
 
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
+    internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };

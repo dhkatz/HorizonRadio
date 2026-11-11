@@ -87,21 +87,16 @@ public sealed class QueuePlayback : IDisposable
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            var addedIds = Model.AppendExplicit(items);
-            if (playNow && addedIds.Count > 0)
-                Model.JumpToExplicit(addedIds[0]);
+            Model.AppendExplicit(items, playNow);
         }
         finally { _gate.Release(); }
         await EnsureActiveAsync().ConfigureAwait(false);
     }
 
-    /// <summary>Resolve a locator and play its first item now, ahead of the queue, which keeps the
-    /// rest (unlike <see cref="EnqueueLocatorAsync"/>'s play-now). <paramref name="joinAt"/>, when
-    /// given, says where to start, worked out the moment it starts. Returns the queued item.</summary>
+    /// <summary>The first thing a locator plays, without queueing it.</summary>
     /// <exception cref="InvalidOperationException">It can't be played here (a tool missing, nothing
     /// playable).</exception>
-    public async Task<QueueItem> PlayNowAsync(IAudioSourceFactory factory, string locator, Func<TimeSpan>? joinAt = null,
-        CancellationToken ct = default)
+    public async Task<PlayableItem> ResolveAsync(IAudioSourceFactory factory, string locator, CancellationToken ct = default)
     {
         if (factory is not IContentSourceFactory)
             throw new InvalidOperationException($"{factory.DisplayName} can't be added to the queue.");
@@ -109,13 +104,21 @@ public sealed class QueuePlayback : IDisposable
         SourceRequirements.EnsureToolsAvailable(factory, values);
 
         var items = await _resolver.EnumerateAsync(new ContentRef(factory.Id, locator.Trim()), ct).ConfigureAwait(false);
-        if (items.Count == 0) throw new InvalidOperationException("That didn't resolve to anything playable.");
+        return items.Count > 0 ? items[0] : throw new InvalidOperationException("That didn't resolve to anything playable.");
+    }
 
+    /// <summary>Play <paramref name="item"/> now, ahead of the queue, which keeps the rest (unlike
+    /// <see cref="EnqueueLocatorAsync"/>'s play-now), as <paramref name="id"/> when given.
+    /// <paramref name="joinAt"/>, when given, says where to start, worked out the moment it starts.
+    /// Returns the queued item.</summary>
+    public async Task<QueueItem> PlayNowAsync(PlayableItem item, Func<TimeSpan>? joinAt = null, string? id = null,
+        CancellationToken ct = default)
+    {
         QueueItem queued;
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            queued = Model.PlayNext(items[0], joinAt);
+            queued = Model.PlayNext(item, joinAt, id);
         }
         finally { _gate.Release(); }
         await EnsureActiveAsync().ConfigureAwait(false);
@@ -129,14 +132,15 @@ public sealed class QueuePlayback : IDisposable
     /// it the queue's context (the infinite tail) and switches to it now;
     /// <see cref="QueueAddMode.Add"/> snapshots one lap of its tracks as explicit
     /// items ahead of the existing context. Pre-flights every entry's tools first so
-    /// a missing tool reports up front instead of silently skipping mid-mix.</summary>
+    /// a missing tool reports up front instead of silently skipping mid-mix. While the queue is a
+    /// listening party's, a mix is always added to it (the host's mix stays the party's).</summary>
     public async Task PlayMixAsync(Mix mix, QueueAddMode mode, CancellationToken ct = default)
     {
         if (mix.Entries.Count == 0)
             throw new InvalidOperationException($"'{mix.Name}' has no entries to play.");
         EnsureMixToolsAvailable(mix);
 
-        if (mode == QueueAddMode.Replace)
+        if (mode == QueueAddMode.Replace && Model.Owner == null)
         {
             var provider = new MixContextProvider(mix, _resolver, _runner.Shuffle);
             await _gate.WaitAsync(ct).ConfigureAwait(false);

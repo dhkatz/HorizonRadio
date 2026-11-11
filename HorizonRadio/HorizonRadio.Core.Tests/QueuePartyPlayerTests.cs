@@ -47,6 +47,41 @@ public sealed class QueuePartyPlayerTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task The_hosts_queue_is_shown_and_its_next_song_found_ahead_then_played_as_found()
+    {
+        var items = new Dictionary<string, FakeItem> { ["loc1"] = new("Melt"), ["loc2"] = new("World is Mine") };
+        var finds = new Dictionary<string, int>();
+        var finder = new PartySongFinder((_, locator, _) =>
+            {
+                lock (finds) finds[locator] = finds.GetValueOrDefault(locator) + 1;
+                return Task.FromResult<PlayableItem>(items[locator]);
+            },
+            (_, _) => Task.FromResult<IReadOnlyList<PartySource>>([]), id => id == _youTube.Id ? _youTube : null);
+        var player = new QueuePartyPlayer(_router.Player, finder);
+        var model = _router.Player.Model;
+        PartySong Song(string key, string title, string locator) => new(key, title, "ryo", 240_000, false, [new PartySource(_youTube.Id, locator)]);
+
+        player.ShareQueue(new RecordingQueueOwner());
+        player.MirrorQueue(new PartyQueueList([Song("k2", "World is Mine", "loc2")], null, []));
+        Assert.Equal(["k2"], model.Snapshot().Explicit.Select(q => q.Id));
+        Assert.Equal("World is Mine", model.Snapshot().Explicit[0].Metadata.Title);
+
+        Assert.True(await player.PlayAsync(Song("k1", "Melt", "loc1"), () => TimeSpan.Zero, CancellationToken.None));
+        await Eventually.Until(() => items["loc1"].Plays == 1, "Melt to play");
+        await Eventually.Until(() => items["loc2"].Prefetches > 0, "the next song to be found and loaded ahead");
+
+        // The host takes its next song off its list as it starts it; then the guest hears it's on.
+        player.MirrorQueue(PartyQueueList.Empty);
+        Assert.True(await player.PlayAsync(Song("k2", "World is Mine", "loc2"), () => TimeSpan.Zero, CancellationToken.None));
+        await Eventually.Until(() => items["loc2"].Plays == 1, "World is Mine to play");
+        Assert.Equal("k2", model.Current?.Id);
+        lock (finds) Assert.Equal(1, finds["loc2"]); // found once, ahead
+
+        player.UnshareQueue();
+        Assert.Null(model.Owner);
+    }
+
+    [Fact]
     public async Task A_song_nothing_here_has_is_not_found()
     {
         var song = Melt(new PartySource("spotify", "spotify:track:0"));

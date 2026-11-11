@@ -7,11 +7,12 @@ namespace HorizonRadio.Core.Sources.Queue;
 /// item playing now, the explicit "next in queue" items (exact), and a rolling
 /// peek of upcoming context tracks ("next from: &lt;ContextName&gt;"). Produced by
 /// <see cref="QueueModel.Snapshot"/> under its lock so the UI never reads a
-/// half-mutated queue.
+/// half-mutated queue. <see cref="Shared"/>: it's a listening party's queue, the host's.
 /// </summary>
 public sealed record QueueSnapshot(
     QueueItem? Current,
     bool CurrentFromContext,
     IReadOnlyList<QueueItem> Explicit,
     string? ContextName,
-    IReadOnlyList<QueuePreview> ContextPeek);
+    IReadOnlyList<QueuePreview> ContextPeek,
+    bool Shared = false);

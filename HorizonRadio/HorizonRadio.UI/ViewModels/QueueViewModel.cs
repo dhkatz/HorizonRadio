@@ -25,6 +25,8 @@ namespace HorizonRadio.UI.ViewModels;
 /// queue" one-offs, and a rolling peek of upcoming tracks from the active mix
 /// context ("next from: …"). The + button adds a one-off via the same quick-play
 /// dialog the player bar uses; rows carry their own play-now/remove/reorder commands.
+/// In a listening party (as a guest) it's the party's queue, the host's: the same actions go to the
+/// host.
 /// </summary>
 public sealed partial class QueueViewModel : ViewModelBase, IDisposable
 {
@@ -86,6 +88,15 @@ public sealed partial class QueueViewModel : ViewModelBase, IDisposable
     [ObservableProperty] private bool hasContext;
     [ObservableProperty] private string contextHeader = "";
 
+    /// <summary>It's a listening party's queue (the host's), which everyone in it can change.</summary>
+    [ObservableProperty] private bool isShared;
+
+    public string Title => IsShared ? "Party Queue" : "Queue";
+
+    public string EmptyText => IsShared
+        ? "The party's queue is empty. Add a track with the + button."
+        : "Your queue is empty. Play a mix or add a track with the + button.";
+
     /// <summary>True when there's nothing playing and nothing queued — drives the
     /// empty-state hint.</summary>
     public bool IsEmpty => !HasNowPlaying && !HasUpcoming && !HasContext;
@@ -134,6 +145,7 @@ public sealed partial class QueueViewModel : ViewModelBase, IDisposable
         if (_queue == null) return;
         var snap = _queue.Model.Snapshot();
 
+        IsShared = snap.Shared;
         HasNowPlaying = snap.Current != null;
         // Prefer what was enriched for this exact track; otherwise the item's own seed
         // (e.g. the raw stream title and station logo before a song is identified).
@@ -332,6 +344,12 @@ public sealed partial class QueueViewModel : ViewModelBase, IDisposable
     partial void OnHasNowPlayingChanged(bool value) => OnPropertyChanged(nameof(IsEmpty));
     partial void OnHasUpcomingChanged(bool value) => OnPropertyChanged(nameof(IsEmpty));
     partial void OnHasContextChanged(bool value) => OnPropertyChanged(nameof(IsEmpty));
+
+    partial void OnIsSharedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(Title));
+        OnPropertyChanged(nameof(EmptyText));
+    }
 
     /// <summary>Drag-and-drop reorder: move the dragged row to the dropped-on row's
     /// position. Called from the view's drop handler.</summary>

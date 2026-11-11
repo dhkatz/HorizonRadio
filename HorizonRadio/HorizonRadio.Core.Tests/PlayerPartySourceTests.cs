@@ -67,6 +67,38 @@ public sealed class PlayerPartySourceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task The_queue_is_the_partys_and_a_guest_changes_it_as_the_host_can()
+    {
+        Model.AppendExplicit([new FakeItem("a"), new FakeItem("b"), new FakeItem("c")]);
+        Model.SetContext(new FakeContext("Sam's Mix"), "m");
+        var ids = Model.Snapshot().Explicit.Select(q => q.Id).ToList();
+        Assert.Equal(["a", "b", "c"], _host.Queue.Songs.Select(s => s.Title));
+        Assert.Equal(ids, _host.Queue.Songs.Select(s => s.Key));
+        Assert.Equal("Sam's Mix", _host.Queue.From);
+
+        await _host.ChangeQueueAsync(new PartyQueueChange { Op = PartyQueueChange.Remove, Id = ids[1] });
+        await _host.ChangeQueueAsync(new PartyQueueChange { Op = PartyQueueChange.MoveTo, Id = ids[2], To = ids[0] });
+        Assert.Equal(["c", "a"], _host.Queue.Songs.Select(s => s.Title));
+        await _host.ChangeQueueAsync(new PartyQueueChange { Op = PartyQueueChange.Move, Id = ids[2], By = 1 });
+        Assert.Equal(["a", "c"], _host.Queue.Songs.Select(s => s.Title));
+
+        // A guest's song joins the queue as the guest told it, until it's found here.
+        PartySource[] from = [new("youtube", "https://www.youtube.com/watch?v=nW6nGsEKDE0")];
+        await _host.ChangeQueueAsync(new PartyQueueChange
+        {
+            Op = PartyQueueChange.Add,
+            Songs = [new PartySong("", "Melt", "ryo", 263_000, false, from)],
+        });
+        var melt = _host.Queue.Songs.Single(s => s.Title == "Melt");
+        Assert.Equal(from, melt.Sources);
+        Assert.Equal(263_000, melt.DurationMs);
+        Assert.Contains(melt.Key, Model.Snapshot().Explicit.Select(q => q.Id));
+
+        await _host.ChangeQueueAsync(new PartyQueueChange { Op = PartyQueueChange.Clear });
+        Assert.Empty(_host.Queue.Songs);
+    }
+
+    [Fact]
     public async Task A_pause_is_told()
     {
         var a = new FakeItem("a", TimeSpan.FromMinutes(3));
