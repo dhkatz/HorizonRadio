@@ -31,8 +31,9 @@ public readonly record struct StationAssignment(StationAssignmentKind Kind, stri
 /// FH6's Stations setting: which station plays what, and how mix stations behave while you're
 /// tuned elsewhere. Persisted in the plugin's settings as <c>"station:&lt;name&gt;"</c> →
 /// <c>"player"</c> | <c>"mix:&lt;id&gt;"</c> (absent = the game's own music) and
-/// <c>"switchMode"</c>. At most one station plays the player, so "where does my queue play?"
-/// always has one answer. Thread-safe.
+/// <c>"switchMode"</c>, both synced between the user's PCs (<see cref="IsSynced"/>), so a change made
+/// on another PC is taken in as it arrives. At most one station plays the player, so "where does my
+/// queue play?" always has one answer. Thread-safe.
 /// </summary>
 public sealed class StationMap
 {
@@ -52,14 +53,45 @@ public sealed class StationMap
     public StationMap(IPluginSettings? settings)
     {
         _settings = settings;
+        Load();
+        // Written here, or on another of the user's PCs: take the settings in again. Off the
+        // writer's thread, since a write here happens under _lock.
+        if (settings != null) settings.Changed += _ => ThreadPool.QueueUserWorkItem(_ => Reload());
+    }
+
+    /// <summary>Which of the plugin's settings follow the user to their other PCs: all of them,
+    /// the assignments and the mode, as preferences.</summary>
+    public static bool IsSynced(string key) => key.StartsWith(StationKeyPrefix, StringComparison.Ordinal) || key == SwitchModeKey;
+
+    // Read the settings into the map (caller holds _lock, or nobody else can see the map yet).
+    private void Load()
+    {
+        _assignments.Clear();
+        var hasPlayer = false;
         foreach (var station in StationCatalog.Names)
         {
-            if (Parse(settings?.GetValue(StationKeyPrefix + station)) is { } assignment)
-                _assignments[station] = assignment;
+            if (Parse(_settings?.GetValue(StationKeyPrefix + station)) is not { } assignment) continue;
+            // Two PCs may each have put the player on a station before they met: keep one.
+            if (assignment.Kind == StationAssignmentKind.Player && hasPlayer) continue;
+            hasPlayer |= assignment.Kind == StationAssignmentKind.Player;
+            _assignments[station] = assignment;
         }
-        _mode = Enum.TryParse<StationSwitchMode>(settings?.GetValue(SwitchModeKey), ignoreCase: true, out var mode)
+        _mode = Enum.TryParse<StationSwitchMode>(_settings?.GetValue(SwitchModeKey), ignoreCase: true, out var mode)
             ? mode
             : StationSwitchMode.Resume;
+    }
+
+    private void Reload()
+    {
+        bool changed;
+        lock (_lock)
+        {
+            var before = (_assignments.ToDictionary(), _mode);
+            Load();
+            changed = before._mode != _mode || before.Item1.Count != _assignments.Count
+                || before.Item1.Any(a => !_assignments.TryGetValue(a.Key, out var now) || now != a.Value);
+        }
+        if (changed) Changed?.Invoke();
     }
 
     /// <summary>Raised after any assignment or the mode changes. Fires on the caller's thread.</summary>

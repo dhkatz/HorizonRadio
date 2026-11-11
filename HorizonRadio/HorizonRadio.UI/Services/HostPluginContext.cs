@@ -15,4 +15,6 @@ internal sealed class HostPluginContext(IMetadataCache cache, SettingsStore sett
     public IMetadataCache Cache { get; } = cache;
 
     public IPluginSettings GetSettings(string pluginId) => PluginSettings.For(settings, pluginId);
+
+    public IPluginSettings GetSettings(string pluginId, System.Func<string, bool> synced) => PluginSettings.For(settings, pluginId, synced);
 }

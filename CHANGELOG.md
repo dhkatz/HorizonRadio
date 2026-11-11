@@ -18,7 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Keep your settings, mixes and history in step between your PCs (Settings → Devices).** Choose
   Show Code on one PC and type the code on the other: they pair, then keep their mixes, play
   history and synced settings (lyrics, shuffle, the search order, the metadata providers' order,
-  event rules and controls) the same, the newest change of each winning. A mix deleted, a song
+  event rules, controls, and Forza Horizon 6's station assignments) the same, the newest change of
+  each winning. A mix deleted, a song
   removed from History, or History cleared on one goes from all. A PC that was off catches up when it's back. They connect to each other directly
   over the IPFS network or your local network, with no account and no server of ours; folders,
   audio devices, the game, logins and keys stay on each PC. A code is good for 10 minutes and one

@@ -17,6 +17,11 @@ public interface IPluginContext
     IMetadataCache Cache { get; }
 
     /// <summary>The persisted settings belonging to the plugin with id <paramref name="pluginId"/>
-    /// (pass your own <see cref="IPlugin.Id"/>).</summary>
+    /// (pass your own <see cref="IPlugin.Id"/>). They stay on this PC.</summary>
     IPluginSettings GetSettings(string pluginId);
+
+    /// <summary>The plugin's settings, where the keys <paramref name="synced"/> says yes to follow the
+    /// user to their other PCs (when they've paired them): preferences, not paths or facts about this
+    /// machine. Watch <see cref="IPluginSettings.Changed"/> to follow a change made elsewhere.</summary>
+    IPluginSettings GetSettings(string pluginId, System.Func<string, bool> synced) => GetSettings(pluginId);
 }

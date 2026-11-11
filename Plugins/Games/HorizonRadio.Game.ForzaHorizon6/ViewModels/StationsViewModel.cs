@@ -73,6 +73,7 @@ public sealed partial class StationsViewModel : ObservableObject
                 .. _game.Mixes.Select(m => new StationOption(m.Name, StationAssignment.ForMix(m.Id))),
             ];
             var onAir = _game.CurrentStation;
+            SelectedMode = Modes.First(m => m.Mode == _game.Map.Mode); // it may have changed on another PC
             foreach (var row in Rows)
             {
                 var assignment = _game.Map.Get(row.Name);
