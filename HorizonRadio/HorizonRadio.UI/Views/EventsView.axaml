@@ -4,7 +4,6 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
-             xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="640"
              x:Class="HorizonRadio.UI.Views.EventsView"
              x:DataType="vm:EventsViewModel">
@@ -20,15 +19,7 @@
                            Description="Run an action when something happens in-game."/>
 
             <!-- Telemetry hint -->
-            <Border Classes="Card" Padding="12,10" IsVisible="{Binding HasSetupHint}">
-                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <materialIcons:MaterialIcon Kind="AccessPoint" Width="16" Height="16"
-                                                Opacity="0.7" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding SetupHint}"
-                               FontSize="12" Opacity="0.75"
-                               TextWrapping="Wrap" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Border>
+            <ui:Notice Tone="Info" Text="{Binding SetupHint}" IsVisible="{Binding HasSetupHint}"/>
 
             <!-- Events grouped by category (Racing / Menu / Radio) -->
             <ItemsControl ItemsSource="{Binding Groups}">

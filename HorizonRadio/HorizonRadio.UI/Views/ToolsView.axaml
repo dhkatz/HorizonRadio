@@ -1,7 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="using:HorizonRadio.Sdk.UI.Controls"
-             xmlns:theme="using:HorizonRadio.Sdk.UI.Theme"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
@@ -46,16 +45,8 @@
                                 <!-- Title row: icon + title block + status pill -->
                                 <Grid ColumnDefinitions="Auto,*,Auto"
                                       RowDefinitions="Auto,Auto">
-                                    <Border Grid.Column="0" Grid.RowSpan="2"
-                                            Width="38" Height="38"
-                                            CornerRadius="999"
-                                            Background="{Binding StatusTone, Converter={x:Static theme:ToneConverters.Brush}}"
-                                            Margin="0,0,14,0"
-                                            VerticalAlignment="Center">
-                                        <materialIcons:MaterialIcon Kind="Toolbox"
-                                                                    Width="20" Height="20"
-                                                                    Foreground="{DynamicResource OnToneBrush}"/>
-                                    </Border>
+                                    <ui:StatusAvatar Grid.Column="0" Grid.RowSpan="2" Margin="0,0,14,0"
+                                                     Tone="{Binding StatusTone}" Icon="Toolbox"/>
 
                                     <shadui:CardTitle Grid.Column="1" Grid.Row="0"
                                                       Content="{Binding DisplayName}"

@@ -37,10 +37,8 @@
                 </ui:PageHeader.Actions>
             </ui:PageHeader>
 
-            <!-- Empty state -->
-            <TextBlock Text="Nothing played yet. Songs you play will show up here."
-                       FontSize="12" Opacity="0.5" Margin="2,4"
-                       IsVisible="{Binding IsEmpty}"/>
+            <ui:EmptyState Icon="History" Title="Nothing played yet" Text="Songs you play will show up here."
+                           IsVisible="{Binding IsEmpty}"/>
 
             <ItemsControl ItemsSource="{Binding Items}">
                 <ItemsControl.ItemTemplate>

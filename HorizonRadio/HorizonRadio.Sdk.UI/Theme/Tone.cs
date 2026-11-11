@@ -60,4 +60,8 @@ public static class ToneConverters
     /// <summary>The tone's brush: <c>Background="{Binding Status, Converter={x:Static theme:ToneConverters.Brush}}"</c>.</summary>
     public static readonly IValueConverter Brush =
         new FuncValueConverter<Tone, IBrush>(tone => Brushes[(int)tone]);
+
+    /// <summary>Success when true, neutral when false: <c>Tone="{Binding IsConnected, Converter={x:Static theme:ToneConverters.SuccessWhenTrue}}"</c>.</summary>
+    public static readonly IValueConverter SuccessWhenTrue =
+        new FuncValueConverter<bool, Tone>(on => on ? Tone.Success : Tone.Neutral);
 }
