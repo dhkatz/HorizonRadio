@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using HorizonRadio.Core.IO;
+using HorizonRadio.Core.Peers;
 using HorizonRadio.Core.Sources;
 
 namespace HorizonRadio.Tools.Peer;
@@ -19,7 +20,7 @@ namespace HorizonRadio.Tools.Peer;
 /// The process is tied to the app (<see cref="ChildProcesses.TieToApp"/>) and exits when its stdin
 /// closes, so it never outlives it. Events are raised on the reading thread: keep handlers short.
 /// </summary>
-public sealed class PeerHelper : IAsyncDisposable
+public sealed class PeerHelper : IPeerNetwork, IAsyncDisposable
 {
     public const string ExeName = "horizon-peer.exe";
 
@@ -90,7 +91,7 @@ public sealed class PeerHelper : IAsyncDisposable
         };
         foreach (var arg in new[] { "serve", "-key", keyPath, "-discovery", DiscoveryArgument(discovery) }) psi.ArgumentList.Add(arg);
 
-        var process = Process.Start(psi) ?? throw new PeerHelperException($"couldn't start {exePath}");
+        var process = Process.Start(psi) ?? throw new PeerNetworkException($"couldn't start {exePath}");
         ChildProcesses.TieToApp(process);
         process.ErrorDataReceived += (_, e) =>
         {
@@ -155,7 +156,7 @@ public sealed class PeerHelper : IAsyncDisposable
             if (!found.Reader.Completion.IsCompleted)
             {
                 try { await WriteAsync(new Command("stop") { Id = id }, CancellationToken.None).ConfigureAwait(false); }
-                catch (Exception ex) when (ex is IOException or ObjectDisposedException or PeerHelperException) { }
+                catch (Exception ex) when (ex is IOException or ObjectDisposedException or PeerNetworkException) { }
             }
         }
     }
@@ -197,7 +198,7 @@ public sealed class PeerHelper : IAsyncDisposable
     private async Task WriteAsync(Command command, CancellationToken ct)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        if (_reading.IsCompleted) throw new PeerHelperException("the peer helper has stopped");
+        if (_reading.IsCompleted) throw new PeerNetworkException("the peer helper has stopped");
         var line = JsonSerializer.Serialize(command, CommandJson);
         await _writeLock.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -232,7 +233,7 @@ public sealed class PeerHelper : IAsyncDisposable
         }
         finally
         {
-            var stopped = new PeerHelperException("the peer helper has stopped");
+            var stopped = new PeerNetworkException("the peer helper has stopped");
             _ready.TrySetException(stopped);
             foreach (var (_, reply) in _pending) reply.TrySetException(stopped);
             foreach (var (_, found) in _finds) found.Writer.TryComplete(stopped);
@@ -255,10 +256,10 @@ public sealed class PeerHelper : IAsyncDisposable
                 reply.TrySetResult(ev.Clone());
                 break;
             case "error" when id != null && _pending.TryGetValue(id, out var failed):
-                failed.TrySetException(new PeerHelperException(ev.GetProperty("error").GetString() ?? "failed"));
+                failed.TrySetException(new PeerNetworkException(ev.GetProperty("error").GetString() ?? "failed"));
                 break;
             case "error" when id != null && _finds.TryGetValue(id, out var badFind):
-                badFind.Writer.TryComplete(new PeerHelperException(ev.GetProperty("error").GetString() ?? "failed"));
+                badFind.Writer.TryComplete(new PeerNetworkException(ev.GetProperty("error").GetString() ?? "failed"));
                 break;
             case "found" when id != null && _finds.TryGetValue(id, out var find):
                 find.Writer.TryWrite(new FoundPeer(

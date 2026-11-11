@@ -39,9 +39,14 @@ public sealed class InputBindingStore
         // A change made elsewhere (another device, later) replaces what's matched against.
         settings.Changed += key =>
         {
-            if (key == Bindings.Key) _byKey = Read();
+            if (key != Bindings.Key) return;
+            _byKey = Read();
+            Changed?.Invoke();
         };
     }
+
+    /// <summary>The bindings changed, here or on another of your devices.</summary>
+    public event Action? Changed;
 
     /// <summary>The action bound to <paramref name="binding"/>'s physical
     /// identity, or <see cref="EventAction.None"/> if unbound.</summary>

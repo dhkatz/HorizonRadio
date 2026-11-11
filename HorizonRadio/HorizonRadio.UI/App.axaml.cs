@@ -7,6 +7,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using HorizonRadio.Core;
 using HorizonRadio.Core.Audio;
+using HorizonRadio.Core.Devices;
 using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Fingerprints;
 using HorizonRadio.Core.Games;
@@ -35,6 +36,7 @@ using HorizonRadio.Core.Tools;
 using HorizonRadio.Plugins.Abstractions;
 using HorizonRadio.TitleModel;
 using HorizonRadio.Tools.Librespot;
+using HorizonRadio.Tools.Peer;
 using HorizonRadio.Tools.Soloist;
 using HorizonRadio.UI.Services;
 using HorizonRadio.UI.Tools;
@@ -313,7 +315,14 @@ public partial class App : Application
 
                 var gameSettings = new GameSettingsViewModel(gamePlugins, settings, chosenGameId);
                 gameSettings.RestartRequested += () => Restart(desktop);
-                var vm = new MainWindowViewModel(router, _store, mixStore, mixSwitcher, queuePlayback, _historyStore, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, _game, gameSettings, toasts, dialogManager, lyrics, songSync);
+                // Your devices: paired PCs keep their synced settings in step over the peer helper,
+                // which starts only once this PC is paired (or starts pairing).
+                var myDevices = new MyDevices(settings, async ct =>
+                    await PeerHelper.StartAsync(PeerHelper.DefaultKeyPath, Core.Peers.PeerDiscovery.All, ct: ct));
+                _ = myDevices.StartAsync();
+                var devicesVm = new DevicesViewModel(myDevices);
+
+                var vm = new MainWindowViewModel(router, _store, mixStore, mixSwitcher, queuePlayback, _historyStore, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, _game, gameSettings, toasts, dialogManager, devicesVm, lyrics, songSync);
                 var mainWindow = new MainWindow { DataContext = vm };
                 desktop.MainWindow = mainWindow;
                 // Composed after startup (the first-run picker), so show it ourselves.
@@ -387,6 +396,7 @@ public partial class App : Application
                     if (_spotifyConnection != null) await _spotifyConnection.DisposeAsync();
                     // After the runner, so nothing is still sending audio to the game.
                     if (_game != null) await _game.DisposeAsync();
+                    await myDevices.DisposeAsync(); // stops the peer helper
                     // Dispose the container last — it owns the leaf singletons (stores + cache).
                     await provider.DisposeAsync();
                     settings.Dispose(); // writes any change still waiting to be saved

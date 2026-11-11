@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Windows.Input;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Metadata;
@@ -42,6 +43,26 @@ public sealed partial class MetadataViewModel : ViewModelBase
         _resolver = resolver;
         BuildProviders();
         BuildFields();
+        // The order and overrides sync between your devices (Devices): when they change
+        // elsewhere, the page shows them and the resolver uses them.
+        _ = store.Settings.Watch(MetadataSettings.Order, _ => Dispatcher.UIThread.Post(Reload));
+        _ = store.Settings.Watch(MetadataSettings.Forced, _ => Dispatcher.UIThread.Post(Reload));
+    }
+
+    private IReadOnlyList<string> _shownOrder = [];
+    private Dictionary<MetadataField, string> _shownForced = [];
+
+    private void Reload()
+    {
+        if (_store.Order.SequenceEqual(_shownOrder) && _store.Forced.Count == _shownForced.Count
+            && !_store.Forced.Except(_shownForced).Any())
+            return; // what this page applied itself
+        Providers.Clear();
+        Fields.Clear();
+        BuildProviders();
+        BuildFields();
+        var (contributors, policy) = MetadataCatalog.BuildPipeline(_store, _context);
+        _resolver.Configure(contributors, policy);
     }
 
     /// <summary>Designer ctor.</summary>
@@ -56,6 +77,7 @@ public sealed partial class MetadataViewModel : ViewModelBase
 
     private void BuildProviders()
     {
+        _shownOrder = [.. _store.Order];
         // Enabled providers first, in saved order; then any remaining (disabled).
         var ordered = new List<IMetadataProviderFactory>();
         foreach (var id in _store.Order)
@@ -81,6 +103,7 @@ public sealed partial class MetadataViewModel : ViewModelBase
 
     private void BuildFields()
     {
+        _shownForced = new Dictionary<MetadataField, string>(_store.Forced);
         // Option set shared by every field: Auto + Source + each provider.
         var providerOptions = MetadataCatalog.All
             .Select(f => new OverrideOption(f.DisplayName, f.Id))
@@ -141,6 +164,8 @@ public sealed partial class MetadataViewModel : ViewModelBase
             foreach (var fr in Fields)
                 if (fr.Selected?.ProviderId is { } pid) forced[fr.Field] = pid;
             _store.Forced = forced;
+            _shownOrder = [.. _store.Order];
+            _shownForced = new Dictionary<MetadataField, string>(_store.Forced);
 
             var (contributors, policy) = MetadataCatalog.BuildPipeline(_store, _context);
             _resolver.Configure(contributors, policy);

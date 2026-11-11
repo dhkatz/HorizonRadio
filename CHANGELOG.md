@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Keep your settings in step between your PCs (Settings → Devices).** Choose Show Code on one PC
+  and type the code on the other: they pair, then keep their synced settings (lyrics, shuffle, the
+  search order, the metadata providers' order, event rules and controls) the same, the newest
+  change winning. A PC that was off catches up when it's back. They connect to each other directly
+  over the IPFS network or your local network, with no account and no server of ours; folders,
+  audio devices, the game, logins and keys stay on each PC. A code is good for 10 minutes and one
+  try. Devices can be renamed, removed, or leave.
 - **Run a second copy of the app with its own settings: `--profile <name>`.** Started with
   `--profile test`, Horizon Radio keeps everything (settings, history, mixes, logins, caches,
   logs) in `%LOCALAPPDATA%\HorizonRadio\profiles\test` instead, so two copies can run side by

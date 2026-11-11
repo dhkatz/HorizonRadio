@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
+using HorizonRadio.Core.Peers;
 using HorizonRadio.Tools.Peer;
 
 namespace HorizonRadio.Core.Tests;
@@ -75,7 +76,7 @@ public sealed class PeerHelperProtocolTests : IAsyncLifetime, IDisposable
         var refused = _peer.SendAsync("12D3nobody", JsonDocument.Parse("{}").RootElement);
         cmd = await NextCommand();
         await Emit($$"""{"event":"error","id":"{{cmd.GetProperty("id").GetString()}}","error":"not connected to that peer"}""");
-        var ex = await Assert.ThrowsAsync<PeerHelperException>(() => refused.WaitAsync(TimeSpan.FromSeconds(5)));
+        var ex = await Assert.ThrowsAsync<PeerNetworkException>(() => refused.WaitAsync(TimeSpan.FromSeconds(5)));
         Assert.Contains("not connected", ex.Message);
     }
 
@@ -147,9 +148,9 @@ public sealed class PeerHelperProtocolTests : IAsyncLifetime, IDisposable
 
         _helperOut.Dispose();
 
-        await Assert.ThrowsAsync<PeerHelperException>(() => send.WaitAsync(TimeSpan.FromSeconds(5)));
+        await Assert.ThrowsAsync<PeerNetworkException>(() => send.WaitAsync(TimeSpan.FromSeconds(5)));
         await exited.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        await Assert.ThrowsAsync<PeerHelperException>(() => _peer.AdvertiseAsync("x"));
+        await Assert.ThrowsAsync<PeerNetworkException>(() => _peer.AdvertiseAsync("x"));
     }
 
     [Fact]
@@ -218,13 +219,42 @@ public sealed class PeerHelperIntegrationTests : IDisposable
         await using var again = await Start("same");
         Assert.Equal(id, again.PeerId);
 
-        var ex = await Assert.ThrowsAsync<PeerHelperException>(() =>
+        var ex = await Assert.ThrowsAsync<PeerNetworkException>(() =>
             again.SendAsync("12D3KooWJPMTXATvFksayTLgi9nmRzQdkMuHyWncF889xCTSZWzH", JsonSerializer.SerializeToElement(new { })));
         Assert.Contains("not connected", ex.Message);
 
         var found = 0;
         await foreach (var _ in again.FindAsync("nobody/here", TimeSpan.FromMilliseconds(200))) found++;
         Assert.Equal(0, found);
+    }
+
+    [Fact]
+    public async Task Two_devices_pair_over_the_local_network_and_sync_a_setting()
+    {
+        if (!HelperBuilt()) return;
+        var karaoke = new Core.Settings.Setting<bool>("test.karaoke", Core.Settings.SettingScope.Synced, true);
+        Core.Devices.MyDevices Device(string name, Core.Settings.SettingsStore settings)
+        {
+            settings.Set(Core.Devices.DeviceSettings.Name, name);
+            return new Core.Devices.MyDevices(settings, async ct =>
+                await PeerHelper.StartAsync(Path.Combine(_dir.Path, name + ".key"), PeerDiscovery.Lan, ct: ct),
+                presenceInterval: TimeSpan.FromSeconds(2), sendDelay: TimeSpan.FromMilliseconds(50));
+        }
+        var desktopSettings = Core.Settings.SettingsStore.CreateInMemory();
+        var laptopSettings = Core.Settings.SettingsStore.CreateInMemory();
+        await using var desktop = Device("Desktop", desktopSettings);
+        await using var laptop = Device("Laptop", laptopSettings);
+        await desktop.StartAsync();
+        await laptop.StartAsync();
+
+        var code = await desktop.StartPairingAsync();
+        var joined = await laptop.JoinAsync(code);
+        Assert.Equal("Desktop", joined.Name);
+
+        desktopSettings.Set(karaoke, false);
+        var end = DateTime.UtcNow.AddSeconds(15);
+        while (laptopSettings.Get(karaoke) && DateTime.UtcNow < end) await Task.Delay(50);
+        Assert.False(laptopSettings.Get(karaoke));
     }
 
     [Fact]

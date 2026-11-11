@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
@@ -146,4 +147,39 @@ func TestCommandsThatCantBeDoneSayWhy(t *testing.T) {
 	sa.do(command{ID: "c", Cmd: "connect", Peer: b.ID().String(), Addrs: []string{b.Addrs()[0].String()}})
 	sa.rec.wait(t, 5*time.Second, is("connected", "id", "c"))
 	require.ErrorContains(t, sa.msg.send(t.Context(), b.ID(), make([]byte, maxMessageSize+1)), "limit")
+}
+
+// A peer that crashed and came back (same identity, new connection) gets the
+// replies to what it sends, though the old connection still looks alive.
+func TestARestartedPeerGetsItsReplies(t *testing.T) {
+	net := newSimNet(t)
+	a := net.host("/ip4/1.2.0.10/udp/8000/quic-v1", true)
+	key, _, err := crypto.GenerateEd25519Key(nil)
+	require.NoError(t, err)
+	b, crash := net.crashableHost("/ip4/1.2.0.20/udp/8000/quic-v1", libp2p.Identity(key))
+	sa := startService(t, a)
+	sb := startService(t, b)
+
+	n := func(ev map[string]any, field string) any {
+		m, _ := ev["message"].(map[string]any)
+		return m[field]
+	}
+	exchange := func(sb *testService, round float64) {
+		t.Helper()
+		sb.do(command{Cmd: "send", Peer: a.ID().String(), Message: json.RawMessage(fmt.Sprintf(`{"n":%v}`, round))})
+		sa.rec.wait(t, 5*time.Second, func(ev map[string]any) bool { return ev["event"] == "message" && n(ev, "n") == round })
+		sa.do(command{Cmd: "send", Peer: b.ID().String(), Message: json.RawMessage(fmt.Sprintf(`{"reply":%v}`, round))})
+		sb.rec.wait(t, 5*time.Second, func(ev map[string]any) bool { return ev["event"] == "message" && n(ev, "reply") == round })
+	}
+
+	sb.do(command{ID: "c", Cmd: "connect", Peer: a.ID().String(), Addrs: []string{a.Addrs()[0].String()}})
+	sb.rec.wait(t, 5*time.Second, is("connected", "id", "c"))
+	exchange(sb, 1)
+
+	crash()
+	again := net.host("/ip4/1.2.0.30/udp/8000/quic-v1", true, libp2p.Identity(key))
+	sb2 := startService(t, again)
+	sb2.do(command{ID: "c", Cmd: "connect", Peer: a.ID().String(), Addrs: []string{a.Addrs()[0].String()}})
+	sb2.rec.wait(t, 5*time.Second, is("connected", "id", "c"))
+	exchange(sb2, 2)
 }
