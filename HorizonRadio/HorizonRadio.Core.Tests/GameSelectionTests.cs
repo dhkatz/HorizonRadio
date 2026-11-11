@@ -1,5 +1,6 @@
 using HorizonRadio.Core.Games;
 using HorizonRadio.Core.Plugins;
+using HorizonRadio.Core.Settings;
 
 namespace HorizonRadio.Core.Tests;
 
@@ -36,10 +37,10 @@ public class GameSelectionTests
     [Fact]
     public void Plugin_settings_report_whether_a_plugin_has_been_set_up()
     {
-        var store = PluginSettingsStore.CreateInMemory();
-        Assert.False(store.HasSettings("fh6"));
-        store.For("fh6").SetValue("switchMode", "Live");
-        Assert.True(store.HasSettings("fh6"));
+        var store = SettingsStore.CreateInMemory();
+        Assert.False(PluginSettings.HasSettings(store, "fh6"));
+        PluginSettings.For(store, "fh6").SetValue("switchMode", "Live");
+        Assert.True(PluginSettings.HasSettings(store, "fh6"));
     }
 
     [Fact]

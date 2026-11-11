@@ -1,4 +1,5 @@
 using HorizonRadio.Core.IO;
+using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Tools.Soloist;
 using Xunit;
@@ -59,13 +60,11 @@ public sealed class SoloistToolTests
 
 public sealed class SecretSettingTests : IDisposable
 {
-    private readonly string _path = Path.Combine(Path.GetTempPath(), $"hzn-sources-{Guid.NewGuid():N}.json");
+    private readonly TempDir _dir = TempDir.Create();
 
-    public void Dispose()
-    {
-        File.Delete(_path);
-        GC.SuppressFinalize(this);
-    }
+    private string Path => System.IO.Path.Combine(_dir.Path, SettingsStore.FileName);
+
+    public void Dispose() => _dir.Dispose();
 
     private static readonly ConfigField[] Schema =
     [
@@ -73,63 +72,81 @@ public sealed class SecretSettingTests : IDisposable
         new TextField("deviceName", "Device name"),
     ];
 
+    private static void Write(SettingsStore settings, Action<ConfigValues> change)
+    {
+        var config = new SourceConfigStore(settings);
+        var values = config.Load("spotify-driven", Schema);
+        change(values);
+        config.Save("spotify-driven", values);
+        settings.Flush();
+    }
+
+    private static ConfigValues Read(string path)
+    {
+        using var settings = SettingsStore.Open(path);
+        return new SourceConfigStore(settings).Load("spotify-driven", Schema);
+    }
+
     [Fact]
     public void A_secret_setting_is_stored_encrypted_and_read_back()
     {
         if (!OperatingSystem.IsWindows()) return;
-        var store = new SourceConfigStore();
-        var values = store.Load("spotify-driven", Schema);
-        values.Set("soloistKey", "my-secret-key");
-        values.Set("deviceName", "Horizon Radio");
-        store.Save("spotify-driven", values);
-        store.SaveToDisk(_path);
+        using (var settings = SettingsStore.Open(Path))
+        {
+            Write(settings, values =>
+            {
+                values.Set("soloistKey", "my-secret-key");
+                values.Set("deviceName", "Horizon Radio");
+            });
+        }
 
-        var onDisk = File.ReadAllText(_path);
+        var onDisk = File.ReadAllText(Path);
         Assert.DoesNotContain("my-secret-key", onDisk, StringComparison.Ordinal);
         Assert.Contains(SecretText.Prefix, onDisk, StringComparison.Ordinal);
         Assert.Contains("Horizon Radio", onDisk, StringComparison.Ordinal); // the rest stays plain
 
-        var reloaded = SourceConfigStore.LoadFromDisk(_path).Load("spotify-driven", Schema);
-        Assert.Equal("my-secret-key", reloaded.GetString("soloistKey"));
+        Assert.Equal("my-secret-key", Read(Path).GetString("soloistKey"));
     }
 
     [Fact]
     public void A_secret_this_user_cant_decrypt_is_kept_until_replaced()
     {
         if (!OperatingSystem.IsWindows()) return;
-        // As if sources.json came from another Windows account: valid base64, not this user's DPAPI.
+        // As if settings.json came from another Windows account: valid base64, not this user's DPAPI.
         const string foreign = SecretText.Prefix + "AAECAwQFBgcICQ==";
-        File.WriteAllText(_path,
-            "{\"perSource\":{\"spotify-driven\":{\"soloistKey\":\"" + foreign + "\",\"deviceName\":\"Horizon Radio\"}}}");
+        File.WriteAllText(Path, $$"""
+            { "version": 1, "settings": {
+              "source.spotify-driven.soloistKey": { "value": "{{foreign}}", "scope": "secret" },
+              "source.spotify-driven.deviceName": { "value": "Horizon Radio", "scope": "device" } } }
+            """);
 
-        var store = SourceConfigStore.LoadFromDisk(_path);
-        var values = store.Load("spotify-driven", Schema);
-        Assert.Null(values.GetString("soloistKey"));
-        values.Set("deviceName", "Renamed");
-        store.Save("spotify-driven", values);
-        store.SaveToDisk(_path);
-        Assert.Contains(foreign, File.ReadAllText(_path), StringComparison.Ordinal);
+        using var settings = SettingsStore.Open(Path);
+        Assert.Null(new SourceConfigStore(settings).Load("spotify-driven", Schema).GetString("soloistKey"));
+        Write(settings, values => values.Set("deviceName", "Renamed"));
+        Assert.Contains(foreign, File.ReadAllText(Path), StringComparison.Ordinal);
 
-        values.Set("soloistKey", "a-new-key");
-        store.Save("spotify-driven", values);
-        store.SaveToDisk(_path);
-        Assert.DoesNotContain(foreign, File.ReadAllText(_path), StringComparison.Ordinal);
-        Assert.Equal("a-new-key", SourceConfigStore.LoadFromDisk(_path).Load("spotify-driven", Schema).GetString("soloistKey"));
+        Write(settings, values => values.Set("soloistKey", "a-new-key"));
+        Assert.DoesNotContain(foreign, File.ReadAllText(Path), StringComparison.Ordinal);
+        Assert.Equal("a-new-key", Read(Path).GetString("soloistKey"));
     }
 
     [Fact]
     public void A_secret_stays_encrypted_when_saved_before_its_settings_are_shown()
     {
         if (!OperatingSystem.IsWindows()) return;
-        var first = new SourceConfigStore();
-        var values = first.Load("spotify-driven", Schema);
-        values.Set("soloistKey", "my-secret-key");
-        first.Save("spotify-driven", values);
-        first.SaveToDisk(_path);
+        using (var first = SettingsStore.Open(Path))
+            Write(first, values => values.Set("soloistKey", "my-secret-key"));
 
-        // Next run: saved again before anything loads the Spotify settings.
-        SourceConfigStore.LoadFromDisk(_path).SaveToDisk(_path);
+        // Next run: saved again, with a source that never loads the Spotify settings.
+        using (var next = SettingsStore.Open(Path))
+        {
+            var config = new SourceConfigStore(next);
+            var values = config.Load("local", []);
+            values.Set("path", "C:/Music");
+            config.Save("local", values);
+        }
 
-        Assert.DoesNotContain("my-secret-key", File.ReadAllText(_path), StringComparison.Ordinal);
+        Assert.DoesNotContain("my-secret-key", File.ReadAllText(Path), StringComparison.Ordinal);
+        Assert.Equal("my-secret-key", Read(Path).GetString("soloistKey"));
     }
 }

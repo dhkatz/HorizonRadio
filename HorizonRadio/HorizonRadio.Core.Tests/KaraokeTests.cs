@@ -1,7 +1,7 @@
 using System.Text.Json;
 using HorizonRadio.Core.Lyrics;
 using HorizonRadio.Core.Metadata.VocaDb;
-using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Core.Settings;
 
 namespace HorizonRadio.Core.Tests;
 
@@ -139,20 +139,17 @@ public class LyricsVersionPreferenceTests
     [Fact]
     public void Karaoke_and_version_choices_survive_a_restart()
     {
-        var path = Path.Combine(Path.GetTempPath(), $"hzn-sources-{Guid.NewGuid():N}.json");
-        try
+        using var dir = TempDir.Create();
+        var path = Path.Combine(dir.Path, SettingsStore.FileName);
+        using (var store = SettingsStore.Open(path))
         {
-            var store = new SourceConfigStore { LyricsKaraoke = false, LyricsVersion = "Romaji" };
-            store.SaveToDisk(path);
+            store.Set(LyricsSettings.Karaoke, false);
+            store.Set(LyricsSettings.Version, "Romaji");
+        }
 
-            var loaded = SourceConfigStore.LoadFromDisk(path);
-            Assert.False(loaded.LyricsKaraoke);
-            Assert.Equal("Romaji", loaded.LyricsVersion);
-            Assert.True(new SourceConfigStore().LyricsKaraoke); // on by default
-        }
-        finally
-        {
-            File.Delete(path);
-        }
+        using var loaded = SettingsStore.Open(path);
+        Assert.False(loaded.Get(LyricsSettings.Karaoke));
+        Assert.Equal("Romaji", loaded.Get(LyricsSettings.Version));
+        Assert.True(SettingsStore.CreateInMemory().Get(LyricsSettings.Karaoke)); // on by default
     }
 }

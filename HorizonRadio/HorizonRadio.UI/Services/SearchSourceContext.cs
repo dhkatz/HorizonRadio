@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 
@@ -28,14 +29,14 @@ public sealed class SearchSourceContext
         ShowLabels = showLabels;
     }
 
-    public static SearchSourceContext Build(SourceConfigStore store)
+    public static SearchSourceContext Build(SettingsStore settings)
     {
         var sources = UnifiedSearch.SearchableSources;            // catalog order
         var names = sources.ToDictionary(s => s.Id, s => s.DisplayName);
 
         // User priority first, then any remaining searchable sources in catalog order, so
         // an unlisted/new source still has a defined (lowest) rank.
-        var priority = store.SearchSourcePriority
+        var priority = settings.Get(SourceSettings.SearchPriority)
             .Where(names.ContainsKey)
             .Concat(sources.Select(s => s.Id))
             .Distinct()

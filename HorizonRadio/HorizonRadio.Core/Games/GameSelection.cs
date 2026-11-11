@@ -1,3 +1,5 @@
+using HorizonRadio.Core.Settings;
+
 namespace HorizonRadio.Core.Games;
 
 /// <summary>
@@ -6,6 +8,11 @@ namespace HorizonRadio.Core.Games;
 /// </summary>
 public static class GameSelection
 {
+    /// <summary>The game Horizon Radio runs with: a game plugin's id, <see cref="NoGameIntegration.Id"/>
+    /// for a plain player, or null before the user has chosen (first run). Read at startup, so a
+    /// change takes effect on restart. About what's installed on this machine, so it doesn't sync.</summary>
+    public static readonly Setting<string?> Chosen = new("game", SettingScope.Device, null);
+
     /// <summary>The outcome: a game id to start with (a plugin id or
     /// <see cref="NoGameIntegration.Id"/>), or <see langword="null"/> to ask the user first.</summary>
     /// <param name="savedId">The persisted choice, or <see langword="null"/> if never chosen.</param>

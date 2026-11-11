@@ -1,5 +1,4 @@
 using HorizonRadio.Core.IO;
-using HorizonRadio.Core.Sources.Config;
 
 namespace HorizonRadio.Core.Tests;
 
@@ -51,24 +50,5 @@ public class AtomicFileTests
         AtomicFile.WriteAllBytes(path, [42]);
 
         Assert.Equal([42], File.ReadAllBytes(path));
-    }
-
-    [Fact]
-    public void A_source_config_save_that_fails_partway_keeps_the_previous_settings()
-    {
-        using var dir = TempDir.Create();
-        var path = Path.Combine(dir.Path, "sources.json");
-        new SourceConfigStore { GameId = "fh6", LastSelectedId = "local" }.SaveToDisk(path);
-        var before = File.ReadAllBytes(path);
-
-        // NaN isn't valid JSON: the writer throws after the earlier fields were written,
-        // which used to leave sources.json truncated (and the next start empty).
-        new SourceConfigStore { GameId = "other", PreviewVolume = double.NaN }.SaveToDisk(path);
-
-        Assert.Equal(before, File.ReadAllBytes(path));
-        Assert.Empty(TempFiles(dir));
-        var reloaded = SourceConfigStore.LoadFromDisk(path);
-        Assert.Equal("fh6", reloaded.GameId);
-        Assert.Equal("local", reloaded.LastSelectedId);
     }
 }

@@ -5,6 +5,7 @@ using HorizonRadio.Core.Games;
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Plugins;
+using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Game.ForzaHorizon6;
 using HorizonRadio.Plugins.Abstractions;
@@ -15,11 +16,11 @@ namespace HorizonRadio.Core.Tests;
 // integration against a fake mod on pipe names of its own.
 public class Fh6GameIntegrationTests
 {
-    private sealed class TestContext(PluginSettingsStore settings) : IPluginContext
+    private sealed class TestContext(SettingsStore settings) : IPluginContext
     {
         public IMetadataCache Cache => throw new NotSupportedException();
 
-        public IPluginSettings GetSettings(string pluginId) => settings.For(pluginId);
+        public IPluginSettings GetSettings(string pluginId) => PluginSettings.For(settings, pluginId);
     }
 
     [Fact]
@@ -28,7 +29,7 @@ public class Fh6GameIntegrationTests
         var plugin = new Fh6GamePlugin();
         Assert.Equal("fh6", plugin.Id);
 
-        await using var game = plugin.Create(new TestContext(PluginSettingsStore.CreateInMemory()));
+        await using var game = plugin.Create(new TestContext(SettingsStore.CreateInMemory()));
         Assert.Equal("Forza Horizon 6", game.DisplayName);
         Assert.NotNull(game.Output);
         Assert.NotNull(game.Stations);
@@ -108,8 +109,7 @@ public class Fh6GameIntegrationTests
     [Fact]
     public void Assignments_and_mode_persist_and_ignore_unknown_stations()
     {
-        var store = PluginSettingsStore.CreateInMemory();
-        var settings = store.For("fh6");
+        var settings = PluginSettings.For(SettingsStore.CreateInMemory(), "fh6");
         var map = new StationMap(settings);
         map.Set("Horizon XS", StationAssignment.ForMix("drive"));
         map.Mode = StationSwitchMode.Restart;
@@ -140,8 +140,8 @@ public class Fh6GameIntegrationTests
     [Fact]
     public async Task Integration_reads_its_station_map_from_the_plugin_settings()
     {
-        var store = PluginSettingsStore.CreateInMemory();
-        new StationMap(store.For("fh6")).Set("Horizon XS", StationAssignment.Player);
+        var store = SettingsStore.CreateInMemory();
+        new StationMap(PluginSettings.For(store, "fh6")).Set("Horizon XS", StationAssignment.Player);
 
         await using var game = new Fh6GamePlugin().Create(new TestContext(store));
         var fh6 = Assert.IsType<Fh6GameIntegration>(game);

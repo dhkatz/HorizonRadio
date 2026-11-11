@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Threading;
-using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Core.Settings;
 
 namespace HorizonRadio.Core.Audio;
 
@@ -50,49 +49,37 @@ public sealed class PreviewController : IDisposable
     }
 
     private readonly TeePcmSink _tee;
-    private readonly SourceConfigStore _store;
+    private readonly SettingsStore _settings;
     private readonly ISpeakerOutput _speaker;
     private readonly IAudioDeviceWatcher? _watcher;
     private readonly Action<Action> _post;
-    private readonly Action _save;
 
     // The DeviceId the open speaker was asked for (it may have fallen back to the
     // default if that device was gone).
     private string? _openedFor;
 
-    // Volume persistence is debounced: a slider drag fires SetVolume dozens of
-    // times, so we coalesce them and write the store once the slider goes quiet.
-    // The debounce timer posts the write to the UI thread; _persistLock guards
-    // _volumeDirty/_disposed against SetVolume and Dispose. Without the
-    // timer the position was only saved on Dispose, so a crash lost it.
-    private readonly object _persistLock = new();
-    private readonly Timer _persistTimer;
-    private static readonly TimeSpan PersistDebounce = TimeSpan.FromMilliseconds(800);
-    private bool _volumeDirty;
+    // Settings save themselves a moment after the last change (SettingsStore), so a slider drag
+    // that fires SetVolume dozens of times writes the file once.
     private bool _disposed;
 
     /// <param name="post">Runs an action later on the UI thread (the thread every
     /// public member is called on). Device callbacks go through it.</param>
-    public PreviewController(TeePcmSink tee, SourceConfigStore store, Action<Action> post)
-        : this(tee, store, post, new SpeakerPcmSink(), WasapiDeviceWatcher.TryCreate(), () => store.SaveToDisk())
+    public PreviewController(TeePcmSink tee, SettingsStore settings, Action<Action> post)
+        : this(tee, settings, post, new SpeakerPcmSink(), WasapiDeviceWatcher.TryCreate())
     {
     }
 
-    internal PreviewController(TeePcmSink tee, SourceConfigStore store, Action<Action> post,
-        ISpeakerOutput speaker, IAudioDeviceWatcher? watcher, Action save)
+    internal PreviewController(TeePcmSink tee, SettingsStore settings, Action<Action> post,
+        ISpeakerOutput speaker, IAudioDeviceWatcher? watcher)
     {
         _tee = tee;
-        _store = store;
+        _settings = settings;
         _post = post;
         _speaker = speaker;
         _watcher = watcher;
-        _save = save;
-        // The timer fires on the thread pool; the save itself runs on the UI thread, the
-        // thread that mutates the store, so it never enumerates the store mid-change.
-        _persistTimer = new Timer(_ => _post(OnPersistDue), null, Timeout.Infinite, Timeout.Infinite);
-        Enabled = store.PreviewEnabled;
-        DeviceId = store.PreviewDeviceId;
-        Volume = store.PreviewVolume;
+        Enabled = settings.Get(PreviewSettings.Enabled);
+        DeviceId = settings.Get(PreviewSettings.Device);
+        Volume = settings.Get(PreviewSettings.Volume);
         _speaker.Volume = VolumeTaper.ToGain(Volume);
 
         _speaker.Lost += OnSpeakerLost;
@@ -140,8 +127,7 @@ public sealed class PreviewController : IDisposable
         if (Enabled != on)
         {
             Enabled = on;
-            _store.PreviewEnabled = on;
-            Persist();
+            _settings.Set(PreviewSettings.Enabled, on);
         }
         Fire(Trigger.User);
     }
@@ -156,9 +142,8 @@ public sealed class PreviewController : IDisposable
         {
             Enabled = true;
             DeviceId = deviceId;
-            _store.PreviewEnabled = true;
-            _store.PreviewDeviceId = deviceId;
-            Persist();
+            _settings.Set(PreviewSettings.Enabled, true);
+            _settings.Set(PreviewSettings.Device, deviceId);
         }
         Fire(Trigger.User);
     }
@@ -170,18 +155,7 @@ public sealed class PreviewController : IDisposable
         // Volume is the raw slider *position*; the speaker takes a linear gain.
         // Run it through the perceptual taper so the fader eases down smoothly.
         _speaker.Volume = VolumeTaper.ToGain(volume);
-        // Don't hit disk on every slider tick — a drag fires this dozens of
-        // times. Update the in-memory pref and (re)arm the debounce timer so the
-        // value lands on disk shortly after the slider goes quiet. Arming under
-        // the lock with the _disposed check means we never call Change() on an
-        // already-disposed timer (a slider tick during shutdown teardown).
-        lock (_persistLock)
-        {
-            if (_disposed) return;
-            _store.PreviewVolume = volume;
-            _volumeDirty = true;
-            _persistTimer.Change(PersistDebounce, Timeout.InfiniteTimeSpan);
-        }
+        _settings.Set(PreviewSettings.Volume, volume);
     }
 
     // Device callbacks: any thread. Hand off to the UI thread; never act here
@@ -265,46 +239,10 @@ public sealed class PreviewController : IDisposable
         StateChanged?.Invoke();
     }
 
-    // The debounce elapsed (posted to the UI thread). Dispose already flushed, so a
-    // post that lands after it does nothing.
-    private void OnPersistDue()
-    {
-        lock (_persistLock)
-        {
-            if (_disposed) return;
-            FlushVolumeIfDirty();
-        }
-    }
-
-    private void FlushVolumeIfDirty()
-    {
-        lock (_persistLock)
-        {
-            if (!_volumeDirty) return;
-            _save();
-            _volumeDirty = false;
-        }
-    }
-
-    private void Persist()
-    {
-        lock (_persistLock)
-        {
-            _save();
-            _volumeDirty = false;
-        }
-    }
-
     public void Dispose()
     {
         if (_disposed) return;
-        // Mark disposed under the lock first so any in-flight SetVolume returns
-        // without re-arming the timer we're about to dispose.
-        lock (_persistLock) _disposed = true;
-        _persistTimer.Dispose();
-        // Flush any volume change that hadn't hit its debounce window yet
-        // (lock-guarded, same as every other access to _volumeDirty).
-        FlushVolumeIfDirty();
+        _disposed = true;
 
         // Stop listening before releasing the device, so no callback posts a
         // transition after this (and any already posted finds us Disposed).

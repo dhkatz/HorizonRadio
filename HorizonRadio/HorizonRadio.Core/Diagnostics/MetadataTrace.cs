@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using HorizonRadio.Core.IO;
 using HorizonRadio.Core.Models;
+using HorizonRadio.Core.Settings;
 
 namespace HorizonRadio.Core.Diagnostics;
 
@@ -49,12 +50,17 @@ public static class MetadataTrace
 
     public static string Directory => AppPaths.In("diagnostics");
 
-    private static string SettingsPath => Path.Combine(Directory, "settings.json");
+    /// <summary>Whether capture is on, kept across restarts.</summary>
+    public static readonly Setting<bool> EnabledSetting = new("diagnostics.metadataTrace", SettingScope.Device, false);
 
-    /// <summary>Apply the persisted setting (and the <c>HZN_META_TRACE</c> override) at startup.
+    private static SettingsStore? _settings;
+
+    /// <summary>Apply the persisted setting (and the <c>HZN_META_TRACE</c> override) at startup, and
+    /// keep <paramref name="settings"/> to persist later changes in.
     /// The env var wins when set to anything other than 0/false/off (useful for headless runs).</summary>
-    public static void RestoreFromSettings()
+    public static void RestoreFromSettings(SettingsStore settings)
     {
+        _settings = settings;
         var env = Environment.GetEnvironmentVariable("HZN_META_TRACE")?.Trim().ToLowerInvariant();
         if (!string.IsNullOrEmpty(env))
         {
@@ -63,7 +69,7 @@ public static class MetadataTrace
             if (env is not ("0" or "false" or "off" or "no")) { SetEnabled(true, persist: false); return; }
             return; // explicitly disabled via env → don't fall through to the persisted setting
         }
-        if (ReadPersistedEnabled()) SetEnabled(true, persist: false);
+        if (settings.Get(EnabledSetting)) SetEnabled(true, persist: false);
     }
 
     /// <summary>Turn capture on/off. Opening a session starts a fresh timestamped file; the choice
@@ -98,7 +104,7 @@ public static class MetadataTrace
                 ProcessConsole.Append(ConsoleTag, "capture stopped");
             }
         }
-        if (persist) WritePersistedEnabled(on);
+        if (persist) _settings?.Set(EnabledSetting, on);
     }
 
     // -- Song / model capture (from the radio source) --
@@ -316,26 +322,5 @@ public static class MetadataTrace
             try { _writer.WriteLine(JsonSerializer.Serialize(record, JsonOpts)); }
             catch { /* never let diagnostics break playback */ }
         }
-    }
-
-    private static bool ReadPersistedEnabled()
-    {
-        try
-        {
-            if (!File.Exists(SettingsPath)) return false;
-            using var doc = JsonDocument.Parse(File.ReadAllText(SettingsPath));
-            return doc.RootElement.TryGetProperty("enabled", out var e) && e.ValueKind == JsonValueKind.True;
-        }
-        catch { return false; }
-    }
-
-    private static void WritePersistedEnabled(bool enabled)
-    {
-        try
-        {
-            System.IO.Directory.CreateDirectory(Directory);
-            File.WriteAllText(SettingsPath, JsonSerializer.Serialize(new { enabled }, JsonOpts));
-        }
-        catch { /* best-effort */ }
     }
 }

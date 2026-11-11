@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Fingerprints;
 using HorizonRadio.Core.Lyrics;
 using HorizonRadio.Core.Models;
+using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 
@@ -101,7 +102,7 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
 
     private readonly LyricsService? _service;
     private readonly Func<IPlaybackProgress?> _progress;
-    private readonly SourceConfigStore? _prefs;
+    private readonly SettingsStore? _prefs;
     private readonly LiveSongSync? _sync;
     private readonly DispatcherTimer _timer;
 
@@ -178,16 +179,16 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
 
     public bool HasLines => Lines.Count > 0;
 
-    public LyricsViewModel(LyricsService? service, Func<IPlaybackProgress?> progress, SourceConfigStore? prefs = null,
+    public LyricsViewModel(LyricsService? service, Func<IPlaybackProgress?> progress, SettingsStore? prefs = null,
         LiveSongSync? sync = null)
     {
         _service = service;
         _progress = progress;
         _prefs = prefs;
         _sync = sync;
-        isKaraoke = prefs?.LyricsKaraoke ?? true;
-        isAudioSyncEnabled = prefs?.LyricsAudioSync ?? true;
-        radioOffset = prefs?.LyricsRadioOffset ?? 0;
+        isKaraoke = prefs?.Get(LyricsSettings.Karaoke) ?? LyricsSettings.Karaoke.Default;
+        isAudioSyncEnabled = prefs?.Get(LyricsSettings.AudioSync) ?? LyricsSettings.AudioSync.Default;
+        radioOffset = prefs?.Get(LyricsSettings.RadioOffset) ?? LyricsSettings.RadioOffset.Default;
         // Fast enough for a smooth fill; it only runs while a song's lyrics are up.
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
         _timer.Tick += (_, _) => Tick();
@@ -201,11 +202,7 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
         if (!double.TryParse(seconds, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var by))
             return;
         RadioOffset = Math.Round(Math.Clamp(RadioOffset + by, -10, 10), 1);
-        if (_prefs != null)
-        {
-            _prefs.LyricsRadioOffset = RadioOffset;
-            _prefs.SaveToDisk();
-        }
+        _prefs?.Set(LyricsSettings.RadioOffset, RadioOffset);
         Tick();
     }
 
@@ -213,11 +210,7 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
 
     partial void OnIsAudioSyncEnabledChanged(bool value)
     {
-        if (_prefs != null && _prefs.LyricsAudioSync != value)
-        {
-            _prefs.LyricsAudioSync = value;
-            _prefs.SaveToDisk();
-        }
+        _prefs?.Set(LyricsSettings.AudioSync, value);
         if (value)
         {
             if (_lyrics != null) StartAudioSync(_lyrics);
@@ -231,11 +224,7 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
 
     partial void OnIsKaraokeChanged(bool value)
     {
-        if (_prefs != null && _prefs.LyricsKaraoke != value)
-        {
-            _prefs.LyricsKaraoke = value;
-            _prefs.SaveToDisk();
-        }
+        _prefs?.Set(LyricsSettings.Karaoke, value);
         Tick();
     }
 
@@ -350,7 +339,7 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
             Versions.Add(new LyricsVersionViewModel(OriginalLabel));
             foreach (var v in variants) Versions.Add(new LyricsVersionViewModel(v.Label));
         }
-        var preferred = _prefs?.LyricsVersion;
+        var preferred = _prefs?.Get(LyricsSettings.Version);
         BuildLines(Versions.Any(v => v.Label == preferred) ? preferred! : OriginalLabel);
         Status = null;
         Credit = lyrics.Credit;
@@ -444,11 +433,7 @@ public sealed partial class LyricsViewModel : ViewModelBase, IDisposable
     {
         if (version == null || _lyrics == null) return;
         BuildLines(version.Label);
-        if (_prefs != null)
-        {
-            _prefs.LyricsVersion = version.Label == OriginalLabel ? null : version.Label;
-            _prefs.SaveToDisk();
-        }
+        _prefs?.Set(LyricsSettings.Version, version.Label == OriginalLabel ? null : version.Label);
         Tick();
     }
 

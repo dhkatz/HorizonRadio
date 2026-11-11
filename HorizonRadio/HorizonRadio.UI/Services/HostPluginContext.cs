@@ -1,5 +1,6 @@
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Plugins;
+using HorizonRadio.Core.Settings;
 using HorizonRadio.Plugins.Abstractions;
 
 namespace HorizonRadio.UI.Services;
@@ -9,9 +10,9 @@ namespace HorizonRadio.UI.Services;
 /// when it builds them. For now it carries the metadata cache; it grows as more plugin kinds come
 /// online (a tool resolver, HTTP client, diagnostics, cross-plugin service lookup).
 /// </summary>
-internal sealed class HostPluginContext(IMetadataCache cache, PluginSettingsStore settings) : IPluginContext
+internal sealed class HostPluginContext(IMetadataCache cache, SettingsStore settings) : IPluginContext
 {
     public IMetadataCache Cache { get; } = cache;
 
-    public IPluginSettings GetSettings(string pluginId) => settings.For(pluginId);
+    public IPluginSettings GetSettings(string pluginId) => PluginSettings.For(settings, pluginId);
 }

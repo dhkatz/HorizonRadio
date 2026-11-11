@@ -82,7 +82,7 @@ public sealed partial class SourcesViewModel : ViewModelBase
         _runner.ActiveSourceChanged += _ =>
             Avalonia.Threading.Dispatcher.UIThread.Post(() => IsRunning = _runner.IsRunning);
 
-        var initial = SourceCatalog.Find(store.LastSelectedId ?? "")
+        var initial = SourceCatalog.Find(store.Settings.Get(SourceSettings.LastSelected) ?? "")
                    ?? AvailableSources.FirstOrDefault();
         SelectedFactory = initial;
     }
@@ -111,8 +111,7 @@ public sealed partial class SourcesViewModel : ViewModelBase
         OnPropertyChanged(nameof(StartLabel));
         OnPropertyChanged(nameof(IsAuthenticatingSource));
         RefreshConnection();
-        _store.LastSelectedId = value?.Id;
-        _store.SaveToDisk();
+        _store.Settings.Set(SourceSettings.LastSelected, value?.Id);
     }
 
     private void RebuildSchema(IAudioSourceFactory? factory)
@@ -152,7 +151,6 @@ public sealed partial class SourcesViewModel : ViewModelBase
         if (SelectedFactory != null)
         {
             _store.Save(SelectedFactory.Id, values);
-            _store.SaveToDisk();
         }
         return values;
     }
