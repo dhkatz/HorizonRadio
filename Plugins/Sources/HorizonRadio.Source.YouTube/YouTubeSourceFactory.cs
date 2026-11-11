@@ -18,6 +18,17 @@ public sealed class YouTubeSourceFactory : IContentSourceFactory, ISearchSource,
     public const string KeyFfmpeg = "ffmpeg";
     public const string KeyUrl = "url";
     public const string KeyNormalise = "normalise";
+    public const string KeyDownloadAhead = "downloadAhead";
+    public const string KeyKeepDownloads = "keepDownloads";
+
+    /// <summary>How much downloaded audio to keep, by the label the settings show.</summary>
+    private static readonly IReadOnlyDictionary<string, long> KeepSizes = new Dictionary<string, long>
+    {
+        ["250 MB"] = 250L << 20,
+        ["1 GB"] = 1L << 30,
+        ["4 GB"] = 4L << 30,
+        ["10 GB"] = 10L << 30,
+    };
 
     public string Id => SourceId;
     public string DisplayName => "YouTube";
@@ -51,7 +62,21 @@ public sealed class YouTubeSourceFactory : IContentSourceFactory, ISearchSource,
                 Key:         KeyNormalise,
                 Label:       "Volume normalisation",
                 Default:     false,
-                Description: "Apply EBU R128 loudnorm. Costs a little CPU; off by default.")
+                Description: "Apply EBU R128 loudnorm. Costs a little CPU; off by default."),
+
+            new BoolField(
+                Key:         KeyDownloadAhead,
+                Label:       "Download songs ahead",
+                Default:     true,
+                Description: "Download the next song while one plays, so it starts at once, can be skipped " +
+                             "through, and plays again without the network. Off: songs stream as they play."),
+
+            new EnumField(
+                Key:         KeyKeepDownloads,
+                Label:       "Keep downloaded songs",
+                Options:     [.. KeepSizes.Keys],
+                Default:     "1 GB",
+                Description: "Past this, the songs played longest ago are removed."),
         ];
     }
 
@@ -75,7 +100,13 @@ public sealed class YouTubeSourceFactory : IContentSourceFactory, ISearchSource,
         if (ffmpeg is null)
             throw new InvalidOperationException("YouTube: pick an ffmpeg.exe path.");
 
-        return new YouTubeContentPlayer(ytDlp, ffmpeg, values.GetBool(KeyNormalise, false));
+        AudioCache? cache = null;
+        if (values.GetBool(KeyDownloadAhead, true))
+        {
+            cache = AudioCache.For(SourceId);
+            cache.MaxBytes = KeepSizes.GetValueOrDefault(values.GetString(KeyKeepDownloads) ?? "", 1L << 30);
+        }
+        return new YouTubeContentPlayer(ytDlp, ffmpeg, values.GetBool(KeyNormalise, false), cache);
     }
 
     // -- ISearchSource (yt-dlp ytsearch → youtube.com/watch locators) --

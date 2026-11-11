@@ -46,6 +46,24 @@ public static class Ffmpeg
     }
 
     /// <summary>
+    /// Decode an audio file (a song downloaded ahead) to canonical PCM, from <paramref name="start"/>
+    /// (an input seek, so it starts there at once), with optional loudness normalisation.
+    /// </summary>
+    public static string[] BuildFileDecodeArgs(string path, bool normalise, TimeSpan start = default)
+    {
+        var args = new List<string> { "-hide_banner", "-loglevel", "error" };
+        if (start > TimeSpan.Zero)
+        {
+            args.Add("-ss");
+            args.Add(start.TotalSeconds.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        args.Add("-i");
+        args.Add(path);
+        AppendPcmOutput(args, normalise);
+        return args.ToArray();
+    }
+
+    /// <summary>
     /// Decode audio fed into ffmpeg's stdin (<c>pipe:0</c>) to canonical PCM. Used by the
     /// internet-radio source, which pipes its ICY-stripped stream in.
     /// </summary>

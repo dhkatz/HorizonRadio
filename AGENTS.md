@@ -244,6 +244,14 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
     (one pick plus the play after it); the loop acts on the merged request between
     steps. `QueueModel.Generation` lets it tell a jump it already honoured from a
     newer one, and drop a track the old context resolves after a switch.
+    Once a track has started (and whenever the queue changes), it loads the next one ahead
+    (`PlayableItem.PrefetchAsync`, 2 s later): a track stepped back over, the queue's next, or the
+    context's (`IQueueContext.PeekNextAsync`; a mix loads its next entry then, and `NextAsync`
+    hands out that same item). A YouTube item downloads itself there (`YtDlpClient.DownloadAudioAsync`)
+    into the `AudioCache` (`cache\audio\youtube`: a folder per video, moved into place only when
+    whole; one download per song at a time, two at once; past the size setting the songs used
+    longest ago go), and plays and seeks from the file; one that isn't downloaded yet streams, and
+    downloads meanwhile. It seeks by starting ffmpeg again at the new place.
   - The FH6 plugin also bundles its mod: its csproj flows
     `Mods/ForzaHorizon6/build/Release/version.dll` into the app's build output
     (`ExcludeFromSingleFile`), and the UI's publish step copies it next to the exe.

@@ -86,6 +86,13 @@ public sealed class QueueModel
         }
     }
 
+    /// <summary>What <see cref="TakeNext"/> would hand out from the explicit list, without taking
+    /// it; with none, the context the next track would come from.</summary>
+    internal (QueueItem? Item, IQueueContext? Context) PeekNext()
+    {
+        lock (_lock) return _explicit.Count > 0 ? (_explicit[0], null) : (null, _context);
+    }
+
     internal void NotifyChanged() => Changed?.Invoke();
 
     internal void SetNowPlaying(QueueItem? item, bool fromContext)

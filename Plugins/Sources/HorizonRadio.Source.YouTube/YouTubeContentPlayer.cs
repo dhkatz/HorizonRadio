@@ -7,9 +7,10 @@ namespace HorizonRadio.Core.Sources.YouTube;
 /// normalization behavior, and expands a <see cref="ContentRef"/> whose locator is
 /// a video or playlist URL into <see cref="YouTubePlayableItem"/>s. Keeps the
 /// yt-dlp/ffmpeg specifics encapsulated here rather than leaking them up to the
-/// queue — the queue only ever hands us a URL.
+/// queue — the queue only ever hands us a URL. Its videos download ahead into
+/// <paramref name="cache"/> (null: they only stream).
 /// </summary>
-public sealed class YouTubeContentPlayer(string ytDlpPath, string ffmpegPath, bool normalise)
+public sealed class YouTubeContentPlayer(string ytDlpPath, string ffmpegPath, bool normalise, AudioCache? cache = null)
     : IContentPlayer, IContentDescriber
 {
     public async Task<IReadOnlyList<PlayableItem>> EnumerateAsync(ContentRef content, CancellationToken ct)
@@ -20,7 +21,7 @@ public sealed class YouTubeContentPlayer(string ytDlpPath, string ffmpegPath, bo
         // --flat-playlist enumerate: cheap id/title list now; each item does its
         // own (short-lived, signed-URL) resolve lazily in PrepareAsync/PlayAsync.
         var entries = await YtDlpClient.EnumerateAsync(ytDlpPath, content.Locator, ct).ConfigureAwait(false);
-        return [.. entries.Select(e => (PlayableItem)new YouTubePlayableItem(e, ytDlpPath, ffmpegPath, normalise))];
+        return [.. entries.Select(e => (PlayableItem)new YouTubePlayableItem(e, ytDlpPath, ffmpegPath, normalise, cache))];
     }
 
     /// <summary>A playlist's title, owner, size, and thumbnail. A single video is left to the

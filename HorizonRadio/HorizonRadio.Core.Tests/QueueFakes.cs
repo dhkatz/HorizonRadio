@@ -58,6 +58,17 @@ internal sealed class FakeItem : PlayableItem
     /// several requests before the engine reacts to the first.</summary>
     public TaskCompletionSource? HoldCancel { get; set; }
 
+    private int _prefetches;
+
+    /// <summary>How many times it was loaded ahead.</summary>
+    public int Prefetches => Volatile.Read(ref _prefetches);
+
+    public override Task PrefetchAsync(CancellationToken ct)
+    {
+        Interlocked.Increment(ref _prefetches);
+        return Task.CompletedTask;
+    }
+
     /// <summary>End the current play as if the track ran out.</summary>
     public void End() => Volatile.Read(ref _end).TrySetResult();
 
@@ -123,6 +134,11 @@ internal sealed class FakeContext(string name = "Fake") : IQueueContext
     }
 
     public IReadOnlyList<QueuePreview> Peek(int count) => [];
+
+    /// <summary>What it says comes next, when asked to look ahead.</summary>
+    public PlayableItem? Ahead { get; set; }
+
+    public Task<PlayableItem?> PeekNextAsync(CancellationToken ct) => Task.FromResult(Ahead);
 
     /// <summary>Whether shuffle is on, as last set.</summary>
     public bool Shuffled => _shuffled;
