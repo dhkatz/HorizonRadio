@@ -1,0 +1,24 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:theme="using:HorizonRadio.Sdk.UI.Theme">
+
+    <!-- Color tokens, built from ThemePalette so XAML and code share one set of values.
+         Use these instead of color literals: Fill="{DynamicResource ToneSuccessBrush}".
+         ShadUI's own brushes (PrimaryColor, MutedColor, BorderColor…) cover surfaces and text. -->
+
+    <!-- Status: what something's state means (see Tone). -->
+    <SolidColorBrush x:Key="ToneNeutralBrush" Color="{x:Static theme:ThemePalette.Neutral}"/>
+    <SolidColorBrush x:Key="ToneSuccessBrush" Color="{x:Static theme:ThemePalette.Success}"/>
+    <SolidColorBrush x:Key="ToneWarningBrush" Color="{x:Static theme:ThemePalette.Warning}"/>
+    <SolidColorBrush x:Key="ToneDangerBrush" Color="{x:Static theme:ThemePalette.Danger}"/>
+    <SolidColorBrush x:Key="ToneInfoBrush" Color="{x:Static theme:ThemePalette.Info}"/>
+
+    <!-- Text and icons on a tone-colored fill (a badge, a status circle). -->
+    <SolidColorBrush x:Key="OnToneBrush" Color="{x:Static theme:ThemePalette.OnTone}"/>
+
+    <!-- What's live or chosen: the song playing, a hovered search box. -->
+    <SolidColorBrush x:Key="HighlightBrush" Color="{x:Static theme:ThemePalette.Highlight}"/>
+
+    <!-- Dims what's behind an overlay. -->
+    <SolidColorBrush x:Key="ScrimBrush" Color="{x:Static theme:ThemePalette.Scrim}"/>
+</ResourceDictionary>

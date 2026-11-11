@@ -8,6 +8,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.ModInstall;
 
+using HorizonRadio.Sdk.UI.Theme;
+
 namespace HorizonRadio.Game.ForzaHorizon6.ViewModels;
 
 /// <summary>
@@ -42,7 +44,7 @@ public sealed partial class ModManagerViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusLabel))]
     [NotifyPropertyChangedFor(nameof(StatusDetail))]
-    [NotifyPropertyChangedFor(nameof(StatusBrush))]
+    [NotifyPropertyChangedFor(nameof(StatusTone))]
     [NotifyPropertyChangedFor(nameof(CanInstall))]
     [NotifyPropertyChangedFor(nameof(CanUninstall))]
     [NotifyPropertyChangedFor(nameof(InstallButtonLabel))]
@@ -67,12 +69,11 @@ public sealed partial class ModManagerViewModel : ObservableObject
         _ => "Pick your FH6 folder above.",
     };
 
-    public string StatusBrush => Status switch
+    public Tone StatusTone => Status switch
     {
-        InstallationStatus.InstalledMatch => "#22c55e", // green
-        InstallationStatus.InstalledOther => "#f59e0b", // amber
-        InstallationStatus.NotInstalled => "#6b7280", // grey
-        _ => "#6b7280",
+        InstallationStatus.InstalledMatch => Tone.Success,
+        InstallationStatus.InstalledOther => Tone.Warning,
+        _ => Tone.Neutral,
     };
 
     public bool CanInstall => HasGamePath

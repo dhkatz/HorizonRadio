@@ -1,0 +1,52 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Text styles, by role. Give a TextBlock one class instead of a size, weight and opacity:
+         <TextBlock Classes="sectionTitle" Text="Your Friends"/>. -->
+
+    <!-- A page's title and the line under it. -->
+    <Style Selector=":is(TextBlock).pageTitle">
+        <Setter Property="FontSize" Value="20"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style Selector=":is(TextBlock).pageDescription">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Opacity" Value="0.6"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+
+    <!-- A card's or section's heading. -->
+    <Style Selector=":is(TextBlock).sectionTitle">
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+
+    <!-- A small heading over a list ("Now Playing", "Next In Queue"). -->
+    <Style Selector=":is(TextBlock).groupLabel">
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Opacity" Value="0.6"/>
+    </Style>
+
+    <!-- The name over a form field. -->
+    <Style Selector=":is(TextBlock).fieldLabel">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+    </Style>
+
+    <!-- Ordinary text, and the secondary text that explains it. -->
+    <Style Selector=":is(TextBlock).body">
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+    <Style Selector=":is(TextBlock).caption">
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="Opacity" Value="0.6"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+
+    <!-- Codes, hashes and log lines. -->
+    <Style Selector=":is(TextBlock).mono">
+        <Setter Property="FontFamily" Value="Consolas,Cascadia Mono,monospace"/>
+    </Style>
+</Styles>

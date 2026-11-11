@@ -117,13 +117,13 @@
                                 </Border>
                                 <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding NowPlayingTitle}" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="#4A90F8" TextTrimming="CharacterEllipsis"/>
+                                               Foreground="{DynamicResource HighlightBrush}" TextTrimming="CharacterEllipsis"/>
                                     <TextBlock Text="{Binding NowPlayingSubtitle}" FontSize="11" Opacity="0.6"
                                                TextTrimming="CharacterEllipsis"/>
                                 </StackPanel>
                                 <material:MaterialIcon Grid.Column="2" Kind="VolumeHigh" Width="15" Height="15"
                                                        Margin="8,0,0,0" VerticalAlignment="Center"
-                                                       Foreground="#4A90F8"/>
+                                                       Foreground="{DynamicResource HighlightBrush}"/>
                             </Grid>
                         </Border>
                     </StackPanel>
@@ -153,10 +153,10 @@
                                                     <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"
                                                            IsVisible="{Binding HasThumbnail}"/>
                                                     <!-- Same rounded-square shape as the thumbnail, translucent. -->
-                                                    <Border Classes="playOverlay" Background="#73000000" CornerRadius="4"
+                                                    <Border Classes="playOverlay" Background="{DynamicResource ScrimBrush}" CornerRadius="4"
                                                             PointerPressed="OnPlayOverlayPressed">
                                                         <material:MaterialIcon Kind="Play" Width="24" Height="24"
-                                                                               Foreground="White"
+                                                                               Foreground="{DynamicResource OnToneBrush}"
                                                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                     </Border>
                                                 </Panel>

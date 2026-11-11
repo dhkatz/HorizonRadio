@@ -80,13 +80,12 @@
         </PackageReference>
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.1" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
-        <PackageReference Include="ShadUI" Version="0.2.3" />
-        <PackageReference Include="Material.Icons.Avalonia" Version="3.0.2" />
         <PackageReference Include="LiveChartsCore.SkiaSharpView.Avalonia" Version="2.1.0-dev-570" />
     </ItemGroup>
 
     <ItemGroup>
       <ProjectReference Include="..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+      <ProjectReference Include="..\HorizonRadio.Sdk.UI\HorizonRadio.Sdk.UI.csproj" />
       <ProjectReference Include="..\..\Plugins\Lyrics\HorizonRadio.Lyrics.Lrclib\HorizonRadio.Lyrics.Lrclib.csproj" />
       <ProjectReference Include="..\..\Plugins\Lyrics\HorizonRadio.Lyrics.Unison\HorizonRadio.Lyrics.Unison.csproj" />
       <ProjectReference Include="..\..\Plugins\Metadata\HorizonRadio.Metadata.Apple\HorizonRadio.Metadata.Apple.csproj" />

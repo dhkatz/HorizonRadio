@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:theme="using:HorizonRadio.Sdk.UI.Theme"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
@@ -52,12 +53,12 @@
                                     <Border Grid.Column="0" Grid.RowSpan="2"
                                             Width="38" Height="38"
                                             CornerRadius="999"
-                                            Background="{Binding StatusBrush}"
+                                            Background="{Binding StatusTone, Converter={x:Static theme:ToneConverters.Brush}}"
                                             Margin="0,0,14,0"
                                             VerticalAlignment="Center">
                                         <materialIcons:MaterialIcon Kind="Toolbox"
                                                                     Width="20" Height="20"
-                                                                    Foreground="White"/>
+                                                                    Foreground="{DynamicResource OnToneBrush}"/>
                                     </Border>
 
                                     <shadui:CardTitle Grid.Column="1" Grid.Row="0"
@@ -87,7 +88,7 @@
                                     <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                                         <materialIcons:MaterialIcon Kind="ShieldCheck"
                                                                     Width="14" Height="14"
-                                                                    Foreground="#22c55e"
+                                                                    Foreground="{DynamicResource ToneSuccessBrush}"
                                                                     VerticalAlignment="Center"/>
                                         <TextBlock Text="Verified"
                                                    FontSize="11"
@@ -120,7 +121,7 @@
 
                                 <TextBlock Text="{Binding ErrorMessage}"
                                            FontSize="11"
-                                           Foreground="#ef4444"
+                                           Foreground="{DynamicResource ToneDangerBrush}"
                                            TextWrapping="Wrap"
                                            IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 

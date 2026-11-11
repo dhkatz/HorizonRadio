@@ -76,7 +76,7 @@
                                                 IsVisible="{Binding ShowWarning}"
                                                 ToolTip.Tip="We couldn't identify this song — click to report a metadata issue">
                                             <material:MaterialIcon Kind="AlertCircleOutline" Width="15" Height="15"
-                                                                   Foreground="#E6A23C"/>
+                                                                   Foreground="{DynamicResource ToneWarningBrush}"/>
                                         </Button>
                                     </StackPanel>
                                     <TextBlock FontSize="12" Opacity="0.6" TextTrimming="CharacterEllipsis"

@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using HorizonRadio.Core.Models;
+using HorizonRadio.Sdk.UI.Theme;
 using LiveChartsCore;
 using LiveChartsCore.Defaults;
 using LiveChartsCore.SkiaSharpView;
@@ -31,10 +32,10 @@ public sealed partial class StatsViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(BridgeStatusLabel))]
-    [NotifyPropertyChangedFor(nameof(BridgeStatusBrush))]
+    [NotifyPropertyChangedFor(nameof(BridgeStatusTone))]
     private bool bridgeInstalled;
     public string BridgeStatusLabel => BridgeInstalled ? "Installed" : "Dormant";
-    public string BridgeStatusBrush => BridgeInstalled ? "#22c55e" : "#6b7280";
+    public Tone BridgeStatusTone => BridgeInstalled ? Tone.Success : Tone.Neutral;
 
     [ObservableProperty] private ulong framesIn;
     [ObservableProperty] private ulong framesOut;
@@ -92,8 +93,8 @@ public sealed partial class StatsViewModel : ObservableObject
             {
                 Values            = FramesInHistory,
                 Name              = "Frames in",
-                Stroke            = new SolidColorPaint(SKColor.Parse("#22c55e"), 2),
-                Fill              = new SolidColorPaint(SKColor.Parse("#22c55e").WithAlpha(40)),
+                Stroke            = new SolidColorPaint(Sk(ThemePalette.Success), 2),
+                Fill              = new SolidColorPaint(Sk(ThemePalette.Success).WithAlpha(40)),
                 GeometrySize      = 0,
                 LineSmoothness    = 0.4,
                 AnimationsSpeed   = TimeSpan.Zero,
@@ -103,8 +104,8 @@ public sealed partial class StatsViewModel : ObservableObject
             {
                 Values            = FramesOutHistory,
                 Name              = "Frames out",
-                Stroke            = new SolidColorPaint(SKColor.Parse("#3b82f6"), 2),
-                Fill              = new SolidColorPaint(SKColor.Parse("#3b82f6").WithAlpha(40)),
+                Stroke            = new SolidColorPaint(Sk(ThemePalette.Info), 2),
+                Fill              = new SolidColorPaint(Sk(ThemePalette.Info).WithAlpha(40)),
                 GeometrySize      = 0,
                 LineSmoothness    = 0.4,
                 AnimationsSpeed   = TimeSpan.Zero,
@@ -118,7 +119,7 @@ public sealed partial class StatsViewModel : ObservableObject
             {
                 Values          = UnderrunSparkline,
                 Name            = "Underrun delta",
-                Fill            = new SolidColorPaint(SKColor.Parse("#ef4444")),
+                Fill            = new SolidColorPaint(Sk(ThemePalette.Danger)),
                 Stroke          = null,
                 Padding         = 1,
                 AnimationsSpeed = TimeSpan.Zero,
@@ -242,6 +243,9 @@ public sealed partial class StatsViewModel : ObservableObject
         if (series.Count >= HistoryLength) series.RemoveAt(0);
         series.Add(value);
     }
+
+    /// <summary>A theme color for a chart series (LiveCharts paints with SkiaSharp colors).</summary>
+    private static SKColor Sk(Avalonia.Media.Color c) => new(c.R, c.G, c.B, c.A);
 
     private static string FormatUptime(TimeSpan t)
     {

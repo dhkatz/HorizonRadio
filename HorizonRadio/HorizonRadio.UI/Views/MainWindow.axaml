@@ -228,7 +228,7 @@
                     <DockPanel LastChildFill="True">
                         <Border DockPanel.Dock="Right"
                                 IsVisible="{Binding ToolsTab.HasUpdates}"
-                                Background="#f59e0b"
+                                Background="{DynamicResource ToneWarningBrush}"
                                 CornerRadius="9"
                                 Width="18" Height="18"
                                 Margin="8,0,0,0"
@@ -236,7 +236,7 @@
                                 ToolTip.Tip="Tool updates available">
                             <TextBlock Text="{Binding ToolsTab.UpdatesAvailable}"
                                        FontSize="10" FontWeight="SemiBold"
-                                       Foreground="White"
+                                       Foreground="{DynamicResource OnToneBrush}"
                                        TextAlignment="Center"
                                        HorizontalAlignment="Center"
                                        VerticalAlignment="Center"/>
@@ -277,7 +277,7 @@
                             <Panel>
                                 <material:MaterialIcon Kind="InformationOutline" Width="16" Height="16"/>
                                 <Border IsVisible="{Binding About.UpdateAvailable}"
-                                        Background="#f59e0b"
+                                        Background="{DynamicResource ToneWarningBrush}"
                                         Width="8" Height="8" CornerRadius="4"
                                         HorizontalAlignment="Right" VerticalAlignment="Top"
                                         Margin="0,-2,-2,0"/>
@@ -285,10 +285,10 @@
                         </Button>
                         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                             <Ellipse Width="8" Height="8"
-                                     Fill="#22c55e"
+                                     Fill="{DynamicResource ToneSuccessBrush}"
                                      IsVisible="{Binding NowPlaying.IsConnected}" />
                             <Ellipse Width="8" Height="8"
-                                     Fill="#6b7280"
+                                     Fill="{DynamicResource ToneNeutralBrush}"
                                      IsVisible="{Binding !NowPlaying.IsConnected}" />
                             <TextBlock Text="{Binding ConnectionLabel}"
                                        FontSize="11"
@@ -316,9 +316,9 @@
                   HorizontalAlignment="Center"
                   VerticalAlignment="Bottom"
                   ToolTip.Tip="{Binding ConnectionLabel}">
-                <Ellipse Width="10" Height="10" Fill="#22c55e"
+                <Ellipse Width="10" Height="10" Fill="{DynamicResource ToneSuccessBrush}"
                          IsVisible="{Binding NowPlaying.IsConnected}"/>
-                <Ellipse Width="10" Height="10" Fill="#6b7280"
+                <Ellipse Width="10" Height="10" Fill="{DynamicResource ToneNeutralBrush}"
                          IsVisible="{Binding !NowPlaying.IsConnected}"/>
             </Grid>
             <!-- About / updates, just above the connection dot on the rail. -->
@@ -335,7 +335,7 @@
                 <Panel>
                     <material:MaterialIcon Kind="InformationOutline" Width="18" Height="18"/>
                     <Border IsVisible="{Binding About.UpdateAvailable}"
-                            Background="#f59e0b"
+                            Background="{DynamicResource ToneWarningBrush}"
                             Width="9" Height="9" CornerRadius="4.5"
                             HorizontalAlignment="Right" VerticalAlignment="Top"
                             Margin="0,-2,-2,0"/>
@@ -476,7 +476,7 @@
                         <!-- Corner dot mirrors the expanded badge when the
                              rail is collapsed. -->
                         <Border IsVisible="{Binding ToolsTab.HasUpdates}"
-                                Background="#f59e0b"
+                                Background="{DynamicResource ToneWarningBrush}"
                                 Width="9" Height="9" CornerRadius="4.5"
                                 HorizontalAlignment="Right" VerticalAlignment="Top"
                                 Margin="0,-2,-2,0"
@@ -517,7 +517,7 @@
                             VerticalAlignment="Center">
                         <material:MaterialIcon Kind="AlertOutline"
                                                Width="18" Height="18"
-                                               Foreground="#f59e0b"
+                                               Foreground="{DynamicResource ToneWarningBrush}"
                                                HorizontalAlignment="Center"
                                                VerticalAlignment="Center"/>
                     </Border>

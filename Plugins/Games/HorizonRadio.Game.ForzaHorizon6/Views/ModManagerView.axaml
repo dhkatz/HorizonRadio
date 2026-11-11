@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:theme="using:HorizonRadio.Sdk.UI.Theme"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.Game.ForzaHorizon6.ViewModels"
@@ -69,12 +70,12 @@
                     <Border Grid.Column="0"
                             Width="44" Height="44"
                             CornerRadius="999"
-                            Background="{Binding StatusBrush}"
+                            Background="{Binding StatusTone, Converter={x:Static theme:ToneConverters.Brush}}"
                             Margin="0,0,16,0"
                             VerticalAlignment="Center">
                         <materialIcons:MaterialIcon Kind="PuzzleOutline"
                                                     Width="22" Height="22"
-                                                    Foreground="White"/>
+                                                    Foreground="{DynamicResource OnToneBrush}"/>
                     </Border>
                     <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
                         <TextBlock Text="{Binding StatusLabel}"
@@ -100,7 +101,7 @@
                 <StackPanel Orientation="Horizontal" Spacing="10">
                     <materialIcons:MaterialIcon Kind="AlertCircleOutline"
                                                 Width="20" Height="20"
-                                                Foreground="#f59e0b"
+                                                Foreground="{DynamicResource ToneWarningBrush}"
                                                 VerticalAlignment="Center"/>
                     <TextBlock Text="No DLL bundled. Build HorizonRadio.slnx first."
                                FontSize="12"
@@ -113,7 +114,7 @@
                 <StackPanel Orientation="Horizontal" Spacing="10">
                     <materialIcons:MaterialIcon Kind="Update"
                                                 Width="20" Height="20"
-                                                Foreground="#f59e0b"
+                                                Foreground="{DynamicResource ToneWarningBrush}"
                                                 VerticalAlignment="Center"/>
                     <TextBlock Text="A newer version.dll build exists. Rebuild the app to bundle it, then Install."
                                FontSize="12"

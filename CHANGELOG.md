@@ -141,6 +141,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The app's look lives in `HorizonRadio.Sdk.UI` (internal).** The theme (ShadUI, Material icons,
+  color tokens and text styles) is one `HorizonRadioTheme`, which plugin pages use too: the FH6
+  plugin now references it instead of reaching ShadUI through the app. Status colors come from
+  named tones (`ToneSuccessBrush`…, `Tone` in view models) instead of color literals.
 - **The plugin SDK is `HorizonRadio.Sdk` (internal).** `Plugins/HorizonRadio.Plugins.Abstractions`
   moved to `HorizonRadio/HorizonRadio.Sdk`, and its types moved from `HorizonRadio.Core.*` and
   `HorizonRadio.Plugins.Abstractions` to `HorizonRadio.Sdk.*` namespaces. It's the first step of

@@ -92,7 +92,7 @@ Each step leaves the app working and lands as its own PR or short stack.
 
 1. [x] Move `Plugins/HorizonRadio.Plugins.Abstractions` to `HorizonRadio/HorizonRadio.Sdk`, with
    its types in `HorizonRadio.Sdk.*` namespaces.
-2. [ ] `HorizonRadio.Sdk.UI`: color tokens and text styles; the app and FH6 reference it, and
+2. [x] `HorizonRadio.Sdk.UI`: color tokens and text styles; the app and FH6 reference it, and
    hard-coded colors go.
 3. [ ] `Sdk.UI` controls: page layout (`PageHeader`, `SectionCard`, `SettingRow`), status
    (`Notice`, `EmptyState`, `StatusAvatar`, `StatusDot`), `PathPicker`, the shared row and
