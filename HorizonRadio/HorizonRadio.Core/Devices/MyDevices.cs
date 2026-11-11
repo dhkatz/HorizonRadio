@@ -42,6 +42,8 @@ public sealed class MyDevices : IAsyncDisposable
     private readonly Dictionary<string, DateTimeOffset> _lastSeen = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TaskCompletionSource<DeviceMessage>> _joins = new(StringComparer.Ordinal);
     private readonly HashSet<string> _changedKeys = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _changedData = new(StringComparer.Ordinal);
+    private readonly IReadOnlyList<IDeviceData> _data;
     private IPeerNetwork? _network;
     private string? _advertisedGroupTopic;
     private PairingCode? _pairing;
@@ -52,9 +54,13 @@ public sealed class MyDevices : IAsyncDisposable
 
     /// <param name="startNetwork">Starts the peer network (the helper) when it's first needed:
     /// when pairing, or at start when already paired.</param>
+    /// <param name="data">What else the devices keep in step besides settings (mixes).</param>
     public MyDevices(SettingsStore settings, Func<CancellationToken, Task<IPeerNetwork>> startNetwork,
+        IEnumerable<IDeviceData>? data = null,
         TimeProvider? time = null, TimeSpan? presenceInterval = null, TimeSpan? sendDelay = null, TimeSpan? joinTimeout = null)
     {
+        _data = [.. data ?? []];
+        foreach (var part in _data) part.Changed += () => OnDataChanged(part.Name);
         _settings = settings;
         _startNetwork = startNetwork;
         _time = time ?? TimeProvider.System;
@@ -544,6 +550,13 @@ public sealed class MyDevices : IAsyncDisposable
             var changed = _settings.MergeSynced(settings.Select(s => s.ToSetting()));
             if (changed.Count > 0) Log($"took {changed.Count} setting(s) from {from}");
         }
+        if (sync.Data is { Count: > 0 } data)
+        {
+            foreach (var part in _data)
+            {
+                if (data.TryGetValue(part.Name, out var theirs)) await part.MergeAsync(theirs).ConfigureAwait(false);
+            }
+        }
         if (sync.Reply) await SendFullSyncAsync(from, reply: false).ConfigureAwait(false);
     }
 
@@ -582,13 +595,21 @@ public sealed class MyDevices : IAsyncDisposable
         RaiseChanged();
     }
 
-    private Task SendFullSyncAsync(string peerId, bool reply) => TrySendAsync(peerId, new DeviceMessage
+    private async Task SendFullSyncAsync(string peerId, bool reply) => await TrySendAsync(peerId, new DeviceMessage
     {
         Type = DeviceMessage.Sync,
         Devices = _settings.Get(DeviceSettings.Devices),
         Settings = [.. _settings.SyncedSettings().Select(WireSetting.From)],
+        Data = await ExportAsync(_data).ConfigureAwait(false),
         Reply = reply,
-    }.ToJson());
+    }.ToJson()).ConfigureAwait(false);
+
+    private static async Task<Dictionary<string, System.Text.Json.JsonElement>?> ExportAsync(IEnumerable<IDeviceData> parts)
+    {
+        var data = new Dictionary<string, System.Text.Json.JsonElement>(StringComparer.Ordinal);
+        foreach (var part in parts) data[part.Name] = await part.ExportAsync().ConfigureAwait(false);
+        return data.Count > 0 ? data : null;
+    }
 
     private async Task TrySendAsync(string peerId, System.Text.Json.JsonElement message)
     {
@@ -620,6 +641,17 @@ public sealed class MyDevices : IAsyncDisposable
         _ = SendChangesSoonAsync();
     }
 
+    private void OnDataChanged(string name)
+    {
+        lock (_lock)
+        {
+            _changedData.Add(name);
+            if (_sendScheduled) return;
+            _sendScheduled = true;
+        }
+        _ = SendChangesSoonAsync();
+    }
+
     private async Task SendChangesSoonAsync()
     {
         try
@@ -630,16 +662,20 @@ public sealed class MyDevices : IAsyncDisposable
         {
             return;
         }
-        HashSet<string> keys;
+        HashSet<string> keys, parts;
         lock (_lock)
         {
             keys = [.. _changedKeys];
+            parts = [.. _changedData];
             _changedKeys.Clear();
+            _changedData.Clear();
             _sendScheduled = false;
         }
+        if (Connected().Length == 0) return; // nobody to tell: they catch up when they meet
         var changes = _settings.SyncedSettings().Where(s => keys.Contains(s.Key)).Select(WireSetting.From).ToArray();
-        if (changes.Length == 0) return;
-        var message = new DeviceMessage { Type = DeviceMessage.Sync, Settings = changes }.ToJson();
+        var data = await ExportAsync(_data.Where(p => parts.Contains(p.Name))).ConfigureAwait(false);
+        if (changes.Length == 0 && data == null) return;
+        var message = new DeviceMessage { Type = DeviceMessage.Sync, Settings = changes.Length > 0 ? changes : null, Data = data }.ToJson();
         _work.Writer.TryWrite(async () =>
         {
             foreach (var peer in Connected()) await TrySendAsync(peer, message).ConfigureAwait(false);

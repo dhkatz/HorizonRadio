@@ -2,6 +2,8 @@ using System.Text.Json;
 using HorizonRadio.Core.Devices;
 using HorizonRadio.Core.Peers;
 using HorizonRadio.Core.Settings;
+using HorizonRadio.Core.Sources;
+using HorizonRadio.Core.Sources.Mixes;
 
 namespace HorizonRadio.Core.Tests;
 
@@ -21,24 +23,30 @@ public sealed class MyDevicesTests : IAsyncDisposable
         foreach (var r in Enumerable.Reverse(_running)) await r.DisposeAsync();
     }
 
-    private sealed record Device(MyDevices Devices, SettingsStore Settings, Func<MemoryPeer?> Peer);
+    private sealed record Device(MyDevices Devices, SettingsStore Settings, Func<MemoryPeer?> Peer, MixStore Mixes);
 
     // A device: its settings, and a helper that starts when MyDevices first needs it.
     // joinTimeout: how long joining looks for a code. Generous, since stretching the code's key on both
     // sides takes a while on a busy CI runner; short only where a test waits it out.
-    private async Task<Device> NewDevice(string name, SettingsStore? settings = null, string? peerId = null, TimeSpan? joinTimeout = null)
+    private async Task<Device> NewDevice(string name, SettingsStore? settings = null, string? peerId = null, MixStore? mixes = null, TimeSpan? joinTimeout = null)
     {
         settings ??= SettingsStore.CreateInMemory();
+        mixes ??= new MixStore();
+        var mixSync = new MixSync(mixes, action =>
+        {
+            lock (mixes) action(); // the tests' stand-in for the UI thread
+            return Task.CompletedTask;
+        });
         settings.Set(DeviceSettings.Name, name);
         MemoryPeer? peer = null;
         var devices = new MyDevices(settings, _ =>
         {
             peer = _net.Join(peerId ?? settings.Get(DeviceSettings.Self));
             return Task.FromResult<IPeerNetwork>(peer);
-        }, presenceInterval: TimeSpan.FromMilliseconds(100), sendDelay: TimeSpan.FromMilliseconds(10), joinTimeout: joinTimeout ?? TimeSpan.FromSeconds(20));
+        }, data: [mixSync], presenceInterval: TimeSpan.FromMilliseconds(100), sendDelay: TimeSpan.FromMilliseconds(10), joinTimeout: joinTimeout ?? TimeSpan.FromSeconds(20));
         _running.Add(devices);
         await devices.StartAsync();
-        return new Device(devices, settings, () => peer);
+        return new Device(devices, settings, () => peer, mixes);
     }
 
     private static async Task Eventually(Func<bool> condition, string what)
@@ -187,6 +195,30 @@ public sealed class MyDevicesTests : IAsyncDisposable
         Assert.False(laptop.Devices.IsPaired);
         Assert.Equal(3.0, laptop.Settings.Get(Offset));
         await Eventually(() => !desktop.Devices.IsPaired, "the desktop to hear the laptop left");
+    }
+
+    [Fact]
+    public async Task Mixes_go_both_ways_and_a_deleted_one_goes_everywhere()
+    {
+        var desktop = await NewDevice("Desktop");
+        var laptop = await NewDevice("Laptop");
+        var drive = new Mix("drive", "Drive", [new ContentRef("youtube", "https://youtu.be/a", "Synthwave")]);
+        lock (desktop.Mixes) desktop.Mixes.AddOrUpdate(drive);
+        lock (laptop.Mixes) laptop.Mixes.AddOrUpdate(new Mix("chill", "Chill", []));
+        await Pair(desktop, laptop);
+
+        Mix? Find(Device d, string id)
+        {
+            lock (d.Mixes) return d.Mixes.Get(id);
+        }
+        await Eventually(() => Find(laptop, "drive") != null && Find(desktop, "chill") != null, "each to get the other's mix");
+        Assert.Equal("Synthwave", Find(laptop, "drive")!.Entries.Single().DisplayName);
+
+        // Renamed on the laptop, deleted on the desktop: both arrive.
+        lock (laptop.Mixes) laptop.Mixes.AddOrUpdate(Find(laptop, "drive")! with { Name = "Night Drive" });
+        await Eventually(() => Find(desktop, "drive")?.Name == "Night Drive", "the rename to arrive");
+        lock (desktop.Mixes) desktop.Mixes.Remove("chill");
+        await Eventually(() => Find(laptop, "chill") == null, "the deletion to arrive");
     }
 
     [Fact]

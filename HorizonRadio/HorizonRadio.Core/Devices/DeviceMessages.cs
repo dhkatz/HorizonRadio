@@ -9,9 +9,9 @@ namespace HorizonRadio.Core.Devices;
 //   pair.hello    joiner → host   { name, proof }                  "I have the code"
 //   pair.welcome  host → joiner   { name, proof, groupKey, devices } "so do I; here's the group"
 //   pair.refused  host → joiner   {}                               wrong code, or no pairing open
-//   sync          either way      { devices?, settings?, reply }   the device list and synced
-//                                                                  settings (all, or what changed);
-//                                                                  reply asks for the other's back
+//   sync          either way      { devices?, settings?, data?, reply }
+//                                  the device list, synced settings and other data (mixes: data.mixes),
+//                                  all of it or what changed; reply asks for the other's back
 
 internal sealed record DeviceMessage
 {
@@ -21,6 +21,7 @@ internal sealed record DeviceMessage
     public string? GroupKey { get; init; }
     public DeviceRecord[]? Devices { get; init; }
     public WireSetting[]? Settings { get; init; }
+    public Dictionary<string, JsonElement>? Data { get; init; }
     public bool Reply { get; init; }
 
     public const string Hello = "pair.hello";
