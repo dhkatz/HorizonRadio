@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:HorizonRadio.Sdk.UI.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
@@ -15,11 +16,8 @@
     <ScrollViewer>
         <StackPanel Margin="24" Spacing="16">
 
-            <StackPanel Spacing="4" Margin="0,0,0,4">
-                <TextBlock Text="Events" FontSize="20" FontWeight="SemiBold"/>
-                <TextBlock Text="Run an action when something happens in-game."
-                           FontSize="12" Opacity="0.6"/>
-            </StackPanel>
+            <ui:PageHeader Title="Events"
+                           Description="Run an action when something happens in-game."/>
 
             <!-- Telemetry hint -->
             <Border Classes="Card" Padding="12,10" IsVisible="{Binding HasSetupHint}">
@@ -37,23 +35,13 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="{x:Type vm:EventCategoryGroup}">
                         <StackPanel Spacing="8" Margin="0,0,0,18">
-                            <TextBlock Text="{Binding Category}"
-                                       FontSize="12" FontWeight="SemiBold"
-                                       Opacity="0.7" Margin="2,0,0,0"/>
+                            <TextBlock Classes="groupLabel" Text="{Binding Category}" Margin="2,0,0,0"/>
                             <ItemsControl ItemsSource="{Binding Rows}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:EventRuleRow}">
                                         <Border Classes="Card" Padding="16" Margin="0,0,0,8">
-                                            <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
-                                                <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding DisplayName}"
-                                                               FontSize="14" FontWeight="SemiBold"/>
-                                                    <TextBlock Text="{Binding Description}"
-                                                               FontSize="11" Opacity="0.55" TextWrapping="Wrap"/>
-                                                </StackPanel>
-                                                <ComboBox Grid.Column="1"
-                                                          MinWidth="200"
-                                                          VerticalAlignment="Center"
+                                            <ui:SettingRow Label="{Binding DisplayName}" Description="{Binding Description}">
+                                                <ComboBox MinWidth="200"
                                                           ItemsSource="{Binding Options}"
                                                           SelectedItem="{Binding SelectedOption}">
                                                     <ComboBox.ItemTemplate>
@@ -62,7 +50,7 @@
                                                         </DataTemplate>
                                                     </ComboBox.ItemTemplate>
                                                 </ComboBox>
-                                            </Grid>
+                                            </ui:SettingRow>
                                         </Border>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
@@ -72,12 +60,9 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <!-- Recent activity -->
-            <Border Classes="Card" Padding="16">
+            <ui:SectionCard Title="Recent Activity">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="Recent activity" FontSize="14" FontWeight="SemiBold"/>
-                    <TextBlock Text="No events yet."
-                               FontSize="12" Opacity="0.5"
+                    <TextBlock Classes="description" Text="No events yet."
                                IsVisible="{Binding !Activity.Count}"/>
                     <ItemsControl ItemsSource="{Binding Activity}">
                         <ItemsControl.ItemTemplate>
@@ -89,7 +74,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </StackPanel>
-            </Border>
+            </ui:SectionCard>
 
         </StackPanel>
     </ScrollViewer>

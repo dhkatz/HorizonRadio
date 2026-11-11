@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:HorizonRadio.Sdk.UI.Controls"
              xmlns:theme="using:HorizonRadio.Sdk.UI.Theme"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -17,19 +18,14 @@
     <ScrollViewer>
         <StackPanel Margin="24" Spacing="16">
 
-            <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
-                <StackPanel Grid.Column="0" Spacing="4">
-                    <TextBlock Text="Tools" FontSize="20" FontWeight="SemiBold"/>
-                    <TextBlock Text="Install the external binaries some sources depend on."
-                               FontSize="12" Opacity="0.6"/>
-                </StackPanel>
-                <Button Grid.Column="1"
-                        Classes="Ghost"
-                        Content="{Binding CheckLabel}"
-                        Command="{Binding CheckCommand}"
-                        IsEnabled="{Binding !IsChecking}"
-                        VerticalAlignment="Center"/>
-            </Grid>
+            <ui:PageHeader Title="Tools" Description="Install the external binaries some sources depend on.">
+                <ui:PageHeader.Actions>
+                    <Button Classes="Ghost"
+                            Content="{Binding CheckLabel}"
+                            Command="{Binding CheckCommand}"
+                            IsEnabled="{Binding !IsChecking}"/>
+                </ui:PageHeader.Actions>
+            </ui:PageHeader>
 
             <ItemsControl ItemsSource="{Binding Items}">
                 <ItemsControl.ItemsPanel>

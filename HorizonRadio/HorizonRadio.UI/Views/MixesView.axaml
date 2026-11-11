@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:HorizonRadio.Sdk.UI.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
@@ -45,22 +46,19 @@
     <ScrollViewer>
         <StackPanel Margin="24" Spacing="16">
 
-            <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
-                <StackPanel Grid.Column="0" Spacing="4">
-                    <TextBlock Text="Mixes" FontSize="20" FontWeight="SemiBold"/>
-                    <TextBlock Text="Cross-source playlists. Mix tracks and playlists from any source, then tune to one in a click."
-                               FontSize="12" Opacity="0.6"/>
-                </StackPanel>
-                <Button Grid.Column="1" Classes="Primary"
-                        VerticalAlignment="Center"
-                        Command="{Binding NewCommand}"
-                        IsVisible="{Binding !IsEditing}">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <materialIcons:MaterialIcon Kind="Plus" Width="16" Height="16"/>
-                        <TextBlock Text="New Mix" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
-            </Grid>
+            <ui:PageHeader Title="Mixes"
+                           Description="Cross-source playlists. Mix tracks and playlists from any source, then tune to one in a click.">
+                <ui:PageHeader.Actions>
+                    <Button Classes="Primary"
+                            Command="{Binding NewCommand}"
+                            IsVisible="{Binding !IsEditing}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <materialIcons:MaterialIcon Kind="Plus" Width="16" Height="16"/>
+                            <TextBlock Text="New Mix" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </ui:PageHeader.Actions>
+            </ui:PageHeader>
 
             <!-- ── Library ─────────────────────────────────────────────── -->
             <StackPanel Spacing="0" IsVisible="{Binding !IsEditing}">

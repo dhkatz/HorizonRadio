@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:HorizonRadio.Sdk.UI.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
@@ -31,13 +32,8 @@
     <DockPanel LastChildFill="True" Margin="24,16">
 
         <!-- Header -->
-        <StackPanel DockPanel.Dock="Top" Spacing="2" Margin="0,0,0,16">
-            <TextBlock Text="Search Results" FontSize="20" FontWeight="SemiBold"/>
-            <TextBlock Text="{Binding Query, StringFormat='Results for “{0}”'}"
-                       FontSize="13" Opacity="0.6"
-                       IsVisible="{Binding Query, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                       TextTrimming="CharacterEllipsis"/>
-        </StackPanel>
+        <ui:PageHeader DockPanel.Dock="Top" Margin="0,0,0,16" Title="Search Results"
+                       Description="{Binding Query, StringFormat='Results for “{0}”'}"/>
 
         <!-- Source filter chips (only when more than one source is searchable) -->
         <ItemsControl DockPanel.Dock="Top" ItemsSource="{Binding Filters}"

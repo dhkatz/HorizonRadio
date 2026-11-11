@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:HorizonRadio.Sdk.UI.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
@@ -100,11 +101,8 @@
     <ScrollViewer>
         <StackPanel Margin="24" Spacing="16">
 
-            <StackPanel Spacing="4" Margin="0,0,0,4">
-                <TextBlock Text="Controls" FontSize="20" FontWeight="SemiBold"/>
-                <TextBlock Text="Bind a key, mouse button, or controller / wheel input to each playback action."
-                           FontSize="12" Opacity="0.6"/>
-            </StackPanel>
+            <ui:PageHeader Title="Controls"
+                           Description="Bind a key, mouse button, or controller / wheel input to each playback action."/>
 
             <!-- Controller device picker (which controller the Controller column edits) -->
             <StackPanel Orientation="Horizontal" Spacing="8"
@@ -151,12 +149,9 @@
                 <ItemsControl ItemsSource="{Binding MixRows}"/>
             </StackPanel>
 
-            <!-- Recent activity -->
-            <Border Classes="Card" Padding="16">
+            <ui:SectionCard Title="Recent Activity">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="Recent Activity" FontSize="14" FontWeight="SemiBold"/>
-                    <TextBlock Text="No input yet."
-                               FontSize="12" Opacity="0.5"
+                    <TextBlock Classes="description" Text="No input yet."
                                IsVisible="{Binding !Activity.Count}"/>
                     <ItemsControl ItemsSource="{Binding Activity}">
                         <ItemsControl.ItemTemplate>
@@ -168,7 +163,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </StackPanel>
-            </Border>
+            </ui:SectionCard>
 
         </StackPanel>
     </ScrollViewer>

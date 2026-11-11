@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:HorizonRadio.Sdk.UI.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
@@ -36,15 +37,9 @@
         </DataTemplate>
 
         <DataTemplate DataType="{x:Type vm:BoolFieldViewModel}">
-            <Grid ColumnDefinitions="*,Auto">
-                <StackPanel Grid.Column="0" Spacing="2">
-                    <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="Medium"/>
-                    <TextBlock Text="{Binding Description}"
-                               FontSize="11" Opacity="0.55" TextWrapping="Wrap"
-                               IsVisible="{Binding Description, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-                </StackPanel>
-                <ToggleSwitch Grid.Column="1" IsChecked="{Binding IsOn, Mode=TwoWay}"/>
-            </Grid>
+            <ui:SettingRow Label="{Binding Label}" Description="{Binding Description}">
+                <ToggleSwitch IsChecked="{Binding IsOn, Mode=TwoWay}"/>
+            </ui:SettingRow>
         </DataTemplate>
 
         <DataTemplate DataType="{x:Type vm:EnumFieldViewModel}">
@@ -63,15 +58,12 @@
     <ScrollViewer>
         <StackPanel Margin="24" Spacing="16">
 
-            <StackPanel Spacing="4">
-                <TextBlock Text="Metadata" FontSize="20" FontWeight="SemiBold"/>
-                <TextBlock Text="Where to look up canonical titles, artists, and album art. Providers run after the source in the order below; each fills only what's still missing — unless you override a field on the right."
-                           FontSize="12" Opacity="0.6" TextWrapping="Wrap"/>
-            </StackPanel>
+            <ui:PageHeader Title="Metadata"
+                           Description="Where to look up canonical titles, artists, and album art. Providers run after the source in the order below; each fills only what's still missing — unless you override a field on the right."/>
 
             <!-- Providers: enable + order + credentials -->
             <StackPanel Spacing="6">
-                <TextBlock Text="Providers (priority order)" FontSize="12" FontWeight="Medium" Opacity="0.7"/>
+                <TextBlock Classes="groupLabel" Text="Providers, in Priority Order"/>
                 <ItemsControl ItemsSource="{Binding Providers}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:MetadataProviderRow}">
@@ -114,7 +106,7 @@
 
             <!-- Per-field overrides -->
             <StackPanel Spacing="6">
-                <TextBlock Text="Field sources" FontSize="12" FontWeight="Medium" Opacity="0.7"/>
+                <TextBlock Classes="groupLabel" Text="Field Sources"/>
                 <TextBlock Text="Pin a field to one provider, or leave it on Auto to use the order above."
                            FontSize="11" Opacity="0.55" TextWrapping="Wrap"/>
                 <Border Classes="Card" Padding="14">

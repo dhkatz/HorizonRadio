@@ -1,0 +1,69 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:ui="using:HorizonRadio.Sdk.UI.Controls">
+
+    <!-- <ui:PageHeader Title="History" Description="Songs you've played.">
+             <ui:PageHeader.Actions><Button …/></ui:PageHeader.Actions>
+         </ui:PageHeader> -->
+    <ControlTheme x:Key="{x:Type ui:PageHeader}" TargetType="ui:PageHeader">
+        <Setter Property="Margin" Value="0,0,0,4"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" Spacing="4" VerticalAlignment="Center">
+                        <TextBlock Classes="pageTitle" Text="{TemplateBinding Title}"/>
+                        <TextBlock Classes="description" Text="{TemplateBinding Description}"
+                                   IsVisible="{Binding Description, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                    </StackPanel>
+                    <ContentPresenter Grid.Column="1" Content="{TemplateBinding Actions}"
+                                      VerticalAlignment="Center" Margin="16,0,0,0"/>
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+    <!-- <ui:SectionCard Title="Your Friends" Description="…"> content </ui:SectionCard> -->
+    <ControlTheme x:Key="{x:Type ui:SectionCard}" TargetType="ui:SectionCard">
+        <Setter Property="Padding" Value="20"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Classes="Card" Padding="{TemplateBinding Padding}">
+                    <StackPanel Spacing="12">
+                        <Grid ColumnDefinitions="*,Auto"
+                              IsVisible="{Binding Title, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                            <TextBlock Grid.Column="0" Classes="sectionTitle" Text="{TemplateBinding Title}"
+                                       VerticalAlignment="Center"/>
+                            <ContentPresenter Grid.Column="1" Content="{TemplateBinding Actions}"
+                                              VerticalAlignment="Center" Margin="12,0,0,0"/>
+                        </Grid>
+                        <TextBlock Classes="description" Text="{TemplateBinding Description}"
+                                   IsVisible="{Binding Description, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                        <ContentPresenter Name="PART_ContentPresenter"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          IsVisible="{Binding Content, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                    </StackPanel>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+    <!-- <ui:SettingRow Label="Karaoke" Description="…"><ToggleSwitch …/></ui:SettingRow> -->
+    <ControlTheme x:Key="{x:Type ui:SettingRow}" TargetType="ui:SettingRow">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center" Margin="0,0,16,0">
+                        <TextBlock Classes="fieldLabel" Text="{TemplateBinding Label}" TextWrapping="Wrap"/>
+                        <TextBlock Classes="caption" Text="{TemplateBinding Description}"
+                                   IsVisible="{Binding Description, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                    </StackPanel>
+                    <ContentPresenter Grid.Column="1" Name="PART_ContentPresenter"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      VerticalAlignment="Center"/>
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+</ResourceDictionary>

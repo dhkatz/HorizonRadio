@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:HorizonRadio.Sdk.UI.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.Game.ForzaHorizon6.ViewModels"
@@ -14,15 +15,11 @@
     <ScrollViewer>
         <StackPanel Margin="24" Spacing="16">
 
-            <StackPanel Spacing="4" Margin="0,0,0,4">
-                <TextBlock Text="Stations" FontSize="20" FontWeight="SemiBold"/>
-                <TextBlock Text="Choose what each in-game station plays. Tune to a station in Forza and Horizon Radio follows."
-                           FontSize="12" Opacity="0.6" TextWrapping="Wrap"/>
-            </StackPanel>
+            <ui:PageHeader Title="Stations"
+                           Description="Choose what each in-game station plays. Tune to a station in Forza and Horizon Radio follows."/>
 
-            <Border Classes="Card" Padding="20">
+            <ui:SectionCard Title="When You Switch Stations">
                 <StackPanel Spacing="8">
-                    <TextBlock Text="When You Switch Stations" FontSize="14" FontWeight="SemiBold"/>
                     <ComboBox ItemsSource="{Binding Modes}"
                               SelectedItem="{Binding SelectedMode, Mode=TwoWay}"
                               HorizontalAlignment="Stretch">
@@ -32,14 +29,12 @@
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
-                    <TextBlock Text="{Binding SelectedMode.Description}"
-                               FontSize="11" Opacity="0.6" TextWrapping="Wrap"/>
-                    <TextBlock Text="The Horizon Radio player always pauses and resumes."
-                               FontSize="11" Opacity="0.6" TextWrapping="Wrap"/>
+                    <TextBlock Classes="caption" Text="{Binding SelectedMode.Description}"/>
+                    <TextBlock Classes="caption" Text="The Horizon Radio player always pauses and resumes."/>
                 </StackPanel>
-            </Border>
+            </ui:SectionCard>
 
-            <Border Classes="Card" Padding="20">
+            <ui:SectionCard Title="Stations">
                 <ItemsControl ItemsSource="{Binding Rows}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -48,34 +43,29 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:StationRow">
-                            <Grid ColumnDefinitions="*,Auto,280" VerticalAlignment="Center">
-                                <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Name}" FontSize="13"/>
-                                    <TextBlock Text="{Binding Hint}" IsVisible="{Binding HasHint}"
-                                               FontSize="11" Opacity="0.55" TextWrapping="Wrap"/>
+                            <ui:SettingRow Label="{Binding Name}" Description="{Binding Hint}">
+                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                    <Border IsVisible="{Binding IsOnAir}"
+                                            Background="{DynamicResource ToneSuccessBrush}" CornerRadius="999"
+                                            Padding="8,2" VerticalAlignment="Center">
+                                        <TextBlock Text="On Air" FontSize="10" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource OnToneBrush}"/>
+                                    </Border>
+                                    <ComboBox Width="280"
+                                              ItemsSource="{Binding Options}"
+                                              SelectedItem="{Binding Selected, Mode=TwoWay}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:StationOption">
+                                                <TextBlock Text="{Binding Label}"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
                                 </StackPanel>
-                                <Border Grid.Column="1" IsVisible="{Binding IsOnAir}"
-                                        Background="{DynamicResource ToneSuccessBrush}" CornerRadius="999"
-                                        Padding="8,2" Margin="12,0"
-                                        VerticalAlignment="Center">
-                                    <TextBlock Text="On Air" FontSize="10" FontWeight="SemiBold"
-                                               Foreground="{DynamicResource OnToneBrush}"/>
-                                </Border>
-                                <ComboBox Grid.Column="2"
-                                          ItemsSource="{Binding Options}"
-                                          SelectedItem="{Binding Selected, Mode=TwoWay}"
-                                          HorizontalAlignment="Stretch">
-                                    <ComboBox.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:StationOption">
-                                            <TextBlock Text="{Binding Label}"/>
-                                        </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                </ComboBox>
-                            </Grid>
+                            </ui:SettingRow>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-            </Border>
+            </ui:SectionCard>
 
         </StackPanel>
     </ScrollViewer>

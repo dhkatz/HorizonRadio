@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:HorizonRadio.Sdk.UI.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
@@ -28,17 +29,13 @@
     <ScrollViewer>
         <StackPanel Margin="24" Spacing="16">
 
-            <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,4">
-                <StackPanel Grid.Column="0" Spacing="4">
-                    <TextBlock Text="History" FontSize="20" FontWeight="SemiBold"/>
-                    <TextBlock Text="Songs you've played."
-                               FontSize="12" Opacity="0.6" TextWrapping="Wrap"/>
-                </StackPanel>
-                <Button Grid.Column="1" Classes="Outline" Content="Clear History"
-                        VerticalAlignment="Center"
-                        Command="{Binding ClearCommand}"
-                        IsVisible="{Binding !IsEmpty}"/>
-            </Grid>
+            <ui:PageHeader Title="History" Description="Songs you've played.">
+                <ui:PageHeader.Actions>
+                    <Button Classes="Outline" Content="Clear History"
+                            Command="{Binding ClearCommand}"
+                            IsVisible="{Binding !IsEmpty}"/>
+                </ui:PageHeader.Actions>
+            </ui:PageHeader>
 
             <!-- Empty state -->
             <TextBlock Text="Nothing played yet. Songs you play will show up here."
