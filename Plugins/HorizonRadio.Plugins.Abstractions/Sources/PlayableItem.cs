@@ -35,6 +35,11 @@ public abstract class PlayableItem
     /// <see cref="Position"/>, once its length is known.</summary>
     public virtual TimeSpan? SongPosition => Duration is null ? null : Position;
 
+    /// <summary>The live stream this item plays (an internet radio station), to tune into it again
+    /// elsewhere: a listening party's guest joins the station rather than a song on it. Null for a
+    /// track, which is found again by its own id.</summary>
+    public virtual ContentRef? LiveOrigin => null;
+
     /// <summary>Whether <see cref="SeekAsync"/> does anything. Defaults false so
     /// stream items (which can report position but not seek) need not override it.</summary>
     public virtual bool CanSeek => false;

@@ -26,4 +26,18 @@ public sealed class QueueItem(PlayableItem item, bool fromContext = false, strin
     public bool FromContext { get; } = fromContext;
 
     public Track Metadata => Item.Metadata;
+
+    private Func<TimeSpan>? _joinAt;
+
+    /// <summary>Where this item's first play starts, worked out as it starts: joining a play under
+    /// way elsewhere (a listening party's host). A later play of it (a restart, a step back onto
+    /// it) is from the top.</summary>
+    public Func<TimeSpan>? JoinAt
+    {
+        init => _joinAt = value;
+    }
+
+    /// <summary>The first play's start, taken once (see <see cref="JoinAt"/>).</summary>
+    internal TimeSpan TakeJoinAt() =>
+        Interlocked.Exchange(ref _joinAt, null) is { } at && at() is { Ticks: > 0 } start ? start : TimeSpan.Zero;
 }

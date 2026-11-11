@@ -71,6 +71,12 @@ public sealed class RadioPlayableItem : PlayableItem, ILiveSongAudio
         Metadata = BuildTrack(null, null);
     }
 
+    /// <summary>The station: its directory entry when it came from one, else its stream.</summary>
+    public override ContentRef LiveOrigin => new(
+        RadioSourceFactory.SourceId,
+        _station.Uuid is { Length: > 0 } uuid ? "radio://" + uuid : _station.StreamUrl,
+        _station.Name);
+
     // A live stream has no fixed length (base Duration stays null → no scrub bar) and
     // can't be seeked; report wall-clock elapsed from the decoder as the position so
     // the HUD can show time-on-station.

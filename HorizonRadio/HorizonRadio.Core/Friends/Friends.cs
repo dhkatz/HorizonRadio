@@ -16,8 +16,17 @@ public sealed record FriendRecord(string PublicKey, string Name);
 /// <summary>What someone is listening to.</summary>
 public sealed record Listening(string Title, string Artist, string Source, string? ExternalId = null);
 
-/// <summary>A friend as the Friends page shows them.</summary>
-public sealed record FriendStatus(string UserId, string Name, bool IsOnline, Listening? Listening, DateTimeOffset? LastSeen);
+/// <summary>A friend as the Friends page shows them. <paramref name="HostingPeer"/>: the friend's PC
+/// that's hosting a listening party, if one is.</summary>
+public sealed record FriendStatus(string UserId, string Name, bool IsOnline, Listening? Listening, DateTimeOffset? LastSeen,
+    string? HostingPeer = null)
+{
+    public bool IsHosting => HostingPeer != null;
+}
+
+/// <summary>A message from a friend's PC that isn't the friends feature's own (a listening party's),
+/// passed on only once that PC has proven it's the friend's.</summary>
+public sealed record FriendPeerMessage(string UserId, string PeerId, JsonElement Message);
 
 /// <summary>
 /// Your friends: adding one (<see cref="InviteAsync"/> shows a code, <see cref="AcceptAsync"/> takes
@@ -46,6 +55,7 @@ public sealed class Friends : IAsyncDisposable
     // Under _lock. A friend's devices we've verified: peer → user id; and what each is playing.
     private readonly Dictionary<string, string> _friendPeers = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Listening?> _listening = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _hostingPeers = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTimeOffset> _lastSeen = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TaskCompletionSource<FriendMessage>> _accepts = new(StringComparer.Ordinal);
     private readonly HashSet<string> _connecting = new(StringComparer.Ordinal);
@@ -54,6 +64,7 @@ public sealed class Friends : IAsyncDisposable
     private PairingCode? _invite;
     private DateTimeOffset _inviteExpires;
     private Listening? _myListening;
+    private bool _myHosting;
     private Task? _loop;
     private Task? _presence;
 
@@ -70,6 +81,13 @@ public sealed class Friends : IAsyncDisposable
 
     /// <summary>The friend list, who's online, what they're playing, or the invite changed.</summary>
     public event Action? Changed;
+
+    /// <summary>A friend's PC sent a message of another feature's (see <see cref="FriendPeerMessage"/>).
+    /// Raised on the message loop, one at a time, in the order they came.</summary>
+    public event Action<FriendPeerMessage>? PeerMessage;
+
+    /// <summary>A friend's PC went away (closed, or the connection was lost).</summary>
+    public event Action<string>? PeerLeft;
 
     /// <summary>What happened last that you should hear about ("Added Sam").</summary>
     public string? Status { get; private set; }
@@ -99,7 +117,8 @@ public sealed class Friends : IAsyncDisposable
                     var peers = _friendPeers.Where(p => p.Value == userId).Select(p => p.Key).ToList();
                     var listening = peers.Select(p => _listening.GetValueOrDefault(p)).FirstOrDefault(l => l != null);
                     list.Add(new FriendStatus(userId, friend.Name, peers.Count > 0, listening,
-                        _lastSeen.TryGetValue(userId, out var seen) ? seen : null));
+                        _lastSeen.TryGetValue(userId, out var seen) ? seen : null,
+                        peers.Order(StringComparer.Ordinal).FirstOrDefault(_hostingPeers.Contains)));
                 }
             }
             return [.. list.OrderByDescending(f => f.IsOnline).ThenBy(f => f.Name, StringComparer.CurrentCultureIgnoreCase)];
@@ -273,6 +292,41 @@ public sealed class Friends : IAsyncDisposable
         _work.Writer.TryWrite(SendStatusToAllAsync);
     }
 
+    /// <summary>Whether this device is hosting a listening party, for your friends to see.</summary>
+    public void SetHosting(bool hosting)
+    {
+        lock (_lock)
+        {
+            if (_myHosting == hosting) return;
+            _myHosting = hosting;
+        }
+        _work.Writer.TryWrite(SendStatusToAllAsync);
+    }
+
+    /// <summary>A friend's name, or null when they aren't one.</summary>
+    public string? NameOf(string userId) => RecordOf(userId)?.Name;
+
+    /// <summary>Send another feature's message to a friend's PC that has proven it's theirs. False
+    /// when it isn't (or is no longer) connected.</summary>
+    public async Task<bool> SendToFriendAsync(string peerId, JsonElement message, CancellationToken ct = default)
+    {
+        lock (_lock)
+        {
+            if (!_friendPeers.ContainsKey(peerId)) return false;
+        }
+        if (_network is not { } network) return false;
+        try
+        {
+            await network.SendAsync(peerId, message, ct).ConfigureAwait(false);
+            return true;
+        }
+        catch (PeerNetworkException ex)
+        {
+            Log($"couldn't send to {peerId}: {ex.Message}");
+            return false;
+        }
+    }
+
     private IEnumerable<(string UserId, FriendRecord Friend)> Records()
     {
         foreach (var key in _settings.KeysWithPrefix(RecordPrefix))
@@ -412,8 +466,15 @@ public sealed class Friends : IAsyncDisposable
 
     private async Task OnMessageAsync(PeerMessage received)
     {
-        if (FriendMessage.From(received.Message) is not { } message) return;
         var from = received.PeerId;
+        if (FriendMessage.TypeOf(received.Message) is { } type && !type.StartsWith("friend.", StringComparison.Ordinal))
+        {
+            string? sender;
+            lock (_lock) _friendPeers.TryGetValue(from, out sender);
+            if (sender != null) RaisePeerMessage(new FriendPeerMessage(sender, from, received.Message));
+            return;
+        }
+        if (FriendMessage.From(received.Message) is not { } message) return;
         switch (message.Type)
         {
             case FriendMessage.Request:
@@ -433,6 +494,8 @@ public sealed class Friends : IAsyncDisposable
                 {
                     if (!_friendPeers.TryGetValue(from, out userId)) return; // not a friend we've verified
                     _listening[from] = message.Listening;
+                    if (message.Hosting) _hostingPeers.Add(from);
+                    else _hostingPeers.Remove(from);
                     _lastSeen[userId] = _time.GetUtcNow();
                 }
                 RaiseChanged();
@@ -510,22 +573,31 @@ public sealed class Friends : IAsyncDisposable
         {
             was = _friendPeers.Remove(change.PeerId, out var userId);
             _listening.Remove(change.PeerId);
+            _hostingPeers.Remove(change.PeerId);
             if (was) _lastSeen[userId!] = _time.GetUtcNow();
         }
-        if (was) RaiseChanged();
+        if (was)
+        {
+            RaisePeerLeft(change.PeerId);
+            RaiseChanged();
+        }
         return Task.CompletedTask;
     }
 
     private Task OnExited()
     {
+        string[] gone;
         lock (_lock)
         {
             _network = null;
             _advertised = null;
             _invite = null;
+            gone = [.. _friendPeers.Keys];
             _friendPeers.Clear();
             _listening.Clear();
+            _hostingPeers.Clear();
         }
+        foreach (var peer in gone) RaisePeerLeft(peer);
         RaiseChanged();
         return Task.CompletedTask;
     }
@@ -533,8 +605,13 @@ public sealed class Friends : IAsyncDisposable
     private Task SendStatusAsync(string peerId)
     {
         Listening? now;
-        lock (_lock) now = _myListening;
-        return TrySendAsync(peerId, new FriendMessage { Type = FriendMessage.StatusType, Name = MyName, Listening = now });
+        bool hosting;
+        lock (_lock)
+        {
+            now = _myListening;
+            hosting = _myHosting;
+        }
+        return TrySendAsync(peerId, new FriendMessage { Type = FriendMessage.StatusType, Name = MyName, Listening = now, Hosting = hosting });
     }
 
     private async Task SendStatusToAllAsync()
@@ -569,6 +646,30 @@ public sealed class Friends : IAsyncDisposable
         Status = status;
         if (status != null) Log(status);
         RaiseChanged();
+    }
+
+    private void RaisePeerMessage(FriendPeerMessage message)
+    {
+        try
+        {
+            PeerMessage?.Invoke(message);
+        }
+        catch (Exception ex)
+        {
+            Log($"a PeerMessage handler failed: {ex}");
+        }
+    }
+
+    private void RaisePeerLeft(string peerId)
+    {
+        try
+        {
+            PeerLeft?.Invoke(peerId);
+        }
+        catch (Exception ex)
+        {
+            Log($"a PeerLeft handler failed: {ex}");
+        }
     }
 
     private void RaiseChanged()
@@ -613,7 +714,8 @@ public sealed class Friends : IAsyncDisposable
 //   friend.accept   them → you                       { name, userKey, proof }
 //   friend.refused  them → you                       wrong code, or none showing
 //   friend.hello    either way                       { name, userKey, proof (signed), reply }
-//   friend.status   either way                       { name, listening? }
+//   friend.status   either way                       { name, listening?, hosting }
+// Any other type from a verified friend's PC is another feature's (FriendPeerMessage).
 internal sealed record FriendMessage
 {
     public required string Type { get; init; }
@@ -622,6 +724,7 @@ internal sealed record FriendMessage
     public string? Proof { get; init; }
     public bool Reply { get; init; }
     public Listening? Listening { get; init; }
+    public bool Hosting { get; init; }
 
     public const string Request = "friend.request";
     public const string Accept = "friend.accept";
@@ -635,6 +738,12 @@ internal sealed record FriendMessage
     };
 
     public JsonElement ToJson() => JsonSerializer.SerializeToElement(this, Json);
+
+    /// <summary>The message's type, or null when it has none.</summary>
+    public static string? TypeOf(JsonElement json) =>
+        json.ValueKind == JsonValueKind.Object && json.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String
+            ? type.GetString()
+            : null;
 
     public static FriendMessage? From(JsonElement json)
     {

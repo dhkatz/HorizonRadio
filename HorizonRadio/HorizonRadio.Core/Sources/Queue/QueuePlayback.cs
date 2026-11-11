@@ -95,6 +95,36 @@ public sealed class QueuePlayback : IDisposable
         await EnsureActiveAsync().ConfigureAwait(false);
     }
 
+    /// <summary>Resolve a locator and play its first item now, ahead of the queue, which keeps the
+    /// rest (unlike <see cref="EnqueueLocatorAsync"/>'s play-now). <paramref name="joinAt"/>, when
+    /// given, says where to start, worked out the moment it starts. Returns the queued item.</summary>
+    /// <exception cref="InvalidOperationException">It can't be played here (a tool missing, nothing
+    /// playable).</exception>
+    public async Task<QueueItem> PlayNowAsync(IAudioSourceFactory factory, string locator, Func<TimeSpan>? joinAt = null,
+        CancellationToken ct = default)
+    {
+        if (factory is not IContentSourceFactory)
+            throw new InvalidOperationException($"{factory.DisplayName} can't be added to the queue.");
+        var values = _config.Load(factory.Id, factory.Schema);
+        SourceRequirements.EnsureToolsAvailable(factory, values);
+
+        var items = await _resolver.EnumerateAsync(new ContentRef(factory.Id, locator.Trim()), ct).ConfigureAwait(false);
+        if (items.Count == 0) throw new InvalidOperationException("That didn't resolve to anything playable.");
+
+        QueueItem queued;
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            queued = Model.PlayNext(items[0], joinAt);
+        }
+        finally { _gate.Release(); }
+        await EnsureActiveAsync().ConfigureAwait(false);
+        return queued;
+    }
+
+    /// <summary>The engine on the runner, or null when the queue isn't what's playing.</summary>
+    public QueueSource? ActiveEngine => _source is { } source && ReferenceEquals(_runner.ActiveSource, source) ? source : null;
+
     /// <summary>Play a mix into the queue. <see cref="QueueAddMode.Replace"/> makes
     /// it the queue's context (the infinite tail) and switches to it now;
     /// <see cref="QueueAddMode.Add"/> snapshots one lap of its tracks as explicit

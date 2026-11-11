@@ -22,6 +22,26 @@
 
             <TextBlock Text="{Binding Status}" FontSize="12" TextWrapping="Wrap" IsVisible="{Binding HasStatus}"/>
 
+            <!-- Listening party -->
+            <Border Classes="Card" Padding="20" IsVisible="{Binding HasParty}">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Listening Party" FontSize="14" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding PartyTitle}" FontSize="12" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding PartyDetail}" FontSize="12" Opacity="0.7" TextWrapping="Wrap"
+                               IsVisible="{Binding HasPartyDetail}"/>
+                    <TextBlock Text="{Binding PartyProblem}" FontSize="12" Opacity="0.7" TextWrapping="Wrap"
+                               IsVisible="{Binding HasPartyProblem}"/>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Classes="Primary" Content="Start Party" Command="{Binding StartPartyCommand}"
+                                IsVisible="{Binding CanStartParty}" IsEnabled="{Binding !IsBusy}"/>
+                        <Button Classes="Secondary" Content="End Party" Command="{Binding EndPartyCommand}"
+                                IsVisible="{Binding IsHostingParty}"/>
+                        <Button Classes="Secondary" Content="Leave Party" Command="{Binding LeavePartyCommand}"
+                                IsVisible="{Binding IsInParty}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
             <!-- Your friends -->
             <Border Classes="Card" Padding="20">
                 <StackPanel Spacing="12">
@@ -31,7 +51,7 @@
                     <ItemsControl ItemsSource="{Binding Friends}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:FriendRow}">
-                                <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,4">
+                                <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,4">
                                     <material:MaterialIcon Grid.Column="0" Kind="Account" Width="20" Height="20"
                                                            Margin="0,0,12,0" VerticalAlignment="Center"
                                                            Opacity="{Binding IconOpacity}"/>
@@ -39,7 +59,9 @@
                                         <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Medium"/>
                                         <TextBlock Text="{Binding State}" FontSize="11" Opacity="0.6" TextWrapping="Wrap"/>
                                     </StackPanel>
-                                    <Button Grid.Column="2" Classes="Secondary" Content="Remove"
+                                    <Button Grid.Column="2" Classes="Primary" Content="Join Party" Margin="0,0,8,0"
+                                            Command="{Binding JoinCommand}" IsVisible="{Binding CanJoin}"/>
+                                    <Button Grid.Column="3" Classes="Secondary" Content="Remove"
                                             Command="{Binding RemoveCommand}"/>
                                 </Grid>
                             </DataTemplate>
