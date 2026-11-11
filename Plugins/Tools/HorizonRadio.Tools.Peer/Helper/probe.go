@@ -9,30 +9,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ipfs/go-cid"
-	"github.com/libp2p/go-libp2p/core/event"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
-	"github.com/multiformats/go-multihash"
 )
 
 const probeProtocol = protocol.ID("/horizon-radio/probe/1.0.0")
 
-// probeKey is where a listener announces itself in the DHT. A peer behind NAT
-// isn't in anyone's routing table, so a plain peer lookup rarely finds it; its
-// provider record carries its relay addresses instead.
-//
-// libp2p's RoutingDiscovery does the same, but cuts every publish off at 60 s,
-// and a provide on Amino often needs longer.
-func probeKey(id peer.ID) cid.Cid {
-	mh, err := multihash.Sum([]byte("horizon-radio/probe/"+id.String()), multihash.SHA2_256, -1)
-	if err != nil {
-		panic(err) // SHA2-256 is always available
-	}
-	return cid.NewCidV1(cid.Raw, mh)
-}
+// probeTopic is where a listener announces itself.
+func probeTopic(id peer.ID) string { return "probe/" + id.String() }
 
 // listen announces this peer and reports every probe that reaches it, and how.
 func listen(ctx context.Context, n *node) error {
@@ -82,51 +68,8 @@ func listen(ctx context.Context, n *node) error {
 		"peer_id": h.ID().String(),
 		"hint":    "on the other machine run: horizon-peer probe dial " + h.ID().String(),
 	})
-	return advertiseLoop(ctx, n)
-}
-
-// advertiseLoop (re)publishes the provider record when the addresses others
-// can reach us on change (a relay reservation, a port mapping), and every
-// 10 minutes.
-func advertiseLoop(ctx context.Context, n *node) error {
-	sub, err := n.host.EventBus().Subscribe(new(event.EvtLocalAddressesUpdated))
-	if err != nil {
-		return err
-	}
-	defer sub.Close()
-	key := probeKey(n.host.ID())
-
-	// Give AutoNAT and AutoRelay a moment, so the first record has useful addresses.
-	timer := time.NewTimer(10 * time.Second)
-	defer timer.Stop()
-	var published []string
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-sub.Out():
-			if !slices.Equal(publicAddrs(n.host), published) {
-				// Debounce: addresses tend to change several times in a row.
-				timer.Reset(5 * time.Second)
-			}
-			continue
-		case <-timer.C:
-		}
-		start := time.Now()
-		addrs := publicAddrs(n.host)
-		stored, err := provide(ctx, n.dht.WAN, key)
-		if ctx.Err() != nil {
-			return nil
-		}
-		if err != nil {
-			emit("advertise_failed", map[string]any{"error": err.Error(), "seconds": time.Since(start).Seconds()})
-			timer.Reset(30 * time.Second)
-			continue
-		}
-		published = addrs
-		emit("advertised", map[string]any{"addrs": addrs, "stored_on_peers": stored, "seconds": time.Since(start).Seconds()})
-		timer.Reset(10 * time.Minute)
-	}
+	aminoDiscovery{n}.advertise(ctx, probeTopic(h.ID()))
+	return nil
 }
 
 type dialOptions struct {
@@ -225,19 +168,19 @@ func findPeer(ctx context.Context, n *node, target peer.ID, timeout time.Duratio
 		via  string
 	}
 	results := make(chan found, 2)
-	key := probeKey(target)
 
 	go func() {
-		for ctx.Err() == nil {
-			// The public DHT only: the LAN one would answer for a peer on this machine.
-			for p := range n.dht.WAN.FindProvidersAsync(ctx, key, 20) {
-				if p.ID == target && len(p.Addrs) > 0 {
-					results <- found{p, "provider_record"}
-					return
+		fctx, stop := context.WithCancel(ctx)
+		defer stop()
+		findProviders(fctx, n.dht.WAN, topicKey(probeTopic(target)), func(p peer.AddrInfo) {
+			if p.ID == target {
+				select {
+				case results <- found{p, "provider_record"}:
+				default:
 				}
+				stop()
 			}
-			sleep(ctx, 5*time.Second)
-		}
+		})
 	}()
 	if !recordOnly {
 		go func() {

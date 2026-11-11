@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"os"
 	"slices"
 	"strings"
@@ -15,11 +16,19 @@ import (
 	manet "github.com/multiformats/go-multiaddr/net"
 )
 
-var emitMu sync.Mutex
+// events writes events as JSON lines, the same newline-delimited JSON the app
+// already speaks with its other helpers.
+type events struct {
+	mu sync.Mutex
+	w  io.Writer
+}
 
-// emit writes one event as a JSON line on stdout, the same newline-delimited
-// JSON the app already speaks with its other helpers.
-func emit(event string, fields map[string]any) {
+var stdout = &events{w: os.Stdout}
+
+// emit writes one event as a JSON line on stdout.
+func emit(event string, fields map[string]any) { stdout.emit(event, fields) }
+
+func (e *events) emit(event string, fields map[string]any) {
 	line := map[string]any{"time": time.Now().Format("15:04:05.000"), "event": event}
 	for k, v := range fields {
 		line[k] = v
@@ -28,9 +37,9 @@ func emit(event string, fields map[string]any) {
 	if err != nil {
 		b = []byte(`{"event":"error","error":"unencodable event"}`)
 	}
-	emitMu.Lock()
-	defer emitMu.Unlock()
-	_, _ = os.Stdout.Write(append(b, '\n'))
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	_, _ = e.w.Write(append(b, '\n'))
 }
 
 // connInfo describes one connection to a peer: how it got through.
