@@ -119,11 +119,19 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
     // Completed when the queue gains work, to wake an idle engine.
     private TaskCompletionSource _work = NewSignal();
 
+    // Loading the next track while this one plays (StartPrefetch).
+    private CancellationTokenSource? _prefetch;
+
+    /// <summary>How long after a track starts (or the queue changes) the next one is loaded: long
+    /// enough that a track's own start isn't slowed, and that a burst of queue edits loads once.</summary>
+    internal TimeSpan PrefetchAfter { get; init; } = TimeSpan.FromSeconds(2);
+
     public QueueSource(QueueModel model)
     {
         _model = model;
         _model.WorkAvailable += OnWorkAvailable;
         _model.InterruptRequested += OnInterrupt;
+        _model.Changed += OnModelChanged;
     }
 
     private static void Log(string msg) => Trace.WriteLine($"[hzn-queue] {msg}");
@@ -238,6 +246,8 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
         IsDisposed = true;
         _model.WorkAvailable -= OnWorkAvailable;
         _model.InterruptRequested -= OnInterrupt;
+        _model.Changed -= OnModelChanged;
+        TryCancel(Interlocked.Exchange(ref _prefetch, null));
         await StopAsync().ConfigureAwait(false);
         // Nothing will play from this engine again, so the queue shows nothing playing. (A
         // parked engine keeps its track there: it comes back to it.)
@@ -652,6 +662,57 @@ public sealed class QueueSource : IAudioSource, ITransportControls, IPlaybackPro
         }
         // Null: cut short, or the context has nothing to give.
         return new Outcome(Completed: !step.IsCancellationRequested);
+    }
+
+    // -- Loading ahead --
+
+    // The queue changed, or a track started (the engine publishes it there): load what comes next.
+    private void OnModelChanged()
+    {
+        lock (_gate)
+        {
+            if (_phase is not Playing { Started: true } || _run is not { Loop.IsCompleted: false }) return;
+        }
+        StartPrefetch();
+    }
+
+    // Load the next track ahead (PlayableItem.PrefetchAsync), after a beat; a newer call replaces
+    // an older one that hasn't got going.
+    private void StartPrefetch()
+    {
+        var cts = new CancellationTokenSource();
+        TryCancel(Interlocked.Exchange(ref _prefetch, cts));
+        var ct = cts.Token;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(PrefetchAfter, ct).ConfigureAwait(false);
+                if (await NextUpAsync(ct).ConfigureAwait(false) is not { } next) return;
+                await next.PrefetchAsync(ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                Log($"loading ahead failed: {ex.GetType().Name}: {ex.Message}");
+            }
+        }, CancellationToken.None);
+    }
+
+    // What plays after the current track, as the loop would go on: a track stepped back over, the
+    // queue's next, or the context's next.
+    private async Task<PlayableItem?> NextUpAsync(CancellationToken ct)
+    {
+        lock (_gate)
+        {
+            if (_phase is not Playing) return null;
+            if (_future.Count > 0) return _future[^1].Item;
+        }
+        var (item, context) = _model.PeekNext();
+        if (item != null) return item.Item;
+        return context is { HasEntries: true } ? await context.PeekNextAsync(ct).ConfigureAwait(false) : null;
     }
 
     private async Task<Outcome> IdleAsync(CancellationToken step)

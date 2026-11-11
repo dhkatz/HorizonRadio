@@ -19,6 +19,11 @@ public interface IQueueContext
     /// <summary>The next track, resolving lazily. Null on cancellation, or when it has nothing.</summary>
     Task<PlayableItem?> NextAsync(CancellationToken ct);
 
+    /// <summary>The track <see cref="NextAsync"/> will hand out next, without consuming it, so it
+    /// can be loaded ahead (the same instance <see cref="NextAsync"/> then returns). Null when it
+    /// can't be known yet (the next lap's order isn't drawn until it starts).</summary>
+    Task<PlayableItem?> PeekNextAsync(CancellationToken ct) => Task.FromResult<PlayableItem?>(null);
+
     /// <summary>A best-effort window of what's coming, without consuming it.</summary>
     IReadOnlyList<QueuePreview> Peek(int count);
 

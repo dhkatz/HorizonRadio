@@ -263,6 +263,40 @@ public static class YtDlpClient
             duration, m.Track, m.Artist, m.ReleaseYear);
     }
 
+    /// <summary>A video's audio, downloaded to <paramref name="AudioPath"/>, and what's known about it.</summary>
+    public sealed record Downloaded(string AudioPath, Meta Meta, TimeSpan? Duration);
+
+    /// <summary>
+    /// Download a video's best audio into <paramref name="folder"/> (as <c>audio.&lt;ext&gt;</c>, in
+    /// whatever format YouTube serves it: no re-encode), in one call that also prints its metadata.
+    /// yt-dlp downloads it itself, in pieces, which YouTube serves far faster than a player's
+    /// single request for the stream.
+    /// </summary>
+    public static async Task<Downloaded> DownloadAudioAsync(
+        string ytDlpPath, string videoUrl, string folder, CancellationToken ct)
+    {
+        var stdout = await RunCapture(ytDlpPath,
+            new[]
+            {
+                "-f", "bestaudio/best", "--no-playlist", "--no-warnings", "--no-progress",
+                "-j", "--no-simulate", // print the metadata and download too
+                "-o", Path.Combine(folder, "audio.%(ext)s"), videoUrl,
+            },
+            ct).ConfigureAwait(false);
+
+        var line = stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault()
+                   ?? throw new InvalidOperationException("yt-dlp printed nothing for " + videoUrl);
+        using var doc = JsonDocument.Parse(line);
+        var root = doc.RootElement;
+        TimeSpan? duration = ReadDouble(root, "duration") is { } secs && secs > 0 ? TimeSpan.FromSeconds(secs) : null;
+
+        var audio = Directory.EnumerateFiles(folder, "audio.*")
+                        .FirstOrDefault(f => !f.EndsWith(".part", StringComparison.OrdinalIgnoreCase) &&
+                                             !f.EndsWith(".ytdl", StringComparison.OrdinalIgnoreCase))
+                    ?? throw new InvalidOperationException("yt-dlp didn't write the audio for " + videoUrl);
+        return new Downloaded(audio, ParseMeta(root), duration);
+    }
+
     /// <summary>
     /// The command line that downloads one video's best audio and writes it to stdout, for piping into
     /// a decoder. yt-dlp does the download itself (not the decoder from a resolved URL): some sites only

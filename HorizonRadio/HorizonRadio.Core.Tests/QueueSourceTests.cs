@@ -228,6 +228,38 @@ public class QueueSourceTests
     }
 
     [Fact]
+    public async Task The_next_track_is_loaded_ahead_while_one_plays_and_follows_queue_changes()
+    {
+        var (a, b, c) = (new FakeItem("a"), new FakeItem("b"), new FakeItem("c"));
+        var model = new QueueModel();
+        model.AppendExplicit([a, b]);
+        await using var src = new QueueSource(model) { PrefetchAfter = TimeSpan.FromMilliseconds(50) };
+        await src.StartAsync(new NullPcmSink(), CancellationToken.None);
+        await Eventually.Until(() => a.Plays == 1, "a to play");
+        await Eventually.Until(() => b.Prefetches > 0, "b to be loaded ahead");
+        Assert.Equal(0, a.Prefetches);
+
+        // b leaves the queue: c is next now.
+        model.AppendExplicit([c]);
+        model.RemoveExplicit(model.Snapshot().Explicit[0].Id);
+        await Eventually.Until(() => c.Prefetches > 0, "c to be loaded ahead");
+    }
+
+    [Fact]
+    public async Task The_contexts_next_track_is_loaded_ahead()
+    {
+        var context = new FakeContext();
+        var (a, next) = (new FakeItem("a"), new FakeItem("next"));
+        var model = new QueueModel();
+        model.SetContext(context, "m");
+        await using var src = new QueueSource(model) { PrefetchAfter = TimeSpan.FromMilliseconds(50) };
+        await src.StartAsync(new NullPcmSink(), CancellationToken.None);
+        context.Ahead = next;
+        context.Feed(a);
+        await Eventually.Until(() => next.Prefetches > 0, "the context's next track to be loaded ahead");
+    }
+
+    [Fact]
     public async Task Play_now_while_the_context_is_still_resolving_plays_at_once()
     {
         var context = new FakeContext();

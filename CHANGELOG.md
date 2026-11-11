@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The next song loads while one plays, and YouTube songs download ahead (Queue, YouTube).** While
+  a song plays, the player gets the next one ready, from the queue or the mix. A YouTube song is
+  downloaded whole, so it starts the moment the one before it ends (no more seconds of yt-dlp
+  between songs), and plays without the network. YouTube songs can now be skipped through, too.
+  Downloads are kept for replays, up to a size you choose in the YouTube source's settings (1 GB by
+  default; the songs played longest ago go first), and "Download songs ahead" turns it off.
 - **Listening parties: friends hear what you play, in time with you (Friends).** Choose Start Party
   on the Friends page; your friends see you hosting and can choose Join Party. Their player then
   plays your songs from where you are in them, pauses and plays with you, and puts itself back in

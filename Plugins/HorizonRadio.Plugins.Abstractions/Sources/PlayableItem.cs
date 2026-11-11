@@ -57,6 +57,14 @@ public abstract class PlayableItem
     public virtual Task PrepareAsync(CancellationToken ct) => Task.CompletedTask;
 
     /// <summary>
+    /// Get ready well ahead of play: the queue calls this on the next song while the current one
+    /// plays, so it starts at once when it comes up. Default: <see cref="PrepareAsync"/>. A source
+    /// that can fetch the whole song ahead (YouTube downloads it) does that here, which can take a
+    /// while; <see cref="PlayAsync"/> never waits for it, and plays without it if it isn't done.
+    /// </summary>
+    public virtual Task PrefetchAsync(CancellationToken ct) => PrepareAsync(ct);
+
+    /// <summary>
     /// Best-effort metadata for list/queue display ahead of play — canonical
     /// title/artist/album/art where available — WITHOUT the playback side effects of
     /// <see cref="PrepareAsync"/> (no signed stream URL warmed, so nothing expires).

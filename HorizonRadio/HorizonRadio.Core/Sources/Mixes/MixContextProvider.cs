@@ -48,6 +48,17 @@ public sealed class MixContextProvider : IQueueContext
 
     private bool _shuffle;
 
+    // The next entry, loaded ahead (PeekNextAsync) for NextAsync to take as it is: its items, and
+    // the order they play in once drawn, so what was loaded ahead is what plays.
+    private sealed class Ahead(int entry, Task<List<PlayableItem>> items)
+    {
+        public int Entry => entry;
+        public Task<List<PlayableItem>> Items => items;
+        public PlayOrder? Order { get; set; }
+    }
+
+    private Ahead? _ahead;
+
     public MixContextProvider(Mix mix, MixContentResolver resolver, bool shuffle = false)
     {
         _mix = mix;
@@ -82,7 +93,62 @@ public sealed class MixContextProvider : IQueueContext
             // played, so it can reorder freely.
             if (_itemsLoaded)
                 _itemOrder.SetShuffle(enabled, keepCurrent: _itemHandedOut, keepPlayed: true);
+            _ahead?.Order?.SetShuffle(enabled, keepCurrent: false);
         }
+    }
+
+    /// <summary>
+    /// The track <see cref="NextAsync"/> hands out next, without moving on: the next one in the
+    /// loaded entry, else the first of the next entry, which this loads now (and
+    /// <see cref="NextAsync"/> then takes, rather than loading it again). Null before the first
+    /// track, and at the end of a lap, whose next order isn't drawn until it starts.
+    /// </summary>
+    public async Task<PlayableItem?> PeekNextAsync(CancellationToken ct)
+    {
+        var entries = _mix.Entries;
+        Ahead ahead;
+        lock (_lock)
+        {
+            if (!_initialized || !_itemsLoaded) return null;
+            var rest = _itemOrder.RemainingIndices();
+            var skip = _itemHandedOut ? 1 : 0;
+            if (rest.Count > skip) return _items[rest[skip]];
+
+            var upcoming = _entryOrder.RemainingIndices();
+            if (upcoming.Count < 2) return null;
+            if (_ahead?.Entry != upcoming[1]) _ahead = new Ahead(upcoming[1], LoadAheadAsync(entries[upcoming[1]]));
+            ahead = _ahead;
+        }
+
+        var items = await ahead.Items.WaitAsync(ct).ConfigureAwait(false);
+        lock (_lock)
+        {
+            if (!ReferenceEquals(_ahead, ahead) || items.Count == 0) return null;
+            ahead.Order ??= NewOrder(items.Count);
+            return items[ahead.Order.CurrentIndex];
+        }
+    }
+
+    private async Task<List<PlayableItem>> LoadAheadAsync(ContentRef entry)
+    {
+        try
+        {
+            return [.. await _resolver.EnumerateAsync(entry, CancellationToken.None).ConfigureAwait(false)];
+        }
+        catch (Exception ex)
+        {
+            Log($"enumerate {entry.SourceId}:{entry.Locator} ahead failed: {ex.Message}");
+            return [];
+        }
+    }
+
+    // Under the lock.
+    private PlayOrder NewOrder(int count)
+    {
+        var order = new PlayOrder();
+        order.Reset(count);
+        if (_shuffle) order.SetShuffle(true, keepCurrent: false);
+        return order;
     }
 
     /// <summary>
@@ -98,6 +164,7 @@ public sealed class MixContextProvider : IQueueContext
         while (!ct.IsCancellationRequested)
         {
             ContentRef entryToLoad;
+            Ahead? ahead;
             lock (_lock)
             {
                 if (!_initialized)
@@ -127,13 +194,16 @@ public sealed class MixContextProvider : IQueueContext
                 }
 
                 entryToLoad = entries[_entryOrder.CurrentIndex];
+                ahead = _ahead?.Entry == _entryOrder.CurrentIndex ? _ahead : null;
             }
 
-            // Resolve outside the lock (a YouTube entry spawns yt-dlp).
+            // Resolve outside the lock (a YouTube entry spawns yt-dlp), unless it was loaded ahead.
             List<PlayableItem> resolved;
             try
             {
-                resolved = [.. await _resolver.EnumerateAsync(entryToLoad, ct).ConfigureAwait(false)];
+                resolved = ahead != null
+                    ? await ahead.Items.WaitAsync(ct).ConfigureAwait(false)
+                    : [.. await _resolver.EnumerateAsync(entryToLoad, ct).ConfigureAwait(false)];
             }
             catch (OperationCanceledException) { return null; }
             catch (Exception ex)
@@ -147,9 +217,8 @@ public sealed class MixContextProvider : IQueueContext
             lock (_lock)
             {
                 _items = resolved;
-                _itemOrder = new PlayOrder();
-                _itemOrder.Reset(_items.Count);
-                if (_shuffle) _itemOrder.SetShuffle(true, keepCurrent: false);
+                _itemOrder = ahead?.Order is { } drawn && drawn.Count == _items.Count ? drawn : NewOrder(_items.Count);
+                if (ReferenceEquals(_ahead, ahead)) _ahead = null;
                 _itemsLoaded = true;
                 _itemHandedOut = false;
                 empty = _items.Count == 0;
