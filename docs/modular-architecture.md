@@ -90,7 +90,7 @@ These are agreed but wait until something needs them:
 
 Each step leaves the app working and lands as its own PR or short stack.
 
-1. [ ] Move `Plugins/HorizonRadio.Plugins.Abstractions` to `HorizonRadio/HorizonRadio.Sdk`, with
+1. [x] Move `Plugins/HorizonRadio.Plugins.Abstractions` to `HorizonRadio/HorizonRadio.Sdk`, with
    its types in `HorizonRadio.Sdk.*` namespaces.
 2. [ ] `HorizonRadio.Sdk.UI`: color tokens and text styles; the app and FH6 reference it, and
    hard-coded colors go.

@@ -1,7 +1,7 @@
-using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Plugins;
 using HorizonRadio.Core.Settings;
-using HorizonRadio.Plugins.Abstractions;
+using HorizonRadio.Sdk;
+using HorizonRadio.Sdk.Metadata;
 
 namespace HorizonRadio.UI.Services;
 

@@ -4,7 +4,8 @@ using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Metadata.Apple;
 using HorizonRadio.Core.Metadata.MusicBrainz;
 using HorizonRadio.Core.Metadata.VocaDb;
-using HorizonRadio.Core.Models;
+using HorizonRadio.Sdk.Metadata;
+using HorizonRadio.Sdk.Models;
 
 namespace HorizonRadio.Core.Tests;
 

@@ -1,9 +1,9 @@
 using HorizonRadio.Core.History;
-using HorizonRadio.Core.Models;
-using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Queue;
 using HorizonRadio.Core.Sources.Spotify;
 using HorizonRadio.Core.Sources.YouTube;
+using HorizonRadio.Sdk.Models;
+using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.Tests;
 

@@ -6,6 +6,7 @@ using HorizonRadio.Core.Sources.Spotify;
 using HorizonRadio.Core.Sources.Test;
 using HorizonRadio.Core.Sources.YouTube;
 using HorizonRadio.Core.Tools;
+using HorizonRadio.Sdk.Tools;
 
 namespace HorizonRadio.Core.Tests;
 

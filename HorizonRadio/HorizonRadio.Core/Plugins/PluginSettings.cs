@@ -1,5 +1,5 @@
 using HorizonRadio.Core.Settings;
-using HorizonRadio.Plugins.Abstractions;
+using HorizonRadio.Sdk;
 
 namespace HorizonRadio.Core.Plugins;
 

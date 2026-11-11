@@ -2,6 +2,7 @@ using System.Text.Json;
 using HorizonRadio.Core.Lyrics;
 using HorizonRadio.Core.Metadata.VocaDb;
 using HorizonRadio.Core.Settings;
+using HorizonRadio.Sdk.Lyrics;
 
 namespace HorizonRadio.Core.Tests;
 

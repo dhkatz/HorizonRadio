@@ -16,6 +16,7 @@ using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Plugins;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Sdk.Metadata;
 
 namespace HorizonRadio.Core.Settings;
 

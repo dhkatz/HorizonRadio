@@ -1,6 +1,6 @@
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
-using HorizonRadio.Core.Games;
+using HorizonRadio.Sdk.Games;
 using Material.Icons;
 
 namespace HorizonRadio.UI.ViewModels;

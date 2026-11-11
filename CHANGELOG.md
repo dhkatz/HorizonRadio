@@ -141,6 +141,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The plugin SDK is `HorizonRadio.Sdk` (internal).** `Plugins/HorizonRadio.Plugins.Abstractions`
+  moved to `HorizonRadio/HorizonRadio.Sdk`, and its types moved from `HorizonRadio.Core.*` and
+  `HorizonRadio.Plugins.Abstractions` to `HorizonRadio.Sdk.*` namespaces. It's the first step of
+  the move to a modular layout (`docs/modular-architecture.md`).
 - **Settings live in one file, `settings.json`.** The app's preferences, each source's
   settings, plugin settings, the metadata providers, event rules, controller and keyboard
   bindings and the diagnostics switch used to be spread over `sources.json`,

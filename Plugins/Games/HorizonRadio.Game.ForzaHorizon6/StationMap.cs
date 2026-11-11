@@ -1,6 +1,6 @@
-using HorizonRadio.Core.Games;
 using HorizonRadio.Core.Sources;
-using HorizonRadio.Plugins.Abstractions;
+using HorizonRadio.Sdk;
+using HorizonRadio.Sdk.Games;
 
 namespace HorizonRadio.Game.ForzaHorizon6;
 

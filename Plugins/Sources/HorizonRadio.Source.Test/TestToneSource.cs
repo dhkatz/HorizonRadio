@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using HorizonRadio.Core.Audio;
-using HorizonRadio.Core.Models;
+using HorizonRadio.Sdk.Models;
+using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.Sources.Test;
 

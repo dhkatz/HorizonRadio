@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Sources;
+using HorizonRadio.Sdk.Sources;
 using HorizonRadio.UI.Imaging;
 using HorizonRadio.UI.Services;
 

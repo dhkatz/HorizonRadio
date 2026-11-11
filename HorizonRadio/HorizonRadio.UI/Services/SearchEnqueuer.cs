@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Queue;
+using HorizonRadio.Sdk.Sources;
 using ShadUI;
 
 namespace HorizonRadio.UI.Services;

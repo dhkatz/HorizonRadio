@@ -5,8 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Games;
 using HorizonRadio.Core.Settings;
-using HorizonRadio.Core.Sources.Config;
-using HorizonRadio.Plugins.Abstractions;
+using HorizonRadio.Sdk;
 
 namespace HorizonRadio.UI.ViewModels;
 

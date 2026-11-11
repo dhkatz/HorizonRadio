@@ -1,5 +1,6 @@
 using HorizonRadio.Core.Metadata;
-using HorizonRadio.Core.Models;
+using HorizonRadio.Sdk.Metadata;
+using HorizonRadio.Sdk.Models;
 
 namespace HorizonRadio.Core.Tests;
 

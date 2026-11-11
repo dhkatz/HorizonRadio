@@ -5,8 +5,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Metadata;
-using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Sources;
+using HorizonRadio.Sdk.Models;
 
 namespace HorizonRadio.Core.History;
 

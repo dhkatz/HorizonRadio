@@ -1,8 +1,8 @@
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Fingerprints;
-using HorizonRadio.Core.Models;
-using HorizonRadio.Core.Sources;
-using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Sdk.Models;
+using HorizonRadio.Sdk.Sources;
+using HorizonRadio.Sdk.Sources.Config;
 
 namespace HorizonRadio.Core.Tests;
 

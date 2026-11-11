@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Sdk.Metadata;
 
 namespace HorizonRadio.Core.Metadata.Apple;
 

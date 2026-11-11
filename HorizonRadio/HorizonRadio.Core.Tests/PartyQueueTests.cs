@@ -9,6 +9,7 @@ using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Core.Sources.Queue;
 using HorizonRadio.Core.Sources.YouTube;
+using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.Tests;
 

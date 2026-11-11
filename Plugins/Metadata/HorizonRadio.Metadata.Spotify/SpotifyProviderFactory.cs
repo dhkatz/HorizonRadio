@@ -2,9 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Spotify;
-using HorizonRadio.Plugins.Abstractions;
+using HorizonRadio.Sdk;
+using HorizonRadio.Sdk.Metadata;
+using HorizonRadio.Sdk.Sources.Config;
 using SpotifyAPI.Web;
 
 namespace HorizonRadio.Core.Metadata.Spotify;

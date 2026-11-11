@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Models;
+using HorizonRadio.Sdk.Models;
 
 namespace HorizonRadio.Core.Metadata;
 
@@ -9,7 +9,7 @@ namespace HorizonRadio.Core.Metadata;
 /// Extracts (artist, title) interpretations from a freeform stream/track title. An optional
 /// upgrade over the deterministic <see cref="TitleArtistParser"/>: a local language model can
 /// split formats heuristics can't (no separators, reversed order, mixed-language). The result
-/// feeds the same <see cref="Models.TitleCandidate"/> seam the resolver already validates
+/// feeds the same <see cref="Sdk.Models.TitleCandidate"/> seam the resolver already validates
 /// against the catalogs, so a wrong extraction can't reach the UI.
 /// </summary>
 public interface ITitleExtractor : System.IAsyncDisposable

@@ -2,7 +2,7 @@ namespace HorizonRadio.Core.Tools;
 
 /// <summary>
 /// Tool-kind identifiers shared across the Core/UI boundary. Source
-/// factories tag their <see cref="HorizonRadio.Core.Sources.Config.ToolField"/>
+/// factories tag their <see cref="HorizonRadio.Sdk.Sources.Config.ToolField"/>
 /// entries with one of these; the UI's tool registry and per-kind
 /// installers key install state and downloaders off the same strings.
 ///

@@ -1,7 +1,8 @@
 using System.Diagnostics;
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Metadata;
-using HorizonRadio.Core.Models;
+using HorizonRadio.Sdk.Models;
+using HorizonRadio.Sdk.Sources;
 using NAudio.Wave;
 
 namespace HorizonRadio.Core.Sources.Local;

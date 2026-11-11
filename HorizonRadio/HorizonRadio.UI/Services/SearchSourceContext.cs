@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using System.Linq;
 using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources;
-using HorizonRadio.Core.Sources.Config;
 
 namespace HorizonRadio.UI.Services;
 

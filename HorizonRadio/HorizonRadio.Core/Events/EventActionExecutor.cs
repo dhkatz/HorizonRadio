@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Sdk.Games;
 
 namespace HorizonRadio.Core.Events;
 

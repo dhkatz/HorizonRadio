@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
 using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Sdk.Metadata;
 
 namespace HorizonRadio.Core.Metadata.MusicBrainz;
 

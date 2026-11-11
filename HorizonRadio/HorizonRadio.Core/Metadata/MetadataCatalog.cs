@@ -1,7 +1,8 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using HorizonRadio.Plugins.Abstractions;
+using HorizonRadio.Sdk;
+using HorizonRadio.Sdk.Metadata;
 
 namespace HorizonRadio.Core.Metadata;
 

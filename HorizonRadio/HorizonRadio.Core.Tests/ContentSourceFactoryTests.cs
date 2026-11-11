@@ -1,8 +1,9 @@
 using HorizonRadio.Core.Sources;
-using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Local;
 using HorizonRadio.Core.Sources.YouTube;
 using HorizonRadio.Core.Tools;
+using HorizonRadio.Sdk.Sources;
+using HorizonRadio.Sdk.Sources.Config;
 
 namespace HorizonRadio.Core.Tests;
 

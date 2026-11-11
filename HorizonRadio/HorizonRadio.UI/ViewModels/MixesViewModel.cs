@@ -17,6 +17,7 @@ using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Core.Sources.Queue;
+using HorizonRadio.Sdk.Sources;
 using Material.Icons;
 using ShadUI;
 

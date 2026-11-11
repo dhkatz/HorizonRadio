@@ -1,14 +1,13 @@
 using System.IO.Pipes;
 using System.Text.Json;
-using HorizonRadio.Core.Events;
-using HorizonRadio.Core.Games;
-using HorizonRadio.Core.Metadata;
-using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Plugins;
 using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Game.ForzaHorizon6;
-using HorizonRadio.Plugins.Abstractions;
+using HorizonRadio.Sdk;
+using HorizonRadio.Sdk.Games;
+using HorizonRadio.Sdk.Metadata;
+using HorizonRadio.Sdk.Models;
 
 namespace HorizonRadio.Core.Tests;
 

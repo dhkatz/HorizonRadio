@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
+using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.Sources.Queue;
 

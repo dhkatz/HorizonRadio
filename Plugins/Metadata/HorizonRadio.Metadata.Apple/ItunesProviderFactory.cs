@@ -1,6 +1,7 @@
 using System.Collections.Generic;
-using HorizonRadio.Core.Sources.Config;
-using HorizonRadio.Plugins.Abstractions;
+using HorizonRadio.Sdk;
+using HorizonRadio.Sdk.Metadata;
+using HorizonRadio.Sdk.Sources.Config;
 
 namespace HorizonRadio.Core.Metadata.Apple;
 

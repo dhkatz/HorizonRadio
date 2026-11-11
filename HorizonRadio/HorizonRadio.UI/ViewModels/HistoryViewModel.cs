@@ -13,10 +13,11 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.History;
 using HorizonRadio.Core.Metadata;
-using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Queue;
 using HorizonRadio.Core.Sources.Spotify;
+using HorizonRadio.Sdk.Models;
+using HorizonRadio.Sdk.Sources;
 using HorizonRadio.UI.Services;
 using ShadUI;
 

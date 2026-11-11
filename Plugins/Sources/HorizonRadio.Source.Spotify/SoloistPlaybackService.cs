@@ -3,6 +3,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Tools.Soloist;
 
 namespace HorizonRadio.Core.Sources.Spotify;

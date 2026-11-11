@@ -1,11 +1,11 @@
 using System;
-using HorizonRadio.Core.Models;
+using HorizonRadio.Sdk.Models;
 
 namespace HorizonRadio.Core.History;
 
 /// <summary>
 /// Turns a played <see cref="Track"/>'s stable id back into a <em>song-level</em> replay handle:
-/// a queueable source id + a <see cref="Sources.ContentRef"/>-ready locator the existing
+/// a queueable source id + a <see cref="Sdk.Sources.ContentRef"/>-ready locator the existing
 /// enqueue path can resolve. The mapping is per-source because each source namespaces its id
 /// differently and a few don't round-trip at all:
 ///
@@ -29,12 +29,12 @@ public static class HistoryReplay
 
     /// <summary>The entry that plays this song again (to queue it, or add it to a mix), named
     /// after the song; null when its origin can't be re-addressed (a radio song).</summary>
-    public static Sources.ContentRef? OriginOf(Track track)
+    public static Sdk.Sources.ContentRef? OriginOf(Track track)
     {
         var (sourceId, locator) = DeriveOrigin(track.ExternalId);
         return sourceId is null || locator is null
             ? null
-            : new Sources.ContentRef(sourceId, locator, string.IsNullOrWhiteSpace(track.Title) ? null : track.Title.Trim());
+            : new Sdk.Sources.ContentRef(sourceId, locator, string.IsNullOrWhiteSpace(track.Title) ? null : track.Title.Trim());
     }
 
     /// <summary>Derive the (queueable source id, locator) that replays this song, or

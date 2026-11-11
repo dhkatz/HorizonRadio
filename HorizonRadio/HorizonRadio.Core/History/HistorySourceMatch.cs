@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Sources;
+using HorizonRadio.Sdk.Metadata;
+using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.History;
 
