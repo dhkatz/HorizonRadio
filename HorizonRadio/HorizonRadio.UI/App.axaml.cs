@@ -318,13 +318,19 @@ public partial class App : Application
                 // Your devices: paired PCs keep their synced settings, mixes and history in step over the peer
                 // helper, which starts only once this PC is paired (or starts pairing). The mix store
                 // belongs to the UI thread, so merges run there.
-                var myDevices = new MyDevices(settings, async ct =>
-                    await PeerHelper.StartAsync(PeerHelper.DefaultKeyPath, Core.Peers.PeerDiscovery.All, ct: ct),
+                var peers = new Core.Peers.SharedPeerNetwork(async ct =>
+                    await PeerHelper.StartAsync(PeerHelper.DefaultKeyPath, Core.Peers.PeerDiscovery.All, ct: ct));
+                var myDevices = new MyDevices(settings, peers.GetAsync,
                     data: [new MixSync(mixStore, action => Dispatcher.UIThread.InvokeAsync(action).GetTask()), new HistorySync(_historyStore)]);
                 _ = myDevices.StartAsync();
                 var devicesVm = new DevicesViewModel(myDevices);
 
-                var vm = new MainWindowViewModel(router, _store, mixStore, mixSwitcher, queuePlayback, _historyStore, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, _game, gameSettings, toasts, dialogManager, devicesVm, lyrics, songSync);
+                // Your friends, over the same helper: they see what you're playing, and you them.
+                var friends = new Core.Friends.Friends(settings, peers.GetAsync);
+                _ = friends.StartAsync();
+                var friendsVm = new FriendsViewModel(friends);
+
+                var vm = new MainWindowViewModel(router, _store, mixStore, mixSwitcher, queuePlayback, _historyStore, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, _game, gameSettings, toasts, dialogManager, devicesVm, friendsVm, lyrics, songSync);
                 var mainWindow = new MainWindow { DataContext = vm };
                 desktop.MainWindow = mainWindow;
                 // Composed after startup (the first-run picker), so show it ourselves.
@@ -362,6 +368,7 @@ public partial class App : Application
                 {
                     Dispatcher.UIThread.Post(() => vm.NowPlaying.Apply(t));
                     _game.NowPlaying?.Show(t);
+                    friends.SetListening(Listening(t));
                 };
 
                 _enricher.TrackEnriched += t =>
@@ -370,6 +377,7 @@ public partial class App : Application
                     // A lookup can finish after its track was parked (the game routed elsewhere);
                     // don't put a title back up for a channel that's no longer playing.
                     if (_runner.ActiveSource != null) _game.NowPlaying?.Show(t);
+                    if (_runner.ActiveSource != null) friends.SetListening(Listening(t));
                 };
 
                 // Nothing on the runner any more (stopped, or parked as the game switched channels):
@@ -378,11 +386,18 @@ public partial class App : Application
                 // factory when a channel starts, so check the runner itself.)
                 _runner.ActiveSourceChanged += _ =>
                 {
-                    if (_runner.ActiveSource == null) _game.NowPlaying?.Clear();
+                    if (_runner.ActiveSource == null)
+                    {
+                        _game.NowPlaying?.Clear();
+                        friends.SetListening(null);
+                    }
                 };
 
                 desktop.ShutdownRequested += async (_, _) =>
                 {
+                    // First, and without waiting: the helper closes its connections, so friends and
+                    // your other PCs see this one leave now. Nothing below is waited for before exit.
+                    peers.Stop();
                     _eventExecutor?.Dispose();
                     _inputService?.Dispose();
                     _historyService?.Dispose(); // unsubscribes from the runner + flushes the final save
@@ -398,7 +413,9 @@ public partial class App : Application
                     if (_spotifyConnection != null) await _spotifyConnection.DisposeAsync();
                     // After the runner, so nothing is still sending audio to the game.
                     if (_game != null) await _game.DisposeAsync();
-                    await myDevices.DisposeAsync(); // stops the peer helper
+                    await friends.DisposeAsync();
+                    await myDevices.DisposeAsync();
+                    await peers.DisposeAsync(); // stops the peer helper
                     // Dispose the container last — it owns the leaf singletons (stores + cache).
                     await provider.DisposeAsync();
                     settings.Dispose(); // writes any change still waiting to be saved
@@ -445,6 +462,12 @@ public partial class App : Application
         }
         desktop.Shutdown();
     }
+
+    // What your friends see you playing: a real song only (not a station card before its first title).
+    private static Core.Friends.Listening? Listening(Track t) =>
+        t.Resolvable && !string.IsNullOrWhiteSpace(t.Title)
+            ? new Core.Friends.Listening(t.Title, t.Artist, t.SourceDisplay, t.ExternalId)
+            : null;
 
     private static string Or(string? value, string fallback) =>
         string.IsNullOrWhiteSpace(value) ? fallback : value;

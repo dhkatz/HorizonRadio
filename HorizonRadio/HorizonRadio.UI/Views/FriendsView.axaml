@@ -1,0 +1,94 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             xmlns:material="using:Material.Icons.Avalonia"
+             mc:Ignorable="d" d:DesignWidth="720" d:DesignHeight="640"
+             x:Class="HorizonRadio.UI.Views.FriendsView"
+             x:DataType="vm:FriendsViewModel">
+
+    <Design.DataContext>
+        <vm:FriendsViewModel />
+    </Design.DataContext>
+
+    <ScrollViewer>
+        <StackPanel Margin="24" Spacing="16" MaxWidth="760" HorizontalAlignment="Left">
+            <StackPanel Spacing="4" Margin="0,0,0,4">
+                <TextBlock Text="Friends" FontSize="20" FontWeight="SemiBold"/>
+                <TextBlock FontSize="12" Opacity="0.6" TextWrapping="Wrap"
+                           Text="See when your friends are online and what they're listening to; they see you too. You connect to each other directly, with no account and no server of ours."/>
+            </StackPanel>
+
+            <TextBlock Text="{Binding Status}" FontSize="12" TextWrapping="Wrap" IsVisible="{Binding HasStatus}"/>
+
+            <!-- Your friends -->
+            <Border Classes="Card" Padding="20">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Your Friends" FontSize="14" FontWeight="SemiBold"/>
+                    <TextBlock Text="None yet. Add one below." FontSize="12" Opacity="0.6"
+                               IsVisible="{Binding !HasFriends}"/>
+                    <ItemsControl ItemsSource="{Binding Friends}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:FriendRow}">
+                                <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,4">
+                                    <material:MaterialIcon Grid.Column="0" Kind="Account" Width="20" Height="20"
+                                                           Margin="0,0,12,0" VerticalAlignment="Center"
+                                                           Opacity="{Binding IconOpacity}"/>
+                                    <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Medium"/>
+                                        <TextBlock Text="{Binding State}" FontSize="11" Opacity="0.6" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                    <Button Grid.Column="2" Classes="Secondary" Content="Remove"
+                                            Command="{Binding RemoveCommand}"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <!-- Add a friend -->
+            <Border Classes="Card" Padding="20">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Add a Friend" FontSize="14" FontWeight="SemiBold"/>
+                    <TextBlock FontSize="12" Opacity="0.7" TextWrapping="Wrap"
+                               Text="One of you shows a code; the other types it on their Friends page. You're then friends on all your PCs."/>
+                    <StackPanel Spacing="6" IsVisible="{Binding IsShowingCode}">
+                        <SelectableTextBlock Text="{Binding InviteCode}" FontSize="28" FontWeight="SemiBold"
+                                             FontFamily="Consolas,Cascadia Mono,monospace" LetterSpacing="2"/>
+                        <TextBlock Text="{Binding InviteExpires}" FontSize="11" Opacity="0.6"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Classes="Primary" Content="Show Code" Command="{Binding ShowCodeCommand}"
+                                IsVisible="{Binding !IsShowingCode}" IsEnabled="{Binding !IsBusy}"/>
+                        <Button Classes="Secondary" Content="New Code" Command="{Binding ShowCodeCommand}"
+                                IsVisible="{Binding IsShowingCode}" IsEnabled="{Binding !IsBusy}"/>
+                        <Button Classes="Secondary" Content="Hide Code" Command="{Binding HideCodeCommand}"
+                                IsVisible="{Binding IsShowingCode}"/>
+                    </StackPanel>
+                    <Separator Margin="0,4"/>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBox Grid.Column="0" Text="{Binding FriendCode, Mode=TwoWay}" PlaceholderText="Your friend's code"
+                                 FontFamily="Consolas,Cascadia Mono,monospace" Margin="0,0,8,0"/>
+                        <Button Grid.Column="1" Classes="Primary" Content="Add Friend" Command="{Binding AddCommand}"
+                                IsEnabled="{Binding !IsBusy}"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- You -->
+            <Border Classes="Card" Padding="20">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="You" FontSize="14" FontWeight="SemiBold"/>
+                    <TextBlock FontSize="12" Opacity="0.7" TextWrapping="Wrap"
+                               Text="What your friends see you as. Your friends see the song you're playing while Horizon Radio is open."/>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBox Grid.Column="0" Text="{Binding MyName, Mode=TwoWay}" Margin="0,0,8,0"/>
+                        <Button Grid.Column="1" Classes="Secondary" Content="Rename" Command="{Binding RenameCommand}"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

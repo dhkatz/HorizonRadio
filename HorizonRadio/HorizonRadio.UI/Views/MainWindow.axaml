@@ -124,6 +124,15 @@
                     </shadui:SidebarItem.Icon>
                 </shadui:SidebarItem>
 
+                <shadui:SidebarItem Content="Friends"
+                                    Command="{Binding ShowFriendsCommand}"
+                                    IsChecked="{Binding IsFriendsWorkspace}"
+                                    Route="friends">
+                    <shadui:SidebarItem.Icon>
+                        <material:MaterialIcon Kind="AccountMultiple" Width="18" Height="18"/>
+                    </shadui:SidebarItem.Icon>
+                </shadui:SidebarItem>
+
                 <shadui:SidebarItem Content="History"
                                     Command="{Binding ShowHistoryCommand}"
                                     IsChecked="{Binding IsHistoryWorkspace}"
@@ -367,6 +376,15 @@
                               ToolTip.Tip="Mixes">
                     <material:MaterialIcon Kind="PlaylistMusic" Width="18" Height="18"/>
                 </ToggleButton>
+                <ToggleButton Command="{Binding ShowFriendsCommand}"
+                              IsChecked="{Binding IsFriendsWorkspace}"
+                              Height="40" Width="40"
+                              HorizontalContentAlignment="Center"
+                              VerticalContentAlignment="Center"
+                              Padding="0"
+                              ToolTip.Tip="Friends">
+                    <material:MaterialIcon Kind="AccountMultiple" Width="18" Height="18"/>
+                </ToggleButton>
                 <ToggleButton Command="{Binding ShowHistoryCommand}"
                               IsChecked="{Binding IsHistoryWorkspace}"
                               Height="40" Width="40"
@@ -567,6 +585,9 @@
             </Grid>
             <Grid IsVisible="{Binding IsDevicesWorkspace}">
                 <views:DevicesView DataContext="{Binding Devices}"/>
+            </Grid>
+            <Grid IsVisible="{Binding IsFriendsWorkspace}">
+                <views:FriendsView DataContext="{Binding Friends}"/>
             </Grid>
             </Panel>
         </Grid>

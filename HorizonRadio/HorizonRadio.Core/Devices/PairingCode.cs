@@ -54,7 +54,10 @@ public sealed class PairingCode
     public override int GetHashCode() => _chars.GetHashCode(StringComparison.Ordinal);
 
     /// <summary>Where the two devices meet: the host advertises it, the joiner finds it.</summary>
-    internal string Topic => "pair/" + _chars[..4];
+    internal string Topic => TopicFor("pair");
+
+    /// <summary>Where two peers meet for one use of a code (pairing devices, adding a friend).</summary>
+    internal string TopicFor(string purpose) => purpose + "/" + _chars[..4];
 
     /// <summary>Proof of knowing the code, for one step of pairing between two peers.</summary>
     internal string Proof(string step, string from, string to) =>

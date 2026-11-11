@@ -74,5 +74,11 @@ public sealed record PeerMessage(string PeerId, JsonElement Message);
 /// <summary>A peer the app connected to or heard from changed path.</summary>
 public sealed record PeerPathChange(string PeerId, PeerPath Path);
 
+/// <summary>A network that can be told to stop at once, without waiting (the app is exiting).</summary>
+public interface IStoppable
+{
+    void StopNow();
+}
+
 /// <summary>The network refused or failed a request.</summary>
 public sealed class PeerNetworkException(string message) : Exception(message);

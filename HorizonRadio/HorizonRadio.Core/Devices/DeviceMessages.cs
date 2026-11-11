@@ -7,7 +7,8 @@ namespace HorizonRadio.Core.Devices;
 // What the user's devices say to each other, as JSON messages over the peer network:
 //
 //   pair.hello    joiner → host   { name, proof }                  "I have the code"
-//   pair.welcome  host → joiner   { name, proof, groupKey, devices } "so do I; here's the group"
+//   pair.welcome  host → joiner   { name, proof, groupKey, identityKey, devices }
+//                                  "so do I; here's the group, and who you are to friends"
 //   pair.refused  host → joiner   {}                               wrong code, or no pairing open
 //   sync          either way      { devices?, settings?, data?, reply }
 //                                  the device list, synced settings and other data (mixes: data.mixes),
@@ -19,6 +20,7 @@ internal sealed record DeviceMessage
     public string? Name { get; init; }
     public string? Proof { get; init; }
     public string? GroupKey { get; init; }
+    public string? IdentityKey { get; init; }
     public DeviceRecord[]? Devices { get; init; }
     public WireSetting[]? Settings { get; init; }
     public Dictionary<string, JsonElement>? Data { get; init; }
@@ -40,7 +42,8 @@ internal sealed record DeviceMessage
     {
         try
         {
-            return json.Deserialize<DeviceMessage>(Json);
+            var message = json.Deserialize<DeviceMessage>(Json);
+            return message?.Type is Hello or Welcome or Refused or Sync ? message : null;
         }
         catch (JsonException)
         {

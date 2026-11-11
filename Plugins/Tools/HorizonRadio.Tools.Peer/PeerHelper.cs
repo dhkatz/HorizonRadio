@@ -20,7 +20,7 @@ namespace HorizonRadio.Tools.Peer;
 /// The process is tied to the app (<see cref="ChildProcesses.TieToApp"/>) and exits when its stdin
 /// closes, so it never outlives it. Events are raised on the reading thread: keep handlers short.
 /// </summary>
-public sealed class PeerHelper : IPeerNetwork, IAsyncDisposable
+public sealed class PeerHelper : IPeerNetwork, IStoppable, IAsyncDisposable
 {
     public const string ExeName = "horizon-peer.exe";
 
@@ -318,6 +318,30 @@ public sealed class PeerHelper : IPeerNetwork, IAsyncDisposable
     }
 
     private static void Log(string message) => Trace.WriteLine($"[hzn-peer] {message}");
+
+    /// <summary>
+    /// Tell the helper to stop now, without waiting: it closes its connections, so peers see this one
+    /// leave at once rather than when its connection times out. For when the app is exiting and won't
+    /// wait for <see cref="DisposeAsync"/> (the helper is ended with the app).
+    /// </summary>
+    public void StopNow()
+    {
+        if (!_writeLock.Wait(0)) return; // a write in progress: DisposeAsync gets there
+        try
+        {
+            _input.WriteLine(ShutdownCommand);
+            _input.Flush();
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+        {
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
+    }
+
+    private const string ShutdownCommand = "{\"cmd\":\"shutdown\"}";
 
     /// <summary>Ask the helper to stop, and end it if it doesn't within a few seconds.</summary>
     public async ValueTask DisposeAsync()
