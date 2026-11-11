@@ -88,6 +88,10 @@ jobs:
           cmake --preset windows-x64
           cmake --build --preset windows-x64-release --target horizon_audio_tap
 
+      # The peer helper, bundled next to the exe by HorizonRadio.Tools.Peer.csproj.
+      - name: Build horizon-peer.exe
+        uses: ./.github/actions/build-peer-helper
+
       # Self-contained publish so end users don't need a separate
       # .NET runtime install. The csproj's ZipPublishOutput target
       # fires automatically after Publish and drops a zip into

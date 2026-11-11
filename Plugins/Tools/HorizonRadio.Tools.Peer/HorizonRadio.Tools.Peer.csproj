@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The peer-to-peer helper (Helper/, Go: horizon-peer.exe) and the app's client for it
+       (PeerHelper). Multiplayer and syncing your devices run over it, with no server of ours. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\HorizonRadio\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="HorizonRadio.Core.Tests" />
+  </ItemGroup>
+
+  <!-- The Go sources and their build output aren't part of the C# build (the exe is added below). -->
+  <ItemGroup>
+    <None Remove="Helper\**" />
+    <Compile Remove="Helper\**" />
+  </ItemGroup>
+
+  <!--
+    Bundle the helper with the app, next to the exe. It's ours and speaks a protocol that changes
+    with the app, so it ships with each build rather than as a separately versioned download (see
+    ../tool-provisioning.md). Built separately with Go (Helper/README.md), like the native DLLs with
+    CMake; gated on Exists() so a checkout without Go still builds, and the app then runs without
+    peer-to-peer features. ExcludeFromSingleFile: it's a process of its own, so a real file.
+  -->
+  <PropertyGroup>
+    <_PeerHelperPath>$(MSBuildThisFileDirectory)Helper\build\horizon-peer.exe</_PeerHelperPath>
+  </PropertyGroup>
+  <ItemGroup Condition="Exists('$(_PeerHelperPath)')">
+    <None Include="$(_PeerHelperPath)"
+          Link="horizon-peer.exe"
+          CopyToOutputDirectory="PreserveNewest"
+          ExcludeFromSingleFile="true"
+          Visible="false" />
+  </ItemGroup>
+
+</Project>

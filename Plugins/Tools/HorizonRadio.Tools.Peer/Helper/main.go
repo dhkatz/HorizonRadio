@@ -42,7 +42,7 @@ func serve(ctx context.Context, keyPath string, forcePrivate bool, discoveryList
 			amino = true
 		case "lan":
 			lan = true
-		case "":
+		case "", "none":
 		default:
 			return fmt.Errorf("unknown discovery %q (amino, lan)", d)
 		}
@@ -67,7 +67,7 @@ func serve(ctx context.Context, keyPath string, forcePrivate bool, discoveryList
 	}
 	s := newService(ctx, n.host, disc, stdout)
 	s.n = n
-	stdout.emit("ready", map[string]any{"peer_id": n.host.ID().String(), "discovery": discoveryList})
+	stdout.emit("ready", map[string]any{"peer_id": n.host.ID().String(), "addrs": addrStrings(n.host.Addrs()), "discovery": discoveryList})
 	return s.run(ctx, os.Stdin)
 }
 
@@ -81,7 +81,7 @@ func run(args []string) error {
 	hold := fs.Duration("hold", 3*time.Minute, "dial: how long to keep the connection open")
 	findTimeout := fs.Duration("find-timeout", 3*time.Minute, "dial: how long to look for the peer")
 	find := fs.String("find", "any", "dial: how to find the peer: any, or record (its published DHT record only)")
-	discoveryFlag := fs.String("discovery", "amino,lan", "serve: how peers find each other: amino (the public IPFS DHT), lan (mDNS), or both")
+	discoveryFlag := fs.String("discovery", "amino,lan", "serve: how peers find each other: amino (the public IPFS DHT), lan (mDNS), both, or none (connect by address only)")
 
 	cmd, rest := args[0], args[1:]
 	var sub string
