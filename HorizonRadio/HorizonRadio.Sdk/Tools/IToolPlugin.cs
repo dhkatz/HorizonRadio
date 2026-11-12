@@ -8,8 +8,11 @@ namespace HorizonRadio.Sdk.Tools;
 /// (path resolution + the install registry) and the Tools tab; consumers (sources, metadata
 /// providers) just declare a dependency on a tool by id via a <c>ToolField</c>.
 /// </summary>
-public interface IToolPlugin
+public interface IToolPlugin : IOrdered
 {
+    /// <summary>The tool's id: its <see cref="ToolDescriptor.Id"/>.</summary>
+    string IOrdered.Id => Descriptor.Id;
+
     /// <summary>The tool's id + on-disk file name + data-vs-exe flag (drives path resolution).</summary>
     ToolDescriptor Descriptor { get; }
 

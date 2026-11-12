@@ -88,6 +88,13 @@ internal sealed class HostPluginSettingsStore(SettingsStore settings) : IPluginS
         PluginSettings.For(settings, pluginId, synced);
 }
 
+/// <summary>Notifications for a host with no window: they go to the Console log.</summary>
+internal sealed class LoggedNotifications(IPluginLog log) : INotifications
+{
+    public void Show(string title, string message, NotificationKind kind = NotificationKind.Info, TimeSpan? duration = null) =>
+        log.Write("notice", $"{kind}: {title}: {message}");
+}
+
 /// <summary>The profile's folders (<see cref="AppPaths"/>).</summary>
 internal sealed class HostAppFolders : IAppFolders
 {

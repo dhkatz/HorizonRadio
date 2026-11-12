@@ -3,8 +3,6 @@ using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Media;
 using HorizonRadio.Core.IO;
-using HorizonRadio.Core.Tools;
-using HorizonRadio.UI.Tools;
 
 namespace HorizonRadio.UI;
 
@@ -37,12 +35,6 @@ sealed class Program
     // Avalonia configuration, don't remove; also used by visual designer.
     public static AppBuilder BuildAvaloniaApp()
     {
-        // Seed the tool catalog before any Avalonia/App code runs: App setup constructs source
-        // factories that probe for their tool (e.g. Spotify → librespot) via the catalog, and this is
-        // the one path both the runtime (Main) and the visual designer go through. Not Avalonia/
-        // third-party, so it's safe to run here ahead of AppMain (see the note above).
-        ToolCatalog.Initialize(ToolPlugins.Descriptors);
-
         return AppBuilder.Configure<App>()
             .UsePlatformDetect()
 #if DEBUG

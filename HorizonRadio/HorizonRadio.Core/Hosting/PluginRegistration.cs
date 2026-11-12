@@ -1,4 +1,5 @@
 using HorizonRadio.Sdk;
+using HorizonRadio.Sdk.Tools;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -6,14 +7,14 @@ namespace HorizonRadio.Core.Hosting;
 
 /// <summary>
 /// Puts the plugins into the host's container: each plugin, listed as an <see cref="IPlugin"/>
-/// (and an <see cref="IGamePlugin"/> if it is one); then each <see cref="IPluginModule"/>'s
+/// (and an <see cref="IGamePlugin"/> or <see cref="IToolPlugin"/> if it is one); then each <see cref="IPluginModule"/>'s
 /// registrations: the plugin's contributions (sources, metadata and lyrics providers), the services
 /// they use, and any host service it replaces or wraps.
 /// </summary>
 public static class PluginRegistration
 {
     /// <summary>What the host lists a plugin class as.</summary>
-    public static IReadOnlyList<Type> Kinds { get; } = [typeof(IPlugin), typeof(IGamePlugin)];
+    public static IReadOnlyList<Type> Kinds { get; } = [typeof(IPlugin), typeof(IGamePlugin), typeof(IToolPlugin)];
 
     /// <summary>
     /// Registers the plugin classes and modules among <paramref name="types"/> (others are
