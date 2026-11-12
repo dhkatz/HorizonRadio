@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Sdk;
@@ -9,7 +8,8 @@ using SpotifyAPI.Web;
 
 namespace HorizonRadio.Metadata.Spotify;
 
-public sealed class SpotifyProviderFactory(IMetadataCache cache, IMetadataTrace trace) : IMetadataProviderFactory
+public sealed class SpotifyProviderFactory(IMetadataCache cache, IMetadataTrace trace, SpotifyConnection connection)
+    : IMetadataProviderFactory
 {
     public const string KeyClientId = "clientId";
     public const string KeyClientSecret = "clientSecret";
@@ -54,7 +54,6 @@ public sealed class SpotifyProviderFactory(IMetadataCache cache, IMetadataTrace 
         // No separate credentials: ride on the connected Spotify source so the user needn't
         // register a second app. Read the connection lazily (it may initialize after the
         // pipeline is first built) and no-op until the source is connected.
-        return new SpotifyProvider(cache, trace, ct =>
-            SpotifyRuntime.Connection?.GetClientAsync(ct) ?? Task.FromResult<SpotifyClient?>(null));
+        return new SpotifyProvider(cache, trace, connection.GetClientAsync);
     }
 }

@@ -3,7 +3,6 @@ using HorizonRadio.Core.Hosting;
 using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Sdk;
-using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Sources.Config;
 using HorizonRadio.Source.YouTube;
 using HorizonRadio.Tools.YtDlp;
@@ -56,7 +55,8 @@ public sealed class HostServicesTests : IDisposable
         values.Set(YouTubeSourceFactory.KeyYtDlp, @"C:\tools\yt-dlp.exe");
         store.Save(youtube.Id, values);
 
-        var read = new HostSourceSettings(store).Load(youtube);
+        ISourceSettings host = new HostSourceSettings(store);
+        var read = host.Load(youtube);
 
         Assert.Equal(@"C:\tools\yt-dlp.exe", read.GetString(YouTubeSourceFactory.KeyYtDlp));
     }
@@ -108,7 +108,7 @@ public sealed class HostServicesTests : IDisposable
 
     private sealed class NoSettings : ISourceSettings
     {
-        public ConfigValues Load(IAudioSourceFactory source) => new();
+        public ConfigValues Load(string sourceId, IReadOnlyList<ConfigField> schema) => new();
     }
 
     // Finds yt-dlp at the given path (whatever's configured), and no ffmpeg.

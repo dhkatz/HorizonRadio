@@ -2,8 +2,7 @@ using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
-using HorizonRadio.Core.Diagnostics;
-using HorizonRadio.Core.Sources;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Tools.Soloist;
 
@@ -67,12 +66,21 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
 
     /// <param name="options">The user's Soloist settings, read fresh on each start; null when
     /// Soloist isn't set up (no key or no soloist.exe).</param>
+    /// <param name="deviceName">The name Soloist shows in the Spotify app, for the pairing prompt.</param>
     /// <param name="tapDll">The bundled audio tap, or null when this build doesn't have it.</param>
-    public SoloistPlaybackService(Func<SoloistOptions?> options, Func<string?>? tapDll = null)
+    public SoloistPlaybackService(Func<SoloistOptions?> options, string deviceName, IProcesses processes,
+        IPluginLog log, Func<string?>? tapDll = null)
     {
         _options = options;
+        _deviceName = deviceName;
+        _processes = processes;
+        _log = log;
         _tapDll = tapDll ?? AudioTap.FindDll;
     }
+
+    private readonly string _deviceName;
+    private readonly IProcesses _processes;
+    private readonly IPluginLog _log;
 
     /// <summary>A key, soloist.exe and the tap are all there: refused tracks can play here.</summary>
     public bool IsConfigured => NotReadyReason == null;
@@ -95,10 +103,10 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
         }
     }
 
-    private static void Log(string message)
+    private void Log(string message)
     {
-        Trace.WriteLine($"[hzn-soloist] {message}");
-        ProcessConsole.Append("soloist", message);
+        _log.Trace("soloist", message);
+        _log.Write("soloist", message);
     }
 
     /// <summary>
@@ -307,10 +315,14 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
             StandardErrorEncoding = Encoding.UTF8,
         };
         foreach (var arg in Soloist.BuildArgs(options)) psi.ArgumentList.Add(arg);
-        var process = Process.Start(psi) ?? throw new SoloistUnavailableException("Soloist didn't start.");
-        ChildProcesses.TieToApp(process);
-        process.OutputDataReceived += (_, e) => { if (e.Data is { Length: > 0 } line) ProcessConsole.Append("soloist", line); };
-        process.ErrorDataReceived += (_, e) => { if (e.Data is { Length: > 0 } line) ProcessConsole.Append("soloist", line); };
+        Process process;
+        try { process = _processes.Start(psi); }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            throw new SoloistUnavailableException($"Soloist didn't start: {ex.Message}");
+        }
+        process.OutputDataReceived += (_, e) => { if (e.Data is { Length: > 0 } line) _log.Write("soloist", line); };
+        process.ErrorDataReceived += (_, e) => { if (e.Data is { Length: > 0 } line) _log.Write("soloist", line); };
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
         _process = process;
@@ -394,7 +406,7 @@ public sealed class SoloistPlaybackService : IAsyncDisposable
     {
         if (await LoggedInWithinAsync(RestoreTimeout, ct).ConfigureAwait(false)) return;
 
-        var device = _options()?.DeviceName ?? Soloist.DefaultDeviceName;
+        var device = _options()?.DeviceName ?? _deviceName;
         Log($"waiting for pairing: pick \"{device}\" in the Spotify app");
         PairingNeeded?.Invoke(device);
         if (await LoggedInWithinAsync(PairingTimeout, ct).ConfigureAwait(false))

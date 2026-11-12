@@ -1,10 +1,7 @@
-using System;
 using System.Diagnostics;
-using System.IO;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
-using HorizonRadio.Core.IO;
 using HorizonRadio.Sdk.IO;
 
 namespace HorizonRadio.Source.Spotify;
@@ -27,9 +24,11 @@ public sealed class SpotifyAuthStore
 
     private readonly string _path;
 
-    public SpotifyAuthStore(string? path = null)
+    /// <param name="path">The file it keeps the token in (the plugin's: <c>spotify-auth.dat</c> in the
+    /// app's data folder).</param>
+    public SpotifyAuthStore(string path)
     {
-        _path = path ?? AppPaths.In("spotify-auth.dat");
+        _path = path;
     }
 
     private static void Log(string msg) => Trace.WriteLine($"[hzn-spotify-auth] {msg}");

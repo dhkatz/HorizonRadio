@@ -33,6 +33,9 @@ public sealed class NoTitleModel : Sdk.Metadata.ITitleModel
 /// <summary>The shipped sources, as the test container built them (<see cref="TestModuleInit"/>).</summary>
 public static class TestSources
 {
+    public static Source.Spotify.SpotifyContentSourceFactory Spotify =>
+        (Source.Spotify.SpotifyContentSourceFactory)Sources.SourceCatalog.Find(Source.Spotify.SpotifyContentSourceFactory.SourceId)!;
+
     public static Source.Radio.RadioSourceFactory Radio =>
         (Source.Radio.RadioSourceFactory)Sources.SourceCatalog.Find(Source.Radio.RadioSourceFactory.SourceId)!;
 

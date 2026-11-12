@@ -23,7 +23,6 @@ using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Core.Tools;
-using HorizonRadio.Metadata.MusicBrainz;
 using HorizonRadio.Metadata.Spotify;
 using HorizonRadio.Metadata.VocaDb;
 using HorizonRadio.Sdk;
@@ -35,9 +34,7 @@ using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Tools;
 using HorizonRadio.Source.Spotify;
 using HorizonRadio.TitleModel;
-using HorizonRadio.Tools.Librespot;
 using HorizonRadio.Tools.Peer;
-using HorizonRadio.Tools.Soloist;
 using HorizonRadio.UI.Services;
 using HorizonRadio.UI.Tools;
 using HorizonRadio.UI.ViewModels;
@@ -67,9 +64,6 @@ public partial class App : Application
     private (string? Path, long WriteTicks) _titleModelStamp = ("\0uninitialized", -1);
     private EventActionExecutor? _eventExecutor;
     private InputBindingService? _inputService;
-    private SpotifyConnection? _spotifyConnection;
-    private SpotifyPlaybackService? _spotifyPlayback;
-    private SoloistPlaybackService? _soloistPlayback;
     private PlayHistoryStore? _historyStore;
     private PlayHistoryService? _historyService;
 
@@ -171,33 +165,6 @@ public partial class App : Application
                 _preview = new PreviewController(tee, settings, a => Dispatcher.UIThread.Post(a));
 
                 _runner = new SourceRunner(tee);
-
-                // Spotify: the account connection (PKCE, bring-your-own Client ID) and the
-                // shared librespot playback service our engine drives via the Web API are
-                // app singletons published for the (parameterless) content-source factory.
-                // The service reads its librespot options fresh on each launch (via the
-                // closure below) so installing librespot or editing the config mid-session
-                // takes effect without an app restart.
-                var spotifyFactory = (SpotifyContentSourceFactory)SourceCatalog.Find(SpotifyContentSourceFactory.SourceId)!;
-                _spotifyConnection = new SpotifyConnection(
-                    new SpotifyAuthStore(),
-                    _store.Load(spotifyFactory.Id, spotifyFactory.Schema)
-                        .GetString(SpotifyContentSourceFactory.KeyClientId) ?? "");
-                _spotifyPlayback = new SpotifyPlaybackService(
-                    _spotifyConnection, () => LoadLibrespotOptions(_store!, spotifyFactory));
-                // The tracks Spotify refuses librespot play through Spotify Soloist once the user
-                // has set it up (its key + soloist.exe), read fresh on each Soloist start.
-                _soloistPlayback = new SoloistPlaybackService(() => LoadSoloistOptions(_store!, spotifyFactory));
-                SpotifyRuntime.Initialize(_spotifyConnection, _spotifyPlayback, _soloistPlayback);
-
-                // The driven service and the zero-config "Spotify Connect" receiver both
-                // drive the "Horizon Radio" librespot device; when the receiver (id
-                // "spotify") becomes the active source, release the driven service's
-                // librespot so the two don't fight over the device/cache.
-                _runner.ActiveSourceChanged += factory =>
-                {
-                    if (factory?.Id == "spotify") _ = _spotifyPlayback.ReleaseAsync();
-                };
 
                 // The metadata providers, before the config store loads — it derives fresh-install
                 // defaults + the "introduced" set from the catalog, so the catalog must be populated
@@ -401,9 +368,6 @@ public partial class App : Application
                     if (_metaResolver != null) await _metaResolver.DisposeAsync();
                     await router.DisposeAsync(); // stops the engine; disposes parked channels and the player
                     if (_runner != null) await _runner.DisposeAsync();
-                    if (_spotifyPlayback != null) await _spotifyPlayback.DisposeAsync();
-                    if (_soloistPlayback != null) await _soloistPlayback.DisposeAsync();
-                    if (_spotifyConnection != null) await _spotifyConnection.DisposeAsync();
                     // After the runner, so nothing is still sending audio to the game.
                     if (_game != null) await _game.DisposeAsync();
                     await party.DisposeAsync();
@@ -411,7 +375,8 @@ public partial class App : Application
                     await friends.DisposeAsync();
                     await myDevices.DisposeAsync();
                     await peers.DisposeAsync(); // stops the peer helper
-                    // Dispose the container last — it owns the leaf singletons (stores + cache).
+                    // Dispose the container last — it owns the leaf singletons (stores, caches) and
+                    // the plugins' services (Spotify's connection and players among them).
                     await provider.DisposeAsync();
                     settings.Dispose(); // writes any change still waiting to be saved
                     HorizonRadio.Core.Diagnostics.LogFile.Stop();
@@ -428,10 +393,11 @@ public partial class App : Application
                 CheckAppUpdateAsync(vm);
 
                 // A Spotify track Soloist plays waits for the user to pair Soloist once; only
-                // they can (in the Spotify app), so say how.
-                if (_soloistPlayback != null)
+                // they can (in the Spotify app), so say how. (Until plugins can show a notice
+                // themselves, the app listens for the Spotify plugin's.)
+                if (provider.GetService<SoloistPlaybackService>() is { } soloist)
                 {
-                    _soloistPlayback.PairingNeeded += device => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    soloist.PairingNeeded += device => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                         vm.ToastManager.CreateToast("Pair Spotify Soloist")
                             .WithContent($"Spotify won't play this track through librespot. In the Spotify app, " +
                                          $"pick the device \"{device}\" once; the track plays when you have.")
@@ -463,36 +429,6 @@ public partial class App : Application
         t.Resolvable && !string.IsNullOrWhiteSpace(t.Title)
             ? new Core.Friends.Listening(t.Title, t.Artist, t.SourceDisplay, t.ExternalId)
             : null;
-
-    private static string Or(string? value, string fallback) =>
-        string.IsNullOrWhiteSpace(value) ? fallback : value;
-
-    // Read the driven Spotify source's librespot options fresh from the persisted
-    // config (called on every librespot launch). Falls back to a live exe discovery
-    // when the stored path is empty — e.g. librespot was installed via the Tools tab
-    // after the schema default was first captured.
-    private static LibrespotOptions LoadLibrespotOptions(SourceConfigStore store, SpotifyContentSourceFactory factory)
-    {
-        var cfg = store.Load(factory.Id, factory.Schema);
-        return new LibrespotOptions
-        {
-            ExecutablePath = Or(cfg.GetString(SpotifyContentSourceFactory.KeyExecutable), Librespot.DiscoverExe() ?? ""),
-            DeviceName = Or(cfg.GetString(SpotifyContentSourceFactory.KeyDeviceName), Librespot.DefaultDeviceName),
-            CacheDirectory = Or(cfg.GetString(SpotifyContentSourceFactory.KeyCacheDir), Librespot.DefaultCacheDir),
-            Bitrate = cfg.GetString(SpotifyContentSourceFactory.KeyBitrate) ?? "auto",
-            EnableVolumeNormalisation = cfg.GetBool(SpotifyContentSourceFactory.KeyNormalise, true),
-        };
-    }
-
-    // The user's Soloist setup, or null while it's incomplete (no key, or no soloist.exe).
-    private static SoloistOptions? LoadSoloistOptions(SourceConfigStore store, SpotifyContentSourceFactory factory)
-    {
-        var cfg = store.Load(factory.Id, factory.Schema);
-        var key = cfg.GetString(SpotifyContentSourceFactory.KeySoloistKey)?.Trim();
-        var exe = Or(cfg.GetString(SpotifyContentSourceFactory.KeySoloistExecutable), Soloist.DiscoverExe() ?? "");
-        if (string.IsNullOrEmpty(key) || !System.IO.File.Exists(exe)) return null;
-        return new SoloistOptions { ExecutablePath = exe, ApiKey = key };
-    }
 
     private static async void CheckAppUpdateAsync(MainWindowViewModel vm)
     {

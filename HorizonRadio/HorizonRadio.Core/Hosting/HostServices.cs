@@ -68,11 +68,7 @@ internal sealed class HostAudioCaches(IAppFolders folders) : IAudioCaches, IDisp
 /// <summary>A source's saved settings, from the settings store (<see cref="SourceConfigStore"/>).</summary>
 internal sealed class HostSourceSettings(SourceConfigStore store) : ISourceSettings
 {
-    public ConfigValues Load(IAudioSourceFactory source)
-    {
-        ArgumentNullException.ThrowIfNull(source);
-        return store.Load(source.Id, source.Schema);
-    }
+    public ConfigValues Load(string sourceId, IReadOnlyList<ConfigField> schema) => store.Load(sourceId, schema);
 }
 
 /// <summary>The title model as the app last set it up (<see cref="TitleExtractorRuntime"/>).</summary>

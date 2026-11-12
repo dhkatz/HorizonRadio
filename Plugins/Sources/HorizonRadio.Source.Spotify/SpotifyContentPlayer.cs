@@ -1,8 +1,6 @@
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
-using System.Linq;
-using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Sources;
 using SpotifyAPI.Web;
 
@@ -14,7 +12,8 @@ namespace HorizonRadio.Source.Spotify;
 /// queue. Playback itself runs through the shared <see cref="SpotifyPlaybackService"/>;
 /// this only does the catalog lookups (which need the authed Web API client).
 /// </summary>
-public sealed class SpotifyContentPlayer(SpotifyConnection connection, SpotifyPlaybackService playback)
+public sealed class SpotifyContentPlayer(SpotifyConnection connection, SpotifyPlaybackService playback,
+    SoloistPlaybackService? soloist, SpotifyPlayerChoice? choice, IPluginLog log)
     : IContentPlayer, IContentDescriber
 {
     public async Task<IReadOnlyList<PlayableItem>> EnumerateAsync(ContentRef content, CancellationToken ct)
@@ -37,7 +36,7 @@ public sealed class SpotifyContentPlayer(SpotifyConnection connection, SpotifyPl
                 _ => throw new InvalidOperationException(InvalidLocatorMessage),
             };
 
-            return [.. infos.Select(i => (PlayableItem)new SpotifyPlayableItem(i, playback))];
+            return [.. infos.Select(i => (PlayableItem)new SpotifyPlayableItem(i, playback, soloist, choice, log))];
         }
         catch (APIException ex)
         {
@@ -97,10 +96,10 @@ public sealed class SpotifyContentPlayer(SpotifyConnection connection, SpotifyPl
     private const string InvalidLocatorMessage =
         "Spotify: paste a track, playlist, or album link (spotify:… or open.spotify.com/…).";
 
-    private static void Log(string msg)
+    private void Log(string msg)
     {
-        Trace.WriteLine($"[hzn-spotify-content] {msg}");
-        ProcessConsole.Append("spotify", msg);
+        log.Trace("spotify-content", msg);
+        log.Write("spotify", msg);
     }
 
     private static async Task<IReadOnlyList<SpotifyTrackInfo>> TrackInfosAsync(

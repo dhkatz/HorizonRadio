@@ -35,12 +35,13 @@ public sealed class SoloistToolTests
         {
             ExecutablePath = @"C:\tools\soloist.exe",
             ApiKey = "k3y",
+            DeviceName = "Horizon Radio (Soloist)",
             DataDirectory = @"C:\data\soloist",
         });
 
         Assert.Equal(
         [
-            "--device-name", Soloist.DefaultDeviceName,
+            "--device-name", "Horizon Radio (Soloist)",
             "--api-key", "k3y",
             "--data-dir", @"C:\data\soloist",
             "--cache-dir", @"C:\data\soloist\cache",

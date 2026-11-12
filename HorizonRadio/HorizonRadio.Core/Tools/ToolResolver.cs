@@ -1,4 +1,3 @@
-using System;
 using System.IO;
 
 namespace HorizonRadio.Core.Tools;
@@ -8,7 +7,7 @@ namespace HorizonRadio.Core.Tools;
 /// Tool paths are stored per-source in config, but a tool installed via the Tools tab
 /// is shared by every source — so an explicit per-source path is preferred, and when
 /// none is set we fall back to the managed install location (and the app directory for
-/// a bundled copy). This mirrors <see cref="Sources.Spotify.Librespot.DiscoverExe"/>
+/// a bundled copy). This mirrors the librespot plugin's <c>Librespot.DiscoverExe</c>
 /// and means installing a tool once makes it usable from every source without opening
 /// each source's config form to copy the path across.
 /// </summary>
