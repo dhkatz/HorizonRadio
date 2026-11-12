@@ -8,9 +8,10 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Core.Metadata;
 using HorizonRadio.Sdk.Metadata;
 
-namespace HorizonRadio.Core.Metadata.VocaDb;
+namespace HorizonRadio.Metadata.VocaDb;
 
 /// <summary>
 /// Metadata via VocaDB (vocadb.net) — the community database for Vocaloid / UTAU / CeVIO /

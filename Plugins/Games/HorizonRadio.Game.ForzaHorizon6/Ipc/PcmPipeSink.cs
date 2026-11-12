@@ -1,7 +1,7 @@
 using System;
 using HorizonRadio.Sdk.Sources;
 
-namespace HorizonRadio.Core.Ipc;
+namespace HorizonRadio.Game.ForzaHorizon6.Ipc;
 
 /// <summary>
 /// <see cref="IPcmSink"/> backed by <see cref="PcmPipeClient"/>. Just a

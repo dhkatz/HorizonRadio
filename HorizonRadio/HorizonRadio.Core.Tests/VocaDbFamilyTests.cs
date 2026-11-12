@@ -1,5 +1,5 @@
 using System.Text.Json;
-using HorizonRadio.Core.Metadata.VocaDb;
+using HorizonRadio.Metadata.VocaDb;
 
 namespace HorizonRadio.Core.Tests;
 

@@ -3,7 +3,7 @@ using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Sources.Config;
 
-namespace HorizonRadio.Core.Metadata.VocaDb;
+namespace HorizonRadio.Metadata.VocaDb;
 
 public sealed class VocaDbProviderFactory : IMetadataProviderFactory
 {

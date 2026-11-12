@@ -7,10 +7,11 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Core.Metadata;
 using HorizonRadio.Sdk.Metadata;
 using SpotifyAPI.Web;
 
-namespace HorizonRadio.Core.Metadata.Spotify;
+namespace HorizonRadio.Metadata.Spotify;
 
 /// <summary>
 /// Metadata via the Spotify Web API. The client comes from a factory delegate so this

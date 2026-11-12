@@ -1,4 +1,4 @@
-namespace HorizonRadio.Core.Sources.Radio;
+namespace HorizonRadio.Source.Radio;
 
 /// <summary>
 /// One internet-radio station as returned by the radio-browser directory. Only the

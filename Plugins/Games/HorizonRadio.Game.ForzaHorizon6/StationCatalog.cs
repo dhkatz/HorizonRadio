@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace HorizonRadio.Core.Sources;
+namespace HorizonRadio.Game.ForzaHorizon6;
 
 /// <summary>
 /// The fixed set of Forza Horizon 6 radio stations, captured from the live

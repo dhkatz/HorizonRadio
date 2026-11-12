@@ -3,7 +3,7 @@ using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Sources.Config;
 
-namespace HorizonRadio.Core.Metadata.Apple;
+namespace HorizonRadio.Metadata.Apple;
 
 public sealed class ItunesProviderFactory : IMetadataProviderFactory
 {

@@ -5,9 +5,10 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using HorizonRadio.Core.Diagnostics;
 using SpotifyAPI.Web;
 
-namespace HorizonRadio.Core.Sources.Spotify;
+namespace HorizonRadio.Source.Spotify;
 
 /// <summary>
 /// The user's Spotify account connection: a PKCE OAuth login (no client secret — safe
@@ -51,7 +52,7 @@ public sealed class SpotifyConnection : IAsyncDisposable
     private static void Log(string msg)
     {
         Trace.WriteLine($"[hzn-spotify-conn] {msg}");
-        Diagnostics.ProcessConsole.Append("spotify", msg);
+        ProcessConsole.Append("spotify", msg);
     }
 
     /// <summary>The loopback redirect URI; must be registered on the Spotify app.</summary>

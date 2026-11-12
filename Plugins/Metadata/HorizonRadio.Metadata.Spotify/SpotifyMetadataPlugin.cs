@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
 
-namespace HorizonRadio.Core.Metadata.Spotify;
+namespace HorizonRadio.Metadata.Spotify;
 
 /// <summary>The Spotify metadata plugin — contributes the Spotify Web API provider.</summary>
 public sealed class SpotifyMetadataPlugin : IMetadataPlugin

@@ -1,4 +1,4 @@
-namespace HorizonRadio.Core.Sources.YouTube;
+namespace HorizonRadio.Source.YouTube;
 
 /// <summary>Recognises YouTube links among pasted locators, and which of them are playlists.</summary>
 public static class YouTubeLinks

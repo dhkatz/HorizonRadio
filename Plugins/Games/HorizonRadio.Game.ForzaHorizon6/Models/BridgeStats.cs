@@ -1,4 +1,4 @@
-namespace HorizonRadio.Core.Models;
+namespace HorizonRadio.Game.ForzaHorizon6.Models;
 
 /// <summary>
 /// Per-tick snapshot of the FMOD bridge + normalizer state inside the

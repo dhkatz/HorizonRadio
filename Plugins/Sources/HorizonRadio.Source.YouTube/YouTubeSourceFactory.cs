@@ -1,9 +1,10 @@
+using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Sources.Config;
 using HorizonRadio.Sdk.Tools;
 
-namespace HorizonRadio.Core.Sources.YouTube;
+namespace HorizonRadio.Source.YouTube;
 
 /// <summary>
 /// Factory for the YouTube source. Exposes yt-dlp + ffmpeg paths (auto-detected

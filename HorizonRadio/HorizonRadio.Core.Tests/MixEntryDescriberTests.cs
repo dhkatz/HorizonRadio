@@ -1,10 +1,10 @@
 using HorizonRadio.Core.Sources.Config;
-using HorizonRadio.Core.Sources.Local;
 using HorizonRadio.Core.Sources.Mixes;
-using HorizonRadio.Core.Sources.Radio;
-using HorizonRadio.Core.Sources.Spotify;
-using HorizonRadio.Core.Sources.YouTube;
 using HorizonRadio.Sdk.Sources;
+using HorizonRadio.Source.Local;
+using HorizonRadio.Source.Radio;
+using HorizonRadio.Source.Spotify;
+using HorizonRadio.Source.YouTube;
 
 namespace HorizonRadio.Core.Tests;
 

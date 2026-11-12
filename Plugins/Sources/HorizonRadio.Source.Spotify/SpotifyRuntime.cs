@@ -1,11 +1,13 @@
-namespace HorizonRadio.Core.Sources.Spotify;
+using HorizonRadio.Core.Diagnostics;
+
+namespace HorizonRadio.Source.Spotify;
 
 /// <summary>
 /// App-level Spotify singletons, set once at startup so the parameterless
 /// <see cref="SpotifyContentSourceFactory"/> (constructed inside the static
 /// <see cref="SourceCatalog"/>) can reach the authenticated connection and the
 /// shared librespot playback service. Deliberately static, mirroring
-/// <see cref="Diagnostics.ProcessConsole"/>: the catalog has no DI seam, and the
+/// <see cref="ProcessConsole"/>: the catalog has no DI seam, and the
 /// alternative — threading these through every factory call site — buys nothing.
 ///
 /// Null until <see cref="Initialize"/> runs (e.g. headless tools, the designer),

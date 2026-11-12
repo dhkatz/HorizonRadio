@@ -10,12 +10,13 @@ using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Fingerprints;
 using HorizonRadio.Core.Metadata;
+using HorizonRadio.Core.Sources;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Tools.FFmpeg;
 
-namespace HorizonRadio.Core.Sources.Radio;
+namespace HorizonRadio.Source.Radio;
 
 /// <summary>
 /// One internet-radio station as a <see cref="PlayableItem"/>. Unlike a fixed-track

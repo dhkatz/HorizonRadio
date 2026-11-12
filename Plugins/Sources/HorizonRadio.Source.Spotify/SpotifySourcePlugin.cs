@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Sources;
 
-namespace HorizonRadio.Core.Sources.Spotify;
+namespace HorizonRadio.Source.Spotify;
 
 /// <summary>
 /// The Spotify source plugin. Ships two factories by design: the zero-config Connect receiver

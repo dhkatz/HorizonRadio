@@ -6,7 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using HorizonRadio.Core.ModInstall;
+using HorizonRadio.Game.ForzaHorizon6.ModInstall;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.UI.Theme;
 

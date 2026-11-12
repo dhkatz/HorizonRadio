@@ -3,7 +3,7 @@ using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Lyrics;
 using HorizonRadio.Sdk.Metadata;
 
-namespace HorizonRadio.Core.Metadata.VocaDb;
+namespace HorizonRadio.Metadata.VocaDb;
 
 /// <summary>The VocaDB plugin: contributes the VocaDB metadata provider, and VocaDB's lyrics
 /// (original, romanized, translated; never timed, so after the synced lyrics providers).</summary>

@@ -1,12 +1,12 @@
 using System.Runtime.CompilerServices;
 using HorizonRadio.Core.Sources;
-using HorizonRadio.Core.Sources.Local;
-using HorizonRadio.Core.Sources.Radio;
-using HorizonRadio.Core.Sources.Spotify;
-using HorizonRadio.Core.Sources.Test;
-using HorizonRadio.Core.Sources.YouTube;
 using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk.Tools;
+using HorizonRadio.Source.Local;
+using HorizonRadio.Source.Radio;
+using HorizonRadio.Source.Spotify;
+using HorizonRadio.Source.Test;
+using HorizonRadio.Source.YouTube;
 
 namespace HorizonRadio.Core.Tests;
 

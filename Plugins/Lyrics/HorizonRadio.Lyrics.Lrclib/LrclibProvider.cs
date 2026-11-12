@@ -6,7 +6,7 @@ using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Lyrics;
 using HorizonRadio.Sdk.Metadata;
 
-namespace HorizonRadio.Core.Lyrics.Lrclib;
+namespace HorizonRadio.Lyrics.Lrclib;
 
 /// <summary>
 /// LRCLIB (lrclib.net): free, open, community-synced LRC lyrics. Synced lyrics are matched strictly

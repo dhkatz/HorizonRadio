@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Sdk.Games;
 
-namespace HorizonRadio.Core.Events;
+namespace HorizonRadio.Game.ForzaHorizon6.Events;
 
 /// <summary>
 /// Listens for Forza "Data Out" UDP telemetry and turns it into

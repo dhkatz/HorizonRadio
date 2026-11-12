@@ -1,9 +1,9 @@
 using HorizonRadio.Core.Metadata;
-using HorizonRadio.Core.Metadata.Apple;
-using HorizonRadio.Core.Metadata.MusicBrainz;
-using HorizonRadio.Core.Metadata.Spotify;
-using HorizonRadio.Core.Metadata.VocaDb;
 using HorizonRadio.Core.Settings;
+using HorizonRadio.Metadata.Apple;
+using HorizonRadio.Metadata.MusicBrainz;
+using HorizonRadio.Metadata.Spotify;
+using HorizonRadio.Metadata.VocaDb;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Sources.Config;
 

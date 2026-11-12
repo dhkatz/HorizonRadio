@@ -1,4 +1,4 @@
-using HorizonRadio.Core.Sources.Spotify;
+using HorizonRadio.Source.Spotify;
 using Xunit;
 
 namespace HorizonRadio.Core.Tests;

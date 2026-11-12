@@ -8,9 +8,10 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Core.Metadata;
 using HorizonRadio.Sdk.Metadata;
 
-namespace HorizonRadio.Core.Metadata.Apple;
+namespace HorizonRadio.Metadata.Apple;
 
 /// <summary>
 /// Metadata via Apple's public iTunes Search API — keyless, broad coverage (notably for

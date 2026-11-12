@@ -104,8 +104,8 @@ Each step leaves the app working and lands as its own PR or short stack.
    - [x] The self-contained helpers (search-term matching, lyrics parsing, audio format and
      playlists, tool hash checks, the peer-network contract, build info) are in the SDK; the
      LRCLIB, Unison, local-files and test-tone plugins reference only the SDK.
-   - [ ] Plugin namespaces match their assemblies (`HorizonRadio.Lyrics.Lrclib`, not
-     `HorizonRadio.Core.Lyrics.Lrclib`), so a plugin can't see Core types by namespace nesting.
+   - [x] Plugin namespaces match their assemblies (`HorizonRadio.Lyrics.Lrclib`; they were
+     under `HorizonRadio.Core`), so every Core type a plugin uses takes a `using` line and shows.
    - [ ] Every plugin gets the context, which carries app folders, process launching, logging,
      diagnostics and the tool resolver.
    - [ ] The remaining engine coupling (FH6 and Spotify on the queue engine and mixes) goes

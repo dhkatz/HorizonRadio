@@ -3,9 +3,9 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Metadata;
-using HorizonRadio.Core.Sources.Radio;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
+using HorizonRadio.Source.Radio;
 
 namespace HorizonRadio.Core.Tests;
 

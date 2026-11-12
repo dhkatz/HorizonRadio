@@ -5,7 +5,7 @@ using System.Runtime.Versioning;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
-namespace HorizonRadio.Core.ModInstall;
+namespace HorizonRadio.Game.ForzaHorizon6.ModInstall;
 
 /// <summary>
 /// Tries to find a Forza Horizon 6 installation on disk so the user

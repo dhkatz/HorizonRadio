@@ -1,4 +1,4 @@
-namespace HorizonRadio.Core.Sources.Spotify;
+namespace HorizonRadio.Source.Spotify;
 
 /// <summary>What the end-wait of one Spotify track should do next.</summary>
 internal enum TrackWaitVerdict

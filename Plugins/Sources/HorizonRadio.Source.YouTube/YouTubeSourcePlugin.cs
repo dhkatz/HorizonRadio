@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Sources;
 
-namespace HorizonRadio.Core.Sources.YouTube;
+namespace HorizonRadio.Source.YouTube;
 
 /// <summary>The YouTube source plugin.</summary>
 public sealed class YouTubeSourcePlugin : ISourcePlugin

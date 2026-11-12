@@ -1,7 +1,8 @@
+using HorizonRadio.Core.Sources;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Tools.YtDlp;
 
-namespace HorizonRadio.Core.Sources.YouTube;
+namespace HorizonRadio.Source.YouTube;
 
 /// <summary>
 /// Content-free YouTube engine: holds the yt-dlp/ffmpeg paths and the

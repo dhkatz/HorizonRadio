@@ -1,4 +1,4 @@
-namespace HorizonRadio.Core.Models;
+namespace HorizonRadio.Game.ForzaHorizon6.Models;
 
 /// <summary>
 /// A registered audio source the user can switch to. Mirrors the DLL's

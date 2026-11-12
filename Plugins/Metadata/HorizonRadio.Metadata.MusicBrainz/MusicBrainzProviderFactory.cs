@@ -3,7 +3,7 @@ using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Sources.Config;
 
-namespace HorizonRadio.Core.Metadata.MusicBrainz;
+namespace HorizonRadio.Metadata.MusicBrainz;
 
 public sealed class MusicBrainzProviderFactory : IMetadataProviderFactory
 {

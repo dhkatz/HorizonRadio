@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Sources;
 
-namespace HorizonRadio.Core.Sources.Test;
+namespace HorizonRadio.Source.Test;
 
 /// <summary>The diagnostic test-tone source plugin.</summary>
 public sealed class TestToneSourcePlugin : ISourcePlugin

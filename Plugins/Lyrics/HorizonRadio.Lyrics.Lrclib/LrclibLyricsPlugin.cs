@@ -1,7 +1,7 @@
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Lyrics;
 
-namespace HorizonRadio.Core.Lyrics.Lrclib;
+namespace HorizonRadio.Lyrics.Lrclib;
 
 /// <summary>The LRCLIB lyrics plugin. After Unison: LRCLIB is much larger, but its lyrics are
 /// timed per line rather than per word.</summary>

@@ -3,10 +3,11 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Core.Sources;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Tools.Soloist;
 
-namespace HorizonRadio.Core.Sources.Spotify;
+namespace HorizonRadio.Source.Spotify;
 
 /// <summary>Soloist couldn't play: not set up, not paired yet, an expired build, or the tap failed.
 /// The message says what to do.</summary>

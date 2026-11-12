@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
 
-namespace HorizonRadio.Core.Metadata.MusicBrainz;
+namespace HorizonRadio.Metadata.MusicBrainz;
 
 /// <summary>The MusicBrainz metadata plugin — contributes the MusicBrainz provider.</summary>
 public sealed class MusicBrainzMetadataPlugin : IMetadataPlugin

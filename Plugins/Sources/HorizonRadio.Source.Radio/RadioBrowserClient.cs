@@ -6,8 +6,9 @@ using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using HorizonRadio.Core.Diagnostics;
 
-namespace HorizonRadio.Core.Sources.Radio;
+namespace HorizonRadio.Source.Radio;
 
 /// <summary>
 /// Thin client for the community radio-browser.info directory — the searchable station
@@ -105,7 +106,7 @@ public sealed class RadioBrowserClient : IDisposable
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
-                Diagnostics.ProcessConsole.Append("radio", $"mirror {mirrors[i]} failed: {ex.Message}");
+                ProcessConsole.Append("radio", $"mirror {mirrors[i]} failed: {ex.Message}");
                 // Try the next mirror.
             }
         }
@@ -144,7 +145,7 @@ public sealed class RadioBrowserClient : IDisposable
         }
         catch (Exception ex)
         {
-            Diagnostics.ProcessConsole.Append("radio", $"mirror discovery failed: {ex.Message}");
+            ProcessConsole.Append("radio", $"mirror discovery failed: {ex.Message}");
         }
 
         return hosts.Count > 0 ? hosts : FallbackMirrors;

@@ -1,7 +1,7 @@
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Sources.Config;
 
-namespace HorizonRadio.Core.Sources.Local;
+namespace HorizonRadio.Source.Local;
 
 /// <summary>
 /// Factory for the local-files source. Its one field — the directory, M3U, or

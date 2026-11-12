@@ -2,12 +2,14 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using HorizonRadio.Core.Audio;
+using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Core.Sources;
 using HorizonRadio.Sdk.Audio;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Tools.Librespot;
 using SpotifyAPI.Web;
 
-namespace HorizonRadio.Core.Sources.Spotify;
+namespace HorizonRadio.Source.Spotify;
 
 /// <summary>
 /// Drives Spotify playback <em>track-by-track</em> from our own engine, the way
@@ -101,7 +103,7 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
     private static void Log(string msg)
     {
         Trace.WriteLine($"[hzn-spotify-svc] {msg}");
-        Diagnostics.ProcessConsole.Append("spotify", msg);
+        ProcessConsole.Append("spotify", msg);
     }
 
     // Run a Web API control call, logging failures (with HTTP status) instead of

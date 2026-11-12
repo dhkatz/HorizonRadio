@@ -1,5 +1,5 @@
 using System.Text.Json;
-using HorizonRadio.Core.Metadata.Apple;
+using HorizonRadio.Metadata.Apple;
 
 namespace HorizonRadio.Core.Tests;
 

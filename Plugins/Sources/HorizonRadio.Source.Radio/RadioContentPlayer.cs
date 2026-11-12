@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Sdk.Sources;
 
-namespace HorizonRadio.Core.Sources.Radio;
+namespace HorizonRadio.Source.Radio;
 
 /// <summary>
 /// Content-free internet-radio engine: holds the ffmpeg path and resolves a

@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Sources;
 
-namespace HorizonRadio.Core.Sources.Local;
+namespace HorizonRadio.Source.Local;
 
 /// <summary>The local-files source plugin.</summary>
 public sealed class LocalSourcePlugin : ISourcePlugin

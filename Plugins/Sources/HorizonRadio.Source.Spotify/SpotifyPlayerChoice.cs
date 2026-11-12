@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Text.Json;
 using HorizonRadio.Core.IO;
 
-namespace HorizonRadio.Core.Sources.Spotify;
+namespace HorizonRadio.Source.Spotify;
 
 /// <summary>
 /// Which player a Spotify track goes to first, kept across sessions. Spotify refuses librespot
