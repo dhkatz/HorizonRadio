@@ -7,11 +7,13 @@
     <!-- <ui:Notice Tone="Warning" Title="Mod Update Available" Text="…">
              <ui:Notice.Actions><Button …/></ui:Notice.Actions>
          </ui:Notice>
-         Classes="inline" drops the card, for a line inside other content. -->
+         A band washed in its tone's color. Classes="inline" drops the band, for a line inside
+         other content. -->
     <ControlTheme x:Key="{x:Type ui:Notice}" TargetType="ui:Notice">
         <Setter Property="Template">
             <ControlTemplate>
-                <Border Name="PART_Root" Classes="Card" Padding="14,12">
+                <Border Name="PART_Root" Padding="14,12" CornerRadius="{DynamicResource MdCornerRadius}"
+                        Background="{Binding Tone, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static theme:ToneConverters.Tint}}">
                     <Grid ColumnDefinitions="Auto,*,Auto">
                         <material:MaterialIcon Grid.Column="0" Name="PART_Icon"
                                                Kind="{Binding Tone, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static ui:ToneIcons.Notice}}"
@@ -35,10 +37,9 @@
             <Setter Property="Opacity" Value="0.7"/>
         </Style>
 
-        <!-- Inline: no card, a smaller icon. -->
+        <!-- Inline: no band, a smaller icon. -->
         <Style Selector="^.inline /template/ Border#PART_Root">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Padding" Value="0"/>
         </Style>
         <Style Selector="^.inline /template/ material|MaterialIcon#PART_Icon">
@@ -53,7 +54,7 @@
         <Setter Property="Padding" Value="24"/>
         <Setter Property="Template">
             <ControlTemplate>
-                <Border Classes="Card" Padding="{TemplateBinding Padding}">
+                <Border Padding="{TemplateBinding Padding}">
                     <StackPanel Spacing="8" HorizontalAlignment="Center" MaxWidth="380">
                         <material:MaterialIcon Kind="{TemplateBinding Icon}" Width="36" Height="36" Opacity="0.4"/>
                         <TextBlock Classes="sectionTitle" Text="{TemplateBinding Title}" HorizontalAlignment="Center"

@@ -18,7 +18,7 @@
             <ui:PageHeader Title="Stations"
                            Description="Choose what each in-game station plays. Tune to a station in Forza and Horizon Radio follows."/>
 
-            <ui:SectionCard Title="When You Switch Stations">
+            <ui:Section Title="When You Switch Stations">
                 <StackPanel Spacing="8">
                     <ComboBox ItemsSource="{Binding Modes}"
                               SelectedItem="{Binding SelectedMode, Mode=TwoWay}"
@@ -32,9 +32,9 @@
                     <TextBlock Classes="caption" Text="{Binding SelectedMode.Description}"/>
                     <TextBlock Classes="caption" Text="The Horizon Radio player always pauses and resumes."/>
                 </StackPanel>
-            </ui:SectionCard>
+            </ui:Section>
 
-            <ui:SectionCard Title="Stations">
+            <ui:Section Title="Stations">
                 <ItemsControl ItemsSource="{Binding Rows}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
@@ -65,7 +65,7 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-            </ui:SectionCard>
+            </ui:Section>
 
         </StackPanel>
     </ScrollViewer>

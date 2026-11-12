@@ -27,4 +27,17 @@ public class ThemeToneTests
 
         Assert.Equal(ThemePalette.For(tone), Assert.IsAssignableFrom<ISolidColorBrush>(brush).Color);
     }
+
+    [Theory]
+    [InlineData(Tone.Neutral)]
+    [InlineData(Tone.Warning)]
+    [InlineData(Tone.Danger)]
+    public void TheTintIsAFaintWashOfTheTonesColor(Tone tone)
+    {
+        var brush = ToneConverters.Tint.Convert(tone, typeof(IBrush), null, CultureInfo.InvariantCulture);
+
+        var tint = Assert.IsAssignableFrom<ISolidColorBrush>(brush);
+        Assert.Equal(ThemePalette.For(tone), tint.Color);
+        Assert.Equal(ToneConverters.TintOpacity, tint.Opacity);
+    }
 }

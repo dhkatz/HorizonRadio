@@ -23,14 +23,16 @@
 
             <!-- Events grouped by category (Racing / Menu / Radio) -->
             <ItemsControl ItemsSource="{Binding Groups}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Spacing="16"/></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="{x:Type vm:EventCategoryGroup}">
-                        <StackPanel Spacing="8" Margin="0,0,0,18">
-                            <TextBlock Classes="groupLabel" Text="{Binding Category}" Margin="2,0,0,0"/>
-                            <ItemsControl ItemsSource="{Binding Rows}">
+                        <ui:Section Title="{Binding Category}">
+                            <ItemsControl Classes="divided" ItemsSource="{Binding Rows}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:EventRuleRow}">
-                                        <Border Classes="Card" Padding="16" Margin="0,0,0,8">
+                                        <Border Padding="0,8">
                                             <ui:SettingRow Label="{Binding DisplayName}" Description="{Binding Description}">
                                                 <ComboBox MinWidth="200"
                                                           ItemsSource="{Binding Options}"
@@ -46,12 +48,12 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                        </StackPanel>
+                        </ui:Section>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <ui:SectionCard Title="Recent Activity">
+            <ui:Section Title="Recent Activity">
                 <StackPanel Spacing="8">
                     <TextBlock Classes="description" Text="No events yet."
                                IsVisible="{Binding !Activity.Count}"/>
@@ -65,7 +67,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </StackPanel>
-            </ui:SectionCard>
+            </ui:Section>
 
         </StackPanel>
     </ScrollViewer>

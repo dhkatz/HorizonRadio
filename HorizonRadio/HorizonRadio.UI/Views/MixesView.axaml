@@ -43,10 +43,10 @@
                                Text="Click “New Mix”, then paste Spotify or YouTube links, radio stations, or music folders."
                                IsVisible="{Binding !HasMixes}"/>
 
-                <ItemsControl ItemsSource="{Binding Mixes}">
+                <ItemsControl Classes="divided" ItemsSource="{Binding Mixes}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:MixCardViewModel}">
-                            <Border Classes="Card" Padding="12" Margin="0,0,0,8">
+                            <Border Classes="listRow">
                                 <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
                                     <!-- Cover: a 2×2 mosaic of the first entries' art, one cover, or a placeholder. -->
                                     <Border Grid.Column="0" Width="64" Height="64" CornerRadius="6"
@@ -102,7 +102,7 @@
             </StackPanel>
 
             <!-- ── Builder ─────────────────────────────────────────────── -->
-            <Border Classes="Card" Padding="16" IsVisible="{Binding IsEditing}">
+            <Border IsVisible="{Binding IsEditing}">
                 <StackPanel Spacing="16">
                     <TextBlock Text="{Binding EditorTitle}" FontSize="16" FontWeight="SemiBold"/>
 

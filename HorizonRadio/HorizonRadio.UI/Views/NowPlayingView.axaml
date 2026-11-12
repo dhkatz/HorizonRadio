@@ -19,14 +19,12 @@
     <Grid Margin="24" RowDefinitions="Auto,*">
         <Border Grid.Row="0"
                 Grid.RowSpan="{Binding !Lyrics.IsVisible, Converter={x:Static vm:LyricsConverters.RowSpan}}"
-                Classes="Card"
                 Padding="32"
                 HorizontalAlignment="Stretch"
                 VerticalAlignment="{Binding Lyrics.IsVisible, Converter={x:Static vm:LyricsConverters.CardAlignment}}">
             <views:TrackInfoView />
         </Border>
         <Border Grid.Row="1"
-                Classes="Card"
                 Margin="0,16,0,0"
                 Padding="32,24"
                 IsVisible="{Binding Lyrics.IsVisible}">

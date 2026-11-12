@@ -68,7 +68,7 @@
                     <!-- Now playing -->
                     <StackPanel Spacing="4" IsVisible="{Binding HasNowPlaying}">
                         <TextBlock Classes="groupLabel" Text="Now Playing"/>
-                        <Border Classes="Card" Padding="10,8"
+                        <Border Classes="listRow"
                                 views:SongMenu.Target="{Binding NowPlayingSong}">
                             <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
                                 <!-- Album art (when resolved) over a placeholder tile. -->

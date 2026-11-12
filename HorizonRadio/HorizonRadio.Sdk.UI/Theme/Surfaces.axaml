@@ -1,12 +1,22 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- A card: a raised surface with a hairline border. ShadUI only styles its own Card
-         control, so a Border asks for the same look with Classes="Card". -->
-    <Style Selector="Border.Card">
-        <Setter Property="Background" Value="{DynamicResource CardBackgroundColor}"/>
+    <!-- Pages are flat: no cards. A page is split into ui:Section's (a hairline above each), and
+         the items of a list are split by hairlines too:
+         <ItemsControl Classes="divided" ItemsSource="…"/>. -->
+    <Style Selector="ItemsControl.divided > ContentPresenter">
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
+        <Setter Property="BorderThickness" Value="0,1,0,0"/>
+        <Setter Property="Padding" Value="0,4"/>
+    </Style>
+    <Style Selector="ItemsControl.divided > ContentPresenter:nth-child(1)">
+        <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+
+    <!-- A sunken area for a block of its own (the Console's log): a hairline round it, no fill. -->
+    <Style Selector="Border.inset">
         <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="{DynamicResource LgCornerRadius}"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource MdCornerRadius}"/>
     </Style>
 </Styles>

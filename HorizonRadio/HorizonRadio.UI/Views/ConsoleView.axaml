@@ -39,7 +39,7 @@
                     Margin="8,0,0,0"/>
         </Grid>
 
-        <Border Grid.Row="2" Classes="Card" Padding="2">
+        <Border Grid.Row="2" Classes="inset" Padding="2">
             <ListBox x:Name="LogList"
                      ItemsSource="{Binding Lines}"
                      Background="Transparent"

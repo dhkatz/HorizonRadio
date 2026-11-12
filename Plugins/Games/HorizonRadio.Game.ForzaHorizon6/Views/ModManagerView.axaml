@@ -18,7 +18,7 @@
             <ui:PageHeader Title="Mod Installer"
                            Description="Install or remove the Horizon Radio DLL."/>
 
-            <ui:SectionCard Title="Game Folder">
+            <ui:Section Title="Game Folder">
                 <StackPanel Spacing="12">
 
                     <StackPanel Spacing="6"
@@ -50,9 +50,9 @@
                                        DialogTitle="Pick your Forza Horizon 6 install folder"/>
                     </StackPanel>
                 </StackPanel>
-            </ui:SectionCard>
+            </ui:Section>
 
-            <Border Classes="Card" Padding="20">
+            <ui:Section Title="Mod">
                 <Grid ColumnDefinitions="Auto,*,Auto">
                     <ui:StatusAvatar Grid.Column="0" Size="44" Margin="0,0,16,0"
                                      Tone="{Binding StatusTone}" Icon="PuzzleOutline"/>
@@ -73,7 +73,7 @@
                             VerticalAlignment="Center"
                             IsVisible="{Binding HasGamePath}"/>
                 </Grid>
-            </Border>
+            </ui:Section>
 
             <!-- Only in a development build: the app was built without the mod, or before its
                  latest build. -->

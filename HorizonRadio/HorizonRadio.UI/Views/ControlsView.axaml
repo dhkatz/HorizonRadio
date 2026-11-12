@@ -74,12 +74,7 @@
         <!-- One mapping-table row: action name + a binding slot per device column.
              Implicit so both the playback list and the profile list reuse it. -->
         <DataTemplate DataType="{x:Type vm:ControlBindingRow}">
-            <Border Background="{DynamicResource CardBackgroundColor}"
-                    BorderBrush="{DynamicResource BorderColor}"
-                    BorderThickness="1"
-                    CornerRadius="8"
-                    Padding="14,8"
-                    Margin="0,0,0,6">
+            <Border Padding="14,4">
                 <Grid VerticalAlignment="Center">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
@@ -140,16 +135,16 @@
                                HorizontalAlignment="Center" Margin="6,0"/>
                 </Grid>
 
-                <ItemsControl ItemsSource="{Binding Rows}"/>
+                <ItemsControl Classes="divided" ItemsSource="{Binding Rows}"/>
 
                 <!-- Mixes section: Next/Previous + one row per saved mix. -->
                 <TextBlock Text="MIXES"
                            FontSize="11" FontWeight="SemiBold" Opacity="0.5"
                            Margin="14,10,14,6"/>
-                <ItemsControl ItemsSource="{Binding MixRows}"/>
+                <ItemsControl Classes="divided" ItemsSource="{Binding MixRows}"/>
             </StackPanel>
 
-            <ui:SectionCard Title="Recent Activity">
+            <ui:Section Title="Recent Activity">
                 <StackPanel Spacing="8">
                     <TextBlock Classes="description" Text="No input yet."
                                IsVisible="{Binding !Activity.Count}"/>
@@ -163,7 +158,7 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </StackPanel>
-            </ui:SectionCard>
+            </ui:Section>
 
         </StackPanel>
     </ScrollViewer>

@@ -61,6 +61,18 @@ public static class ToneConverters
     public static readonly IValueConverter Brush =
         new FuncValueConverter<Tone, IBrush>(tone => Brushes[(int)tone]);
 
+    private static readonly IImmutableSolidColorBrush[] Tints =
+        [.. Enum.GetValues<Tone>().Select(t => new ImmutableSolidColorBrush(ThemePalette.For(t), TintOpacity))];
+
+    /// <summary>How strongly a tint shows its tone: enough to tell a warning from a note at a
+    /// glance, faint enough that the text on it reads as ordinary text.</summary>
+    public const double TintOpacity = 0.12;
+
+    /// <summary>A faint wash of the tone, for an area that carries it (a notice's band):
+    /// <c>Background="{Binding Tone, Converter={x:Static theme:ToneConverters.Tint}}"</c>.</summary>
+    public static readonly IValueConverter Tint =
+        new FuncValueConverter<Tone, IBrush>(tone => Tints[(int)tone]);
+
     /// <summary>Success when true, neutral when false: <c>Tone="{Binding IsConnected, Converter={x:Static theme:ToneConverters.SuccessWhenTrue}}"</c>.</summary>
     public static readonly IValueConverter SuccessWhenTrue =
         new FuncValueConverter<bool, Tone>(on => on ? Tone.Success : Tone.Neutral);
