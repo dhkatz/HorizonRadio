@@ -1,12 +1,10 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
-using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Sdk;
 
 namespace HorizonRadio.Source.Radio;
 
@@ -25,7 +23,6 @@ public sealed class RadioBrowserClient : IDisposable
 {
     /// <summary>Shared instance for the parameterless factory in <see cref="SourceCatalog"/>
     /// (which has no DI seam) and the content player's uuid resolve.</summary>
-    public static RadioBrowserClient Shared { get; } = new();
 
     private const string DnsSeed = "all.api.radio-browser.info";
 
@@ -39,12 +36,14 @@ public sealed class RadioBrowserClient : IDisposable
         "https://all.api.radio-browser.info",
     ];
 
+    private readonly IPluginLog _log;
     private readonly HttpClient _http;
     private readonly SemaphoreSlim _mirrorGate = new(1, 1);
     private IReadOnlyList<string>? _mirrors;
 
-    public RadioBrowserClient()
+    public RadioBrowserClient(IPluginLog log)
     {
+        _log = log;
         _http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
         // radio-browser blocks empty/blank User-Agents; identify ourselves.
         _http.DefaultRequestHeaders.UserAgent.ParseAdd("HorizonRadio/0.5 (internet-radio)");
@@ -106,7 +105,7 @@ public sealed class RadioBrowserClient : IDisposable
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
-                ProcessConsole.Append("radio", $"mirror {mirrors[i]} failed: {ex.Message}");
+                _log.Write("radio", $"mirror {mirrors[i]} failed: {ex.Message}");
                 // Try the next mirror.
             }
         }
@@ -126,7 +125,7 @@ public sealed class RadioBrowserClient : IDisposable
         finally { _mirrorGate.Release(); }
     }
 
-    private static async Task<IReadOnlyList<string>> DiscoverMirrorsAsync(CancellationToken ct)
+    private async Task<IReadOnlyList<string>> DiscoverMirrorsAsync(CancellationToken ct)
     {
         var hosts = new List<string>();
         try
@@ -145,7 +144,7 @@ public sealed class RadioBrowserClient : IDisposable
         }
         catch (Exception ex)
         {
-            ProcessConsole.Append("radio", $"mirror discovery failed: {ex.Message}");
+            _log.Write("radio", $"mirror discovery failed: {ex.Message}");
         }
 
         return hosts.Count > 0 ? hosts : FallbackMirrors;

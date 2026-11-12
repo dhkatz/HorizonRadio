@@ -1,8 +1,8 @@
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Tools;
+using HorizonRadio.Sdk;
+using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Sources.Config;
 using HorizonRadio.Sdk.Tools;
@@ -19,7 +19,7 @@ namespace HorizonRadio.Source.Radio;
 public sealed class RadioSourceFactory : IContentSourceFactory, ISearchSource
 {
     /// <summary>Catalog id search results carry so the enqueuer can find this factory
-    /// again (see <see cref="SourceCatalog.Find"/>).</summary>
+    /// again.</summary>
     public const string SourceId = "radio";
 
     public const string KeyUrl = "url";
@@ -32,8 +32,23 @@ public sealed class RadioSourceFactory : IContentSourceFactory, ISearchSource
 
     public IReadOnlyList<ConfigField> Schema { get; }
 
-    public RadioSourceFactory()
+    private readonly IToolLocator _tools;
+    private readonly RadioBrowserClient _directory;
+    private readonly IProcesses _processes;
+    private readonly IPluginLog _log;
+    private readonly IMetadataTrace _trace;
+    private readonly ITitleModel _titleModel;
+
+    public RadioSourceFactory(IToolLocator tools, RadioBrowserClient directory, IProcesses processes,
+        IPluginLog log, IMetadataTrace trace, ITitleModel titleModel)
     {
+        _tools = tools;
+        _directory = directory;
+        _processes = processes;
+        _log = log;
+        _trace = trace;
+        _titleModel = titleModel;
+
         Schema =
         [
             new TextField(
@@ -59,11 +74,11 @@ public sealed class RadioSourceFactory : IContentSourceFactory, ISearchSource
 
     public IContentPlayer CreatePlayer(ConfigValues values)
     {
-        var ffmpeg = ToolResolver.Resolve(values.GetString(KeyFfmpeg), ToolKind.Ffmpeg);
+        var ffmpeg = _tools.Find(ToolKind.Ffmpeg, values.GetString(KeyFfmpeg));
         if (ffmpeg is null)
             throw new InvalidOperationException("Internet Radio: pick an ffmpeg.exe path.");
 
-        return new RadioContentPlayer(ffmpeg, RadioBrowserClient.Shared);
+        return new RadioContentPlayer(new RadioServices(ffmpeg, _processes, _log, _trace, _titleModel), _directory);
     }
 
     // -- ISearchSource (radio-browser directory → radio://uuid locators) --
@@ -72,7 +87,7 @@ public sealed class RadioSourceFactory : IContentSourceFactory, ISearchSource
     {
         // Pure HTTP, no tool needed — and never throws, so a directory outage can't
         // break a query that spans other sources.
-        var stations = await RadioBrowserClient.Shared.SearchAsync(query, limit, ct).ConfigureAwait(false);
+        var stations = await _directory.SearchAsync(query, limit, ct).ConfigureAwait(false);
         return [.. stations.Select(ToResult)];
     }
 

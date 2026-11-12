@@ -1,4 +1,5 @@
 using AcoustID;
+using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.Fingerprints;
 
@@ -11,7 +12,7 @@ namespace HorizonRadio.Core.Fingerprints;
 public static class Chromaprint
 {
     /// <summary>The rate Chromaprint analyses audio at. Audio at this rate, mono, is used as is.</summary>
-    public const int SampleRate = 11025;
+    public const int SampleRate = LiveAudioBuffer.SampleRate;
 
     /// <summary>Samples between the starts of consecutive frames (a 4096-sample frame, overlapping the
     /// next by two thirds).</summary>
