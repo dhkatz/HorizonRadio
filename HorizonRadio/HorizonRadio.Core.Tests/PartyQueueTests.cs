@@ -1,4 +1,3 @@
-using HorizonRadio.Core.Devices;
 using HorizonRadio.Core.Friends;
 using HorizonRadio.Core.Party;
 using HorizonRadio.Core.Playback;
@@ -27,7 +26,7 @@ public sealed class PartyQueueTests : IAsyncDisposable
 
     private readonly MemoryPeerNetwork _net = new();
     private readonly List<IAsyncDisposable> _running = [];
-    private readonly YouTubeSourceFactory _youTube = new();
+    private readonly YouTubeSourceFactory _youTube = TestSources.YouTube;
 
     public async ValueTask DisposeAsync()
     {

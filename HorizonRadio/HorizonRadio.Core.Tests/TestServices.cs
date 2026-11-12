@@ -1,0 +1,30 @@
+using System.Diagnostics;
+using HorizonRadio.Sdk;
+
+namespace HorizonRadio.Core.Tests;
+
+/// <summary>Process launching that refuses: for code that mustn't start a process in a test.</summary>
+public sealed class NoProcesses : IProcesses
+{
+    public static NoProcesses Instance { get; } = new();
+
+    public Process Start(ProcessStartInfo info) =>
+        throw new InvalidOperationException($"The test started {info.FileName}.");
+}
+
+/// <summary>A log that drops everything.</summary>
+public sealed class NoLog : IPluginLog
+{
+    public static NoLog Instance { get; } = new();
+
+    public void Write(string tag, string text) { }
+
+    public void Trace(string tag, string text) { }
+}
+
+/// <summary>The shipped sources, as the test container built them (<see cref="TestModuleInit"/>).</summary>
+public static class TestSources
+{
+    public static Source.YouTube.YouTubeSourceFactory YouTube =>
+        (Source.YouTube.YouTubeSourceFactory)Sources.SourceCatalog.Find(Source.YouTube.YouTubeSourceFactory.SourceId)!;
+}

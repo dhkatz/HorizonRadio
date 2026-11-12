@@ -132,9 +132,13 @@ Each step leaves the app working and lands as its own PR or short stack.
    - [x] Contributions are registrations: a plugin is an `IPlugin` plus an `IPluginModule` that
      registers its sources, metadata providers and lyrics providers, each ordered by its own
      `SortOrder`; `ISourcePlugin`, `IMetadataPlugin` and `ILyricsPlugin` are gone.
-   - [ ] Source plugins, each with the tool wrappers it runs, which become services: YouTube
-     (yt-dlp, ffmpeg), Radio, then Spotify (librespot, Soloist); `SpotifyRuntime` and
-     `YouTubeRuntime` go. The peer helper with them.
+   - [x] YouTube, with yt-dlp: the factory takes its services by constructor, `YtDlpClient` is a
+     service the yt-dlp plugin registers, `AudioCache` and `SubprocessPcmSource` are in the SDK
+     (the host hands out caches, `IAudioCaches`), a source reads its saved settings through
+     `ISourceSettings`, and `YouTubeRuntime` is gone. The YouTube and yt-dlp plugins reference only
+     the SDK.
+   - [ ] Radio, then Spotify (librespot, Soloist; `SpotifyRuntime` goes), then the peer helper.
+     Until then their audio processes use `StaticHostServices`.
    - [ ] The audio helpers (the audio cache, subprocess audio, fingerprints) and the title
      extractor, handed out by the host.
    - [ ] The remaining engine coupling (FH6 and Spotify on the queue engine and mixes) goes

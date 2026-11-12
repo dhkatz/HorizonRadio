@@ -1,6 +1,4 @@
 using System.Diagnostics;
-using HorizonRadio.Core.Diagnostics;
-using HorizonRadio.Core.Sources;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Tools.FFmpeg;
 using HorizonRadio.Tools.YtDlp;
@@ -15,11 +13,11 @@ namespace HorizonRadio.Source.YouTube;
 internal static class YouTubeReferenceAudio
 {
     public static async Task<ReferenceAudio?> FetchAsync(
-        string ytDlp, string ffmpeg, string url, int sampleRate, TimeSpan maxLength, CancellationToken ct)
+        YouTubeTools tools, string url, int sampleRate, TimeSpan maxLength, CancellationToken ct)
     {
         var started = Stopwatch.StartNew();
-        using var download = Start(ytDlp, YtDlpClient.BuildAudioToStdoutArgs(url, maxLength), stdin: false);
-        using var decode = Start(ffmpeg, Ffmpeg.BuildStdinAnalysisArgs(sampleRate), stdin: true);
+        using var download = Start(tools, tools.YtDlpPath, YtDlpClient.BuildAudioToStdoutArgs(url, maxLength), stdin: false);
+        using var decode = Start(tools, tools.FfmpegPath, Ffmpeg.BuildStdinAnalysisArgs(sampleRate), stdin: true);
         using var kill = ct.Register(() =>
         {
             Kill(download);
@@ -54,7 +52,7 @@ internal static class YouTubeReferenceAudio
             {
                 Kill(download);
                 Kill(decode);
-                ProcessConsole.Append("sync", $"skipped {url}: longer than {maxLength.TotalMinutes:0} min");
+                tools.Log.Write("sync", $"skipped {url}: longer than {maxLength.TotalMinutes:0} min");
                 return null;
             }
         }
@@ -62,8 +60,8 @@ internal static class YouTubeReferenceAudio
         await pipe.ConfigureAwait(false);
         await download.WaitForExitAsync(ct).ConfigureAwait(false);
         await decode.WaitForExitAsync(ct).ConfigureAwait(false);
-        ProcessConsole.AppendBlock("yt-dlp", await downloadErrors.ConfigureAwait(false));
-        ProcessConsole.AppendBlock("ffmpeg", await decodeErrors.ConfigureAwait(false));
+        tools.Log.Write("yt-dlp", await downloadErrors.ConfigureAwait(false));
+        tools.Log.Write("ffmpeg", await decodeErrors.ConfigureAwait(false));
 
         if (download.ExitCode != 0)
             throw new InvalidOperationException($"yt-dlp exited {download.ExitCode} downloading {url}");
@@ -71,12 +69,12 @@ internal static class YouTubeReferenceAudio
 
         var samples = new short[pcm.Length / sizeof(short)];
         Buffer.BlockCopy(pcm.GetBuffer(), 0, samples, 0, samples.Length * sizeof(short));
-        ProcessConsole.Append("sync",
+        tools.Log.Write("sync",
             $"fetched {url}: {samples.Length / (double)sampleRate:0.0} s of audio in {started.Elapsed.TotalSeconds:0.0} s");
         return new ReferenceAudio(url, samples, sampleRate);
     }
 
-    private static Process Start(string exe, string[] args, bool stdin)
+    private static Process Start(YouTubeTools tools, string exe, string[] args, bool stdin)
     {
         var psi = new ProcessStartInfo
         {
@@ -89,9 +87,7 @@ internal static class YouTubeReferenceAudio
             StandardErrorEncoding = System.Text.Encoding.UTF8,
         };
         foreach (var a in args) psi.ArgumentList.Add(a);
-        var process = Process.Start(psi) ?? throw new InvalidOperationException($"failed to start {exe}");
-        ChildProcesses.TieToApp(process);
-        return process;
+        return tools.Processes.Start(psi);
     }
 
     private static void Kill(Process process)

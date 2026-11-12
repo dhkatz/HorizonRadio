@@ -1,11 +1,15 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.IO;
 using HorizonRadio.Core.Sources;
+using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
+using HorizonRadio.Sdk.Sources;
+using HorizonRadio.Sdk.Sources.Config;
 
 namespace HorizonRadio.Core.Hosting;
 
@@ -45,6 +49,29 @@ internal sealed class HostMetadataTrace : IMetadataTrace
 
     public void Model(string raw, long latencyMs, IReadOnlyList<TitleCandidate> extracted, bool applied) =>
         MetadataTrace.Model(raw, latencyMs, extracted, applied);
+}
+
+/// <summary>One audio cache per source under the profile's data folder (<c>cache\audio\&lt;source&gt;</c>),
+/// with two downloads at once across them all.</summary>
+internal sealed class HostAudioCaches(IAppFolders folders) : IAudioCaches, IDisposable
+{
+    private readonly ConcurrentDictionary<string, AudioCache> _caches = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim _downloads = new(2);
+
+    public AudioCache ForSource(string sourceId) =>
+        _caches.GetOrAdd(sourceId, id => new AudioCache(folders.Data("cache", "audio", id), _downloads));
+
+    public void Dispose() => _downloads.Dispose();
+}
+
+/// <summary>A source's saved settings, from the settings store (<see cref="SourceConfigStore"/>).</summary>
+internal sealed class HostSourceSettings(SourceConfigStore store) : ISourceSettings
+{
+    public ConfigValues Load(IAudioSourceFactory source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        return store.Load(source.Id, source.Schema);
+    }
 }
 
 /// <summary>The profile's folders (<see cref="AppPaths"/>).</summary>

@@ -37,12 +37,12 @@ public class ContentSourceFactoryTests
 
     [Fact]
     public void YouTube_factory_is_content_addressable()
-        => Assert.IsAssignableFrom<IContentSourceFactory>(new YouTubeSourceFactory());
+        => Assert.IsAssignableFrom<IContentSourceFactory>(TestSources.YouTube);
 
     [Fact]
     public void YouTube_factory_content_key_is_url()
     {
-        var f = new YouTubeSourceFactory();
+        var f = TestSources.YouTube;
         Assert.Equal(YouTubeSourceFactory.KeyUrl, f.ContentKey);
     }
 
@@ -50,7 +50,7 @@ public class ContentSourceFactoryTests
     public void Content_factories_expose_a_locator_hint()
     {
         Assert.False(string.IsNullOrWhiteSpace(new LocalFileSourceFactory().LocatorHint));
-        Assert.False(string.IsNullOrWhiteSpace(new YouTubeSourceFactory().LocatorHint));
+        Assert.False(string.IsNullOrWhiteSpace(TestSources.YouTube.LocatorHint));
     }
 
     [Fact]
@@ -60,7 +60,7 @@ public class ContentSourceFactoryTests
         ToolResolver.DiscoverOverride = _ => null;
         try
         {
-            var f = new YouTubeSourceFactory();
+            var f = TestSources.YouTube;
             var ex = Assert.Throws<InvalidOperationException>(() => f.CreatePlayer(new ConfigValues()));
             Assert.Contains("yt-dlp", ex.Message);
         }
@@ -73,7 +73,7 @@ public class ContentSourceFactoryTests
         // Tools present but URL empty: tool validation (CreatePlayer) passes and
         // content validation (EnumerateAsync) fails — proving the env/content split.
         using var dir = TempDir.Create();
-        var f = new YouTubeSourceFactory();
+        var f = TestSources.YouTube;
         var player = f.CreatePlayer(ToolValues(dir));
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => player.EnumerateAsync(new ContentRef(f.Id, ""), default));

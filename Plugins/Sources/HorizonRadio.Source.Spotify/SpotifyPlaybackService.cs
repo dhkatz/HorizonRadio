@@ -1,9 +1,7 @@
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Diagnostics;
-using HorizonRadio.Core.Sources;
+using HorizonRadio.Core.Hosting;
 using HorizonRadio.Sdk.Audio;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Tools.Librespot;
@@ -429,7 +427,7 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
                 Args = Librespot.BuildArgs(o, autoplay: false),
                 ToolName = "librespot",
                 OnStderrLine = OnStderr,
-            });
+            }, StaticHostServices.Processes, StaticHostServices.Log);
             await subproc.StartAsync(_routing, _serviceCts.Token).ConfigureAwait(false);
             _librespot = subproc;
         }

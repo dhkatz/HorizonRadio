@@ -1,13 +1,7 @@
-using System;
 using System.Diagnostics;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
-using HorizonRadio.Core.Audio;
 using HorizonRadio.Sdk.Audio;
-using HorizonRadio.Sdk.Sources;
 
-namespace HorizonRadio.Core.Sources;
+namespace HorizonRadio.Sdk.Sources;
 
 /// <summary>
 /// Generic "spawn a process, read raw s16/44.1k/stereo PCM from its
@@ -26,8 +20,12 @@ namespace HorizonRadio.Core.Sources;
 /// no equivalent of the "close-our-end" dance needed in the Win32
 /// version, because ProcessStartInfo.RedirectStandardOutput plumbs it
 /// through a managed stream that we own exclusively.
+///
+/// The process is started through <paramref name="processes"/> (so it's tied to the app), and its
+/// stderr lines go to the Console tab through <paramref name="log"/>.
 /// </summary>
-public sealed class SubprocessPcmSource(SubprocessPcmSource.Config config) : IAsyncDisposable
+public sealed class SubprocessPcmSource(SubprocessPcmSource.Config config, IProcesses processes, IPluginLog log)
+    : IAsyncDisposable
 {
     /// <summary>Configuration knobs the wrapper supplies.</summary>
     public sealed class Config
@@ -61,7 +59,7 @@ public sealed class SubprocessPcmSource(SubprocessPcmSource.Config config) : IAs
     private CancellationTokenSource? _cts;
     private long _pcmBytes;
 
-    private static void Log(string msg) => Trace.WriteLine($"[hzn-subproc] {msg}");
+    private void Log(string msg) => log.Trace("subproc", msg);
 
     public bool IsRunning => _process is { HasExited: false };
 
@@ -110,13 +108,10 @@ public sealed class SubprocessPcmSource(SubprocessPcmSource.Config config) : IAs
         };
         foreach (var arg in config.Args) psi.ArgumentList.Add(arg);
 
-        _process = Process.Start(psi)
-                ?? throw new InvalidOperationException($"failed to spawn {config.ExecutablePath}");
+        // Started through the host, so the child dies with the app however it ends (on Windows, a
+        // job object); Process.Kill(true) in StopAsync covers a stop.
+        _process = processes.Start(psi);
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-
-        // Make sure the child dies if our process dies, however it ends: Process.Kill(true) in the
-        // finally path covers a stop, the app's job object covers the app closing or crashing.
-        ChildProcesses.TieToApp(_process);
         Log($"started pid={_process.Id} cmd={config.ExecutablePath}");
 
         _stderrTask = Task.Run(() => DrainStderrAsync(_process, _cts.Token), _cts.Token);
@@ -137,7 +132,7 @@ public sealed class SubprocessPcmSource(SubprocessPcmSource.Config config) : IAs
             while ((line = await reader.ReadLineAsync(ct).ConfigureAwait(false)) != null)
             {
                 if (string.IsNullOrEmpty(line)) continue;
-                Diagnostics.ProcessConsole.Append(toolName, line);
+                log.Write(toolName, line);
                 try { config.OnStderrLine?.Invoke(line); }
                 catch (Exception ex) { Log($"stderr handler threw: {ex.Message}"); }
             }

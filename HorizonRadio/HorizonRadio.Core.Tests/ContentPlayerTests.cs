@@ -1,6 +1,7 @@
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Source.Local;
 using HorizonRadio.Source.YouTube;
+using HorizonRadio.Tools.YtDlp;
 
 namespace HorizonRadio.Core.Tests;
 
@@ -30,8 +31,10 @@ public class ContentPlayerTests
     [Fact]
     public async Task YouTube_enumerate_blank_locator_throws_without_running_yt_dlp()
     {
-        // Placeholder tool paths: a blank URL must be rejected before yt-dlp is invoked.
-        var player = new YouTubeContentPlayer("yt-dlp", "ffmpeg", normalise: false);
+        // Placeholder tool paths, and no process may start: a blank URL is rejected before yt-dlp runs.
+        var tools = new YouTubeTools(new YtDlpClient(NoProcesses.Instance, NoLog.Instance), "yt-dlp", "ffmpeg",
+            NoProcesses.Instance, NoLog.Instance);
+        var player = new YouTubeContentPlayer(tools, normalise: false);
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => player.EnumerateAsync(new ContentRef("youtube", "  "), default));
         Assert.Contains("video or playlist URL", ex.Message);

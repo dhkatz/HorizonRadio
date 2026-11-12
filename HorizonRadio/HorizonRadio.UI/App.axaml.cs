@@ -22,7 +22,6 @@ using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
-using HorizonRadio.Core.Sources.Queue;
 using HorizonRadio.Core.Tools;
 using HorizonRadio.Metadata.MusicBrainz;
 using HorizonRadio.Metadata.Spotify;
@@ -34,9 +33,7 @@ using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Tools;
-using HorizonRadio.Source.Radio;
 using HorizonRadio.Source.Spotify;
-using HorizonRadio.Source.YouTube;
 using HorizonRadio.TitleModel;
 using HorizonRadio.Tools.Librespot;
 using HorizonRadio.Tools.Peer;
@@ -201,20 +198,6 @@ public partial class App : Application
                 {
                     if (factory?.Id == "spotify") _ = _spotifyPlayback.ReleaseAsync();
                 };
-
-                // YouTube search needs the configured yt-dlp path; publish a resolver that
-                // reads it fresh from the persisted config (so installing yt-dlp via the
-                // Tools tab mid-session takes effect without a restart), or null when it
-                // isn't set/installed yet — which the search source treats as "no results".
-                var youtubeFactory = (YouTubeSourceFactory)SourceCatalog.Find(YouTubeSourceFactory.SourceId)!;
-                string? YouTubeTool(string key)
-                {
-                    var path = _store!.Load(youtubeFactory.Id, youtubeFactory.Schema).GetString(key);
-                    return !string.IsNullOrWhiteSpace(path) && File.Exists(path) ? path : null;
-                }
-                YouTubeRuntime.Initialize(
-                    () => YouTubeTool(YouTubeSourceFactory.KeyYtDlp),
-                    () => YouTubeTool(YouTubeSourceFactory.KeyFfmpeg));
 
                 // The metadata providers, before the config store loads — it derives fresh-install
                 // defaults + the "introduced" set from the catalog, so the catalog must be populated

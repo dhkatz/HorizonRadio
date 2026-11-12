@@ -216,8 +216,11 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   (`ILyricsProvider`). The app collects each kind from the container (`GetServices<T>()`) and
   orders it by `SortOrder`, then id (`InDisplayOrder`; `IOrdered`). Contributions are built by the
   container, so their constructors take the host's services (`IPluginLog`, `IProcesses`,
-  `IAppFolders`, `IToolLocator`, `IMetadataCache`, `IMetadataTrace`, `IConfirmations`) and the
-  module's own. A game plugin (`IGamePlugin`) is the exception for now: the container builds it,
+  `IAppFolders`, `IToolLocator`, `IMetadataCache`, `IMetadataTrace`, `IAudioCaches`,
+  `ISourceSettings` (a source's saved settings, for work outside a player such as search),
+  `IConfirmations`) and the module's own; tool plugins register their wrappers the same way
+  (`YtDlpClient`). Run a tool to its end with `IProcesses.RunToEndAsync` (logs the command and its
+  stderr), and stream one's audio with `SubprocessPcmSource`. A game plugin (`IGamePlugin`) is the exception for now: the container builds it,
   and it builds its integration. A module may also replace a host service or wrap it
   (`Decorate`); modules run after the host in `Order`, then type name, the last registration wins,
   and the Console tab (tag `plugins`) says what each replaced or wrapped. The container is built

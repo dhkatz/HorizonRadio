@@ -1,6 +1,5 @@
-using System.Collections.Generic;
 using System.Diagnostics;
-using HorizonRadio.Core.Sources;
+using HorizonRadio.Core.Hosting;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Tools.Librespot;
@@ -89,7 +88,7 @@ public sealed class SpotifySource(LibrespotOptions options) : IAudioSource, IPla
             Args = args,
             ToolName = "librespot",
             OnStderrLine = OnStderr,
-        });
+        }, StaticHostServices.Processes, StaticHostServices.Log);
         await _subprocess.StartAsync(sink, ct).ConfigureAwait(false);
 
         // Publish a placeholder so the HUD shows "Spotify Connect" right
