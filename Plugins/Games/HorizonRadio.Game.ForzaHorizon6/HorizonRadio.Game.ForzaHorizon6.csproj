@@ -3,8 +3,8 @@
   <!-- Forza Horizon 6 game plugin: the Horizon Radio side of the FH6 integration (IPC + PCM pipe
        clients for the injected version.dll, Forza Data Out telemetry, the mod installer, the
        station list) plus the pages it adds to the app (Mods, Stats). The in-game side is the
-       native mod in Mods/ForzaHorizon6. Moved types keep their HorizonRadio.Core.* namespaces so
-       consumers need no using changes. -->
+       native mod in Mods/ForzaHorizon6. References the SDK (the host's services come through the
+       container) and Sdk.UI for its pages. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -13,7 +13,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\HorizonRadio\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+    <ProjectReference Include="..\..\..\HorizonRadio\HorizonRadio.Sdk\HorizonRadio.Sdk.csproj" />
     <!-- The theme and controls its pages are built from; brings Avalonia, ShadUI and Material
          icons at the app's versions. -->
     <ProjectReference Include="..\..\..\HorizonRadio\HorizonRadio.Sdk.UI\HorizonRadio.Sdk.UI.csproj" />

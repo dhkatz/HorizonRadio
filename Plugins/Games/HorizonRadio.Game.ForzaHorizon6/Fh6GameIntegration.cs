@@ -1,7 +1,5 @@
 using System.ComponentModel;
 using Avalonia.Threading;
-using HorizonRadio.Core.Events;
-using HorizonRadio.Core.Sources;
 using HorizonRadio.Game.ForzaHorizon6.Events;
 using HorizonRadio.Game.ForzaHorizon6.Ipc;
 using HorizonRadio.Game.ForzaHorizon6.ModInstall;
@@ -48,20 +46,22 @@ public sealed class Fh6GameIntegration : IGameIntegration, IStationTargeting, IG
     /// <param name="settings">Where station assignments persist; <see langword="null"/> keeps them
     /// in memory only (tests).</param>
     /// <param name="confirmations">Asks before the Mods page uninstalls the mod; none goes ahead.</param>
-    public Fh6GameIntegration(string displayName, IPluginSettings? settings = null, IConfirmations? confirmations = null)
+    /// <param name="log">The Console tab, for the mod's and the telemetry's reports; none drops them (tests).</param>
+    public Fh6GameIntegration(string displayName, IPluginSettings? settings = null, IConfirmations? confirmations = null,
+        IPluginLog? log = null)
         : this(displayName, settings, IpcClient.DefaultPipeName, PcmPipeClient.DefaultPipeName,
-            ForzaTelemetryListener.DefaultPort)
+            ForzaTelemetryListener.DefaultPort, log)
     {
         _confirmations = confirmations;
     }
 
     /// <summary>Tests: talk to a fake mod on other pipes (and another telemetry port, 0 for any).</summary>
     internal Fh6GameIntegration(string displayName, IPluginSettings? settings, string pipeName,
-        string pcmPipeName, int telemetryPort)
+        string pcmPipeName, int telemetryPort, IPluginLog? log = null)
     {
-        _ipc = new IpcClient(pipeName);
+        _ipc = new IpcClient(pipeName, log);
         _pcm = new PcmPipeClient(pcmPipeName);
-        _telemetry = new ForzaTelemetryListener(telemetryPort);
+        _telemetry = new ForzaTelemetryListener(telemetryPort, log);
         DisplayName = displayName;
         Map = new StationMap(settings);
         Map.Changed += OnMapChanged;

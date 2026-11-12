@@ -177,8 +177,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `IMetadataPlugin` and `ILyricsPlugin`), and the container builds them, so their constructors can
   ask for the services the app provides (logging to the Console tab, starting tool processes, the
   app's folders, finding tools, the metadata cache). A plugin can also register its own services, or
-  replace or wrap the app's; the Console tab (tag `plugins`) lists each one a plugin replaced. The
-  SDK now references `Microsoft.Extensions.DependencyInjection.Abstractions`.
+  replace or wrap the app's; the Console tab (tag `plugins`) lists each one a plugin replaced. No
+  plugin references the engine (`HorizonRadio.Core`) any more, only the SDK, and `IPluginContext` is
+  gone. The SDK now references `Microsoft.Extensions.DependencyInjection.Abstractions`.
 - **The plugin SDK is `HorizonRadio.Sdk` (internal).** `Plugins/HorizonRadio.Plugins.Abstractions`
   moved to `HorizonRadio/HorizonRadio.Sdk`, and its types moved from `HorizonRadio.Core.*` and
   `HorizonRadio.Plugins.Abstractions` to `HorizonRadio.Sdk.*` namespaces. It's the first step of

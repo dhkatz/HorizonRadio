@@ -1,13 +1,11 @@
-using System;
 using System.Diagnostics;
 using System.Globalization;
-using System.IO;
 using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Game.ForzaHorizon6.Models;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Games;
 using HorizonRadio.Sdk.Models;
 
@@ -24,7 +22,9 @@ namespace HorizonRadio.Game.ForzaHorizon6.Ipc;
 /// Wire format mirrors `IpcServer` on the C++ side: newline-delimited
 /// UTF-8 JSON, one event per line.
 /// </summary>
-public sealed class IpcClient(string pipeName = IpcClient.DefaultPipeName) : IAsyncDisposable, IGameEventSource
+/// <param name="log">Where the mod's debug lines go (the Console tab); null drops them.</param>
+public sealed class IpcClient(string pipeName = IpcClient.DefaultPipeName, IPluginLog? log = null)
+    : IAsyncDisposable, IGameEventSource
 {
     public const string DefaultPipeName = "HorizonRadio";
 
@@ -248,7 +248,7 @@ public sealed class IpcClient(string pipeName = IpcClient.DefaultPipeName) : IAs
                     {
                         var tag = GetString(doc.RootElement, "tag") ?? "dll";
                         var text = GetString(doc.RootElement, "text") ?? "";
-                        if (text.Length > 0) HorizonRadio.Core.Diagnostics.ProcessConsole.Append(tag, text);
+                        if (text.Length > 0) log?.Write(tag, text);
                         break;
                     }
             }
