@@ -5,8 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Channels;
-using HorizonRadio.Core.IO;
-using HorizonRadio.Core.Sources;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Peers;
 
 namespace HorizonRadio.Tools.Peer;
@@ -17,8 +16,8 @@ namespace HorizonRadio.Tools.Peer;
 /// a relay until a hole punch succeeds) and exchange JSON messages, in order per peer and at most
 /// once each. The helper's own reports (reachability, addresses, hole punches) go to the log.
 ///
-/// The process is tied to the app (<see cref="ChildProcesses.TieToApp"/>) and exits when its stdin
-/// closes, so it never outlives it. Events are raised on the reading thread: keep handlers short.
+/// The process is started through the host (<see cref="IProcesses"/>, so it's tied to the app) and
+/// exits when its stdin closes, so it never outlives it. Events are raised on the reading thread: keep handlers short.
 /// </summary>
 public sealed class PeerHelper : IPeerNetwork, IStoppable, IAsyncDisposable
 {
@@ -41,7 +40,7 @@ public sealed class PeerHelper : IPeerNetwork, IStoppable, IAsyncDisposable
     private int _disposed;
 
     /// <summary>Where the app keeps this profile's peer identity: its peer ID is derived from it.</summary>
-    public static string DefaultKeyPath => AppPaths.In("peer", "identity.key");
+    public static string KeyPath(IAppFolders folders) => folders.Data("peer", "identity.key");
 
     /// <summary>The bundled helper next to the app, or null when it wasn't built.</summary>
     public static string? FindExe()
@@ -74,7 +73,8 @@ public sealed class PeerHelper : IPeerNetwork, IStoppable, IAsyncDisposable
 
     /// <summary>Start the helper and wait until it's ready for commands.</summary>
     /// <exception cref="FileNotFoundException">The helper isn't there (not built).</exception>
-    public static async Task<PeerHelper> StartAsync(string keyPath, PeerDiscovery discovery, string? exePath = null, CancellationToken ct = default)
+    public static async Task<PeerHelper> StartAsync(
+        IProcesses processes, string keyPath, PeerDiscovery discovery, string? exePath = null, CancellationToken ct = default)
     {
         exePath ??= FindExe() ?? throw new FileNotFoundException($"{ExeName} isn't next to the app (build it: Plugins/Tools/HorizonRadio.Tools.Peer/Helper/README.md).", ExeName);
         if (!File.Exists(exePath)) throw new FileNotFoundException($"The peer helper isn't at {exePath}.", exePath);
@@ -91,8 +91,12 @@ public sealed class PeerHelper : IPeerNetwork, IStoppable, IAsyncDisposable
         };
         foreach (var arg in new[] { "serve", "-key", keyPath, "-discovery", DiscoveryArgument(discovery) }) psi.ArgumentList.Add(arg);
 
-        var process = Process.Start(psi) ?? throw new PeerNetworkException($"couldn't start {exePath}");
-        ChildProcesses.TieToApp(process);
+        Process process;
+        try { process = processes.Start(psi); }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            throw new PeerNetworkException($"couldn't start {exePath}: {ex.Message}");
+        }
         process.ErrorDataReceived += (_, e) =>
         {
             if (!string.IsNullOrWhiteSpace(e.Data)) Log(e.Data);

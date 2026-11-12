@@ -3,6 +3,16 @@ using System.Text.Json;
 namespace HorizonRadio.Sdk.Peers;
 
 /// <summary>
+/// Starts the peer network your devices and friends meet over. The host calls it once, when one of
+/// them first needs it (a paired PC, a friend, a party), and stops the network at exit. The peer
+/// helper's plugin provides it; a plugin can register another network instead.
+/// </summary>
+public interface IPeerNetworkFactory
+{
+    Task<IPeerNetwork> StartAsync(CancellationToken ct);
+}
+
+/// <summary>
 /// The peer-to-peer network as the app's features use it (the helper process implements it;
 /// tests use an in-memory one): peers find each other by topic, connect, and exchange JSON
 /// messages, in order per peer and at most once each. A message's sender is authenticated by

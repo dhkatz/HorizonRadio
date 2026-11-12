@@ -147,7 +147,9 @@ Each step leaves the app working and lands as its own PR or short stack.
      the SDK. Left for later: the login token's DPAPI encryption (a host secret service, with the
      Platform step) and the Soloist pairing toast (`App` listens for it until plugins can show a
      notice).
-   - [ ] The peer helper.
+   - [x] The peer helper: its plugin registers the app's peer network (`IPeerNetworkFactory`, in
+     the SDK, so a plugin can bring another), started through `IProcesses`; it references only the
+     SDK.
    - [ ] The audio helpers (the audio cache, subprocess audio, fingerprints) and the title
      extractor, handed out by the host.
    - [ ] The remaining engine coupling (FH6 and Spotify on the queue engine and mixes) goes

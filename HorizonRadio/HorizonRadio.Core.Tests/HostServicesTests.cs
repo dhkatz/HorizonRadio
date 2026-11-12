@@ -26,7 +26,7 @@ public sealed class HostServicesTests : IDisposable
         var info = new ProcessStartInfo { FileName = "dotnet" };
         info.ArgumentList.Add("--version");
 
-        var run = await new PlainProcesses().RunToEndAsync(info, log, "dotnet", CancellationToken.None);
+        var run = await RealProcesses.Instance.RunToEndAsync(info, log, "dotnet", CancellationToken.None);
 
         Assert.Equal(0, run.ExitCode);
         Assert.False(string.IsNullOrWhiteSpace(run.Output));
@@ -86,11 +86,6 @@ public sealed class HostServicesTests : IDisposable
     private YouTubeSourceFactory YouTube(string? ytDlp) => new(
         new NoSettings(), new Tools(ytDlp), new YtDlpClient(NoProcesses.Instance, NoLog.Instance),
         NoProcesses.Instance, NoLog.Instance, new HostAudioCaches(new Folders(_dir.Path)));
-
-    private sealed class PlainProcesses : IProcesses
-    {
-        public Process Start(ProcessStartInfo info) => Process.Start(info)!;
-    }
 
     private sealed class Lines : IPluginLog
     {

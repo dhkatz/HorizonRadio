@@ -12,6 +12,15 @@ public sealed class NoProcesses : IProcesses
         throw new InvalidOperationException($"The test started {info.FileName}.");
 }
 
+/// <summary>Starts processes for real (and doesn't tie them to anything): for tests that run a tool.</summary>
+public sealed class RealProcesses : IProcesses
+{
+    public static RealProcesses Instance { get; } = new();
+
+    public Process Start(ProcessStartInfo info) =>
+        Process.Start(info) ?? throw new InvalidOperationException($"Couldn't start {info.FileName}.");
+}
+
 /// <summary>A log that drops everything.</summary>
 public sealed class NoLog : IPluginLog
 {
