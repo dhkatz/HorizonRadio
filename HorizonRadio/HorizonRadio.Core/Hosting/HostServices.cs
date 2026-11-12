@@ -73,12 +73,13 @@ internal sealed class HostSourceSettings(SourceConfigStore store) : ISourceSetti
     public ConfigValues Load(string sourceId, IReadOnlyList<ConfigField> schema) => store.Load(sourceId, schema);
 }
 
-/// <summary>The title model as the app last set it up (<see cref="TitleExtractorRuntime"/>).</summary>
-internal sealed class HostTitleModel : ITitleModel
+/// <summary>The user's title-model setting, with no model to run: the title model's module
+/// (<c>HorizonRadio.TitleModel</c>) wraps this with the one installed from the Tools tab.</summary>
+internal sealed class HostTitleModel(SettingsStore settings) : ITitleModel
 {
-    public ITitleExtractor? Extractor => TitleExtractorRuntime.Current;
+    public ITitleExtractor? Extractor => null;
 
-    public TitleModelMode Mode => TitleExtractorRuntime.Mode;
+    public TitleModelMode Mode => settings.Get(MetadataSettings.TitleModel);
 }
 
 /// <summary>Each plugin's settings, in the app's settings store (<see cref="PluginSettings"/>).</summary>
