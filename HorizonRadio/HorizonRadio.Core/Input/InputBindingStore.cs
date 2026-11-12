@@ -10,7 +10,7 @@ namespace HorizonRadio.Core.Input;
 /// The input→action bindings (the Controls tab), kept in the <see cref="SettingsStore"/> as one
 /// synced list, <see cref="Bindings"/> (one setting rather than one per binding, since a binding
 /// replaces others: one action per slot, one action per input). Reads are lock-free (the input
-/// service matches from backend threads); writes come from the UI thread and are saved at once.
+/// service matches from backend threads); writes (the user's) are saved at once.
 /// Keyed by <see cref="InputBinding.Key"/> so a binding is matched by physical identity, not by its
 /// display label.
 /// </summary>

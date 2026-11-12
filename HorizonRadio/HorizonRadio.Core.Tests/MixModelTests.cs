@@ -77,6 +77,32 @@ public class MixModelTests
     }
 
     [Fact]
+    public async Task MixStore_takes_edits_and_merges_from_any_thread()
+    {
+        // The user edits from the window while another device's mixes merge on the helper's
+        // thread: nothing is lost and the list can be read meanwhile.
+        var store = new MixStore();
+        var at = DateTimeOffset.UtcNow;
+        var edits = Enumerable.Range(0, 4).Select(t => Task.Run(() =>
+        {
+            for (var i = 0; i < 200; i++) store.AddOrUpdate(new Mix($"edit-{t}-{i}", "Edit", []));
+        }));
+        var merges = Enumerable.Range(0, 4).Select(t => Task.Run(() =>
+        {
+            for (var i = 0; i < 200; i++)
+                store.MergeSynced([new SyncedMix($"merge-{t}-{i}", new Mix("", "Merged", []), at)]);
+        }));
+        var reads = Task.Run(() =>
+        {
+            for (var i = 0; i < 200; i++) _ = store.All.Count + store.SyncedMixes().Count;
+        });
+
+        await Task.WhenAll([.. edits, .. merges, reads]);
+
+        Assert.Equal(1600, store.All.Count);
+    }
+
+    [Fact]
     public void Resolver_returns_player_for_content_source()
     {
         var resolver = new MixContentResolver(new SourceConfigStore(), TestSources.Catalog);

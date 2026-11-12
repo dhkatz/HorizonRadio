@@ -157,7 +157,7 @@ public partial class App : Application
                 // Tee the pipeline so the active source can play to the game
                 // and (optionally) to local speakers for in-app test playback.
                 var tee = new TeePcmSink(_game.Output);
-                _preview = new PreviewController(tee, settings, a => Dispatcher.UIThread.Post(a));
+                _preview = new PreviewController(tee, settings);
 
                 _runner = new SourceRunner(tee);
 
@@ -265,7 +265,7 @@ public partial class App : Application
                 // belongs to the UI thread, so merges run there.
                 var peers = new Core.Peers.SharedPeerNetwork(provider.GetRequiredService<Sdk.Peers.IPeerNetworkFactory>().StartAsync);
                 var myDevices = new MyDevices(settings, peers.GetAsync,
-                    data: [new MixSync(mixStore, action => Dispatcher.UIThread.InvokeAsync(action).GetTask()), new HistorySync(_historyStore)]);
+                    data: [new MixSync(mixStore), new HistorySync(_historyStore)]);
                 _ = myDevices.StartAsync();
                 var devicesVm = new DevicesViewModel(myDevices, confirmations);
 

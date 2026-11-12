@@ -23,7 +23,7 @@ namespace HorizonRadio.Core.Audio;
 /// rather than unbounded buffer growth — fine for a preview/monitor path.
 ///
 /// Not thread-safe across <see cref="Open"/>/<see cref="Close"/>: those are
-/// expected to be driven from the UI thread. <see cref="Send"/> may be
+/// driven one at a time (by <see cref="PreviewController"/>). <see cref="Send"/> may be
 /// called concurrently from a source's background loop.
 ///
 /// Device loss (unplugged, disabled, driver reset) surfaces as WASAPI's render
@@ -42,7 +42,7 @@ public sealed class SpeakerPcmSink : ISpeakerOutput
     // one consistent output+buffer pair; the callback clears it with a
     // compare-exchange so a stale callback can't clear a newer session.
     private Session? _session;
-    // A session that died on its own, held until the UI thread releases it.
+    // A session that died on its own, held until the next Open/Close releases it.
     private Session? _lost;
     private volatile float _volume = 1.0f;
 
@@ -127,8 +127,8 @@ public sealed class SpeakerPcmSink : ISpeakerOutput
                 // Device found but couldn't be opened (held exclusively, format
                 // unsupported, yanked between enumerate and Init). Leave no
                 // session so IsOpen reports false and callers treat the output
-                // as unreachable — never throw out of Open (it runs from a
-                // binding setter on the UI thread).
+                // as unreachable — never throw out of Open (a user's pick of
+                // output runs it).
                 Log($"failed to open output: {ex.Message}");
                 if (session != null)
                 {

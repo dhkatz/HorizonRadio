@@ -124,7 +124,7 @@ public sealed class PlaybackRouter : IPlaybackRouter, IAsyncDisposable
         _runner = runner;
         _mixes = mixes;
         _time = time ?? TimeProvider.System;
-        _mixList = [.. mixes.All];
+        _mixList = mixes.All;
         MixContexts = (mix, shuffle) => new MixContextProvider(mix, resolver, shuffle);
 
         // The persisted preference; SetShuffleAsync keeps the runner in step from here on.
@@ -201,10 +201,10 @@ public sealed class PlaybackRouter : IPlaybackRouter, IAsyncDisposable
         lock (_routeLock) return Send(new RouteTo(route, ++_routeVersion) { Done = done });
     }
 
-    // On the thread that changed them (the UI's).
+    // On the thread that changed them (the window's, or a merge from another device).
     private void OnMixesChanged()
     {
-        IReadOnlyList<Mix> mixes = [.. _mixes.All];
+        var mixes = _mixes.All;
         _mixList = mixes;
         Send(new MixesEdited(mixes));
         MixesChanged?.Invoke();

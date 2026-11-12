@@ -210,7 +210,8 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
 
             // The speaker can fail or recover on its own (unplugged, default device
             // changed, device back): re-check reachability so a lost device pauses + toasts.
-            _preview.StateChanged += ReevaluateOutput;
+            // Raised on whichever thread changed it.
+            _preview.StateChanged += () => Dispatcher.UIThread.Post(ReevaluateOutput);
         }
 
         // Keep the dropdown in sync when the runner is driven from the

@@ -30,7 +30,7 @@ public sealed class SdlInputBackend : IInputBackend, IControllerDeviceSource
     public event Action<InputBinding>? InputReceived;
 
     // Snapshot of connected controller-category device names, for the UI's
-    // device picker. Rebuilt on the pump thread; read from the UI thread.
+    // device picker. Rebuilt on the pump thread; read from any.
     private volatile IReadOnlyList<string> _deviceSnapshot = Array.Empty<string>();
     public IReadOnlyList<string> Devices => _deviceSnapshot;
     public event Action? DevicesChanged;

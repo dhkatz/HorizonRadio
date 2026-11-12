@@ -26,17 +26,14 @@ public interface IDeviceData
     event Action? Changed;
 }
 
-/// <summary>Your mixes, kept in step between your devices. The store belongs to the UI thread, so
-/// it's only touched through <c>onOwnerThread</c>.</summary>
+/// <summary>Your mixes, kept in step between your devices.</summary>
 public sealed class MixSync : IDeviceData
 {
     private readonly MixStore _mixes;
-    private readonly Func<Action, Task> _onOwnerThread;
 
-    public MixSync(MixStore mixes, Func<Action, Task> onOwnerThread)
+    public MixSync(MixStore mixes)
     {
         _mixes = mixes;
-        _onOwnerThread = onOwnerThread;
         mixes.Changed += () => Changed?.Invoke();
     }
 
@@ -44,14 +41,11 @@ public sealed class MixSync : IDeviceData
 
     public event Action? Changed;
 
-    public async Task<IReadOnlyList<JsonElement>> ExportAsync(bool full)
-    {
-        IReadOnlyList<SyncedMix> all = [];
-        await _onOwnerThread(() => all = _mixes.SyncedMixes()).ConfigureAwait(false);
-        return [JsonSerializer.SerializeToElement(all.Select(WireMix.From).ToArray(), Json)];
-    }
+    public Task<IReadOnlyList<JsonElement>> ExportAsync(bool full) =>
+        Task.FromResult<IReadOnlyList<JsonElement>>(
+            [JsonSerializer.SerializeToElement(_mixes.SyncedMixes().Select(WireMix.From).ToArray(), Json)]);
 
-    public async Task MergeAsync(JsonElement theirs)
+    public Task MergeAsync(JsonElement theirs)
     {
         WireMix[]? mixes;
         try
@@ -60,14 +54,12 @@ public sealed class MixSync : IDeviceData
         }
         catch (JsonException)
         {
-            return;
+            return Task.CompletedTask;
         }
-        if (mixes == null) return;
+        if (mixes == null) return Task.CompletedTask;
         var synced = mixes.Where(m => !string.IsNullOrWhiteSpace(m.Id)).Select(m => m.ToSynced()).ToList();
-        await _onOwnerThread(() =>
-        {
-            if (_mixes.MergeSynced(synced)) _mixes.SaveToDisk();
-        }).ConfigureAwait(false);
+        if (_mixes.MergeSynced(synced)) _mixes.SaveToDisk();
+        return Task.CompletedTask;
     }
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)

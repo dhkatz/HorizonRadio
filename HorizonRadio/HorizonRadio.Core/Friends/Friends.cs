@@ -37,8 +37,7 @@ public sealed record FriendPeerMessage(string UserId, string PeerId, JsonElement
 /// signing a hello bound to the two connections' peer ids with its identity key
 /// (<see cref="Identity"/>), so nobody else can pass as either.
 ///
-/// Messages are handled one at a time on a loop of their own; <see cref="Changed"/> is raised off the
-/// UI thread.
+/// Messages are handled one at a time on a loop of their own; <see cref="Changed"/> is raised from it.
 /// </summary>
 public sealed class Friends : IAsyncDisposable
 {

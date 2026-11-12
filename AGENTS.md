@@ -117,8 +117,8 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   the other's (`MergeSynced`), then sends changes as they happen. Other data rides along as an
   `IDeviceData`, exported whole when devices meet and in part on a change, in pieces small enough
   for one message (a relayed connection carries 128 KB in all): mixes (`MixSync`, over
-  `MixStore.SyncedMixes`/`MergeSynced`, each mix timed, a deleted one kept as `removed`, touched
-  only on the UI thread) and history (`HistorySync`: plays are only added, so it merges as a union
+  `MixStore.SyncedMixes`/`MergeSynced`, each mix timed, a deleted one kept as `removed`; the
+  store is safe from any thread, and raises `Changed` on the one that changed it) and history (`HistorySync`: plays are only added, so it merges as a union
   by id, 100 per message; removed ids and the last clearing are kept). Messages from a peer that isn't in
   the group are ignored. The helper starts only once the PC is paired or starts pairing. Anything
   that shows or uses a synced setting has to follow it changing underneath (`Watch`, or the store's
@@ -209,6 +209,11 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   Each catalog caches its answers (`MetadataCache`); a miss is kept for two weeks, so when
   matching improves, bump `MetadataCache.CurrentMatchVersion`: misses from older matching
   are then looked up again at once.
+- **Threads** — Core knows nothing of the window: no service posts to a UI thread. Each keeps its
+  own state safe (a lock, or a loop of its own: the router, the queue engine, devices, friends,
+  parties) and raises events on the thread that made the change; a view model that updates bound
+  state from one marshals it (`Dispatcher.UIThread.Post`). Local preview (`PreviewController`) runs
+  its state machine under a lock and hands device callbacks to the thread pool.
 - **Plugins and the container** — `App` builds one DI container: Core's services
   (`AddHorizonCore`), the host's, then the plugins (`PluginRegistration.AddPlugins`, fed by
   `PluginDiscovery`'s assembly scan). A plugin is an `IPlugin` (its id, name and order) and,
