@@ -274,8 +274,7 @@ public partial class App : Application
                 // Your devices: paired PCs keep their synced settings, mixes and history in step over the peer
                 // helper, which starts only once this PC is paired (or starts pairing). The mix store
                 // belongs to the UI thread, so merges run there.
-                var peers = new Core.Peers.SharedPeerNetwork(async ct =>
-                    await PeerHelper.StartAsync(PeerHelper.DefaultKeyPath, Sdk.Peers.PeerDiscovery.All, ct: ct));
+                var peers = new Core.Peers.SharedPeerNetwork(provider.GetRequiredService<Sdk.Peers.IPeerNetworkFactory>().StartAsync);
                 var myDevices = new MyDevices(settings, peers.GetAsync,
                     data: [new MixSync(mixStore, action => Dispatcher.UIThread.InvokeAsync(action).GetTask()), new HistorySync(_historyStore)]);
                 _ = myDevices.StartAsync();

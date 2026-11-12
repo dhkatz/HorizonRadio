@@ -18,6 +18,7 @@ using HorizonRadio.Source.Radio;
 using HorizonRadio.Source.Spotify;
 using HorizonRadio.Source.Test;
 using HorizonRadio.Source.YouTube;
+using HorizonRadio.Tools.Peer;
 using HorizonRadio.Tools.YtDlp;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -153,7 +154,7 @@ public class PluginRegistrationTests
         Type[] assemblies = [typeof(YouTubeSourcePlugin), typeof(TestToneSourcePlugin), typeof(LocalSourcePlugin),
             typeof(SpotifySourcePlugin), typeof(RadioSourcePlugin), typeof(LrclibLyricsPlugin), typeof(UnisonLyricsPlugin),
             typeof(VocaDbMetadataPlugin), typeof(ItunesMetadataPlugin), typeof(MusicBrainzMetadataPlugin),
-            typeof(SpotifyMetadataPlugin), typeof(Fh6GamePlugin), typeof(YtDlpToolPlugin)];
+            typeof(SpotifyMetadataPlugin), typeof(Fh6GamePlugin), typeof(YtDlpToolPlugin), typeof(PeerHelperModule)];
         using var settings = SettingsStore.CreateInMemory();
         var provider = Build(s => s.AddHorizonCore(settings), [.. assemblies.SelectMany(a => a.Assembly.GetExportedTypes())]);
 
@@ -166,6 +167,7 @@ public class PluginRegistrationTests
         Assert.Equal(["spotify", "itunes", "musicbrainz", "vocadb"],
             provider.GetServices<IMetadataProviderFactory>().InDisplayOrder().Select(f => f.Id));
         Assert.Contains(provider.GetServices<IGamePlugin>(), p => p is Fh6GamePlugin);
+        Assert.IsType<PeerHelperNetworks>(provider.GetRequiredService<Sdk.Peers.IPeerNetworkFactory>());
     }
 
     [Fact]

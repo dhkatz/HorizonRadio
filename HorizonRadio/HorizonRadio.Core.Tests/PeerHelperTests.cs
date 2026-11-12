@@ -180,7 +180,7 @@ public sealed class PeerHelperIntegrationTests : IDisposable
     }
 
     private Task<PeerHelper> Start(string name) =>
-        PeerHelper.StartAsync(Path.Combine(_dir.Path, name + ".key"), PeerDiscovery.None);
+        PeerHelper.StartAsync(RealProcesses.Instance, Path.Combine(_dir.Path, name + ".key"), PeerDiscovery.None);
 
     [Fact]
     public async Task Two_helpers_connect_and_message_each_other()
@@ -239,7 +239,7 @@ public sealed class PeerHelperIntegrationTests : IDisposable
         {
             settings.Set(Core.Devices.DeviceSettings.Name, name);
             var network = new SharedPeerNetwork(async ct =>
-                await PeerHelper.StartAsync(Path.Combine(_dir.Path, name + ".key"), PeerDiscovery.Lan, ct: ct));
+                await PeerHelper.StartAsync(RealProcesses.Instance, Path.Combine(_dir.Path, name + ".key"), PeerDiscovery.Lan, ct: ct));
             networks.Add(network);
             return new Core.Devices.MyDevices(settings, network.GetAsync,
                 presenceInterval: TimeSpan.FromSeconds(2), sendDelay: TimeSpan.FromMilliseconds(50));
@@ -269,7 +269,7 @@ public sealed class PeerHelperIntegrationTests : IDisposable
     public async Task A_missing_helper_says_so()
     {
         var ex = await Assert.ThrowsAsync<FileNotFoundException>(() =>
-            PeerHelper.StartAsync(Path.Combine(_dir.Path, "k.key"), PeerDiscovery.None, Path.Combine(_dir.Path, "nope.exe")));
+            PeerHelper.StartAsync(RealProcesses.Instance, Path.Combine(_dir.Path, "k.key"), PeerDiscovery.None, Path.Combine(_dir.Path, "nope.exe")));
         Assert.Contains("nope.exe", ex.Message + ex.FileName);
     }
 }

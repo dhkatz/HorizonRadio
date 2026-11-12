@@ -106,7 +106,8 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   through the playback router (`PlaybackRouter.StartSourceAsync`) as the player's
   content.
 - **Your devices (`Core/Devices/`, `Core/Peers/`)** — paired PCs keep their synced settings in
-  step, peer to peer, over the helper (`PeerHelper`, behind the SDK's `IPeerNetwork`; tests use
+  step, peer to peer, over the helper (`PeerHelper`, behind the SDK's `IPeerNetwork`, which its plugin
+  provides as the `IPeerNetworkFactory` the app starts it with; tests use
   `MemoryPeerNetwork`). `MyDevices` owns it: pairing (a 12-character `PairingCode`: the first four
   pick the meeting topic, the other eight are a secret both sides prove with a PBKDF2-stretched
   HMAC, one attempt per code), the group (`DeviceSettings`: a shared group key, secret, from which
