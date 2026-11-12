@@ -45,7 +45,8 @@ public sealed partial class ToolsViewModel : ViewModelBase
             Items.Add(new ToolItemViewModel(installer, registry, confirmations));
     }
 
-    public ToolsViewModel() : this(new ToolRegistry(), ToolInstallers.CreateAll()) { }
+    /// <summary>Designer ctor: no tools (the app's come from the plugins it loads).</summary>
+    public ToolsViewModel() : this(new ToolRegistry(), []) { }
 
     /// <summary>
     /// Run the provisioning-freshness check across every tool and update

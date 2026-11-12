@@ -31,8 +31,16 @@ public sealed class SpotifySourcePlugin : IPlugin, IPluginModule
         services.AddSingleton(sp =>
         {
             var settings = sp.GetRequiredService<SpotifySettings>();
-            return new SoloistPlaybackService(settings.Soloist, settings.SoloistDeviceName,
+            var soloist = new SoloistPlaybackService(settings.Soloist, settings.SoloistDeviceName,
                 sp.GetRequiredService<IProcesses>(), sp.GetRequiredService<IPluginLog>());
+            // A track Soloist plays waits for the user to pair Soloist once; only they can (in the
+            // Spotify app), so say how.
+            var notifications = sp.GetRequiredService<INotifications>();
+            soloist.PairingNeeded += device => notifications.Show("Pair Spotify Soloist",
+                "Spotify won't play this track through librespot. In the Spotify app, " +
+                $"pick the device \"{device}\" once; the track plays when you have.",
+                NotificationKind.Info, TimeSpan.FromSeconds(30));
+            return soloist;
         });
         services.AddSingleton(sp => new SpotifyPlayerChoice(sp.GetRequiredService<IAppFolders>().Data("spotify-player.json")));
 

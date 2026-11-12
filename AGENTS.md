@@ -95,7 +95,8 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   active device resumes its previous track, so `SoloistTrack` starts a track at the first
   `track_changed` after Soloist acknowledges the `play` and ends it at the next one (or an
   idle/paused stop at the end), and audio only reaches the sink in between.
-  An unpaired Soloist holds the track while the user pairs it (`PairingNeeded`, a toast); pairing
+  An unpaired Soloist holds the track while the user pairs it (`PairingNeeded`, which the plugin
+  turns into a notification through `INotifications`: a toast in the window); pairing
   hands the Spotify app's playback over, paused, so a pause the user didn't make here is undone
   (and a play that hasn't started is re-sent).
   A source factory is one of two kinds. A content source (`IContentSourceFactory`:
@@ -214,11 +215,13 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   usually in the same class, an `IPluginModule` (public, parameterless) that registers what it
   contributes: sources (`IAudioSourceFactory`), metadata providers (`IMetadataProviderFactory`:
   factories, since they're built from the user's settings) and lyrics providers
-  (`ILyricsProvider`). The app collects each kind from the container (`GetServices<T>()`) and
+  (`ILyricsProvider`). Tool plugins (`IToolPlugin`: a tool's descriptor and installer) are found
+  the same way and ordered like the rest. The app collects each kind from the container (`GetServices<T>()`) and
   orders it by `SortOrder`, then id (`InDisplayOrder`; `IOrdered`). Contributions are built by the
   container, so their constructors take the host's services (`IPluginLog`, `IProcesses`,
   `IAppFolders`, `IToolLocator`, `IMetadataCache`, `IMetadataTrace`, `IAudioCaches`,
-  `IPluginSettingsStore` (a plugin's own settings),
+  `IPluginSettingsStore` (a plugin's own settings), `INotifications` (a toast, or a log line
+  headless),
   `ISourceSettings` (a source's saved settings, for work outside a player such as search),
   `ITitleModel` (the optional title model, read each time: it's replaced on install),
   `IConfirmations`) and the module's own; tool plugins register their wrappers the same way

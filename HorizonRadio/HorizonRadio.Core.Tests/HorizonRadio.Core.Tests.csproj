@@ -40,6 +40,7 @@
     <ProjectReference Include="..\..\Plugins\Sources\HorizonRadio.Source.YouTube\HorizonRadio.Source.YouTube.csproj" />
     <ProjectReference Include="..\..\Plugins\Tools\HorizonRadio.Tools.Peer\HorizonRadio.Tools.Peer.csproj" />
     <ProjectReference Include="..\..\Plugins\Tools\HorizonRadio.Tools.Soloist\HorizonRadio.Tools.Soloist.csproj" />
+    <ProjectReference Include="..\..\Plugins\Tools\HorizonRadio.Tools.TitleModel\HorizonRadio.Tools.TitleModel.csproj" />
   </ItemGroup>
 
 </Project>

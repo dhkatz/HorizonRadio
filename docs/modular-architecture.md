@@ -158,6 +158,13 @@ Each step leaves the app working and lands as its own PR or short stack.
      the engine only through `IGameHost`. No plugin references Core.
 6. [ ] `App.axaml.cs` stops naming plugin internals: the catalogs (sources, metadata, tools) are
    services, and Core reaches replaceable services through their interfaces.
+   - [x] `App` names no plugin: tool plugins come from the container like the rest (the static
+     tool list is gone), and plugins tell the user things through `INotifications` (the Soloist
+     pairing prompt is the Spotify plugin's).
+   - [ ] The catalogs (`SourceCatalog`, `MetadataCatalog`, `ToolCatalog`) are services instead of
+     statics filled at startup.
+   - [ ] Core reaches what a plugin can replace through its interface (the Console log, process
+     launching, folders, the tool locator), so a replacement applies to Core's own use too.
 7. [ ] `Core/Hosting/`: the startup sequence, plugin discovery, plugin context, game host and
    tool registry move out of `HorizonRadio.UI`.
 8. [ ] Platform interfaces in Core; `HorizonRadio.Platform` with the Windows implementations.

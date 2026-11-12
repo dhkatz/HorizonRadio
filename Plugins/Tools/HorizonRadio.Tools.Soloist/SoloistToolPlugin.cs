@@ -6,6 +6,8 @@ namespace HorizonRadio.Tools.Soloist;
 /// refused. Tracks Spotify's latest build (builds expire after 90 days).</summary>
 public sealed class SoloistToolPlugin : IToolPlugin
 {
+    public int SortOrder => 40;
+
     public ToolDescriptor Descriptor { get; } = new(ToolKind.Soloist, Soloist.ExeName);
     public IToolInstaller Installer { get; } = new SoloistInstaller();
 }

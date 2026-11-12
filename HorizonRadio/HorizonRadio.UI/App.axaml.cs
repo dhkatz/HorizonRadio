@@ -23,8 +23,6 @@ using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Core.Tools;
-using HorizonRadio.Metadata.Spotify;
-using HorizonRadio.Metadata.VocaDb;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Games;
 using HorizonRadio.Sdk.Lyrics;
@@ -32,9 +30,7 @@ using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Tools;
-using HorizonRadio.Source.Spotify;
 using HorizonRadio.TitleModel;
-using HorizonRadio.Tools.Peer;
 using HorizonRadio.UI.Services;
 using HorizonRadio.UI.Tools;
 using HorizonRadio.UI.ViewModels;
@@ -98,12 +94,14 @@ public partial class App : Application
             dialogManager.Register<QuickPlayDialogView, QuickPlayDialogViewModel>();
             dialogManager.Register<QueueAddModeDialogView, QueueAddModeDialogViewModel>();
             var confirmations = new DialogConfirmations(dialogManager);
+            var toasts = new ShadUI.ToastManager();
 
             var services = new ServiceCollection();
             services.AddHorizonCore(settings);
             services.AddSingleton<ToolRegistry>();
             // The app asks with dialogs (Core's default goes ahead without asking).
             services.Replace(ServiceDescriptor.Singleton<IConfirmations>(confirmations));
+            services.Replace(ServiceDescriptor.Singleton<INotifications>(new ToastNotifications(toasts)));
             // The plugins, found by scanning the loaded plugin assemblies rather than named here (the
             // seam the install model rests on), and their modules' services. Last, so a module can
             // replace or wrap any service above; the Console tab says when one does.
@@ -112,9 +110,10 @@ public partial class App : Application
             // ValidateOnBuild: a plugin asking for a service nobody registers fails here, at startup.
             var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
 
-            // Before anything resolves a source from the catalog. SortOrder gives the picker its
-            // display order. (The tool catalog is already seeded in Program.BuildAvaloniaApp, before
-            // any source probes it.)
+            // The tools first: sources look theirs up as they're built. Then the sources, before
+            // anything resolves one from the catalog; SortOrder gives the picker its display order.
+            var toolPlugins = provider.GetServices<IToolPlugin>().InDisplayOrder();
+            ToolCatalog.Initialize([.. toolPlugins.Select(t => t.Descriptor)]);
             SourceCatalog.Initialize(provider.GetServices<IAudioSourceFactory>().InDisplayOrder());
 
             _store = provider.GetRequiredService<SourceConfigStore>();
@@ -188,7 +187,7 @@ public partial class App : Application
                 var songSync = new LiveSongSync(() => SourceCatalog.All, new ReferenceStore(), _metaResolver);
 
                 var toolRegistry = provider.GetRequiredService<ToolRegistry>();
-                var installers = ToolInstallers.CreateAll();
+                var installers = toolPlugins.Select(t => t.Installer).ToArray();
 
                 // Optional local title-extraction model: published to the runtime holder so the
                 // (parameterless) radio source can reach it. Constructed only when a model is actually
@@ -266,8 +265,6 @@ public partial class App : Application
                     new IInputBackend[] { new SharpHookBackend(), new SdlInputBackend() },
                     controlsStore, dispatcher);
                 var controlsVm = new ControlsViewModel(controlsStore, _inputService, mixStore);
-
-                var toasts = new ShadUI.ToastManager();
 
                 var gameSettings = new GameSettingsViewModel(gamePlugins, settings, chosenGameId);
                 gameSettings.RestartRequested += () => Restart(desktop);
@@ -390,20 +387,6 @@ public partial class App : Application
                 // App self-update check: surface a newer build via the About
                 // footer badge + a one-time launch toast. Dev builds no-op.
                 CheckAppUpdateAsync(vm);
-
-                // A Spotify track Soloist plays waits for the user to pair Soloist once; only
-                // they can (in the Spotify app), so say how. (Until plugins can show a notice
-                // themselves, the app listens for the Spotify plugin's.)
-                if (provider.GetService<SoloistPlaybackService>() is { } soloist)
-                {
-                    soloist.PairingNeeded += device => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                        vm.ToastManager.CreateToast("Pair Spotify Soloist")
-                            .WithContent($"Spotify won't play this track through librespot. In the Spotify app, " +
-                                         $"pick the device \"{device}\" once; the track plays when you have.")
-                            .WithDelay(30)
-                            .DismissOnClick()
-                            .ShowInfo());
-                }
             }
         }
 
