@@ -31,7 +31,6 @@ using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Tools;
 using HorizonRadio.TitleModel;
 using HorizonRadio.UI.Services;
-using HorizonRadio.UI.Tools;
 using HorizonRadio.UI.ViewModels;
 using HorizonRadio.UI.Views;
 using Microsoft.Extensions.DependencyInjection;
@@ -97,7 +96,6 @@ public partial class App : Application
 
             var services = new ServiceCollection();
             services.AddHorizonCore(settings);
-            services.AddSingleton<ToolRegistry>();
             // The app asks with dialogs (Core's default goes ahead without asking).
             services.Replace(ServiceDescriptor.Singleton<IConfirmations>(confirmations));
             services.Replace(ServiceDescriptor.Singleton<INotifications>(new ToastNotifications(toasts)));
