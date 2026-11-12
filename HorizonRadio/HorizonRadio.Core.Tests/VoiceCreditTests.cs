@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using System.Text.Json;
 using HorizonRadio.Core.Metadata;
-using HorizonRadio.Core.Metadata.Apple;
-using HorizonRadio.Core.Metadata.MusicBrainz;
-using HorizonRadio.Core.Metadata.VocaDb;
+using HorizonRadio.Metadata.Apple;
+using HorizonRadio.Metadata.MusicBrainz;
+using HorizonRadio.Metadata.VocaDb;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 

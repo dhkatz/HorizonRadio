@@ -1,7 +1,7 @@
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Lyrics;
 
-namespace HorizonRadio.Core.Lyrics.Unison;
+namespace HorizonRadio.Lyrics.Unison;
 
 /// <summary>The Unison lyrics plugin. First: its lyrics are often synced word by word.</summary>
 public sealed class UnisonLyricsPlugin : ILyricsPlugin

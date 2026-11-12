@@ -3,7 +3,7 @@ using HorizonRadio.Sdk.Audio;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
 
-namespace HorizonRadio.Core.Sources.Test;
+namespace HorizonRadio.Source.Test;
 
 /// <summary>
 /// Diagnostic source: emits a 440 Hz sine wave continuously. Used to

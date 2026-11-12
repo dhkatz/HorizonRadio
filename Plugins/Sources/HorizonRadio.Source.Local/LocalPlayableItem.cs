@@ -5,7 +5,7 @@ using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
 using NAudio.Wave;
 
-namespace HorizonRadio.Core.Sources.Local;
+namespace HorizonRadio.Source.Local;
 
 /// <summary>
 /// One local audio file as a <see cref="PlayableItem"/>. Decodes via NAudio

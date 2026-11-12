@@ -4,7 +4,7 @@ using System.IO.Pipes;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace HorizonRadio.Core.Ipc;
+namespace HorizonRadio.Game.ForzaHorizon6.Ipc;
 
 /// <summary>
 /// Writes raw s16 interleaved stereo PCM at 44.1 kHz into the DLL's

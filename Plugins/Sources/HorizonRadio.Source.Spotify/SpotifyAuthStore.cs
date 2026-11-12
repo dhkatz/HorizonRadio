@@ -6,7 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using HorizonRadio.Core.IO;
 
-namespace HorizonRadio.Core.Sources.Spotify;
+namespace HorizonRadio.Source.Spotify;
 
 /// <summary>
 /// Stores the Spotify OAuth refresh token, encrypted at rest with Windows DPAPI

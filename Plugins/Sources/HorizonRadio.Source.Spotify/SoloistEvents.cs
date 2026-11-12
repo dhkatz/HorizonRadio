@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace HorizonRadio.Core.Sources.Spotify;
+namespace HorizonRadio.Source.Spotify;
 
 /// <summary>One message from Soloist's WebSocket API, with the fields playback needs.</summary>
 internal sealed record SoloistEvent(

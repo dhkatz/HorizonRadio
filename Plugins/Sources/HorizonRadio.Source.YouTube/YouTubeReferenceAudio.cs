@@ -1,10 +1,11 @@
 using System.Diagnostics;
 using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Core.Sources;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Tools.FFmpeg;
 using HorizonRadio.Tools.YtDlp;
 
-namespace HorizonRadio.Core.Sources.YouTube;
+namespace HorizonRadio.Source.YouTube;
 
 /// <summary>
 /// Fetches a video's audio whole, as fast as it downloads, for analysis: yt-dlp downloads the best

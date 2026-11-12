@@ -7,11 +7,11 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Models;
+using HorizonRadio.Game.ForzaHorizon6.Models;
 using HorizonRadio.Sdk.Games;
 using HorizonRadio.Sdk.Models;
 
-namespace HorizonRadio.Core.Ipc;
+namespace HorizonRadio.Game.ForzaHorizon6.Ipc;
 
 /// <summary>
 /// Client for the named-pipe IPC the DLL exposes. Auto-reconnects on

@@ -1,8 +1,9 @@
 using System.Diagnostics;
+using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
 
-namespace HorizonRadio.Core.Sources.Spotify;
+namespace HorizonRadio.Source.Spotify;
 
 /// <summary>
 /// Rich metadata for one Spotify track, fetched up front from the Web API when a
@@ -110,7 +111,7 @@ public sealed class SpotifyPlayableItem : PlayableItem
         {
             if (_choice?.LibrespotRefusedAt is { } at)
             {
-                Diagnostics.ProcessConsole.Append("spotify", "playing through Soloist: Spotify refused librespot " +
+                ProcessConsole.Append("spotify", "playing through Soloist: Spotify refused librespot " +
                     $"{at.ToLocalTime():g}; librespot gets another try after {(at + SpotifyPlayerChoice.RecheckAfter).ToLocalTime():g}");
             }
             var soloistPlayed = false;
@@ -127,13 +128,13 @@ public sealed class SpotifyPlayableItem : PlayableItem
             {
                 // Soloist broke (an expired build, its audio tap, pairing lost): librespot plays what
                 // Spotify lets it rather than every track failing until the recheck.
-                Diagnostics.ProcessConsole.Append("spotify", $"Soloist couldn't play the track ({ex.Message}); trying librespot");
+                ProcessConsole.Append("spotify", $"Soloist couldn't play the track ({ex.Message}); trying librespot");
                 soloistFailed = true;
             }
         }
         else if (soloistReady && _choice?.LibrespotRefusedAt is { } refusedAt)
         {
-            Diagnostics.ProcessConsole.Append("spotify", "giving librespot another try (Spotify refused it " +
+            ProcessConsole.Append("spotify", "giving librespot another try (Spotify refused it " +
                 $"{refusedAt.ToLocalTime():g}); Soloist plays the track if it's refused again");
         }
 
@@ -150,12 +151,12 @@ public sealed class SpotifyPlayableItem : PlayableItem
         {
             if (!soloistReady || soloistFailed)
             {
-                Diagnostics.ProcessConsole.Append("spotify", "Spotify refused librespot the audio; no Soloist fallback: "
+                ProcessConsole.Append("spotify", "Spotify refused librespot the audio; no Soloist fallback: "
                     + (soloistFailed ? "Soloist failed on this track too"
                                      : _soloist?.NotReadyReason ?? "Soloist isn't available in this build"));
                 throw;
             }
-            Diagnostics.ProcessConsole.Append("spotify", "Spotify refused librespot the audio; playing it through Soloist");
+            ProcessConsole.Append("spotify", "Spotify refused librespot the audio; playing it through Soloist");
             await PlayWithSoloistAsync(ctx, () =>
             {
                 OnPlaying();

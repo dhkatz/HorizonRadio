@@ -1,7 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
-using HorizonRadio.Core.Models;
+using HorizonRadio.Game.ForzaHorizon6.Models;
 using HorizonRadio.Sdk.UI.Theme;
 using LiveChartsCore;
 using LiveChartsCore.Defaults;

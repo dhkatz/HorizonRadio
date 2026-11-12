@@ -8,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Sdk.Lyrics;
 
-namespace HorizonRadio.Core.Metadata.VocaDb;
+namespace HorizonRadio.Metadata.VocaDb;
 
 /// <summary>
 /// The Vocaloid Lyrics Wiki (vocaloidlyrics.miraheze.org): lyrics for many Vocaloid songs whose

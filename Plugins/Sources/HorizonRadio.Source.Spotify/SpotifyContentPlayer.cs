@@ -2,10 +2,11 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Sdk.Sources;
 using SpotifyAPI.Web;
 
-namespace HorizonRadio.Core.Sources.Spotify;
+namespace HorizonRadio.Source.Spotify;
 
 /// <summary>
 /// Content-free Spotify engine: resolves a Spotify locator (track/playlist/album,
@@ -99,7 +100,7 @@ public sealed class SpotifyContentPlayer(SpotifyConnection connection, SpotifyPl
     private static void Log(string msg)
     {
         Trace.WriteLine($"[hzn-spotify-content] {msg}");
-        Diagnostics.ProcessConsole.Append("spotify", msg);
+        ProcessConsole.Append("spotify", msg);
     }
 
     private static async Task<IReadOnlyList<SpotifyTrackInfo>> TrackInfosAsync(

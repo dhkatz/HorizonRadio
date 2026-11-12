@@ -10,7 +10,7 @@ using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Lyrics;
 using HorizonRadio.Sdk.Metadata;
 
-namespace HorizonRadio.Core.Metadata.VocaDb;
+namespace HorizonRadio.Metadata.VocaDb;
 
 /// <summary>
 /// Lyrics from VocaDB: the original lyrics of a Vocaloid / UTAU / SynthV song, usually with a

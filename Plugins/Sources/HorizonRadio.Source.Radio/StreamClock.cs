@@ -1,6 +1,6 @@
 using System;
 
-namespace HorizonRadio.Core.Sources.Radio;
+namespace HorizonRadio.Source.Radio;
 
 /// <summary>
 /// When a byte of a radio stream will be heard. The stream is read ahead of playback (the

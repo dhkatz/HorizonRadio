@@ -1,13 +1,14 @@
 using System.Diagnostics;
 using System.Text.Json;
 using HorizonRadio.Core.Metadata;
+using HorizonRadio.Core.Sources;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Tools.FFmpeg;
 using HorizonRadio.Tools.YtDlp;
 
-namespace HorizonRadio.Core.Sources.YouTube;
+namespace HorizonRadio.Source.YouTube;
 
 /// <summary>
 /// One YouTube video as a <see cref="PlayableItem"/>, decoded with ffmpeg into the canonical PCM.

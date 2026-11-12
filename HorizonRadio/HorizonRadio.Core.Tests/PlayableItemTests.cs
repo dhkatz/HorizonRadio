@@ -1,5 +1,5 @@
-using HorizonRadio.Core.Sources.Local;
 using HorizonRadio.Sdk.Sources;
+using HorizonRadio.Source.Local;
 
 namespace HorizonRadio.Core.Tests;
 

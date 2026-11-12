@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
 
-namespace HorizonRadio.Core.Metadata.Apple;
+namespace HorizonRadio.Metadata.Apple;
 
 /// <summary>The Apple/iTunes metadata plugin — contributes the iTunes provider.</summary>
 public sealed class ItunesMetadataPlugin : IMetadataPlugin

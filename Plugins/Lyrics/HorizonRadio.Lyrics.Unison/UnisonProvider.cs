@@ -7,7 +7,7 @@ using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Lyrics;
 using HorizonRadio.Sdk.Metadata;
 
-namespace HorizonRadio.Core.Lyrics.Unison;
+namespace HorizonRadio.Lyrics.Unison;
 
 /// <summary>
 /// Unison (unison.boidu.dev): Better Lyrics' crowdsourced, community-voted lyrics, often hand-synced

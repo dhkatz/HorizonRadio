@@ -1,5 +1,5 @@
 
-namespace HorizonRadio.Core.Sources.Spotify;
+namespace HorizonRadio.Source.Spotify;
 
 /// <summary>What a Spotify locator points at.</summary>
 public enum SpotifyLinkKind

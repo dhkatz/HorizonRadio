@@ -1,5 +1,5 @@
 using System.Text;
-using HorizonRadio.Core.Sources.Radio;
+using HorizonRadio.Source.Radio;
 
 namespace HorizonRadio.Core.Tests;
 

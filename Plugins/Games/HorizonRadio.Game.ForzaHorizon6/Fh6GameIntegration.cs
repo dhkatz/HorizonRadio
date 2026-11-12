@@ -1,9 +1,10 @@
 using System.ComponentModel;
 using Avalonia.Threading;
 using HorizonRadio.Core.Events;
-using HorizonRadio.Core.Ipc;
-using HorizonRadio.Core.ModInstall;
 using HorizonRadio.Core.Sources;
+using HorizonRadio.Game.ForzaHorizon6.Events;
+using HorizonRadio.Game.ForzaHorizon6.Ipc;
+using HorizonRadio.Game.ForzaHorizon6.ModInstall;
 using HorizonRadio.Game.ForzaHorizon6.ViewModels;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Games;

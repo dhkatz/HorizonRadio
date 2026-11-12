@@ -1,7 +1,8 @@
+using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Tools.YtDlp;
 
-namespace HorizonRadio.Core.Sources.YouTube;
+namespace HorizonRadio.Source.YouTube;
 
 /// <summary>
 /// Maps yt-dlp search hits to <see cref="SearchResult"/>s. Kept here (not in the
@@ -14,7 +15,7 @@ namespace HorizonRadio.Core.Sources.YouTube;
 /// </summary>
 internal static class YouTubeSearch
 {
-    private static void Log(string msg) => Diagnostics.ProcessConsole.Append("search", msg);
+    private static void Log(string msg) => ProcessConsole.Append("search", msg);
 
     public static async Task<IReadOnlyList<SearchResult>> SearchTracksAsync(
         string ytDlpPath, string query, int limit, CancellationToken ct)

@@ -2,13 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Sources.Spotify;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Sources.Config;
+using HorizonRadio.Source.Spotify;
 using SpotifyAPI.Web;
 
-namespace HorizonRadio.Core.Metadata.Spotify;
+namespace HorizonRadio.Metadata.Spotify;
 
 public sealed class SpotifyProviderFactory : IMetadataProviderFactory
 {

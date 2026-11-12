@@ -5,7 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace HorizonRadio.Core.Sources.Radio;
+namespace HorizonRadio.Source.Radio;
 
 /// <summary>
 /// Reads an internet-radio stream over HTTP with ICY (SHOUTcast/Icecast) metadata

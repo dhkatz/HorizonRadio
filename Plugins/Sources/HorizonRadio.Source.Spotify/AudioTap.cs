@@ -8,7 +8,7 @@ using System.Text;
 using HorizonRadio.Sdk.Audio;
 using HorizonRadio.Sdk.Sources;
 
-namespace HorizonRadio.Core.Sources.Spotify;
+namespace HorizonRadio.Source.Spotify;
 
 /// <summary>
 /// The app's end of horizon_audio_tap.dll (Native/): loads the DLL into a process the app started

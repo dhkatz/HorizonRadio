@@ -8,7 +8,7 @@ using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Sources.Config;
 using HorizonRadio.Sdk.Tools;
 
-namespace HorizonRadio.Core.Sources.Radio;
+namespace HorizonRadio.Source.Radio;
 
 /// <summary>
 /// Factory for the Internet Radio source. It's content-addressable (a station URL is

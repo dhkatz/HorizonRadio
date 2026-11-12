@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 
-namespace HorizonRadio.Core.Sources.Radio;
+namespace HorizonRadio.Source.Radio;
 
 /// <summary>
 /// Parses an ICY <c>StreamTitle</c> into (artist, title) for radio, plus alternative

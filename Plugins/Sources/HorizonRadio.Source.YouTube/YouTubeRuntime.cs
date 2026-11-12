@@ -1,4 +1,4 @@
-namespace HorizonRadio.Core.Sources.YouTube;
+namespace HorizonRadio.Source.YouTube;
 
 /// <summary>
 /// App-level YouTube wiring, set once at startup so the parameterless

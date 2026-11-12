@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using HorizonRadio.Sdk.Audio;
 using NAudio.Dsp;
 
-namespace HorizonRadio.Core.Sources.Spotify;
+namespace HorizonRadio.Source.Spotify;
 
 /// <summary>The sample format the tap announces (Native/include/horizon/tap/protocol.hpp).</summary>
 public readonly record struct AudioTapFormat(int SampleRate, int Channels, int BitsPerSample, bool IsFloat)

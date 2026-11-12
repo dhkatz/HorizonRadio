@@ -1,8 +1,8 @@
 using System;
 using System.Linq;
 using HorizonRadio.Core.History;
-using HorizonRadio.Core.Sources.Local;
 using HorizonRadio.Sdk.Models;
+using HorizonRadio.Source.Local;
 
 namespace HorizonRadio.Core.Tests;
 

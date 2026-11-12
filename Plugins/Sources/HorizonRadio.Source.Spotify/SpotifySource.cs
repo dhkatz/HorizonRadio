@@ -1,10 +1,11 @@
 using System.Collections.Generic;
 using System.Diagnostics;
+using HorizonRadio.Core.Sources;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Tools.Librespot;
 
-namespace HorizonRadio.Core.Sources.Spotify;
+namespace HorizonRadio.Source.Spotify;
 
 /// <summary>
 /// Spotify Connect source backed by a librespot subprocess. librespot

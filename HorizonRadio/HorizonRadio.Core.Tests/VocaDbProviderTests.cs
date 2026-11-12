@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Text.Json;
 using HorizonRadio.Core.Diagnostics;
-using HorizonRadio.Core.Metadata.VocaDb;
+using HorizonRadio.Metadata.VocaDb;
 
 namespace HorizonRadio.Core.Tests;
 

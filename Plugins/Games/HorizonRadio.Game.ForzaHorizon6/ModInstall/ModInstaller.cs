@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
 
-namespace HorizonRadio.Core.ModInstall;
+namespace HorizonRadio.Game.ForzaHorizon6.ModInstall;
 
 /// <summary>
 /// Installs / uninstalls the version.dll proxy mod into a Forza

@@ -1,7 +1,7 @@
 using HorizonRadio.Sdk.Audio;
 using HorizonRadio.Sdk.Sources;
 
-namespace HorizonRadio.Core.Sources.Local;
+namespace HorizonRadio.Source.Local;
 
 /// <summary>
 /// Content-free local-files engine: expands a <see cref="ContentRef"/> locator — a

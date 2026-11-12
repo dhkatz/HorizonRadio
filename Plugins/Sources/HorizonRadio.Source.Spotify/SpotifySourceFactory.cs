@@ -3,7 +3,7 @@ using HorizonRadio.Sdk.Sources.Config;
 using HorizonRadio.Sdk.Tools;
 using HorizonRadio.Tools.Librespot;
 
-namespace HorizonRadio.Core.Sources.Spotify;
+namespace HorizonRadio.Source.Spotify;
 
 /// <summary>
 /// Factory for <see cref="SpotifySource"/>. Exposes the

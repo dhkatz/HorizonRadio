@@ -1,8 +1,8 @@
 using System.Net;
 using System.Text;
 using HorizonRadio.Core.Metadata;
-using HorizonRadio.Core.Metadata.Apple;
-using HorizonRadio.Core.Metadata.VocaDb;
+using HorizonRadio.Metadata.Apple;
+using HorizonRadio.Metadata.VocaDb;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 

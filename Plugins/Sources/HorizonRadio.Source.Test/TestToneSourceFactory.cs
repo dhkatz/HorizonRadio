@@ -1,7 +1,7 @@
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Sources.Config;
 
-namespace HorizonRadio.Core.Sources.Test;
+namespace HorizonRadio.Source.Test;
 
 /// <summary>
 /// Factory for <see cref="TestToneSource"/>. One numeric field for the

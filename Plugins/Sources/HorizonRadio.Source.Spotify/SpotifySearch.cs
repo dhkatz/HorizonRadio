@@ -1,7 +1,8 @@
+using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Sdk.Sources;
 using SpotifyAPI.Web;
 
-namespace HorizonRadio.Core.Sources.Spotify;
+namespace HorizonRadio.Source.Spotify;
 
 /// <summary>
 /// Maps the Spotify Web API Search endpoint to <see cref="SearchResult"/>s. Kept
@@ -22,7 +23,7 @@ internal static class SpotifySearch
 
     // v1 returns tracks only. Albums/playlists slot in later behind SearchResultKind
     // (and enqueue the same way, since the queue resolver already enumerates them).
-    private static void Log(string msg) => Diagnostics.ProcessConsole.Append("search", msg);
+    private static void Log(string msg) => ProcessConsole.Append("search", msg);
 
     public static async Task<IReadOnlyList<SearchResult>> SearchTracksAsync(
         SpotifyConnection connection, string query, int limit, CancellationToken ct)

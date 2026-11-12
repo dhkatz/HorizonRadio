@@ -1,4 +1,4 @@
-namespace HorizonRadio.Core.Sources.Spotify;
+namespace HorizonRadio.Source.Spotify;
 
 /// <summary>
 /// librespot couldn't play a track and gave up on it. <see cref="AudioKeyRefused"/>: Spotify
