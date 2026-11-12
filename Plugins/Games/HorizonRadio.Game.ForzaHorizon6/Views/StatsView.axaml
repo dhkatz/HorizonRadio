@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:HorizonRadio.Sdk.UI.Controls"
              xmlns:theme="using:HorizonRadio.Sdk.UI.Theme"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -16,6 +17,8 @@
 
     <ScrollViewer>
         <StackPanel Margin="24" Spacing="16">
+            <ui:PageHeader Title="Stats"
+                           Description="How the audio bridge into Forza Horizon 6 is doing: what it receives, what it plays, and what it drops."/>
 
             <!-- Hero status card. Big visual at the top so the user can
                  tell at a glance whether the bridge is alive without

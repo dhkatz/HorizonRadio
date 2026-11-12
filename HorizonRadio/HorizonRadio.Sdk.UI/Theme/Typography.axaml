@@ -4,12 +4,12 @@
     <!-- Text styles, by role. Give a TextBlock one class instead of a size, weight and opacity:
          <TextBlock Classes="sectionTitle" Text="Your Friends"/>. -->
 
-    <!-- A page's title and the line under it. -->
+    <!-- A page's title, and the text that explains a page or a section under its title. -->
     <Style Selector=":is(TextBlock).pageTitle">
         <Setter Property="FontSize" Value="20"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
     </Style>
-    <Style Selector=":is(TextBlock).pageDescription">
+    <Style Selector=":is(TextBlock).description">
         <Setter Property="FontSize" Value="12"/>
         <Setter Property="Opacity" Value="0.6"/>
         <Setter Property="TextWrapping" Value="Wrap"/>

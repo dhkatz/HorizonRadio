@@ -141,6 +141,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Every page is laid out the same way, and cards look like cards.** Pages share one header
+  (title, what the page is for, its actions), and their sections sit in cards with a border and a
+  raised background; the app's cards had been drawn without either. Settings with a switch or a
+  choice put their name and explanation on the left and the control on the right everywhere, the
+  Stats page gets a title, and Sources no longer says "(This source has no settings.)".
 - **The app's look lives in `HorizonRadio.Sdk.UI` (internal).** The theme (ShadUI, Material icons,
   color tokens and text styles) is one `HorizonRadioTheme`, which plugin pages use too: the FH6
   plugin now references it instead of reaching ShadUI through the app. Status colors come from

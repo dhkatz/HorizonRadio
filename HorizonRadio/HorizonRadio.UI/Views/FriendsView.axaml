@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
+             xmlns:ui="using:HorizonRadio.Sdk.UI.Controls"
              xmlns:material="using:Material.Icons.Avalonia"
              mc:Ignorable="d" d:DesignWidth="720" d:DesignHeight="640"
              x:Class="HorizonRadio.UI.Views.FriendsView"
@@ -14,23 +15,16 @@
 
     <ScrollViewer>
         <StackPanel Margin="24" Spacing="16" MaxWidth="760" HorizontalAlignment="Left">
-            <StackPanel Spacing="4" Margin="0,0,0,4">
-                <TextBlock Text="Friends" FontSize="20" FontWeight="SemiBold"/>
-                <TextBlock FontSize="12" Opacity="0.6" TextWrapping="Wrap"
-                           Text="See when your friends are online and what they're listening to; they see you too. You connect to each other directly, with no account and no server of ours."/>
-            </StackPanel>
+            <ui:PageHeader Title="Friends"
+                           Description="See when your friends are online and what they're listening to; they see you too. You connect to each other directly, with no account and no server of ours."/>
 
-            <TextBlock Text="{Binding Status}" FontSize="12" TextWrapping="Wrap" IsVisible="{Binding HasStatus}"/>
+            <TextBlock Classes="body" Text="{Binding Status}" IsVisible="{Binding HasStatus}"/>
 
-            <!-- Listening party -->
-            <Border Classes="Card" Padding="20" IsVisible="{Binding HasParty}">
+            <ui:SectionCard Title="Listening Party" IsVisible="{Binding HasParty}">
                 <StackPanel Spacing="12">
-                    <TextBlock Text="Listening Party" FontSize="14" FontWeight="SemiBold"/>
-                    <TextBlock Text="{Binding PartyTitle}" FontSize="12" TextWrapping="Wrap"/>
-                    <TextBlock Text="{Binding PartyDetail}" FontSize="12" Opacity="0.7" TextWrapping="Wrap"
-                               IsVisible="{Binding HasPartyDetail}"/>
-                    <TextBlock Text="{Binding PartyProblem}" FontSize="12" Opacity="0.7" TextWrapping="Wrap"
-                               IsVisible="{Binding HasPartyProblem}"/>
+                    <TextBlock Classes="body" Text="{Binding PartyTitle}"/>
+                    <TextBlock Classes="description" Text="{Binding PartyDetail}" IsVisible="{Binding HasPartyDetail}"/>
+                    <TextBlock Classes="description" Text="{Binding PartyProblem}" IsVisible="{Binding HasPartyProblem}"/>
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <Button Classes="Primary" Content="Start Party" Command="{Binding StartPartyCommand}"
                                 IsVisible="{Binding CanStartParty}" IsEnabled="{Binding !IsBusy}"/>
@@ -40,14 +34,11 @@
                                 IsVisible="{Binding IsInParty}"/>
                     </StackPanel>
                 </StackPanel>
-            </Border>
+            </ui:SectionCard>
 
-            <!-- Your friends -->
-            <Border Classes="Card" Padding="20">
+            <ui:SectionCard Title="Your Friends">
                 <StackPanel Spacing="12">
-                    <TextBlock Text="Your Friends" FontSize="14" FontWeight="SemiBold"/>
-                    <TextBlock Text="None yet. Add one below." FontSize="12" Opacity="0.6"
-                               IsVisible="{Binding !HasFriends}"/>
+                    <TextBlock Classes="description" Text="None yet. Add one below." IsVisible="{Binding !HasFriends}"/>
                     <ItemsControl ItemsSource="{Binding Friends}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:FriendRow}">
@@ -57,7 +48,7 @@
                                                            Opacity="{Binding IconOpacity}"/>
                                     <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Medium"/>
-                                        <TextBlock Text="{Binding State}" FontSize="11" Opacity="0.6" TextWrapping="Wrap"/>
+                                        <TextBlock Classes="caption" Text="{Binding State}"/>
                                     </StackPanel>
                                     <Button Grid.Column="2" Classes="Primary" Content="Join Party" Margin="0,0,8,0"
                                             Command="{Binding JoinCommand}" IsVisible="{Binding CanJoin}"/>
@@ -68,18 +59,15 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </StackPanel>
-            </Border>
+            </ui:SectionCard>
 
-            <!-- Add a friend -->
-            <Border Classes="Card" Padding="20">
+            <ui:SectionCard Title="Add a Friend"
+                            Description="One of you shows a code; the other types it on their Friends page. You're then friends on all your PCs.">
                 <StackPanel Spacing="12">
-                    <TextBlock Text="Add a Friend" FontSize="14" FontWeight="SemiBold"/>
-                    <TextBlock FontSize="12" Opacity="0.7" TextWrapping="Wrap"
-                               Text="One of you shows a code; the other types it on their Friends page. You're then friends on all your PCs."/>
                     <StackPanel Spacing="6" IsVisible="{Binding IsShowingCode}">
-                        <SelectableTextBlock Text="{Binding InviteCode}" FontSize="28" FontWeight="SemiBold"
-                                             FontFamily="Consolas,Cascadia Mono,monospace" LetterSpacing="2"/>
-                        <TextBlock Text="{Binding InviteExpires}" FontSize="11" Opacity="0.6"/>
+                        <SelectableTextBlock Classes="mono" Text="{Binding InviteCode}" FontSize="28" FontWeight="SemiBold"
+                                             LetterSpacing="2"/>
+                        <TextBlock Classes="caption" Text="{Binding InviteExpires}"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <Button Classes="Primary" Content="Show Code" Command="{Binding ShowCodeCommand}"
@@ -97,20 +85,15 @@
                                 IsEnabled="{Binding !IsBusy}"/>
                     </Grid>
                 </StackPanel>
-            </Border>
+            </ui:SectionCard>
 
-            <!-- You -->
-            <Border Classes="Card" Padding="20">
-                <StackPanel Spacing="12">
-                    <TextBlock Text="You" FontSize="14" FontWeight="SemiBold"/>
-                    <TextBlock FontSize="12" Opacity="0.7" TextWrapping="Wrap"
-                               Text="What your friends see you as. Your friends see the song you're playing while Horizon Radio is open."/>
-                    <Grid ColumnDefinitions="*,Auto">
-                        <TextBox Grid.Column="0" Text="{Binding MyName, Mode=TwoWay}" Margin="0,0,8,0"/>
-                        <Button Grid.Column="1" Classes="Secondary" Content="Rename" Command="{Binding RenameCommand}"/>
-                    </Grid>
-                </StackPanel>
-            </Border>
+            <ui:SectionCard Title="You"
+                            Description="What your friends see you as. Your friends see the song you're playing while Horizon Radio is open.">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBox Grid.Column="0" Text="{Binding MyName, Mode=TwoWay}" Margin="0,0,8,0"/>
+                    <Button Grid.Column="1" Classes="Secondary" Content="Rename" Command="{Binding RenameCommand}"/>
+                </Grid>
+            </ui:SectionCard>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

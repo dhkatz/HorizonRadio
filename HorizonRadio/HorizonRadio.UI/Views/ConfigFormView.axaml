@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:HorizonRadio.Sdk.UI.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
@@ -111,17 +112,9 @@
         </DataTemplate>
 
         <DataTemplate DataType="{x:Type vm:BoolFieldViewModel}">
-            <Grid ColumnDefinitions="*,Auto">
-                <StackPanel Grid.Column="0" Spacing="2">
-                    <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="Medium"/>
-                    <TextBlock Text="{Binding Description}"
-                               FontSize="11" Opacity="0.55"
-                               TextWrapping="Wrap"
-                               IsVisible="{Binding Description, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-                </StackPanel>
-                <ToggleSwitch Grid.Column="1"
-                              IsChecked="{Binding IsOn, Mode=TwoWay}"/>
-            </Grid>
+            <ui:SettingRow Label="{Binding Label}" Description="{Binding Description}">
+                <ToggleSwitch IsChecked="{Binding IsOn, Mode=TwoWay}"/>
+            </ui:SettingRow>
         </DataTemplate>
 
         <DataTemplate DataType="{x:Type vm:EnumFieldViewModel}">
