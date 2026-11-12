@@ -1,4 +1,5 @@
-using HorizonRadio.Core.Models;
+using HorizonRadio.Sdk.Models;
+using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.Sources.Queue;
 

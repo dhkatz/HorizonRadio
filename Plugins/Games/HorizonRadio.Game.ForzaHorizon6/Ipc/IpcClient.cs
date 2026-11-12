@@ -7,8 +7,9 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Models;
+using HorizonRadio.Sdk.Games;
+using HorizonRadio.Sdk.Models;
 
 namespace HorizonRadio.Core.Ipc;
 

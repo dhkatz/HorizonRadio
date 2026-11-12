@@ -1,3 +1,5 @@
+using HorizonRadio.Sdk.Sources;
+
 namespace HorizonRadio.Core.Sources;
 
 /// <summary>One searchable source's identity, for filter chips and per-row labels.</summary>

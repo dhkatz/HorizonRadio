@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json;
-using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Sdk.Sources.Config;
 
 namespace HorizonRadio.Core.Settings;
 

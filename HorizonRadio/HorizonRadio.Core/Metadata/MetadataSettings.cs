@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using HorizonRadio.Core.Settings;
+using HorizonRadio.Sdk.Metadata;
 
 namespace HorizonRadio.Core.Metadata;
 

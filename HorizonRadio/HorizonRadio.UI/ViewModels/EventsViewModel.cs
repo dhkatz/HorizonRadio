@@ -7,6 +7,8 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Sources;
+using HorizonRadio.Sdk.Games;
+using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.UI.ViewModels;
 

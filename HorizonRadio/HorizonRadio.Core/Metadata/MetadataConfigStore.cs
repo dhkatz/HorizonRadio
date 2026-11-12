@@ -1,6 +1,7 @@
 using System.Linq;
 using HorizonRadio.Core.Settings;
-using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Sdk.Metadata;
+using HorizonRadio.Sdk.Sources.Config;
 
 namespace HorizonRadio.Core.Metadata;
 

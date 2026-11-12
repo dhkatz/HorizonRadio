@@ -5,6 +5,7 @@ using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
+using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.Events;
 

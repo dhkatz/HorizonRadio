@@ -7,6 +7,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Sdk.Metadata;
 using SpotifyAPI.Web;
 
 namespace HorizonRadio.Core.Metadata.Spotify;

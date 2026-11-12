@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Text;
+using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.Sources.Spotify;
 

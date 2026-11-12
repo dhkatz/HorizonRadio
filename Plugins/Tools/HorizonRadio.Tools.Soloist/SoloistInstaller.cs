@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using HorizonRadio.Core.Tools;
+using HorizonRadio.Sdk.Tools;
 
 namespace HorizonRadio.Tools.Soloist;
 

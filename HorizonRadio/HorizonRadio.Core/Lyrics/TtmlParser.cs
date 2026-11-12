@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
+using HorizonRadio.Sdk.Lyrics;
 
 namespace HorizonRadio.Core.Lyrics;
 

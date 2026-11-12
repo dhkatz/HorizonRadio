@@ -1,6 +1,7 @@
 using HorizonRadio.Core.Lyrics;
 using HorizonRadio.Core.Lyrics.Lrclib;
 using HorizonRadio.Core.Lyrics.Unison;
+using HorizonRadio.Sdk.Lyrics;
 
 namespace HorizonRadio.Core.Tests;
 

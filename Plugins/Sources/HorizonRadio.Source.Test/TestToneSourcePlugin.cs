@@ -1,5 +1,6 @@
 using System.Collections.Generic;
-using HorizonRadio.Plugins.Abstractions;
+using HorizonRadio.Sdk;
+using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.Sources.Test;
 

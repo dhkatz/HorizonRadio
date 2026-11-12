@@ -1,13 +1,14 @@
 using System.ComponentModel;
 using Avalonia.Threading;
 using HorizonRadio.Core.Events;
-using HorizonRadio.Core.Games;
 using HorizonRadio.Core.Ipc;
-using HorizonRadio.Core.Models;
 using HorizonRadio.Core.ModInstall;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Game.ForzaHorizon6.ViewModels;
-using HorizonRadio.Plugins.Abstractions;
+using HorizonRadio.Sdk;
+using HorizonRadio.Sdk.Games;
+using HorizonRadio.Sdk.Models;
+using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Game.ForzaHorizon6;
 

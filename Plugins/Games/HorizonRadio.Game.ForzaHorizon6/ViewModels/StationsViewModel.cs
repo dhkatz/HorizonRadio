@@ -1,8 +1,8 @@
 using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
-using HorizonRadio.Core.Games;
 using HorizonRadio.Core.Sources;
+using HorizonRadio.Sdk.Games;
 
 namespace HorizonRadio.Game.ForzaHorizon6.ViewModels;
 

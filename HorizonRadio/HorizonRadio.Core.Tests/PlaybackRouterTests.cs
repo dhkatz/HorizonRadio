@@ -1,11 +1,12 @@
 using HorizonRadio.Core.Events;
-using HorizonRadio.Core.Games;
-using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Core.Sources.Queue;
+using HorizonRadio.Sdk.Games;
+using HorizonRadio.Sdk.Sources;
+using HorizonRadio.Sdk.Sources.Config;
 
 namespace HorizonRadio.Core.Tests;
 

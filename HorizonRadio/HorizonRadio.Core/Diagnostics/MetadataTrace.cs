@@ -7,8 +7,8 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Threading;
 using HorizonRadio.Core.IO;
-using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Settings;
+using HorizonRadio.Sdk.Models;
 
 namespace HorizonRadio.Core.Diagnostics;
 

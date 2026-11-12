@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The plugin SDK: the contract plugins and the host share (plugin, source, metadata, lyrics,
+    game and tool interfaces, the config-field schema, and the plain models they pass). Keep
+    it zero-dependency (no NAudio, Spotify or Avalonia, no I/O) so it stays a stable, safely
+    shared contract with one type identity across the host and every plugin. Plugins are
+    moving to reference only this (see docs/modular-architecture.md).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Spotify;
+using HorizonRadio.Sdk.Sources;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;

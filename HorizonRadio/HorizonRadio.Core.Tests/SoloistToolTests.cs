@@ -1,6 +1,7 @@
 using HorizonRadio.Core.IO;
 using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Sdk.Sources.Config;
 using HorizonRadio.Tools.Soloist;
 using Xunit;
 

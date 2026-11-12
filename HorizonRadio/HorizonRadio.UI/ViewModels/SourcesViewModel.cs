@@ -11,6 +11,8 @@ using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Core.Sources.Queue;
+using HorizonRadio.Sdk.Sources;
+using HorizonRadio.Sdk.Sources.Config;
 using HorizonRadio.UI.Tools;
 
 namespace HorizonRadio.UI.ViewModels;
@@ -97,7 +99,7 @@ public sealed partial class SourcesViewModel : ViewModelBase
                store)
     { }
 
-    private sealed class NullSink : Core.Sources.IPcmSink
+    private sealed class NullSink : Sdk.Sources.IPcmSink
     {
         public bool Send(ReadOnlySpan<short> samples) => false;
     }

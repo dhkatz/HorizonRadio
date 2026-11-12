@@ -2,8 +2,9 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Metadata;
-using HorizonRadio.Core.Models;
-using HorizonRadio.Core.Sources;
+using HorizonRadio.Sdk.Metadata;
+using HorizonRadio.Sdk.Models;
+using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.Fingerprints;
 

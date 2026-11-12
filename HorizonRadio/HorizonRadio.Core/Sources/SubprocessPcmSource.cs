@@ -4,7 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Audio;
-using HorizonRadio.Core.Models;
+using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.Sources;
 

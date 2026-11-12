@@ -2,11 +2,9 @@
   <Folder Name="/HorizonRadio/">
     <Project Path="HorizonRadio/HorizonRadio.Core/HorizonRadio.Core.csproj" />
     <Project Path="HorizonRadio/HorizonRadio.Core.Tests/HorizonRadio.Core.Tests.csproj" />
+    <Project Path="HorizonRadio/HorizonRadio.Sdk/HorizonRadio.Sdk.csproj" />
     <Project Path="HorizonRadio/HorizonRadio.TitleModel/HorizonRadio.TitleModel.csproj" />
     <Project Path="HorizonRadio/HorizonRadio.UI/HorizonRadio.UI.csproj" />
-  </Folder>
-  <Folder Name="/Plugins/">
-    <Project Path="Plugins/HorizonRadio.Plugins.Abstractions/HorizonRadio.Plugins.Abstractions.csproj" />
   </Folder>
   <Folder Name="/Plugins/Games/">
     <Project Path="Plugins/Games/HorizonRadio.Game.ForzaHorizon6/HorizonRadio.Game.ForzaHorizon6.csproj" />

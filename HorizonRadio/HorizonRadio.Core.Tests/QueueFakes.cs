@@ -1,8 +1,8 @@
 using System.Threading.Channels;
-using HorizonRadio.Core.Models;
-using HorizonRadio.Core.Sources;
-using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Queue;
+using HorizonRadio.Sdk.Models;
+using HorizonRadio.Sdk.Sources;
+using HorizonRadio.Sdk.Sources.Config;
 
 namespace HorizonRadio.Core.Tests;
 

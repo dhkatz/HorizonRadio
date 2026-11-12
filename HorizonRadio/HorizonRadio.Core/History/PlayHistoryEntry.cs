@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using HorizonRadio.Core.Models;
 
 namespace HorizonRadio.Core.History;
 
@@ -27,7 +26,7 @@ public enum HistoryMatchState
 public sealed record HistoryCandidate(string? Artist, string Title);
 
 /// <summary>One way to play a history entry again: a queueable source + a
-/// <see cref="Sources.ContentRef"/>-ready locator. A song matched on multiple services keeps one
+/// <see cref="Sdk.Sources.ContentRef"/>-ready locator. A song matched on multiple services keeps one
 /// per service, so the user can pick where to play (the same multi-source model as search).</summary>
 /// <param name="SourceId">Queueable source id (e.g. "youtube", "spotify-driven").</param>
 /// <param name="SourceDisplay">Human label for the picker ("YouTube", "Spotify").</param>

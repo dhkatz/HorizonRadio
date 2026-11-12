@@ -1,8 +1,8 @@
-using HorizonRadio.Core.Games;
 using HorizonRadio.Core.Plugins;
 using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Game.ForzaHorizon6;
+using HorizonRadio.Sdk.Games;
 using Microsoft.Extensions.Time.Testing;
 
 namespace HorizonRadio.Core.Tests;

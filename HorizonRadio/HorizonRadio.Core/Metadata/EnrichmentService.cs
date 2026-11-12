@@ -2,8 +2,8 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Sources;
+using HorizonRadio.Sdk.Models;
 
 namespace HorizonRadio.Core.Metadata;
 

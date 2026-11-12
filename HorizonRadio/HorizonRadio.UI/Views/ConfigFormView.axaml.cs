@@ -4,7 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
-using HorizonRadio.Core.Tools;
+using HorizonRadio.Sdk.Tools;
 using HorizonRadio.UI.Tools;
 using HorizonRadio.UI.ViewModels;
 

@@ -10,12 +10,13 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Lyrics;
-using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Core.Sources.Queue;
+using HorizonRadio.Sdk.Models;
+using HorizonRadio.Sdk.Sources;
 using ShadUI;
 
 namespace HorizonRadio.UI.ViewModels;

@@ -8,8 +8,9 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Metadata;
-using HorizonRadio.Core.Sources.Config;
-using HorizonRadio.Plugins.Abstractions;
+using HorizonRadio.Sdk;
+using HorizonRadio.Sdk.Metadata;
+using HorizonRadio.Sdk.Sources.Config;
 using HorizonRadio.UI.Services;
 
 namespace HorizonRadio.UI.ViewModels;

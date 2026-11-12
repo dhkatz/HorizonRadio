@@ -2,8 +2,8 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Threading.Channels;
 using HorizonRadio.Core.Friends;
-using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Queue;
+using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.Party;
 

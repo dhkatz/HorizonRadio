@@ -6,7 +6,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Lyrics;
+using HorizonRadio.Sdk.Lyrics;
 
 namespace HorizonRadio.Core.Metadata.VocaDb;
 

@@ -8,10 +8,11 @@ using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.History;
 using HorizonRadio.Core.Metadata;
-using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Core.Sources.Queue;
+using HorizonRadio.Sdk.Models;
+using HorizonRadio.Sdk.Sources;
 using ShadUI;
 
 namespace HorizonRadio.UI.ViewModels;

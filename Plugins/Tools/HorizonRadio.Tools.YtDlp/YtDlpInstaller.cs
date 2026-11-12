@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Tools;
+using HorizonRadio.Sdk.Tools;
 
 namespace HorizonRadio.Tools.YtDlp;
 

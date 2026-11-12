@@ -9,6 +9,7 @@ using HorizonRadio.Core.Plugins;
 using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Sdk.Sources.Config;
 using Microsoft.Extensions.Time.Testing;
 
 namespace HorizonRadio.Core.Tests;

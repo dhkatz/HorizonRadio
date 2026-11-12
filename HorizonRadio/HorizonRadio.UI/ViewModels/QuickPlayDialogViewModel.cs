@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Sources;
+using HorizonRadio.Sdk.Sources;
 using ShadUI;
 
 namespace HorizonRadio.UI.ViewModels;

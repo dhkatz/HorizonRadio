@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using HorizonRadio.Core.Tools;
+using HorizonRadio.Sdk.Tools;
 
 namespace HorizonRadio.UI.Tools;
 

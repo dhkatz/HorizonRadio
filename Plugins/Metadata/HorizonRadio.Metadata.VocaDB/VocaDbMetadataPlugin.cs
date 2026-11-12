@@ -1,6 +1,7 @@
 using System.Collections.Generic;
-using HorizonRadio.Core.Lyrics;
-using HorizonRadio.Plugins.Abstractions;
+using HorizonRadio.Sdk;
+using HorizonRadio.Sdk.Lyrics;
+using HorizonRadio.Sdk.Metadata;
 
 namespace HorizonRadio.Core.Metadata.VocaDb;
 

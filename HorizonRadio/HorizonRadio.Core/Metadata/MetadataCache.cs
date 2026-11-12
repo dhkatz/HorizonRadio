@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using HorizonRadio.Core.IO;
+using HorizonRadio.Sdk.Metadata;
 
 namespace HorizonRadio.Core.Metadata;
 

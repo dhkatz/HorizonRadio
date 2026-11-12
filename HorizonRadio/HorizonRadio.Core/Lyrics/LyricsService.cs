@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Sdk.Lyrics;
 
 namespace HorizonRadio.Core.Lyrics;
 

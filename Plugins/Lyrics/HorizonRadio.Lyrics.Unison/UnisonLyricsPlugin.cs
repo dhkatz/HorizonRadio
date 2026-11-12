@@ -1,4 +1,5 @@
-using HorizonRadio.Plugins.Abstractions;
+using HorizonRadio.Sdk;
+using HorizonRadio.Sdk.Lyrics;
 
 namespace HorizonRadio.Core.Lyrics.Unison;
 

@@ -1,4 +1,4 @@
-using HorizonRadio.Core.Games;
+using HorizonRadio.Sdk.Games;
 
 namespace HorizonRadio.UI.Services;
 

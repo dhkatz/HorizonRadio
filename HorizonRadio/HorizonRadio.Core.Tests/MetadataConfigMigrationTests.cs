@@ -4,7 +4,8 @@ using HorizonRadio.Core.Metadata.MusicBrainz;
 using HorizonRadio.Core.Metadata.Spotify;
 using HorizonRadio.Core.Metadata.VocaDb;
 using HorizonRadio.Core.Settings;
-using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Sdk.Metadata;
+using HorizonRadio.Sdk.Sources.Config;
 
 namespace HorizonRadio.Core.Tests;
 

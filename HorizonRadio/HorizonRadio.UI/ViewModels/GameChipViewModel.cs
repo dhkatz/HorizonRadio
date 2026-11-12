@@ -2,7 +2,7 @@ using System;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using HorizonRadio.Core.Games;
+using HorizonRadio.Sdk.Games;
 
 namespace HorizonRadio.UI.ViewModels;
 

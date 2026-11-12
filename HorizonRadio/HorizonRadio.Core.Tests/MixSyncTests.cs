@@ -1,5 +1,5 @@
-using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Mixes;
+using HorizonRadio.Sdk.Sources;
 using Microsoft.Extensions.Time.Testing;
 
 namespace HorizonRadio.Core.Tests;

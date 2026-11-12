@@ -10,10 +10,10 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Fingerprints;
 using HorizonRadio.Core.Lyrics;
-using HorizonRadio.Core.Models;
 using HorizonRadio.Core.Settings;
-using HorizonRadio.Core.Sources;
-using HorizonRadio.Core.Sources.Config;
+using HorizonRadio.Sdk.Lyrics;
+using HorizonRadio.Sdk.Models;
+using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.UI.ViewModels;
 

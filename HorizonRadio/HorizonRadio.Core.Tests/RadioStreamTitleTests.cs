@@ -43,7 +43,7 @@ public class RadioStreamTitleTests
             RadioStreamTitle.Parse("ExGrooveCh - Heavenz - テロメアの産声").Confidence);
     }
 
-    private static bool Has(IReadOnlyList<HorizonRadio.Core.Models.TitleCandidate> alts, string? artist, string title) =>
+    private static bool Has(IReadOnlyList<HorizonRadio.Sdk.Models.TitleCandidate> alts, string? artist, string title) =>
         alts.Any(c => c.Artist == artist && c.Title == title);
 
     [Fact]
@@ -187,7 +187,7 @@ public class RadioStreamTitleTests
             Pair(RadioStreamTitle.ParseCandidates("ExGrooveCh - Heavenz - テロメアの産声 [SEA]").Primary));
     }
 
-    private static (string?, string) Pair(HorizonRadio.Core.Models.TitleCandidate c) => (c.Artist, c.Title);
+    private static (string?, string) Pair(HorizonRadio.Sdk.Models.TitleCandidate c) => (c.Artist, c.Title);
 
     [Fact]
     public void A_bilingual_title_offers_each_name_on_its_own()

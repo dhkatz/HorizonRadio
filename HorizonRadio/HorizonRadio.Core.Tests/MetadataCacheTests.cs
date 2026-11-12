@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using HorizonRadio.Core.Metadata;
+using HorizonRadio.Sdk.Metadata;
 
 namespace HorizonRadio.Core.Tests;
 
