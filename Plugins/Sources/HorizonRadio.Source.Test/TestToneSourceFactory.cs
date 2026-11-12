@@ -13,6 +13,7 @@ public sealed class TestToneSourceFactory : ISelfDrivenSourceFactory
     public const string KeyFrequency = "frequency";
 
     public string Id => "testtone";
+    public int SortOrder => 50;
     public string DisplayName => "Test Tone";
     public string? Description => "Diagnostic sine wave for verifying the audio pipe end-to-end.";
 

@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Sources.Config;
@@ -10,6 +9,7 @@ public sealed class MusicBrainzProviderFactory(IMetadataCache cache, IMetadataTr
     public const string KeyContact = "contact";
 
     public string Id => "musicbrainz";
+    public int SortOrder => 30;
     public string DisplayName => "MusicBrainz";
     public string? Description => "Free / no-credentials lookup against MusicBrainz + Cover Art Archive. Works for any track that's been catalogued there.";
 

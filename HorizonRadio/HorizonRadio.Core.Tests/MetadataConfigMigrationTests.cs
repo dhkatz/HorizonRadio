@@ -33,10 +33,10 @@ public sealed class MetadataConfigMigrationTests : IDisposable
     // provider set (incl. VocaDB, now its own plugin assembly).
     public MetadataConfigMigrationTests() => MetadataCatalog.Initialize(
     [
-        new SpotifyMetadataPlugin(Cache, IMetadataTrace.Off),
-        new ItunesMetadataPlugin(Cache, IMetadataTrace.Off),
-        new MusicBrainzMetadataPlugin(Cache, IMetadataTrace.Off),
-        new VocaDbMetadataPlugin(Cache, IMetadataTrace.Off),
+        new SpotifyProviderFactory(Cache, IMetadataTrace.Off),
+        new ItunesProviderFactory(Cache, IMetadataTrace.Off),
+        new MusicBrainzProviderFactory(Cache, IMetadataTrace.Off),
+        new VocaDbProviderFactory(Cache, IMetadataTrace.Off),
     ]);
 
     public void Dispose() => _dir.Dispose();

@@ -24,19 +24,18 @@ using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Core.Sources.Queue;
 using HorizonRadio.Core.Tools;
-using HorizonRadio.Metadata.Apple;
 using HorizonRadio.Metadata.MusicBrainz;
 using HorizonRadio.Metadata.Spotify;
 using HorizonRadio.Metadata.VocaDb;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Games;
+using HorizonRadio.Sdk.Lyrics;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
+using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Tools;
-using HorizonRadio.Source.Local;
 using HorizonRadio.Source.Radio;
 using HorizonRadio.Source.Spotify;
-using HorizonRadio.Source.Test;
 using HorizonRadio.Source.YouTube;
 using HorizonRadio.TitleModel;
 using HorizonRadio.Tools.Librespot;
@@ -124,7 +123,7 @@ public partial class App : Application
             // Before anything resolves a source from the catalog. SortOrder gives the picker its
             // display order. (The tool catalog is already seeded in Program.BuildAvaloniaApp, before
             // any source probes it.)
-            SourceCatalog.Initialize(provider.GetServices<ISourcePlugin>().InDisplayOrder());
+            SourceCatalog.Initialize(provider.GetServices<IAudioSourceFactory>().InDisplayOrder());
 
             _store = provider.GetRequiredService<SourceConfigStore>();
 
@@ -217,10 +216,10 @@ public partial class App : Application
                     () => YouTubeTool(YouTubeSourceFactory.KeyYtDlp),
                     () => YouTubeTool(YouTubeSourceFactory.KeyFfmpeg));
 
-                // The metadata plugins, before the config store loads — it derives fresh-install
+                // The metadata providers, before the config store loads — it derives fresh-install
                 // defaults + the "introduced" set from the catalog, so the catalog must be populated
                 // first. SortOrder gives the provider list its display order.
-                MetadataCatalog.Initialize(provider.GetServices<IMetadataPlugin>().InDisplayOrder());
+                MetadataCatalog.Initialize(provider.GetServices<IMetadataProviderFactory>().InDisplayOrder());
 
                 _metaStore = provider.GetRequiredService<MetadataConfigStore>();
                 // The metadata pipeline: a shared resolver (source + ordered providers,
@@ -233,8 +232,7 @@ public partial class App : Application
 
                 // Lyrics for the Now Playing page, from every lyrics plugin (Unison, LRCLIB), in
                 // their SortOrder: the service prefers synced lyrics, then the earlier provider.
-                var lyrics = new LyricsService([.. provider.GetServices<ILyricsPlugin>().InDisplayOrder()
-                    .Select(p => p.CreateLyricsProvider())]);
+                var lyrics = new LyricsService(provider.GetServices<ILyricsProvider>().InDisplayOrder());
                 // Radio lyrics follow the song by lining the station's audio up against a recording
                 // of it (the song's own video, fetched through a source that can, e.g. YouTube).
                 var songSync = new LiveSongSync(() => SourceCatalog.All, new ReferenceStore(), _metaResolver);
@@ -417,7 +415,6 @@ public partial class App : Application
                     mixSwitcher.Dispose();
                     _preview?.Dispose();
                     if (_enricher != null) await _enricher.DisposeAsync();
-                    await lyrics.DisposeAsync();
                     if (_metaResolver != null) await _metaResolver.DisposeAsync();
                     await router.DisposeAsync(); // stops the engine; disposes parked channels and the player
                     if (_runner != null) await _runner.DisposeAsync();

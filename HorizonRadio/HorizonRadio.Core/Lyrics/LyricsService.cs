@@ -1,7 +1,5 @@
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Diagnostics;
@@ -14,9 +12,9 @@ namespace HorizonRadio.Core.Lyrics;
 /// answer is the first provider (in their order) with synced lyrics, else the first unsynced
 /// lyrics with other versions (romanized, translated), else the first with any.
 /// Answers are remembered for the session; a lookup where a provider failed isn't, so it's tried
-/// again next time.
+/// again next time. The providers belong to the container, which disposes them.
 /// </summary>
-public sealed class LyricsService : IAsyncDisposable
+public sealed class LyricsService
 {
     private const int CacheLimit = 256;
 
@@ -122,13 +120,4 @@ public sealed class LyricsService : IAsyncDisposable
         string.Join('\u001f', q.Title.Trim().ToUpperInvariant(), q.Artist.Trim().ToUpperInvariant(),
             q.Duration is { } d ? ((int)Math.Round(d.TotalSeconds)).ToString(System.Globalization.CultureInfo.InvariantCulture) : "",
             q.YouTubeVideoId ?? "");
-
-    public async ValueTask DisposeAsync()
-    {
-        foreach (var p in _providers)
-        {
-            try { await p.DisposeAsync().ConfigureAwait(false); }
-            catch (Exception ex) { Trace.WriteLine($"[hzn-lyrics] dispose {p.Id}: {ex.Message}"); }
-        }
-    }
 }

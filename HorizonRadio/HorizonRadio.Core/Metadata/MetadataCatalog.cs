@@ -1,6 +1,4 @@
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
 
@@ -10,23 +8,14 @@ public static class MetadataCatalog
 {
     public const string NoneId = "none";
 
-    private static IReadOnlyList<IMetadataPlugin> _plugins = [];
+    /// <summary>Register the available metadata providers, in display order. Called once by the
+    /// composition root, from what the plugins registered in the container, BEFORE any provider
+    /// config is loaded (<see cref="MetadataConfigStore"/> derives its fresh-install defaults and
+    /// "introduced" set from <see cref="All"/>, so the catalog must be populated first).</summary>
+    public static void Initialize(IReadOnlyList<IMetadataProviderFactory> providers) => All = providers;
 
-    /// <summary>Register the available metadata plugins. Called once by the composition root — which
-    /// references the plugin assemblies and so can name them — BEFORE any provider config is loaded
-    /// (<see cref="MetadataConfigStore"/> derives its fresh-install defaults and "introduced" set from
-    /// <see cref="All"/>, so the catalog must be populated first). Plugins are listed in display order.</summary>
-    public static void Initialize(IReadOnlyList<IMetadataPlugin> plugins)
-    {
-        _plugins = plugins;
-        All = [.. plugins.SelectMany(p => p.Providers)];
-    }
-
-    /// <summary>The registered metadata plugins, in display order.</summary>
-    public static IReadOnlyList<IMetadataPlugin> Plugins => _plugins;
-
-    /// <summary>Every provider factory the registered plugins contribute, flattened in display order.
-    /// Empty until <see cref="Initialize"/> runs.</summary>
+    /// <summary>Every provider factory the plugins contribute, in display order. Empty until
+    /// <see cref="Initialize"/> runs.</summary>
     public static IReadOnlyList<IMetadataProviderFactory> All { get; private set; } = [];
 
     /// <summary>Providers enabled out of the box (keyless, no setup), highest priority

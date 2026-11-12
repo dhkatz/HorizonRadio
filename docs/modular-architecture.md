@@ -41,9 +41,12 @@ Each rule says where a kind of code goes; the reason follows it.
   host (app folders, launching processes, logging, the tool locator, diagnostics) it takes in its
   constructor: the host's DI container builds plugin classes, so a test host, the CLI, or another
   OS supplies its own by registering it.
-- **A plugin registers its own services** in an `IPluginModule`. Spotify builds its connection
-  and players itself; the host only discovers plugins and runs them, so it never names a
-  plugin's internals.
+- **A plugin registers what it adds, and its own services,** in an `IPluginModule` (usually the
+  `IPlugin` class itself): its sources, metadata and lyrics providers are registrations the host
+  collects (`GetServices<IAudioSourceFactory>()`), not members of the plugin. A contribution with
+  user settings is a factory (sources, metadata providers); one without is the thing itself
+  (lyrics providers). Spotify builds its connection and players itself; the host only discovers
+  plugins and runs them, so it never names a plugin's internals.
 - **A plugin may replace or wrap a host service.** Modules run after the host's registrations,
   in a fixed order (`Order`, then type name), so for a single service the last registration wins;
   `Decorate` wraps one instead. The host logs each replacement and warns when two modules replace
@@ -126,6 +129,9 @@ Each step leaves the app working and lands as its own PR or short stack.
      their constructors; provider factories and lyrics plugins no longer get `IPluginContext`. The
      iTunes, MusicBrainz and VocaDB plugins reference only the SDK (Spotify's metadata still rides
      on the Spotify source's connection).
+   - [x] Contributions are registrations: a plugin is an `IPlugin` plus an `IPluginModule` that
+     registers its sources, metadata providers and lyrics providers, each ordered by its own
+     `SortOrder`; `ISourcePlugin`, `IMetadataPlugin` and `ILyricsPlugin` are gone.
    - [ ] Source plugins, each with the tool wrappers it runs, which become services: YouTube
      (yt-dlp, ffmpeg), Radio, then Spotify (librespot, Soloist); `SpotifyRuntime` and
      `YouTubeRuntime` go. The peer helper with them.

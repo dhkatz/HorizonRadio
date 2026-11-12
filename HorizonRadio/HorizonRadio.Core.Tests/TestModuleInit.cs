@@ -23,7 +23,7 @@ internal static class TestModuleInit
     {
         // Seed the tool catalog first, mirroring the host (App seeds it before the source plugins).
         // Some source factories probe for their tool (Spotify → librespot) in their ctor, so the
-        // catalog must be populated before SourceCatalog.Initialize constructs the plugins.
+        // catalog must be populated before the source factories are constructed.
         ToolCatalog.Initialize(
         [
             new ToolDescriptor(ToolKind.YtDlp, "yt-dlp.exe"),
@@ -35,11 +35,12 @@ internal static class TestModuleInit
 
         SourceCatalog.Initialize(
         [
-            new LocalSourcePlugin(),
-            new SpotifySourcePlugin(),
-            new YouTubeSourcePlugin(),
-            new RadioSourcePlugin(),
-            new TestToneSourcePlugin(),
+            new LocalFileSourceFactory(),
+            new SpotifySourceFactory(),
+            new SpotifyContentSourceFactory(),
+            new YouTubeSourceFactory(),
+            new RadioSourceFactory(),
+            new TestToneSourceFactory(),
         ]);
     }
 }

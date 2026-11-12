@@ -1,10 +1,7 @@
-using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Lyrics;
@@ -21,6 +18,7 @@ namespace HorizonRadio.Metadata.VocaDb;
 public sealed class VocaDbLyricsProvider : ILyricsProvider
 {
     public string Id => "vocadb";
+    public int SortOrder => 40;
 
     private readonly VocaDbProvider _vocadb;
     private readonly HttpClient _http;

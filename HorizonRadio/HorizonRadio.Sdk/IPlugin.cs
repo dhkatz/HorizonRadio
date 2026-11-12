@@ -1,24 +1,24 @@
 namespace HorizonRadio.Sdk;
 
 /// <summary>
-/// Base contract for a plugin — a unit the host discovers and lists. Concrete plugin kinds
-/// (metadata, source, game) extend this with the capabilities they contribute, so the host can
-/// enumerate plugins generically while each kind exposes its own factories.
+/// A plugin: the unit the host discovers and lists, named here. What it adds to the app it
+/// registers as an <see cref="IPluginModule"/> (usually the same class): sources
+/// (<see cref="Sources.IAudioSourceFactory"/>), metadata providers
+/// (<see cref="Metadata.IMetadataProviderFactory"/>), lyrics providers
+/// (<see cref="Lyrics.ILyricsProvider"/>), and the services they use. A game is the exception for
+/// now: an <see cref="IGamePlugin"/> builds its integration itself.
+/// <code>
+/// public sealed class YouTubePlugin : IPlugin, IPluginModule
+/// {
+///     public string Id => "youtube";
+///     public string DisplayName => "YouTube";
+///     public void ConfigureServices(IServiceCollection services) =>
+///         services.AddSingleton&lt;IAudioSourceFactory, YouTubeSourceFactory&gt;();
+/// }
+/// </code>
 /// </summary>
-public interface IPlugin
+public interface IPlugin : IOrdered
 {
-    /// <summary>Stable, lowercase id.</summary>
-    string Id { get; }
-
     /// <summary>User-facing label.</summary>
     string DisplayName { get; }
-
-    /// <summary>
-    /// Relative position among plugins of the same kind, ascending — the host orders the discovered
-    /// plugins by this (then by <see cref="Id"/> as a stable tiebreak) so the source picker and
-    /// metadata provider list have a deterministic order even though assembly-scan discovery does not.
-    /// First-party plugins set explicit values to preserve their shipped order; third-party plugins
-    /// default to the end.
-    /// </summary>
-    int SortOrder => int.MaxValue;
 }

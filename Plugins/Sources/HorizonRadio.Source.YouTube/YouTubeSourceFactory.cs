@@ -34,6 +34,7 @@ public sealed class YouTubeSourceFactory : IContentSourceFactory, ISearchSource,
     };
 
     public string Id => SourceId;
+    public int SortOrder => 30;
     public string DisplayName => "YouTube";
     public string? Description => "Stream audio from a YouTube video or playlist URL via yt-dlp.";
 

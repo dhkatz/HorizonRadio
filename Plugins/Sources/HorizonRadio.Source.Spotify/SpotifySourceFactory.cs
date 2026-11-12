@@ -21,6 +21,7 @@ public sealed class SpotifySourceFactory : ISelfDrivenSourceFactory
     private static readonly string[] BitrateOptions = ["auto", "96", "160", "320"];
 
     public string Id => "spotify";
+    public int SortOrder => 20;
     public string DisplayName => "Spotify Connect";
     public string? Description => "Stream from Spotify via librespot. Cast from your Spotify app to the configured device name.";
 

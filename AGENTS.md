@@ -157,9 +157,9 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   song ahead. A song from the other side is a `PartySongItem`: found on this PC
   (`PartySongFinder`: the same source, else search by title and artist) the first time it's loaded
   ahead, looked up for the list, or played, then played as what was found.
-- **Lyrics (`Plugins/Lyrics/`, `Core/Lyrics/`)** — each `ILyricsPlugin` contributes
-  one `ILyricsProvider` (Unison, LRCLIB, and VocaDB, whose metadata plugin is also a
-  lyrics plugin; when VocaDB has the song but no lyrics it reads the Vocaloid Lyrics
+- **Lyrics (`Plugins/Lyrics/`, `Core/Lyrics/`)** — plugins register `ILyricsProvider`s
+  (Unison, LRCLIB, and VocaDB, whose metadata plugin registers one too; when VocaDB has the
+  song but no lyrics it reads the Vocaloid Lyrics
   Wiki page that links that VocaDB song id, `VocaloidLyricsWiki`). `LyricsService` asks them all at once and keeps the first synced
   answer in `SortOrder`, else the first unsynced one with variants (romanized,
   translated), else any; a lookup where a provider failed isn't remembered. Karaoke
@@ -209,11 +209,16 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   are then looked up again at once.
 - **Plugins and the container** — `App` builds one DI container: Core's services
   (`AddHorizonCore`), the host's, then the plugins (`PluginRegistration.AddPlugins`, fed by
-  `PluginDiscovery`'s assembly scan). Each plugin class (`ISourcePlugin`, `IMetadataPlugin`,
-  `ILyricsPlugin`, `IGamePlugin`) is built by the container, once, under every kind it is, so its
-  constructor can take the host's services (`IPluginLog`, `IProcesses`, `IAppFolders`,
-  `IToolLocator`, `IMetadataCache`, `IMetadataTrace`, `IConfirmations`) and its module's. An `IPluginModule` (public,
-  parameterless) registers a plugin's own services, and may replace a host service or wrap it
+  `PluginDiscovery`'s assembly scan). A plugin is an `IPlugin` (its id, name and order) and,
+  usually in the same class, an `IPluginModule` (public, parameterless) that registers what it
+  contributes: sources (`IAudioSourceFactory`), metadata providers (`IMetadataProviderFactory`:
+  factories, since they're built from the user's settings) and lyrics providers
+  (`ILyricsProvider`). The app collects each kind from the container (`GetServices<T>()`) and
+  orders it by `SortOrder`, then id (`InDisplayOrder`; `IOrdered`). Contributions are built by the
+  container, so their constructors take the host's services (`IPluginLog`, `IProcesses`,
+  `IAppFolders`, `IToolLocator`, `IMetadataCache`, `IMetadataTrace`, `IConfirmations`) and the
+  module's own. A game plugin (`IGamePlugin`) is the exception for now: the container builds it,
+  and it builds its integration. A module may also replace a host service or wrap it
   (`Decorate`); modules run after the host in `Order`, then type name, the last registration wins,
   and the Console tab (tag `plugins`) says what each replaced or wrapped. The container is built
   with `ValidateOnBuild`, so a constructor asking for something nobody registers fails at startup.

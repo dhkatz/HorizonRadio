@@ -13,6 +13,7 @@ public sealed class LocalFileSourceFactory : IContentSourceFactory
     public const string KeyPath = "path";
 
     public string Id => "local";
+    public int SortOrder => 10;
     public string DisplayName => "Local Files";
     public string? Description => "Play through a folder of local audio files (mp3, wav, flac, ogg).";
 

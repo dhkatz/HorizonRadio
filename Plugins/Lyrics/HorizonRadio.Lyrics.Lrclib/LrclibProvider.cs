@@ -17,6 +17,7 @@ namespace HorizonRadio.Lyrics.Lrclib;
 public sealed class LrclibProvider : ILyricsProvider
 {
     public string Id => "lrclib";
+    public int SortOrder => 20;
 
     private const string Credit = "Lyrics from LRCLIB";
 

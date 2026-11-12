@@ -17,6 +17,7 @@ namespace HorizonRadio.Lyrics.Unison;
 public sealed class UnisonProvider : ILyricsProvider
 {
     public string Id => "unison";
+    public int SortOrder => 10;
 
     private readonly HttpClient _http;
     private readonly bool _ownsHttp;

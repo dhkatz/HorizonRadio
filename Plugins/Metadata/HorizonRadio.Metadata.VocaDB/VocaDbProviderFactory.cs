@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Sources.Config;
@@ -8,6 +7,7 @@ namespace HorizonRadio.Metadata.VocaDb;
 public sealed class VocaDbProviderFactory(IMetadataCache cache, IMetadataTrace trace) : IMetadataProviderFactory
 {
     public string Id => "vocadb";
+    public int SortOrder => 40;
     public string DisplayName => "VocaDB";
     public string? Description => "Free / no-credentials lookup against VocaDB — the community database for Vocaloid / UTAU / SynthV music. Catches producer tracks that aren't on iTunes/Spotify; art is the song's Niconico/YouTube image.";
 
