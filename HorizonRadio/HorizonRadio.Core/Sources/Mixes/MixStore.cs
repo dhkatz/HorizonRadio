@@ -33,11 +33,12 @@ namespace HorizonRadio.Core.Sources.Mixes;
 /// }
 /// </code>
 /// Each mix records when it last changed, and a deleted one when it went, so your devices can keep
-/// their mixes in step (<see cref="SyncedMixes"/>, <see cref="MergeSynced"/>). Not thread-safe: use
-/// it from one thread (the UI's).
+/// their mixes in step (<see cref="SyncedMixes"/>, <see cref="MergeSynced"/>). Safe from any thread:
+/// the user edits from the window, and a merge arrives from another device on the helper's.
 /// </summary>
 public sealed class MixStore
 {
+    private readonly Lock _lock = new();
     private readonly List<Mix> _mixes = new();
     private readonly Dictionary<string, DateTimeOffset> _modified = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DateTimeOffset> _removed = new(StringComparer.Ordinal);
@@ -45,10 +46,18 @@ public sealed class MixStore
     /// <summary>The clock changes are timed by (tests set their own).</summary>
     public TimeProvider Clock { get; init; } = TimeProvider.System;
 
-    /// <summary>Raised after any add/update/remove, on the caller's thread.</summary>
+    /// <summary>Raised after any add/update/remove or merge, on the thread that made it (a UI
+    /// marshals to its own).</summary>
     public event Action? Changed;
 
-    public IReadOnlyList<Mix> All => _mixes;
+    /// <summary>The mixes as they are now (a copy).</summary>
+    public IReadOnlyList<Mix> All
+    {
+        get
+        {
+            lock (_lock) return [.. _mixes];
+        }
+    }
 
     private readonly Dictionary<string, string> _legacyStations = new(StringComparer.Ordinal);
 
@@ -59,38 +68,61 @@ public sealed class MixStore
     /// </summary>
     public IReadOnlyDictionary<string, string> LegacyStations => _legacyStations;
 
-    public Mix? Get(string id) => _mixes.FirstOrDefault(m => m.Id == id);
+    public Mix? Get(string id)
+    {
+        lock (_lock) return Find(id);
+    }
+
+    private Mix? Find(string id) => _mixes.FirstOrDefault(m => m.Id == id);
 
     /// <summary>Insert a new mix or replace the one with the same id, then notify.</summary>
     public void AddOrUpdate(Mix mix)
     {
-        var i = _mixes.FindIndex(m => m.Id == mix.Id);
-        if (i >= 0) _mixes[i] = mix;
-        else _mixes.Add(mix);
-        _modified[mix.Id] = Now();
-        _removed.Remove(mix.Id);
+        ArgumentNullException.ThrowIfNull(mix);
+        lock (_lock)
+        {
+            var i = _mixes.FindIndex(m => m.Id == mix.Id);
+            if (i >= 0) _mixes[i] = mix;
+            else _mixes.Add(mix);
+            _modified[mix.Id] = Now();
+            _removed.Remove(mix.Id);
+        }
         Changed?.Invoke();
     }
 
     public void Remove(string id)
     {
-        if (_mixes.RemoveAll(m => m.Id == id) == 0) return;
-        _modified.Remove(id);
-        _removed[id] = Now();
+        lock (_lock)
+        {
+            if (_mixes.RemoveAll(m => m.Id == id) == 0) return;
+            _modified.Remove(id);
+            _removed[id] = Now();
+        }
         Changed?.Invoke();
     }
 
     /// <summary>When a mix last changed (a mix from before this was kept: long ago).</summary>
-    public DateTimeOffset ModifiedAt(string id) =>
+    public DateTimeOffset ModifiedAt(string id)
+    {
+        lock (_lock) return ModifiedAtLocked(id);
+    }
+
+    private DateTimeOffset ModifiedAtLocked(string id) =>
         _modified.TryGetValue(id, out var at) ? at : _removed.TryGetValue(id, out var gone) ? gone : DateTimeOffset.UnixEpoch;
 
     /// <summary>Every mix, and every deleted one, with when it last changed: for another of your
     /// devices to merge.</summary>
-    public IReadOnlyList<SyncedMix> SyncedMixes() =>
-    [
-        .. _mixes.Select(m => new SyncedMix(m.Id, m, ModifiedAt(m.Id))),
-        .. _removed.Select(r => new SyncedMix(r.Key, null, r.Value)),
-    ];
+    public IReadOnlyList<SyncedMix> SyncedMixes()
+    {
+        lock (_lock)
+        {
+            return
+            [
+                .. _mixes.Select(m => new SyncedMix(m.Id, m, ModifiedAtLocked(m.Id))),
+                .. _removed.Select(r => new SyncedMix(r.Key, null, r.Value)),
+            ];
+        }
+    }
 
     /// <summary>Take in another device's mixes: each one changed there later than here replaces
     /// this one (a deletion too). Raises <see cref="Changed"/> once if anything changed, and
@@ -98,11 +130,19 @@ public sealed class MixStore
     public bool MergeSynced(IEnumerable<SyncedMix> remote)
     {
         ArgumentNullException.ThrowIfNull(remote);
+        bool changed;
+        lock (_lock) changed = MergeLocked(remote);
+        if (changed) Changed?.Invoke();
+        return changed;
+    }
+
+    private bool MergeLocked(IEnumerable<SyncedMix> remote)
+    {
         var changed = false;
         foreach (var theirs in remote)
         {
             if (string.IsNullOrWhiteSpace(theirs.Id)) continue;
-            var known = _modified.ContainsKey(theirs.Id) || _removed.ContainsKey(theirs.Id) || Get(theirs.Id) != null;
+            var known = _modified.ContainsKey(theirs.Id) || _removed.ContainsKey(theirs.Id) || Find(theirs.Id) != null;
             if (known && !Newer(theirs)) continue;
             if (theirs.Mix is { } mix)
             {
@@ -120,17 +160,16 @@ public sealed class MixStore
                 _removed[theirs.Id] = theirs.Modified;
             }
         }
-        if (changed) Changed?.Invoke();
         return changed;
     }
 
     private bool Newer(SyncedMix theirs)
     {
-        var mine = ModifiedAt(theirs.Id);
+        var mine = ModifiedAtLocked(theirs.Id);
         if (theirs.Modified != mine) return theirs.Modified > mine;
         var mineRemoved = _removed.ContainsKey(theirs.Id);
         if ((theirs.Mix == null) != mineRemoved) return theirs.Mix == null; // a tie: the deletion
-        return string.CompareOrdinal(theirs.Mix?.Name, Get(theirs.Id)?.Name) > 0;
+        return string.CompareOrdinal(theirs.Mix?.Name, Find(theirs.Id)?.Name) > 0;
     }
 
     private DateTimeOffset Now()
@@ -189,7 +228,7 @@ public sealed class MixStore
         path ??= DefaultPath;
         try
         {
-            AtomicFile.Write(path, stream =>
+            lock (_lock) AtomicFile.Write(path, stream =>
             {
                 using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
 

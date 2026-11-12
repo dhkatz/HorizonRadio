@@ -32,11 +32,7 @@ public sealed class MyDevicesTests : IAsyncDisposable
     {
         settings ??= SettingsStore.CreateInMemory();
         mixes ??= new MixStore();
-        var mixSync = new MixSync(mixes, action =>
-        {
-            lock (mixes) action(); // the tests' stand-in for the UI thread
-            return Task.CompletedTask;
-        });
+        var mixSync = new MixSync(mixes);
         settings.Set(DeviceSettings.Name, name);
         MemoryPeer? peer = null;
         var devices = new MyDevices(settings, _ =>

@@ -56,6 +56,10 @@ Each rule says where a kind of code goes; the reason follows it.
 - **A view model only translates between the engine and the screen.** Logic the CLI would also
   need is a Core service the view model calls (`MixPlayer.PlayAsync(mix, mode)`), and a question
   the UI asks the user (replace or add?) is a parameter of that service.
+- **Core doesn't know what front end it runs under.** It has no UI thread and no way to post to
+  one: each service keeps its own state safe (a lock, or a loop of its own) and raises its events
+  on whichever thread made the change. A front end that needs its own thread (the window's)
+  marshals in its handlers. So the window, the CLI and a test host all run the same engine.
 - **Core and the SDK stay OS-neutral.** OS-specific code lives in `HorizonRadio.Platform` behind
   an interface Core declares, marked `[SupportedOSPlatform]` so the platform analyzer flags an
   unguarded call.
@@ -175,6 +179,9 @@ Each step leaves the app working and lands as its own PR or short stack.
    - [x] Plugin discovery (`Core/Hosting/PluginDiscovery`), the tool registry (a service, beside the
      tool catalog) and the game host (`Core/Games/GameHost`) are in Core. (The plugin context is
      gone: plugins take services by constructor.)
+   - [x] Core has no UI thread: local preview keeps its state machine under a lock of its own and
+     the mix store is safe from any thread, so a merge from another device no longer goes through
+     the window's dispatcher. Front ends marshal the events they show.
    - [ ] The engine's services (runner, router, metadata, lyrics, history, devices, friends,
      parties) are built by the container in Core, in an order Core owns, and stopped in it; they
      log and find their folders through `IPluginLog` and `IAppFolders`, so a replacement reaches

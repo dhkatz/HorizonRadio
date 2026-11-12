@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using HorizonRadio.Core.Settings;
 
 namespace HorizonRadio.Core.Audio;
@@ -24,10 +25,12 @@ public enum SpeakerState
 /// enable/device/volume preferences. The UI drives this; the audio sources
 /// are unaware it exists.
 ///
-/// A small state machine (<see cref="SpeakerState"/>) run on the UI thread:
-/// user calls act inline, while device callbacks (the speaker's
-/// <see cref="ISpeakerOutput.Lost"/>, OS endpoint notifications) arrive on
-/// other threads and are posted to it, never acted on where they're raised.
+/// A small state machine (<see cref="SpeakerState"/>), one transition at a time
+/// under a lock: user calls act inline on the caller's thread, while device
+/// callbacks (the speaker's <see cref="ISpeakerOutput.Lost"/>, OS endpoint
+/// notifications) are handed to the thread pool, never acted on where they're
+/// raised. It knows nothing of a window: <see cref="StateChanged"/> is raised on
+/// whichever thread made the change, and a UI marshals it.
 /// Each state has one tee route: Off → game, On → speaker, Faulted → nowhere
 /// (so audio doesn't leak into the game while the picker says speakers; the
 /// UI pauses and toasts instead).
@@ -53,6 +56,7 @@ public sealed class PreviewController : IDisposable
     private readonly ISpeakerOutput _speaker;
     private readonly IAudioDeviceWatcher? _watcher;
     private readonly Action<Action> _post;
+    private readonly Lock _lock = new();
 
     // The DeviceId the open speaker was asked for (it may have fallen back to the
     // default if that device was gone).
@@ -62,13 +66,14 @@ public sealed class PreviewController : IDisposable
     // that fires SetVolume dozens of times writes the file once.
     private bool _disposed;
 
-    /// <param name="post">Runs an action later on the UI thread (the thread every
-    /// public member is called on). Device callbacks go through it.</param>
-    public PreviewController(TeePcmSink tee, SettingsStore settings, Action<Action> post)
-        : this(tee, settings, post, new SpeakerPcmSink(), WasapiDeviceWatcher.TryCreate())
+    public PreviewController(TeePcmSink tee, SettingsStore settings)
+        : this(tee, settings, a => ThreadPool.QueueUserWorkItem(_ => a()), new SpeakerPcmSink(),
+            WasapiDeviceWatcher.TryCreate())
     {
     }
 
+    /// <param name="post">Runs an action later, off the thread that raised a device
+    /// callback (tests run it when they choose).</param>
     internal PreviewController(TeePcmSink tee, SettingsStore settings, Action<Action> post,
         ISpeakerOutput speaker, IAudioDeviceWatcher? watcher)
     {
@@ -95,7 +100,7 @@ public sealed class PreviewController : IDisposable
     /// <summary>Where local monitoring stands. Changes raise <see cref="StateChanged"/>.</summary>
     public SpeakerState State { get; private set; } = SpeakerState.Off;
 
-    /// <summary>Raised on the UI thread when <see cref="State"/> changes.</summary>
+    /// <summary>Raised when <see cref="State"/> changes, on the thread that changed it.</summary>
     public event Action? StateChanged;
 
     /// <summary>Whether the user wants local monitoring (persisted). True in both
@@ -123,13 +128,16 @@ public sealed class PreviewController : IDisposable
     /// <summary>Turn local monitoring on or off. Turning it on while faulted retries.</summary>
     public void SetEnabled(bool on)
     {
-        if (_disposed) return;
-        if (Enabled != on)
+        lock (_lock)
         {
-            Enabled = on;
-            _settings.Set(PreviewSettings.Enabled, on);
+            if (_disposed) return;
+            if (Enabled != on)
+            {
+                Enabled = on;
+                _settings.Set(PreviewSettings.Enabled, on);
+            }
+            Fire(Trigger.User);
         }
-        Fire(Trigger.User);
     }
 
     /// <summary>Make <paramref name="deviceId"/> (null = system default) the output:
@@ -137,38 +145,48 @@ public sealed class PreviewController : IDisposable
     /// retries it if it's faulted.</summary>
     public void SelectDevice(string? deviceId)
     {
-        if (_disposed) return;
-        if (!Enabled || DeviceId != deviceId)
+        lock (_lock)
         {
-            Enabled = true;
-            DeviceId = deviceId;
-            _settings.Set(PreviewSettings.Enabled, true);
-            _settings.Set(PreviewSettings.Device, deviceId);
+            if (_disposed) return;
+            if (!Enabled || DeviceId != deviceId)
+            {
+                Enabled = true;
+                DeviceId = deviceId;
+                _settings.Set(PreviewSettings.Enabled, true);
+                _settings.Set(PreviewSettings.Device, deviceId);
+            }
+            Fire(Trigger.User);
         }
-        Fire(Trigger.User);
     }
 
     public void SetVolume(double volume)
     {
-        if (_disposed) return;
-        Volume = volume;
-        // Volume is the raw slider *position*; the speaker takes a linear gain.
-        // Run it through the perceptual taper so the fader eases down smoothly.
-        _speaker.Volume = VolumeTaper.ToGain(volume);
-        _settings.Set(PreviewSettings.Volume, volume);
+        lock (_lock)
+        {
+            if (_disposed) return;
+            Volume = volume;
+            // Volume is the raw slider *position*; the speaker takes a linear gain.
+            // Run it through the perceptual taper so the fader eases down smoothly.
+            _speaker.Volume = VolumeTaper.ToGain(volume);
+            _settings.Set(PreviewSettings.Volume, volume);
+        }
     }
 
-    // Device callbacks: any thread. Hand off to the UI thread; never act here
-    // (the speaker may be calling from its render thread, the watcher from a COM
-    // worker that mustn't block).
-    private void OnSpeakerLost() => _post(() => Fire(Trigger.Lost));
+    // Device callbacks: any thread. Hand off; never act here (the speaker may be
+    // calling from its render thread, the watcher from a COM worker that mustn't block).
+    private void OnSpeakerLost() => Post(Trigger.Lost);
 
-    private void OnDefaultDeviceChanged(string? id) => _post(() => Fire(Trigger.DefaultChanged, id));
+    private void OnDefaultDeviceChanged(string? id) => Post(Trigger.DefaultChanged, id);
 
     private void OnDeviceAvailabilityChanged(string id, bool available) =>
-        _post(() => Fire(available ? Trigger.DeviceAvailable : Trigger.DeviceUnavailable, id));
+        Post(available ? Trigger.DeviceAvailable : Trigger.DeviceUnavailable, id);
 
-    /// <summary>The state machine: every transition happens here, on the UI thread.</summary>
+    private void Post(Trigger trigger, string? deviceId = null) => _post(() =>
+    {
+        lock (_lock) Fire(trigger, deviceId);
+    });
+
+    /// <summary>The state machine: every transition happens here, under the lock.</summary>
     private void Fire(Trigger trigger, string? deviceId = null)
     {
         switch (State, trigger)
@@ -240,6 +258,11 @@ public sealed class PreviewController : IDisposable
     }
 
     public void Dispose()
+    {
+        lock (_lock) DisposeLocked();
+    }
+
+    private void DisposeLocked()
     {
         if (_disposed) return;
         _disposed = true;

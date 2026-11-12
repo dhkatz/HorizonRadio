@@ -23,7 +23,7 @@ namespace HorizonRadio.Core.Sources.Mixes;
 ///
 /// Threading: the order state is advanced on the engine thread via
 /// <see cref="NextAsync"/>, reshuffled by <see cref="SetShuffle"/> and read by
-/// <see cref="Peek"/> from the UI thread, so all three go through <see cref="_lock"/>;
+/// <see cref="Peek"/> from any thread (the queue list's), so all three go through <see cref="_lock"/>;
 /// the expensive enumerate happens outside it.
 /// </summary>
 public sealed class MixContextProvider : IQueueContext

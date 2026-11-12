@@ -25,7 +25,7 @@ namespace HorizonRadio.Core.Party;
 /// What a guest does to the queue (add, remove, move, play now, clear, skip, back) is asked of the
 /// host, which does it to its own queue.
 ///
-/// Everything runs on one loop; <see cref="Changed"/> is raised off the UI thread.
+/// Everything runs on one loop; <see cref="Changed"/> is raised from it.
 /// </summary>
 public sealed class ListeningParty : IAsyncDisposable
 {

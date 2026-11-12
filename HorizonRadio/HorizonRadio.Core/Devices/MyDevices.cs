@@ -23,7 +23,7 @@ public sealed record DeviceStatus(string PeerId, string Name, bool IsThisDevice,
 /// happens. A device offline at the time catches up the next time they meet.
 ///
 /// Messages are handled one at a time, in order, on a loop of their own; <see cref="Changed"/> is
-/// raised from it (or the caller's thread), not the UI thread.
+/// raised from it (or the caller's thread).
 /// </summary>
 public sealed class MyDevices : IAsyncDisposable
 {
