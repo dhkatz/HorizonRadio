@@ -55,11 +55,11 @@
                                                FontSize="11" Opacity="0.55" TextWrapping="Wrap"/>
                                 </StackPanel>
                                 <Border Grid.Column="1" IsVisible="{Binding IsOnAir}"
-                                        Background="#22c55e" CornerRadius="999"
+                                        Background="{DynamicResource ToneSuccessBrush}" CornerRadius="999"
                                         Padding="8,2" Margin="12,0"
                                         VerticalAlignment="Center">
                                     <TextBlock Text="On Air" FontSize="10" FontWeight="SemiBold"
-                                               Foreground="White"/>
+                                               Foreground="{DynamicResource OnToneBrush}"/>
                                 </Border>
                                 <ComboBox Grid.Column="2"
                                           ItemsSource="{Binding Options}"

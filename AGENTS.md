@@ -33,7 +33,8 @@ These rules are mandatory for every change, human or agent.
 
 ```
 Assets/         README screenshots and artwork
-HorizonRadio/   the app: Sdk (the plugin SDK), Core (headless engine), UI (Avalonia), Core.Tests, TitleModel
+HorizonRadio/   the app: Sdk (the plugin SDK), Sdk.UI (theme + shared controls), Core (headless engine),
+                UI (Avalonia), Core.Tests, TitleModel
 Plugins/        everything that plugs into Horizon Radio (.NET)
   Games/  Lyrics/  Metadata/  Sources/  Tools/  one project per plugin
     Sources/HorizonRadio.Source.Spotify/Native/   the audio tap DLL (CMake), loaded into Spotify Soloist

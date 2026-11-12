@@ -17,7 +17,7 @@
         <!-- Compact result row: Add/Play sit at the right, always visible (the dropdown
              is a quick-action peek, so no hover-reveal dance like the queue rows). -->
         <Style Selector="Border.searchPill:pointerover">
-            <Setter Property="BorderBrush" Value="#4A90F8"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource HighlightBrush}"/>
         </Style>
     </UserControl.Styles>
 

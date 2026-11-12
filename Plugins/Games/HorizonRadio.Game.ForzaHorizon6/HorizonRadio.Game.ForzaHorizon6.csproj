@@ -14,6 +14,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\HorizonRadio\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+    <!-- The theme and controls its pages are built from; brings Avalonia, ShadUI and Material
+         icons at the app's versions. -->
+    <ProjectReference Include="..\..\..\HorizonRadio\HorizonRadio.Sdk.UI\HorizonRadio.Sdk.UI.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -21,15 +24,13 @@
     <InternalsVisibleTo Include="HorizonRadio.Core.Tests" />
   </ItemGroup>
 
-  <!-- UI for the plugin's pages. Versions must match HorizonRadio.UI's: the host and its plugins
-       share one copy of each UI assembly. -->
+  <!-- UI for the plugin's pages beyond HorizonRadio.Sdk.UI. Versions must match HorizonRadio.UI's:
+       the host and its plugins share one copy of each UI assembly. -->
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="12.0.3" />
     <!-- LiveCharts asks for Avalonia.Skia 12.0.0, which brings an older SkiaSharp than the app's
          (another ~1.2 GB of native assets to restore, and a mismatched copy): pin it to ours. -->
     <PackageReference Include="Avalonia.Skia" Version="12.0.3" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.1" />
-    <PackageReference Include="Material.Icons.Avalonia" Version="3.0.2" />
     <PackageReference Include="LiveChartsCore.SkiaSharpView.Avalonia" Version="2.1.0-dev-570" />
   </ItemGroup>
 

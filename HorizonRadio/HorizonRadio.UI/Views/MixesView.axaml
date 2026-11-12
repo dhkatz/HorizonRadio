@@ -38,7 +38,7 @@
             <Setter Property="Background" Value="{DynamicResource SecondaryColor}"/>
         </Style>
         <Style Selector="TextBlock.error">
-            <Setter Property="Foreground" Value="#EF4444"/>
+            <Setter Property="Foreground" Value="{DynamicResource ToneDangerBrush}"/>
         </Style>
     </UserControl.Styles>
 

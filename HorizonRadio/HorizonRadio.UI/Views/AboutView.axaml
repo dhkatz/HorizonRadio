@@ -27,11 +27,11 @@
                     <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                         <Border Width="38" Height="38"
                                 CornerRadius="999"
-                                Background="#6366f1"
+                                Background="{DynamicResource HighlightBrush}"
                                 VerticalAlignment="Center">
                             <materialIcons:MaterialIcon Kind="Radio"
                                                         Width="20" Height="20"
-                                                        Foreground="White"/>
+                                                        Foreground="{DynamicResource OnToneBrush}"/>
                         </Border>
                         <StackPanel Spacing="1" VerticalAlignment="Center">
                             <TextBlock Text="Horizon Radio" FontSize="15" FontWeight="SemiBold"/>

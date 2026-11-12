@@ -70,8 +70,8 @@
                 <DataTemplate>
                     <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,0,0,2">
                         <material:MaterialIcon Kind="AlertCircleOutline" Width="14" Height="14"
-                                               Foreground="#f59e0b" VerticalAlignment="Center"/>
-                        <TextBlock Text="{Binding}" FontSize="12" Opacity="0.8" Foreground="#f59e0b"/>
+                                               Foreground="{DynamicResource ToneWarningBrush}" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding}" FontSize="12" Opacity="0.8" Foreground="{DynamicResource ToneWarningBrush}"/>
                     </StackPanel>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
@@ -84,7 +84,7 @@
                    FontSize="13" Opacity="0.55"
                    IsVisible="{Binding HasNoResults}"/>
         <TextBlock DockPanel.Dock="Top" Text="Search failed. Check your connection and try again."
-                   FontSize="13" Opacity="0.7" Foreground="#f59e0b"
+                   FontSize="13" Opacity="0.7" Foreground="{DynamicResource ToneWarningBrush}"
                    IsVisible="{Binding HasError}"/>
         <TextBlock DockPanel.Dock="Top" Text="Connect a music source (e.g. Spotify) in Sources to search."
                    FontSize="13" Opacity="0.55"

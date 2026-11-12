@@ -2,8 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="HorizonRadio.UI.App"
              xmlns:local="using:HorizonRadio.UI"
-             xmlns:shad="clr-namespace:ShadUI;assembly=ShadUI"
-             xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
+             xmlns:theme="using:HorizonRadio.Sdk.UI.Theme"
              RequestedThemeVariant="Dark">
     <!-- Dark by default; the title-bar theme switcher toggles to Light at runtime. -->
 
@@ -12,12 +11,8 @@
     </Application.DataTemplates>
 
     <Application.Styles>
-        <shad:ShadTheme/>
-        <!-- Registers the MaterialIcon control template + SVG data
-             lookup. Required by every <materialIcons:MaterialIcon>;
-             without this they render as empty boxes (no template
-             applied, control has no visual). -->
-        <materialIcons:MaterialIconStyles/>
-        <StyleInclude Source="avares://HorizonRadio.UI/Styles/Index.axaml"/>
+        <!-- ShadUI, Material icons, and Horizon Radio's color tokens and text styles
+             (HorizonRadio.Sdk.UI), shared with the plugins' pages. -->
+        <theme:HorizonRadioTheme/>
     </Application.Styles>
 </Application>

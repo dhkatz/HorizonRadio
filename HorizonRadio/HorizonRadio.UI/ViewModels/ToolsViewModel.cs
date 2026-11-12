@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk.Tools;
+using HorizonRadio.Sdk.UI.Theme;
 using HorizonRadio.UI.Tools;
 
 namespace HorizonRadio.UI.ViewModels;
@@ -100,7 +101,7 @@ public sealed partial class ToolItemViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StatusLabel))]
-    [NotifyPropertyChangedFor(nameof(StatusBrush))]
+    [NotifyPropertyChangedFor(nameof(StatusTone))]
     [NotifyPropertyChangedFor(nameof(InstallButtonLabel))]
     [NotifyPropertyChangedFor(nameof(CanUninstall))]
     private bool isInstalled;
@@ -117,7 +118,7 @@ public sealed partial class ToolItemViewModel : ViewModelBase, IDisposable
     /// <summary>Provisioning-freshness of this tool. Drives the status
     /// pill colour/text and whether the action button reads "Update".</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(StatusBrush))]
+    [NotifyPropertyChangedFor(nameof(StatusTone))]
     [NotifyPropertyChangedFor(nameof(InstallButtonLabel))]
     [NotifyPropertyChangedFor(nameof(UpdateAvailable))]
     private ToolFreshness freshness = ToolFreshness.Unknown;
@@ -144,11 +145,11 @@ public sealed partial class ToolItemViewModel : ViewModelBase, IDisposable
         !IsInstalled ? "Not installed"
         : VersionText is null ? "Installed" : $"Installed (v{VersionText})";
 
-    // grey = not installed, amber = update available, green = up to date.
-    public string StatusBrush =>
-        !IsInstalled ? "#6b7280"
-        : Freshness == ToolFreshness.UpdateAvailable ? "#f59e0b"
-        : "#22c55e";
+    // Neutral = not installed, warning = update available, success = up to date.
+    public Tone StatusTone =>
+        !IsInstalled ? Tone.Neutral
+        : Freshness == ToolFreshness.UpdateAvailable ? Tone.Warning
+        : Tone.Success;
 
     public string InstallButtonLabel =>
         IsWorking ? "Installing…"
