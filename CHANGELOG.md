@@ -141,6 +141,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Every folder and file field has a Browse button that starts where you are.** A metadata
+  provider's folder setting gains the Browse button it was missing, and Browse now opens in the
+  folder the field already points to. The Metadata page reuses the Sources page's settings form.
 - **Notices, empty pages and status lights look the same everywhere.** The game's setup banner,
   the Mod Installer's warnings, Search's source problems and the Events hint are one kind of
   notice, and long ones wrap instead of running off the edge. Empty History and Mixes say so

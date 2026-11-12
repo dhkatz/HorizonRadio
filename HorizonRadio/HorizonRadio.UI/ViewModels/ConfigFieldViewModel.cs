@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using HorizonRadio.Sdk.Sources.Config;
@@ -47,16 +48,7 @@ public sealed partial class DirectoryFieldViewModel : ConfigFieldViewModel
 {
     [ObservableProperty] private string? path;
 
-    /// <summary>Raised when the user clicks Browse. The view subscribes,
-    /// opens the native folder picker via its top-level StorageProvider,
-    /// and writes the result back into <see cref="Path"/>. Done as an
-    /// event rather than a Command-with-injection so the VM stays free
-    /// of Avalonia types.</summary>
-    public event Action<DirectoryFieldViewModel>? BrowseRequested;
-
     public DirectoryFieldViewModel(DirectoryField field) : base(field) { Path = field.Default; }
-
-    public void RequestBrowse() => BrowseRequested?.Invoke(this);
 
     public override object? GetValue() => Path;
     public override void SetValue(object? value) => Path = value as string;
@@ -66,8 +58,6 @@ public sealed partial class FileFieldViewModel : ConfigFieldViewModel
 {
     [ObservableProperty] private string? path;
 
-    public event Action<FileFieldViewModel>? BrowseRequested;
-
     public FileField FileField { get; }
 
     public FileFieldViewModel(FileField field) : base(field)
@@ -75,8 +65,6 @@ public sealed partial class FileFieldViewModel : ConfigFieldViewModel
         FileField = field;
         Path = field.Default;
     }
-
-    public void RequestBrowse() => BrowseRequested?.Invoke(this);
 
     public override object? GetValue() => Path;
     public override void SetValue(object? value) => Path = value as string;
@@ -133,7 +121,8 @@ public sealed partial class ToolFieldViewModel : ConfigFieldViewModel
 
     private readonly ToolRegistry? _registry;
 
-    public event Action<ToolFieldViewModel>? BrowseRequested;
+    /// <summary>What Browse offers: executables, which have an extension only on Windows.</summary>
+    public IReadOnlyList<string>? Extensions { get; } = OperatingSystem.IsWindows() ? ["exe"] : null;
 
     public ToolFieldViewModel(ToolField field, ToolRegistry? registry) : base(field)
     {
@@ -169,8 +158,6 @@ public sealed partial class ToolFieldViewModel : ConfigFieldViewModel
     /// the dropdown. Sets <see cref="Path"/> to the tool's path so the
     /// textbox reflects the choice.</summary>
     public void PickInstalled(InstalledTool tool) => Path = tool.Path;
-
-    public void RequestBrowse() => BrowseRequested?.Invoke(this);
 
     public override object? GetValue() => Path;
     public override void SetValue(object? value) => Path = value as string;

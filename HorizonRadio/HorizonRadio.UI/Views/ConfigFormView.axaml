@@ -12,17 +12,8 @@
         <DataTemplate DataType="{x:Type vm:DirectoryFieldViewModel}">
             <StackPanel Spacing="4">
                 <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="Medium"/>
-                <Grid ColumnDefinitions="*,Auto">
-                    <TextBox Grid.Column="0"
-                             Text="{Binding Path, Mode=TwoWay}"
-                             PlaceholderText="Pick a folder..." />
-                    <Button Grid.Column="1"
-                            Classes="Outline"
-                            Content="Browse"
-                            Margin="6,0,0,0"
-                            Click="BrowseDirectory_Click"
-                            Tag="{Binding}"/>
-                </Grid>
+                <ui:PathPicker Path="{Binding Path}" Placeholder="Pick a folder…"
+                               DialogTitle="{Binding Label, StringFormat='Pick a folder: {0}'}"/>
                 <TextBlock Text="{Binding Description}"
                            FontSize="11" Opacity="0.55"
                            TextWrapping="Wrap"
@@ -33,17 +24,9 @@
         <DataTemplate DataType="{x:Type vm:FileFieldViewModel}">
             <StackPanel Spacing="4">
                 <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="Medium"/>
-                <Grid ColumnDefinitions="*,Auto">
-                    <TextBox Grid.Column="0"
-                             Text="{Binding Path, Mode=TwoWay}"
-                             PlaceholderText="Pick a file..." />
-                    <Button Grid.Column="1"
-                            Classes="Outline"
-                            Content="Browse"
-                            Margin="6,0,0,0"
-                            Click="BrowseFile_Click"
-                            Tag="{Binding}"/>
-                </Grid>
+                <ui:PathPicker Path="{Binding Path}" Kind="File" Placeholder="Pick a file…"
+                               FileExtensions="{Binding FileField.ExtensionFilter}"
+                               DialogTitle="{Binding Label, StringFormat='Pick a file: {0}'}"/>
                 <TextBlock Text="{Binding Description}"
                            FontSize="11" Opacity="0.55"
                            TextWrapping="Wrap"
@@ -76,17 +59,9 @@
                     </ComboBox.ItemTemplate>
                 </ComboBox>
 
-                <Grid ColumnDefinitions="*,Auto">
-                    <TextBox Grid.Column="0"
-                             Text="{Binding Path, Mode=TwoWay}"
-                             PlaceholderText="Or paste a custom path..." />
-                    <Button Grid.Column="1"
-                            Classes="Outline"
-                            Content="Browse"
-                            Margin="6,0,0,0"
-                            Click="BrowseTool_Click"
-                            Tag="{Binding}"/>
-                </Grid>
+                <ui:PathPicker Path="{Binding Path}" Kind="File" Placeholder="Or paste a custom path…"
+                               FileExtensions="{Binding Extensions}"
+                               DialogTitle="{Binding Label, StringFormat='Pick a file: {0}'}"/>
 
                 <TextBlock Text="{Binding Description}"
                            FontSize="11" Opacity="0.55"
