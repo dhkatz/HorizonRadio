@@ -112,7 +112,7 @@ public partial class App : Application
             services.AddHorizonCore(settings);
             services.AddSingleton<ToolRegistry>();
             services.AddSingleton<IConfirmations>(confirmations);
-            services.AddSingleton<IPluginContext>(sp => new HostPluginContext(sp.GetRequiredService<MetadataCache>(), settings, confirmations));
+            services.AddSingleton<IPluginContext>(sp => new HostPluginContext(settings, confirmations));
             // The plugins, found by scanning the loaded plugin assemblies rather than named here (the
             // seam the install model rests on), and their modules' services. Last, so a module can
             // replace or wrap any service above; the Console tab says when one does.
@@ -223,20 +223,18 @@ public partial class App : Application
                 MetadataCatalog.Initialize(provider.GetServices<IMetadataPlugin>().InDisplayOrder());
 
                 _metaStore = provider.GetRequiredService<MetadataConfigStore>();
-                // pluginContext (resolved above for the game plugin) is also what metadata provider
-                // factories receive: host services shared across pipeline builds.
                 // The metadata pipeline: a shared resolver (source + ordered providers,
                 // per-field policy) drives both play-time enrichment and list enrichment.
                 _metaResolver = new MetadataResolver();
-                var (metaContributors, metaPolicy) = MetadataCatalog.BuildPipeline(_metaStore, pluginContext);
+                var (metaContributors, metaPolicy) = MetadataCatalog.BuildPipeline(_metaStore);
                 _metaResolver.Configure(metaContributors, metaPolicy);
                 _enricher = new EnrichmentService(_runner, _metaResolver);
-                var metaVm = new MetadataViewModel(_metaStore, pluginContext, _metaResolver);
+                var metaVm = new MetadataViewModel(_metaStore, _metaResolver);
 
                 // Lyrics for the Now Playing page, from every lyrics plugin (Unison, LRCLIB), in
                 // their SortOrder: the service prefers synced lyrics, then the earlier provider.
                 var lyrics = new LyricsService([.. provider.GetServices<ILyricsPlugin>().InDisplayOrder()
-                    .Select(p => p.CreateLyricsProvider(pluginContext))]);
+                    .Select(p => p.CreateLyricsProvider())]);
                 // Radio lyrics follow the song by lining the station's audio up against a recording
                 // of it (the song's own video, fetched through a source that can, e.g. YouTube).
                 var songSync = new LiveSongSync(() => SourceCatalog.All, new ReferenceStore(), _metaResolver);

@@ -6,7 +6,6 @@ using HorizonRadio.Core.Sources;
 using HorizonRadio.Game.ForzaHorizon6;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Games;
-using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 
 namespace HorizonRadio.Core.Tests;
@@ -17,7 +16,6 @@ public class Fh6GameIntegrationTests
 {
     private sealed class TestContext(SettingsStore settings) : IPluginContext
     {
-        public IMetadataCache Cache => throw new NotSupportedException();
 
         public IPluginSettings GetSettings(string pluginId) => PluginSettings.For(settings, pluginId);
     }

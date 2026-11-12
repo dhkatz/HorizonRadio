@@ -5,7 +5,7 @@ using HorizonRadio.Sdk.Sources.Config;
 
 namespace HorizonRadio.Metadata.VocaDb;
 
-public sealed class VocaDbProviderFactory : IMetadataProviderFactory
+public sealed class VocaDbProviderFactory(IMetadataCache cache, IMetadataTrace trace) : IMetadataProviderFactory
 {
     public string Id => "vocadb";
     public string DisplayName => "VocaDB";
@@ -14,5 +14,5 @@ public sealed class VocaDbProviderFactory : IMetadataProviderFactory
     // Keyless, no configuration.
     public IReadOnlyList<ConfigField> Schema { get; } = [];
 
-    public IMetadataProvider Create(ConfigValues values, IPluginContext context) => new VocaDbProvider(context.Cache);
+    public IMetadataProvider Create(ConfigValues values) => new VocaDbProvider(cache, trace);
 }

@@ -10,5 +10,5 @@ public sealed class UnisonLyricsPlugin : ILyricsPlugin
     public string DisplayName => "Unison";
     public int SortOrder => 10;
 
-    public ILyricsProvider CreateLyricsProvider(IPluginContext context) => new UnisonProvider();
+    public ILyricsProvider CreateLyricsProvider() => new UnisonProvider();
 }

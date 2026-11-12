@@ -27,7 +27,7 @@ namespace HorizonRadio.Core;
 ///
 /// It also registers the host's side of the plugin SDK: the services plugin constructors take
 /// (<see cref="IPluginLog"/>, <see cref="IProcesses"/>, <see cref="IAppFolders"/>,
-/// <see cref="IToolLocator"/>, <see cref="IMetadataCache"/>), each of which a plugin module may
+/// <see cref="IToolLocator"/>, <see cref="IMetadataCache"/>, <see cref="IMetadataTrace"/>), each of which a plugin module may
 /// replace (<see cref="Hosting.PluginRegistration.AddPlugins"/>).
 /// </summary>
 public static class HorizonCoreServiceCollectionExtensions
@@ -52,6 +52,7 @@ public static class HorizonCoreServiceCollectionExtensions
         services.AddSingleton<IProcesses, HostProcesses>();
         services.AddSingleton<IAppFolders, HostAppFolders>();
         services.AddSingleton<IToolLocator, HostToolLocator>();
+        services.AddSingleton<IMetadataTrace, HostMetadataTrace>();
 
         // Resolves a mix entry to playable content from the source config; non-disposable and its
         // only dependency (the source config store) is registered above, so it's safe to own here.

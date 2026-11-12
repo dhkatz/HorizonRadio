@@ -1,21 +1,13 @@
-using HorizonRadio.Sdk.Metadata;
-
 namespace HorizonRadio.Sdk;
 
 /// <summary>
-/// Host services handed to a plugin factory when it builds an instance. It decouples a plugin from
-/// the host's concrete types: the factory receives this instead of, say, the concrete metadata
-/// cache, so the plugin contract can live in the SDK without referencing the host engine.
-///
-/// It grows as more plugin kinds come online (a tool resolver, an HTTP client, diagnostics, a
-/// cross-plugin service lookup); for now it exposes the metadata cache, which is all a metadata
-/// provider needs from the host.
+/// What the host hands a game plugin when it builds the game integration
+/// (<see cref="IGamePlugin.Create"/>): the plugin's settings and a way to ask the user before
+/// something destructive. Being replaced: plugins take host services in their constructors from the
+/// host's container (see <see cref="IPluginModule"/>), and this goes once game plugins do too.
 /// </summary>
 public interface IPluginContext
 {
-    /// <summary>The shared on-disk metadata cache (see <see cref="IMetadataCache"/>).</summary>
-    IMetadataCache Cache { get; }
-
     /// <summary>The persisted settings belonging to the plugin with id <paramref name="pluginId"/>
     /// (pass your own <see cref="IPlugin.Id"/>). They stay on this PC.</summary>
     IPluginSettings GetSettings(string pluginId);

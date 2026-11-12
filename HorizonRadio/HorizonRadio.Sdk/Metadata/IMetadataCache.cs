@@ -3,10 +3,9 @@ namespace HorizonRadio.Sdk.Metadata;
 /// <summary>
 /// The on-disk metadata cache as a metadata provider sees it: look up a prior result, store one,
 /// or record a miss. Keyed by a stable hash of (provider-id, query) — providers compute the key
-/// with the host cache's <c>Key</c> helper. The concrete implementation (disk layout, freshness /
-/// TTL, versioning) lives in the host; a provider only needs this surface, so it can be supplied
-/// through <see cref="HorizonRadio.Sdk.IPluginContext"/> without coupling the
-/// provider to the host's cache type.
+/// with <see cref="MetadataCacheKey.For"/>. The concrete implementation (disk layout, freshness /
+/// TTL, versioning) lives in the host; a provider takes this in its plugin's constructor without
+/// coupling to the host's cache type.
 /// </summary>
 public interface IMetadataCache
 {

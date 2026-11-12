@@ -5,10 +5,10 @@ using HorizonRadio.Sdk.Metadata;
 namespace HorizonRadio.Metadata.Spotify;
 
 /// <summary>The Spotify metadata plugin — contributes the Spotify Web API provider.</summary>
-public sealed class SpotifyMetadataPlugin : IMetadataPlugin
+public sealed class SpotifyMetadataPlugin(IMetadataCache cache, IMetadataTrace trace) : IMetadataPlugin
 {
     public string Id => "spotify";
     public string DisplayName => "Spotify";
     public int SortOrder => 10;
-    public IReadOnlyList<IMetadataProviderFactory> Providers { get; } = [new SpotifyProviderFactory()];
+    public IReadOnlyList<IMetadataProviderFactory> Providers { get; } = [new SpotifyProviderFactory(cache, trace)];
 }

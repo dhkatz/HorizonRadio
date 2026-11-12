@@ -122,7 +122,10 @@ Each step leaves the app working and lands as its own PR or short stack.
    - [x] Tool installers: `ToolInstallerBase` and `AtomicFile` are in the SDK, and the host says
      where each install goes (`ToolInstallTarget`); the ffmpeg and title-model plugins reference
      only the SDK.
-   - [ ] Metadata plugins: diagnostics (`MetadataTrace`) and the cache through services.
+   - [x] Metadata and lyrics plugins take the metadata cache and diagnostics (`IMetadataTrace`) in
+     their constructors; provider factories and lyrics plugins no longer get `IPluginContext`. The
+     iTunes, MusicBrainz and VocaDB plugins reference only the SDK (Spotify's metadata still rides
+     on the Spotify source's connection).
    - [ ] Source plugins, each with the tool wrappers it runs, which become services: YouTube
      (yt-dlp, ffmpeg), Radio, then Spotify (librespot, Soloist); `SpotifyRuntime` and
      `YouTubeRuntime` go. The peer helper with them.

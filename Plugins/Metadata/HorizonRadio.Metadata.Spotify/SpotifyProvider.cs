@@ -6,8 +6,6 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Diagnostics;
-using HorizonRadio.Core.Metadata;
 using HorizonRadio.Sdk.Metadata;
 using SpotifyAPI.Web;
 
@@ -29,12 +27,14 @@ public sealed class SpotifyProvider : IMetadataProvider
     public string Id => "spotify";
 
     private readonly IMetadataCache _cache;
+    private readonly IMetadataTrace _trace;
     private readonly Func<CancellationToken, Task<SpotifyClient?>> _clientFactory;
     private readonly HttpClient _httpForArt = new() { Timeout = TimeSpan.FromSeconds(15) };
 
-    public SpotifyProvider(IMetadataCache cache, Func<CancellationToken, Task<SpotifyClient?>> clientFactory)
+    public SpotifyProvider(IMetadataCache cache, IMetadataTrace trace, Func<CancellationToken, Task<SpotifyClient?>> clientFactory)
     {
         _cache = cache;
+        _trace = trace;
         _clientFactory = clientFactory;
     }
 
@@ -51,7 +51,7 @@ public sealed class SpotifyProvider : IMetadataProvider
                     : null;
         if (queryKey == null) return null;
 
-        var cacheKey = MetadataCache.Key(Id, queryKey);
+        var cacheKey = MetadataCacheKey.For(Id, queryKey);
         var hit = _cache.TryGet(cacheKey);
         if (hit != null) return ToContribution(hit);
 
@@ -135,7 +135,7 @@ public sealed class SpotifyProvider : IMetadataProvider
 
             // Capture the query + every scored result for the trace (only when capturing) so this
             // lookup can be replayed through SearchTerms.MatchScore offline.
-            var capture = MetadataTrace.NewCapture();
+            var capture = _trace.NewCapture();
             // For a title-only query, reject a widely-covered/ambiguous title rather than attach a
             // random cover's art; inert when an artist is present.
             var titleGuard = new TitleOnlyGuard(artist);
@@ -151,7 +151,7 @@ public sealed class SpotifyProvider : IMetadataProvider
                 bestScore = sc;
                 best = t;
             }
-            MetadataTrace.ProviderSearch(Id, q, capture);
+            _trace.ProviderSearch(Id, q, capture);
             if (titleGuard.IsAmbiguous) return null;
 
             return best is null ? null : await BuildEntry(best, ct).ConfigureAwait(false);

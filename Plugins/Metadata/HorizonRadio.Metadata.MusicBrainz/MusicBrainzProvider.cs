@@ -1,8 +1,6 @@
 using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
-using HorizonRadio.Core.Diagnostics;
-using HorizonRadio.Core.Metadata;
 using HorizonRadio.Sdk.Metadata;
 
 namespace HorizonRadio.Metadata.MusicBrainz;
@@ -14,14 +12,16 @@ public sealed class MusicBrainzProvider : IMetadataProvider
     private readonly HttpClient _http;
     private readonly bool _ownsHttp;
     private readonly IMetadataCache _cache;
+    private readonly IMetadataTrace _trace;
     // MB ToS: ~1 req/sec; the extra 100 ms buffers clock drift that otherwise returns 503.
     private readonly RateGate _rate = new(TimeSpan.FromMilliseconds(1100));
 
-    public MusicBrainzProvider(IMetadataCache cache,
+    public MusicBrainzProvider(IMetadataCache cache, IMetadataTrace trace,
                                HttpClient? http = null,
                                string? contact = null)
     {
         _cache = cache;
+        _trace = trace;
         _ownsHttp = http is null;
         _http = http ?? new HttpClient(new HttpClientHandler
         {
@@ -56,7 +56,7 @@ public sealed class MusicBrainzProvider : IMetadataProvider
 
         if (queryKey == null) return null;
 
-        var cacheKey = MetadataCache.Key(Id, queryKey);
+        var cacheKey = MetadataCacheKey.For(Id, queryKey);
         var hit = _cache.TryGet(cacheKey);
         if (hit != null) return ToContribution(hit);
 
@@ -117,7 +117,7 @@ public sealed class MusicBrainzProvider : IMetadataProvider
         // MB ranks by its own relevance and will happily return an unrelated recording for
         // a loose query; score each against the request (title-first) and take the best
         // that actually matches, so we never attach a wrong album's art.
-        var capture = MetadataTrace.NewCapture();
+        var capture = _trace.NewCapture();
         JsonElement rec = default;
         string? canonicalTitle = null, canonicalArtist = null;
         double bestScore = double.NegativeInfinity;
@@ -141,7 +141,7 @@ public sealed class MusicBrainzProvider : IMetadataProvider
             canonicalTitle = rt;
             canonicalArtist = ra;
         }
-        MetadataTrace.ProviderSearch(Id, query, capture);
+        _trace.ProviderSearch(Id, query, capture);
         if (canonicalTitle is null) return null; // nothing matched the request
 
         if (!rec.TryGetProperty("releases", out var releases) ||

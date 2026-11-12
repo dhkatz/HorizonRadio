@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Text.Json;
-using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Metadata.VocaDb;
+using HorizonRadio.Sdk.Metadata;
 
 namespace HorizonRadio.Core.Tests;
 
@@ -263,7 +263,7 @@ public class VocaDbProviderTests
         }
         """);
 
-        var sink = new List<MetadataTrace.CatalogCandidate>();
+        var sink = new List<CatalogCandidate>();
         var m = VocaDbProvider.SelectMatch(json, "Sacred Secret", "MuryokuP", artistConfirmed: false, sink: sink);
 
         Assert.Equal("Sacred Secret", m!.Name);

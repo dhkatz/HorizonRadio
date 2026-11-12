@@ -7,8 +7,6 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Diagnostics;
-using HorizonRadio.Core.Metadata;
 using HorizonRadio.Sdk.Metadata;
 
 namespace HorizonRadio.Metadata.Apple;
@@ -30,6 +28,7 @@ public sealed class ItunesProvider : IMetadataProvider
     public string Id => "itunes";
 
     private readonly IMetadataCache _cache;
+    private readonly IMetadataTrace _trace;
     private readonly HttpClient _http;
     private readonly bool _ownsHttp;
     private readonly IReadOnlyList<string> _storefronts;
@@ -38,9 +37,10 @@ public sealed class ItunesProvider : IMetadataProvider
     // lookup can fan out to a few requests across storefronts/query forms.
     private readonly RateGate _rate = new(TimeSpan.FromMilliseconds(250));
 
-    public ItunesProvider(IMetadataCache cache, HttpClient? http = null, string? country = null)
+    public ItunesProvider(IMetadataCache cache, IMetadataTrace trace, HttpClient? http = null, string? country = null)
     {
         _cache = cache;
+        _trace = trace;
         _ownsHttp = http is null;
         _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
 
@@ -60,15 +60,15 @@ public sealed class ItunesProvider : IMetadataProvider
 
         // Cache by the song, not the storefront/term, so the resolved result (or miss) is
         // reused across stores and query forms.
-        var cacheKey = MetadataCache.Key(Id, $"{artist.ToLowerInvariant()}|{title.ToLowerInvariant()}");
+        var cacheKey = MetadataCacheKey.For(Id, $"{artist.ToLowerInvariant()}|{title.ToLowerInvariant()}");
         var hit = _cache.TryGet(cacheKey);
         if (hit != null) return ToContribution(hit);
 
         // Cache only what iTunes actually answered; a failed request is retried next time.
         using var lookup = CatalogLookup.Begin();
-        var capture = MetadataTrace.NewCapture();
+        var capture = _trace.NewCapture();
         var match = await FindBestAsync(title, artist, query.Title, query.Artist, capture, ct).ConfigureAwait(false);
-        MetadataTrace.ProviderSearch(Id, string.IsNullOrEmpty(artist) ? title : $"{artist} {title}", capture);
+        _trace.ProviderSearch(Id, string.IsNullOrEmpty(artist) ? title : $"{artist} {title}", capture);
         if (match is null)
         {
             if (lookup.Failed) throw lookup.Unavailable(Id);
@@ -93,7 +93,7 @@ public sealed class ItunesProvider : IMetadataProvider
 
     private async Task<Match?> FindBestAsync(
         string cleanTitle, string cleanArtist, string rawTitle, string? rawArtist,
-        ICollection<MetadataTrace.CatalogCandidate>? sink, CancellationToken ct)
+        ICollection<CatalogCandidate>? sink, CancellationToken ct)
     {
         // Full query first (more precise), then title-only (catches artist-credit mismatches).
         var terms = string.IsNullOrEmpty(cleanArtist)
@@ -112,7 +112,7 @@ public sealed class ItunesProvider : IMetadataProvider
     }
 
     private async Task<Match?> SearchOnceAsync(string term, string store, string rawTitle, string? rawArtist,
-        ICollection<MetadataTrace.CatalogCandidate>? sink, CancellationToken ct)
+        ICollection<CatalogCandidate>? sink, CancellationToken ct)
     {
         // limit=10 so scoring can see past a fuzzy #1 to the real track.
         var url = $"https://itunes.apple.com/search?media=music&entity=song&limit=10&country={store}&term={Uri.EscapeDataString(term)}";
@@ -136,7 +136,7 @@ public sealed class ItunesProvider : IMetadataProvider
     /// parse/scoring is unit-testable without HTTP. <paramref name="sink"/>, when supplied,
     /// collects every scored result (for the diagnostics trace) without affecting the choice.</summary>
     internal static Match? SelectMatch(JsonElement root, string queryTitle, string? queryArtist,
-        ICollection<MetadataTrace.CatalogCandidate>? sink = null)
+        ICollection<CatalogCandidate>? sink = null)
     {
         if (!root.TryGetProperty("results", out var results) ||
             results.ValueKind != JsonValueKind.Array) return null;
