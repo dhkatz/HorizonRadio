@@ -268,6 +268,12 @@ public sealed partial class QueueViewModel : ViewModelBase, IDisposable
             if (existing != null) Upcoming.Move(Upcoming.IndexOf(existing), i);
             else Upcoming.Insert(i, CreateRow(items[i]));
         }
+
+        for (var i = 0; i < Upcoming.Count; i++)
+        {
+            Upcoming[i].IsFirst = i == 0;
+            Upcoming[i].IsLast = i == Upcoming.Count - 1;
+        }
     }
 
     // The context peek is recomputed on every Changed (twice per track), but it
@@ -412,6 +418,10 @@ public sealed partial class QueueRowViewModel : ViewModelBase
     /// <summary>The track, for the row's right-click menu.</summary>
     [ObservableProperty] private SongTarget? song;
 
+    /// <summary>At the top or the bottom of the queue, where it can't move further.</summary>
+    [ObservableProperty] private bool isFirst;
+    [ObservableProperty] private bool isLast;
+
     public bool HasSubtitle => !string.IsNullOrWhiteSpace(Subtitle);
     public bool HasThumbnail => Thumbnail != null;
 
@@ -431,7 +441,16 @@ public sealed partial class QueueRowViewModel : ViewModelBase
         this.title = title;
         this.subtitle = subtitle;
         this.thumbnail = thumbnail;
-        PlayNowCommand = new RelayCommand(() => playNow(id));
+        // Playing now interrupts what's playing, so a double-click on the art's play button
+        // (two clicks) plays once.
+        var lastPlay = DateTime.MinValue;
+        PlayNowCommand = new RelayCommand(() =>
+        {
+            var now = DateTime.UtcNow;
+            if (now - lastPlay < TimeSpan.FromMilliseconds(500)) return;
+            lastPlay = now;
+            playNow(id);
+        });
         RemoveCommand = new RelayCommand(() => remove(id));
         MoveUpCommand = new RelayCommand(() => moveUp(id));
         MoveDownCommand = new RelayCommand(() => moveDown(id));

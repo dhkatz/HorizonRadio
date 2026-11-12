@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:HorizonRadio.Sdk.UI.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
@@ -12,40 +13,6 @@
     <Design.DataContext>
         <vm:QueueViewModel />
     </Design.DataContext>
-
-    <UserControl.Styles>
-        <!-- On row hover: reveal up/down/remove and fade the title's right edge out
-             from under them (an opacity gradient, theme-independent). The reveal is
-             instant (no opacity transition) — an animated fade reads as flicker when
-             the pointer crosses row boundaries. IsHitTestVisible follows visibility
-             so the hidden actions can't intercept the pointer and toggle hover. -->
-        <Style Selector="StackPanel.rowActions">
-            <Setter Property="Opacity" Value="0"/>
-            <Setter Property="IsHitTestVisible" Value="False"/>
-        </Style>
-        <Style Selector="Border.queueRow:pointerover StackPanel.rowActions">
-            <Setter Property="Opacity" Value="1"/>
-            <Setter Property="IsHitTestVisible" Value="True"/>
-        </Style>
-        <Style Selector="Border.queueRow:pointerover StackPanel.rowTitle">
-            <Setter Property="OpacityMask">
-                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
-                    <GradientStop Offset="0" Color="White"/>
-                    <GradientStop Offset="0.55" Color="White"/>
-                    <GradientStop Offset="1" Color="Transparent"/>
-                </LinearGradientBrush>
-            </Setter>
-        </Style>
-
-        <!-- Play overlay fills the thumbnail (same rounded-square shape), semi-
-             transparent so the art shows through, revealed on thumbnail hover. -->
-        <Style Selector="Border.playOverlay">
-            <Setter Property="Opacity" Value="0"/>
-        </Style>
-        <Style Selector="Border.thumb:pointerover Border.playOverlay">
-            <Setter Property="Opacity" Value="1"/>
-        </Style>
-    </UserControl.Styles>
 
     <Border Background="{DynamicResource SidebarBackgroundColor}"
             BorderBrush="{DynamicResource BorderColor}"
@@ -100,7 +67,7 @@
 
                     <!-- Now playing -->
                     <StackPanel Spacing="4" IsVisible="{Binding HasNowPlaying}">
-                        <TextBlock Text="Now Playing" FontSize="11" FontWeight="SemiBold" Opacity="0.6"/>
+                        <TextBlock Classes="groupLabel" Text="Now Playing"/>
                         <Border Classes="Card" Padding="10,8"
                                 views:SongMenu.Target="{Binding NowPlayingSong}">
                             <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
@@ -130,64 +97,32 @@
 
                     <!-- Next in queue (explicit one-offs) -->
                     <StackPanel Spacing="6" IsVisible="{Binding HasUpcoming}">
-                        <TextBlock Text="Next In Queue" FontSize="11" FontWeight="SemiBold" Opacity="0.6"/>
+                        <TextBlock Classes="groupLabel" Text="Next In Queue"/>
                         <ItemsControl ItemsSource="{Binding Upcoming}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="{x:Type vm:QueueRowViewModel}">
-                                    <!-- Double-click plays now. (Drag-to-reorder: follow-up.) -->
-                                    <Border Classes="Card queueRow" Padding="8" Margin="0,0,0,6"
-                                            DoubleTapped="OnRowDoubleTapped"
-                                            views:SongMenu.Target="{Binding Song}">
-                                        <!-- Transparent background makes the WHOLE row a single hit surface, so
-                                             hover (and the action reveal) fires anywhere on the row, not just over
-                                             the title text. -->
-                                        <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center"
-                                              Background="Transparent">
-                                            <!-- Thumbnail with a play overlay on hover. -->
-                                            <Border Grid.Column="0" Classes="thumb" Width="48" Height="48"
-                                                    CornerRadius="4" ClipToBounds="True" Margin="0,0,12,0"
-                                                    Background="{DynamicResource SecondaryColor}">
-                                                <Panel>
-                                                    <material:MaterialIcon Kind="MusicNote" Width="20" Height="20" Opacity="0.5"
-                                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                    <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"
-                                                           IsVisible="{Binding HasThumbnail}"/>
-                                                    <!-- Same rounded-square shape as the thumbnail, translucent. -->
-                                                    <Border Classes="playOverlay" Background="{DynamicResource ScrimBrush}" CornerRadius="4"
-                                                            PointerPressed="OnPlayOverlayPressed">
-                                                        <material:MaterialIcon Kind="Play" Width="24" Height="24"
-                                                                               Foreground="{DynamicResource OnToneBrush}"
-                                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                    </Border>
-                                                </Panel>
-                                            </Border>
-
-                                            <!-- Title fills the row; on hover its right edge fades (OpacityMask)
-                                                 and the actions appear over it. -->
-                                            <Panel Grid.Column="1">
-                                                <StackPanel Classes="rowTitle" Spacing="2" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="Medium"
-                                                               TextTrimming="CharacterEllipsis"/>
-                                                    <TextBlock Text="{Binding Subtitle}" FontSize="12" Opacity="0.6"
-                                                               IsVisible="{Binding HasSubtitle}"
-                                                               TextTrimming="CharacterEllipsis"/>
-                                                </StackPanel>
-                                                <StackPanel Classes="rowActions" Orientation="Horizontal" Spacing="1"
-                                                            HorizontalAlignment="Right" VerticalAlignment="Center"
-                                                            Background="Transparent">
-                                                    <Button Classes="Ghost" Padding="5" Command="{Binding MoveUpCommand}">
-                                                        <material:MaterialIcon Kind="ChevronUp" Width="16" Height="16"/>
-                                                    </Button>
-                                                    <Button Classes="Ghost" Padding="5" Command="{Binding MoveDownCommand}">
-                                                        <material:MaterialIcon Kind="ChevronDown" Width="16" Height="16"/>
-                                                    </Button>
-                                                    <Button Classes="Ghost" Padding="5" Command="{Binding RemoveCommand}">
-                                                        <material:MaterialIcon Kind="Close" Width="16" Height="16"/>
-                                                    </Button>
-                                                </StackPanel>
-                                            </Panel>
-                                        </Grid>
-                                    </Border>
+                                    <!-- Double-click (or the play button on the art) plays now.
+                                         (Drag-to-reorder: follow-up.) -->
+                                    <ui:SongRow Art="{Binding Thumbnail}" Title="{Binding Title}" Subtitle="{Binding Subtitle}"
+                                                PlayCommand="{Binding PlayNowCommand}"
+                                                views:SongMenu.Target="{Binding Song}">
+                                        <ui:SongRow.Actions>
+                                            <StackPanel Orientation="Horizontal" Spacing="1">
+                                                <Button Classes="Ghost" Padding="5" Command="{Binding MoveUpCommand}"
+                                                        IsEnabled="{Binding !IsFirst}" ToolTip.Tip="Move Up">
+                                                    <material:MaterialIcon Kind="ChevronUp" Width="16" Height="16"/>
+                                                </Button>
+                                                <Button Classes="Ghost" Padding="5" Command="{Binding MoveDownCommand}"
+                                                        IsEnabled="{Binding !IsLast}" ToolTip.Tip="Move Down">
+                                                    <material:MaterialIcon Kind="ChevronDown" Width="16" Height="16"/>
+                                                </Button>
+                                                <Button Classes="Ghost" Padding="5" Command="{Binding RemoveCommand}"
+                                                        ToolTip.Tip="Remove From Queue">
+                                                    <material:MaterialIcon Kind="Close" Width="16" Height="16"/>
+                                                </Button>
+                                            </StackPanel>
+                                        </ui:SongRow.Actions>
+                                    </ui:SongRow>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
@@ -195,14 +130,12 @@
 
                     <!-- Next from: <context> (rolling peek of the active mix) -->
                     <StackPanel Spacing="6" IsVisible="{Binding HasContext}">
-                        <TextBlock Text="{Binding ContextHeader}" FontSize="11" FontWeight="SemiBold" Opacity="0.6"
-                                   TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Classes="groupLabel" Text="{Binding ContextHeader}" TextTrimming="CharacterEllipsis"/>
                         <ItemsControl ItemsSource="{Binding ContextUpcoming}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="{x:Type vm:QueuePreviewRow}">
-                                    <Grid ColumnDefinitions="Auto,*" Margin="2,0,2,8" VerticalAlignment="Center"
-                                          Background="Transparent"
-                                          views:SongMenu.Target="{Binding Song}">
+                                    <Border Classes="listRow" Padding="8,6" views:SongMenu.Target="{Binding Song}">
+                                    <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
                                         <!-- A resolved track shows a note; an as-yet-unresolved
                                              entry (a whole folder/playlist) shows a list glyph. -->
                                         <Panel Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center">
@@ -220,6 +153,7 @@
                                                        TextTrimming="CharacterEllipsis"/>
                                         </StackPanel>
                                     </Grid>
+                                    </Border>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>

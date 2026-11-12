@@ -15,29 +15,6 @@
     </Design.DataContext>
 
     <UserControl.Styles>
-        <!-- Entry rows: reveal reorder/remove on hover and fade the text's right edge out from
-             under them, like the queue's rows. IsHitTestVisible follows visibility so the hidden
-             buttons can't catch the pointer. -->
-        <Style Selector="StackPanel.rowActions">
-            <Setter Property="Opacity" Value="0"/>
-            <Setter Property="IsHitTestVisible" Value="False"/>
-        </Style>
-        <Style Selector="Border.entryRow:pointerover StackPanel.rowActions">
-            <Setter Property="Opacity" Value="1"/>
-            <Setter Property="IsHitTestVisible" Value="True"/>
-        </Style>
-        <Style Selector="Border.entryRow:pointerover StackPanel.rowText">
-            <Setter Property="OpacityMask">
-                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
-                    <GradientStop Offset="0" Color="White"/>
-                    <GradientStop Offset="0.7" Color="White"/>
-                    <GradientStop Offset="1" Color="Transparent"/>
-                </LinearGradientBrush>
-            </Setter>
-        </Style>
-        <Style Selector="Border.entryRow:pointerover">
-            <Setter Property="Background" Value="{DynamicResource SecondaryColor}"/>
-        </Style>
         <Style Selector="TextBlock.error">
             <Setter Property="Foreground" Value="{DynamicResource ToneDangerBrush}"/>
         </Style>
@@ -188,75 +165,57 @@
                         <ItemsControl ItemsSource="{Binding EditEntries}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="{x:Type vm:MixEntryRowViewModel}">
-                                    <Border Classes="entryRow" Padding="6" CornerRadius="6"
-                                            Background="Transparent"
-                                            views:SongMenu.Target="{Binding Song}">
-                                        <Grid ColumnDefinitions="28,Auto,*" VerticalAlignment="Center">
-                                            <TextBlock Grid.Column="0" Text="{Binding Position}" FontSize="12" Opacity="0.45"
-                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
-
-                                            <!-- Cover over a placeholder for what the entry is. -->
-                                            <Border Grid.Column="1" Width="48" Height="48" CornerRadius="4"
-                                                    ClipToBounds="True" Margin="4,0,12,0"
-                                                    Background="{DynamicResource SecondaryColor}">
-                                                <Panel>
-                                                    <materialIcons:MaterialIcon Kind="{Binding Icon}" Width="20" Height="20" Opacity="0.5"
-                                                                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                    <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"
-                                                           IsVisible="{Binding HasThumbnail}"/>
-                                                </Panel>
-                                            </Border>
-
-                                            <Panel Grid.Column="2">
-                                                <StackPanel Classes="rowText" Spacing="1" VerticalAlignment="Center"
-                                                            ToolTip.Tip="{Binding Locator}">
-                                                    <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="Medium"
-                                                               TextTrimming="CharacterEllipsis"/>
-                                                    <TextBlock Text="{Binding Subtitle}" FontSize="12" Opacity="0.65"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               IsVisible="{Binding Subtitle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
-                                                    <TextBlock Text="Looking up…" FontSize="11" Opacity="0.5"
-                                                               IsVisible="{Binding IsLoading}"/>
-                                                    <TextBlock Classes="error" Text="{Binding Error}" FontSize="11"
-                                                               TextWrapping="Wrap" IsVisible="{Binding HasError}"/>
-                                                    <TextBlock Text="{Binding Details}" FontSize="11" Opacity="0.45"
-                                                               TextTrimming="CharacterEllipsis"
-                                                               IsVisible="{Binding !IsLoading}"/>
-                                                </StackPanel>
-
-                                                <StackPanel Classes="rowActions" Orientation="Horizontal" Spacing="1"
-                                                            HorizontalAlignment="Right" VerticalAlignment="Center"
-                                                            Background="Transparent">
-                                                    <Button Classes="Ghost" Padding="6" Command="{Binding Song.AddToQueueCommand}"
-                                                            IsVisible="{Binding Song, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                                            ToolTip.Tip="Add To Queue">
-                                                        <materialIcons:MaterialIcon Kind="PlaylistPlay" Width="16" Height="16"/>
-                                                    </Button>
-                                                    <Button Classes="Ghost" Padding="6" views:SongMenu.MixPicker="{Binding Song}"
-                                                            IsVisible="{Binding Song, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                                            ToolTip.Tip="Add To Another Mix">
-                                                        <materialIcons:MaterialIcon Kind="PlaylistPlus" Width="16" Height="16"/>
-                                                    </Button>
-                                                    <Button Classes="Ghost" Padding="6" Command="{Binding RetryCommand}"
-                                                            ToolTip.Tip="Look Up Again">
-                                                        <materialIcons:MaterialIcon Kind="Refresh" Width="16" Height="16"/>
-                                                    </Button>
-                                                    <Button Classes="Ghost" Padding="6" Command="{Binding MoveUpCommand}"
-                                                            IsEnabled="{Binding !IsFirst}" ToolTip.Tip="Move Up">
-                                                        <materialIcons:MaterialIcon Kind="ChevronUp" Width="16" Height="16"/>
-                                                    </Button>
-                                                    <Button Classes="Ghost" Padding="6" Command="{Binding MoveDownCommand}"
-                                                            IsEnabled="{Binding !IsLast}" ToolTip.Tip="Move Down">
-                                                        <materialIcons:MaterialIcon Kind="ChevronDown" Width="16" Height="16"/>
-                                                    </Button>
-                                                    <Button Classes="Ghost" Padding="6" Command="{Binding RemoveCommand}"
-                                                            ToolTip.Tip="Remove">
-                                                        <materialIcons:MaterialIcon Kind="Close" Width="16" Height="16"/>
-                                                    </Button>
-                                                </StackPanel>
-                                            </Panel>
-                                        </Grid>
-                                    </Border>
+                                    <ui:SongRow Art="{Binding Thumbnail}" ArtIcon="{Binding Icon}"
+                                                Title="{Binding Title}" Subtitle="{Binding Subtitle}"
+                                                ToolTip.Tip="{Binding Locator}"
+                                                views:SongMenu.Target="{Binding Song}">
+                                        <ui:SongRow.Leading>
+                                            <TextBlock Text="{Binding Position}" FontSize="12" Opacity="0.45" Width="28"
+                                                       TextAlignment="Center" Margin="0,0,4,0"/>
+                                        </ui:SongRow.Leading>
+                                        <ui:SongRow.Detail>
+                                            <StackPanel Spacing="1">
+                                                <TextBlock Text="Looking up…" FontSize="11" Opacity="0.5"
+                                                           IsVisible="{Binding IsLoading}"/>
+                                                <TextBlock Text="{Binding Error}" FontSize="11" TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource ToneDangerBrush}"
+                                                           IsVisible="{Binding HasError}"/>
+                                                <TextBlock Text="{Binding Details}" FontSize="11" Opacity="0.45"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           IsVisible="{Binding !IsLoading}"/>
+                                            </StackPanel>
+                                        </ui:SongRow.Detail>
+                                        <ui:SongRow.Actions>
+                                            <StackPanel Orientation="Horizontal" Spacing="1">
+                                                <Button Classes="Ghost" Padding="6" Command="{Binding Song.AddToQueueCommand}"
+                                                        IsVisible="{Binding Song, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                        ToolTip.Tip="Add To Queue">
+                                                    <materialIcons:MaterialIcon Kind="PlaylistPlay" Width="16" Height="16"/>
+                                                </Button>
+                                                <Button Classes="Ghost" Padding="6" views:SongMenu.MixPicker="{Binding Song}"
+                                                        IsVisible="{Binding Song, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                        ToolTip.Tip="Add To Another Mix">
+                                                    <materialIcons:MaterialIcon Kind="PlaylistPlus" Width="16" Height="16"/>
+                                                </Button>
+                                                <Button Classes="Ghost" Padding="6" Command="{Binding RetryCommand}"
+                                                        ToolTip.Tip="Look Up Again">
+                                                    <materialIcons:MaterialIcon Kind="Refresh" Width="16" Height="16"/>
+                                                </Button>
+                                                <Button Classes="Ghost" Padding="6" Command="{Binding MoveUpCommand}"
+                                                        IsEnabled="{Binding !IsFirst}" ToolTip.Tip="Move Up">
+                                                    <materialIcons:MaterialIcon Kind="ChevronUp" Width="16" Height="16"/>
+                                                </Button>
+                                                <Button Classes="Ghost" Padding="6" Command="{Binding MoveDownCommand}"
+                                                        IsEnabled="{Binding !IsLast}" ToolTip.Tip="Move Down">
+                                                    <materialIcons:MaterialIcon Kind="ChevronDown" Width="16" Height="16"/>
+                                                </Button>
+                                                <Button Classes="Ghost" Padding="6" Command="{Binding RemoveCommand}"
+                                                        ToolTip.Tip="Remove From Mix">
+                                                    <materialIcons:MaterialIcon Kind="Close" Width="16" Height="16"/>
+                                                </Button>
+                                            </StackPanel>
+                                        </ui:SongRow.Actions>
+                                    </ui:SongRow>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>

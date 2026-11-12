@@ -14,21 +14,6 @@
         <vm:SearchViewModel />
     </Design.DataContext>
 
-    <UserControl.Styles>
-        <!-- Whole-row hover surface (transparent bg) reveals the per-row actions. -->
-        <Style Selector="Border.resultRow StackPanel.actions">
-            <Setter Property="Opacity" Value="0"/>
-            <Setter Property="IsHitTestVisible" Value="False"/>
-        </Style>
-        <Style Selector="Border.resultRow:pointerover StackPanel.actions">
-            <Setter Property="Opacity" Value="1"/>
-            <Setter Property="IsHitTestVisible" Value="True"/>
-        </Style>
-        <Style Selector="Border.resultRow:pointerover">
-            <Setter Property="Background" Value="{DynamicResource SecondaryColor}"/>
-        </Style>
-    </UserControl.Styles>
-
     <DockPanel LastChildFill="True" Margin="24,16">
 
         <!-- Header -->
@@ -89,57 +74,33 @@
             <ItemsControl ItemsSource="{Binding Results}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="{x:Type vm:SearchResultRowViewModel}">
-                        <Border Classes="resultRow" Padding="8" CornerRadius="6" Margin="0,0,0,2"
-                                views:SongMenu.Target="{Binding Song}">
-                            <Grid ColumnDefinitions="Auto,*,Auto,Auto" VerticalAlignment="Center"
-                                  Background="Transparent">
-                                <!-- Art over a placeholder tile -->
-                                <Border Grid.Column="0" Width="48" Height="48" CornerRadius="4"
-                                        ClipToBounds="True" Margin="0,0,12,0"
-                                        Background="{DynamicResource SecondaryColor}">
-                                    <Panel>
-                                        <material:MaterialIcon Kind="MusicNote" Width="20" Height="20" Opacity="0.5"
-                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        <Image Source="{Binding Art}" Stretch="UniformToFill"
-                                               IsVisible="{Binding HasArt}"/>
-                                    </Panel>
-                                </Border>
-                                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="Medium"
-                                               TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Text="{Binding Subtitle}" FontSize="12" Opacity="0.6"
-                                               IsVisible="{Binding HasSubtitle}"
-                                               TextTrimming="CharacterEllipsis"/>
-                                </StackPanel>
-
-                                <!-- Source area: a picker when the track came from >1 source,
-                                     else a single static label. Only shown once >1 source is
-                                     searchable (otherwise the row looks exactly as before). -->
-                                <Border Grid.Column="2" VerticalAlignment="Center" Margin="8,0,4,0"
-                                        IsVisible="{Binding ShowSourceLabels}">
-                                    <Panel>
-                                        <ComboBox ItemsSource="{Binding Sources}"
-                                                  SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
-                                                  IsVisible="{Binding HasMultipleSources}"
-                                                  FontSize="12" MinWidth="118"
-                                                  ToolTip.Tip="Choose Which Source Plays">
-                                            <ComboBox.ItemTemplate>
-                                                <DataTemplate DataType="{x:Type vm:SourceOption}">
-                                                    <TextBlock Text="{Binding DisplayName}" FontSize="12"/>
-                                                </DataTemplate>
-                                            </ComboBox.ItemTemplate>
-                                        </ComboBox>
-                                        <Border IsVisible="{Binding !HasMultipleSources}"
-                                                Background="{DynamicResource SecondaryColor}"
-                                                CornerRadius="10" Padding="9,3" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding SelectedSourceName}"
-                                                       FontSize="11" Opacity="0.75"/>
-                                        </Border>
-                                    </Panel>
-                                </Border>
-
-                                <StackPanel Grid.Column="3" Classes="actions" Orientation="Horizontal" Spacing="2"
-                                            VerticalAlignment="Center">
+                        <ui:SongRow Art="{Binding Art}" Title="{Binding Title}" Subtitle="{Binding Subtitle}"
+                                    PlayCommand="{Binding PlayCommand}"
+                                    views:SongMenu.Target="{Binding Song}">
+                            <!-- Source area: a picker when the track came from >1 source, else a single
+                                 static label. Only shown once >1 source is searchable. -->
+                            <ui:SongRow.Trailing>
+                                <Panel IsVisible="{Binding ShowSourceLabels}">
+                                    <ComboBox ItemsSource="{Binding Sources}"
+                                              SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
+                                              IsVisible="{Binding HasMultipleSources}"
+                                              FontSize="12" MinWidth="118"
+                                              ToolTip.Tip="Choose Which Source Plays">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate DataType="{x:Type vm:SourceOption}">
+                                                <TextBlock Text="{Binding DisplayName}" FontSize="12"/>
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                    <Border IsVisible="{Binding !HasMultipleSources}"
+                                            Background="{DynamicResource SecondaryColor}"
+                                            CornerRadius="10" Padding="9,3" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding SelectedSourceName}" FontSize="11" Opacity="0.75"/>
+                                    </Border>
+                                </Panel>
+                            </ui:SongRow.Trailing>
+                            <ui:SongRow.Actions>
+                                <StackPanel Orientation="Horizontal" Spacing="2">
                                     <Button Classes="Ghost" Padding="6" Command="{Binding PlayCommand}"
                                             ToolTip.Tip="Play Now">
                                         <material:MaterialIcon Kind="Play" Width="18" Height="18"/>
@@ -154,8 +115,8 @@
                                         <material:MaterialIcon Kind="PlaylistPlus" Width="18" Height="18"/>
                                     </Button>
                                 </StackPanel>
-                            </Grid>
-                        </Border>
+                            </ui:SongRow.Actions>
+                        </ui:SongRow>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
