@@ -3,7 +3,6 @@ using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
-using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Source.YouTube;
 
@@ -11,7 +10,6 @@ namespace HorizonRadio.Core.Tests;
 
 /// <summary>A guest's player telling a song it can't play apart from one it doesn't have: a source
 /// here that has the song but lacks its tools says so, rather than "couldn't find".</summary>
-[Collection("tool-resolver")]
 public sealed class QueuePartyPlayerTests : IAsyncDisposable
 {
     private readonly SourceRunner _runner = new(new NullPcmSink());
@@ -22,12 +20,10 @@ public sealed class QueuePartyPlayerTests : IAsyncDisposable
     {
         var config = new SourceConfigStore();
         _router = new PlaybackRouter(_runner, config, new MixStore(), new MixContentResolver(config, TestSources.Catalog));
-        ToolResolver.DiscoverOverride = _ => null; // a PC without yt-dlp or ffmpeg
     }
 
     public async ValueTask DisposeAsync()
     {
-        ToolResolver.DiscoverOverride = null;
         await _router.DisposeAsync();
         await _runner.DisposeAsync();
     }

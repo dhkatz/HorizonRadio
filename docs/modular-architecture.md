@@ -164,7 +164,10 @@ Each step leaves the app working and lands as its own PR or short stack.
    - [x] `SourceCatalog` and `MetadataCatalog` are services built from the container (the source
      catalog carries its `UnifiedSearch`; the mix resolver, the queue and the router expose it, so
      most of the app reaches it through what it already holds).
-   - [ ] `ToolCatalog`, with `ToolsPaths` and `ToolResolver` behind the tool locator.
+   - [x] `ToolCatalog` is a service from the tool plugins and does what `ToolsPaths` and
+     `ToolResolver` did (where tools install, finding a configured, bundled or installed copy); the
+     host's `IToolLocator` answers from it, and whether a source has its tools is the source
+     catalog's question (`SourceCatalog.EnsureToolsAvailable`).
    - [ ] Core reaches what a plugin can replace through its interface (the Console log, process
      launching, folders, the tool locator), so a replacement applies to Core's own use too.
 7. [ ] `Core/Hosting/`: the startup sequence, plugin discovery, plugin context, game host and

@@ -1,7 +1,7 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using HorizonRadio.Core.Tools;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Sources.Config;
 
@@ -34,7 +34,7 @@ public static class SourceRequirements
     /// In schema order. Empty for sources with no <see cref="ToolField"/>.
     /// </summary>
     public static IReadOnlyList<string> MissingToolKinds(
-        IAudioSourceFactory factory, ConfigValues values)
+        IToolLocator tools, IAudioSourceFactory factory, ConfigValues values)
     {
         var missing = new List<string>();
         foreach (var field in factory.Schema)
@@ -43,7 +43,7 @@ public static class SourceRequirements
             // A tool counts as available if the source has a valid path OR a managed/
             // bundled copy exists — so installing it once (Tools tab) satisfies every
             // source without re-entering the path per source.
-            if (ToolResolver.Resolve(values.GetString(tool.Key), tool.ToolKind) is null
+            if (tools.Find(tool.ToolKind, values.GetString(tool.Key)) is null
                 && !missing.Contains(tool.ToolKind))
                 missing.Add(tool.ToolKind);
         }
@@ -57,9 +57,9 @@ public static class SourceRequirements
     /// for content) so every entry point reports the same thing and the user is
     /// pointed at the Tools tab.
     /// </summary>
-    public static void EnsureToolsAvailable(IAudioSourceFactory factory, ConfigValues values)
+    public static void EnsureToolsAvailable(IToolLocator tools, IAudioSourceFactory factory, ConfigValues values)
     {
-        var missing = MissingToolKinds(factory, values);
+        var missing = MissingToolKinds(tools, factory, values);
         if (missing.Count == 0) return;
 
         var names = HumanJoin(missing);

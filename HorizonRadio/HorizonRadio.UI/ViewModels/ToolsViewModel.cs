@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Diagnostics;
-using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Tools;
 using HorizonRadio.Sdk.UI.Theme;
@@ -219,7 +218,7 @@ public sealed partial class ToolItemViewModel : ViewModelBase, IDisposable
         ProcessConsole.Append(_installer.Kind, "install: starting…");
         try
         {
-            await _installer.InstallAsync(ToolsPaths.TargetFor(_installer.Kind), progress, _cts.Token).ConfigureAwait(true);
+            await _installer.InstallAsync(_registry.Catalog.TargetFor(_installer.Kind), progress, _cts.Token).ConfigureAwait(true);
             _registry.Rescan();
             // We just installed exactly what the app expects (latest for
             // latest-policy tools, the manifest pin for librespot), so the
@@ -260,7 +259,7 @@ public sealed partial class ToolItemViewModel : ViewModelBase, IDisposable
             return;
         try
         {
-            var dir = ToolsPaths.DirectoryFor(_installer.Kind);
+            var dir = _registry.Catalog.DirectoryFor(_installer.Kind);
             if (Directory.Exists(dir))
                 Directory.Delete(dir, recursive: true);
             _registry.Rescan();

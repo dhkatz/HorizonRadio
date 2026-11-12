@@ -13,12 +13,22 @@ public sealed class ToolRegistry
 
     public event Action? Changed;
 
-    public ToolRegistry() { Rescan(); }
+    /// <summary>Designer ctor: no tools.</summary>
+    public ToolRegistry() : this(ToolCatalog.Empty) { }
+
+    public ToolRegistry(ToolCatalog catalog)
+    {
+        Catalog = catalog;
+        Rescan();
+    }
+
+    /// <summary>The tools it tracks, and where they're installed.</summary>
+    public ToolCatalog Catalog { get; }
 
     public void Rescan()
     {
         _byKind.Clear();
-        foreach (var tool in ToolCatalog.All) ScanKind(tool.Id);
+        foreach (var tool in Catalog.All) ScanKind(tool.Id);
         RaiseChanged();
     }
 
@@ -37,11 +47,11 @@ public sealed class ToolRegistry
 
     private void ScanKind(string kind)
     {
-        var path = ToolsPaths.PathFor(kind);
+        var path = Catalog.PathFor(kind);
         if (!File.Exists(path)) return;
 
         // Model-style tools are a GGUF data file, not an exe — there's no FileVersionInfo to read.
-        var version = ToolsPaths.IsModel(kind) ? null : TryReadVersion(path);
+        var version = Catalog.IsModel(kind) ? null : TryReadVersion(path);
         var sha = HashVerification.ReadSidecar(path);
         _byKind[kind] = new List<InstalledTool> { new InstalledTool(kind, path, version, sha) };
     }

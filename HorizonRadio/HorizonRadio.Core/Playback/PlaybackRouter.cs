@@ -368,7 +368,7 @@ public sealed class PlaybackRouter : IPlaybackRouter, IAsyncDisposable
     {
         // Check before stopping anything: a source whose tools are missing shouldn't tear down
         // what's playing. Throws MissingToolException with a Tools-tab hint.
-        SourceRequirements.EnsureToolsAvailable(factory, values);
+        Sources.EnsureToolsAvailable(factory, values);
         var source = factory.Create(values);
 
         // It becomes the player's content. A mix station is parked (tuning back resumes it); the

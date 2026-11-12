@@ -7,6 +7,7 @@ using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
+using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Sources;
@@ -44,6 +45,7 @@ public static class HorizonCoreServiceCollectionExtensions
     {
         services.AddSingleton(settings);
         services.AddSingleton(_ => new SourceConfigStore(settings));
+        services.AddSingleton<ToolCatalog>();
         services.AddSingleton<SourceCatalog>();
         services.AddSingleton<MetadataCatalog>();
         services.AddSingleton(sp => new MetadataConfigStore(settings, sp.GetRequiredService<MetadataCatalog>()));

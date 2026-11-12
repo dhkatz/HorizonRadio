@@ -105,10 +105,10 @@ internal sealed class HostAppFolders : IAppFolders
     public string Label(string name) => AppPaths.Label(name);
 }
 
-/// <summary>The configured, installed or bundled tool (<see cref="ToolResolver"/>, <see cref="ToolsPaths"/>).</summary>
-internal sealed class HostToolLocator : IToolLocator
+/// <summary>The configured, installed or bundled tool (<see cref="ToolCatalog"/>).</summary>
+internal sealed class HostToolLocator(ToolCatalog tools) : IToolLocator
 {
-    public string? Find(string kind, string? configuredPath = null) => ToolResolver.Resolve(configuredPath, kind);
+    public string? Find(string kind, string? configuredPath = null) => tools.Resolve(configuredPath, kind);
 
-    public string InstallPath(string kind) => ToolsPaths.PathFor(kind);
+    public string InstallPath(string kind) => tools.PathFor(kind);
 }
