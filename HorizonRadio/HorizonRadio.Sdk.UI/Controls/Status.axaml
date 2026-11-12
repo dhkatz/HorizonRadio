@@ -1,0 +1,97 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:ui="using:HorizonRadio.Sdk.UI.Controls"
+                    xmlns:theme="using:HorizonRadio.Sdk.UI.Theme"
+                    xmlns:material="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia">
+
+    <!-- <ui:Notice Tone="Warning" Title="Mod Update Available" Text="…">
+             <ui:Notice.Actions><Button …/></ui:Notice.Actions>
+         </ui:Notice>
+         Classes="inline" drops the card, for a line inside other content. -->
+    <ControlTheme x:Key="{x:Type ui:Notice}" TargetType="ui:Notice">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="PART_Root" Classes="Card" Padding="14,12">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <material:MaterialIcon Grid.Column="0" Name="PART_Icon"
+                                               Kind="{Binding Tone, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static ui:ToneIcons.Notice}}"
+                                               Foreground="{Binding Tone, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static theme:ToneConverters.Brush}}"
+                                               Width="18" Height="18" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                            <TextBlock Text="{TemplateBinding Title}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"
+                                       IsVisible="{Binding Title, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                            <TextBlock Name="PART_Text" Classes="body" Text="{TemplateBinding Text}"
+                                       IsVisible="{Binding Text, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                        </StackPanel>
+                        <ContentPresenter Grid.Column="2" Content="{TemplateBinding Actions}"
+                                          VerticalAlignment="Center" Margin="12,0,0,0"/>
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+
+        <!-- A notice with a title explains it underneath, muted. -->
+        <Style Selector="^ /template/ TextBlock#PART_Text">
+            <Setter Property="Opacity" Value="0.7"/>
+        </Style>
+
+        <!-- Inline: no card, a smaller icon. -->
+        <Style Selector="^.inline /template/ Border#PART_Root">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+        </Style>
+        <Style Selector="^.inline /template/ material|MaterialIcon#PART_Icon">
+            <Setter Property="Width" Value="14"/>
+            <Setter Property="Height" Value="14"/>
+            <Setter Property="Margin" Value="0,0,6,0"/>
+        </Style>
+    </ControlTheme>
+
+    <!-- <ui:EmptyState Icon="History" Title="Nothing played yet" Text="Songs you play will show up here."/> -->
+    <ControlTheme x:Key="{x:Type ui:EmptyState}" TargetType="ui:EmptyState">
+        <Setter Property="Padding" Value="24"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Classes="Card" Padding="{TemplateBinding Padding}">
+                    <StackPanel Spacing="8" HorizontalAlignment="Center" MaxWidth="380">
+                        <material:MaterialIcon Kind="{TemplateBinding Icon}" Width="36" Height="36" Opacity="0.4"/>
+                        <TextBlock Classes="sectionTitle" Text="{TemplateBinding Title}" HorizontalAlignment="Center"
+                                   TextAlignment="Center" TextWrapping="Wrap"/>
+                        <TextBlock Classes="description" Text="{TemplateBinding Text}" TextAlignment="Center"
+                                   IsVisible="{Binding Text, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                        <ContentPresenter Content="{TemplateBinding Actions}" HorizontalAlignment="Center" Margin="0,4,0,0"
+                                          IsVisible="{Binding Actions, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                    </StackPanel>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+    <!-- <ui:StatusAvatar Tone="{Binding StatusTone}" Icon="Toolbox"/> -->
+    <ControlTheme x:Key="{x:Type ui:StatusAvatar}" TargetType="ui:StatusAvatar">
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Width="{TemplateBinding Size}" Height="{TemplateBinding Size}" CornerRadius="999"
+                        Background="{Binding Tone, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static theme:ToneConverters.Brush}}">
+                    <material:MaterialIcon Kind="{TemplateBinding Icon}" Foreground="{DynamicResource OnToneBrush}"
+                                           Width="{Binding Size, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static ui:SizeConverters.IconForCircle}}"
+                                           Height="{Binding Size, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static ui:SizeConverters.IconForCircle}}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+    <!-- <ui:StatusDot Tone="{Binding IsConnected, Converter={x:Static theme:ToneConverters.SuccessWhenTrue}}"/> -->
+    <ControlTheme x:Key="{x:Type ui:StatusDot}" TargetType="ui:StatusDot">
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Ellipse Width="{TemplateBinding Size}" Height="{TemplateBinding Size}"
+                         Fill="{Binding Tone, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static theme:ToneConverters.Brush}}"/>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+</ResourceDictionary>

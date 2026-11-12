@@ -1,12 +1,10 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="using:HorizonRadio.Sdk.UI.Controls"
-             xmlns:theme="using:HorizonRadio.Sdk.UI.Theme"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.Game.ForzaHorizon6.ViewModels"
              xmlns:lvc="using:LiveChartsCore.SkiaSharpView.Avalonia"
-             xmlns:materialIcons="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
              x:Class="HorizonRadio.Game.ForzaHorizon6.Views.StatsView"
              x:DataType="vm:StatsViewModel">
@@ -20,22 +18,17 @@
             <ui:PageHeader Title="Stats"
                            Description="How the audio bridge into Forza Horizon 6 is doing: what it receives, what it plays, and what it drops."/>
 
+            <ui:Notice Tone="Info" IsVisible="{Binding !IsConnected}"
+                       Title="Waiting for Forza Horizon 6"
+                       Text="These fill in once the game is running with the mod installed."/>
+
             <!-- Hero status card. Big visual at the top so the user can
                  tell at a glance whether the bridge is alive without
                  reading any of the numeric stats below. -->
             <Border Classes="Card" Padding="20">
                 <Grid ColumnDefinitions="Auto,*,Auto" RowDefinitions="Auto,Auto">
-                    <!-- Status dot -->
-                    <Border Grid.Row="0" Grid.RowSpan="2" Grid.Column="0"
-                            Width="48" Height="48"
-                            CornerRadius="999"
-                            Background="{Binding BridgeStatusTone, Converter={x:Static theme:ToneConverters.Brush}}"
-                            Margin="0,0,16,0"
-                            VerticalAlignment="Center">
-                        <materialIcons:MaterialIcon Kind="Pulse"
-                                                    Width="26" Height="26"
-                                                    Foreground="{DynamicResource OnToneBrush}"/>
-                    </Border>
+                    <ui:StatusAvatar Grid.Row="0" Grid.RowSpan="2" Grid.Column="0" Size="48" Margin="0,0,16,0"
+                                     Tone="{Binding BridgeStatusTone}" Icon="Pulse"/>
 
                     <StackPanel Grid.Row="0" Grid.Column="1" Spacing="2" VerticalAlignment="Center">
                         <TextBlock Text="{Binding BridgeStatusLabel}"
@@ -230,11 +223,6 @@
                                FontSize="14" FontWeight="Medium" HorizontalAlignment="Center"/>
                 </Grid>
             </Border>
-
-            <TextBlock Text="Waiting for Forza Horizon 6 with mod installed..."
-                       HorizontalAlignment="Center"
-                       Opacity="0.5"
-                       IsVisible="{Binding !IsConnected}"/>
 
         </StackPanel>
     </ScrollViewer>

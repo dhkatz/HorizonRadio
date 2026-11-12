@@ -62,14 +62,9 @@
 
             <!-- ── Library ─────────────────────────────────────────────── -->
             <StackPanel Spacing="0" IsVisible="{Binding !IsEditing}">
-                <Border Classes="Card" Padding="24" IsVisible="{Binding !HasMixes}">
-                    <StackPanel Spacing="8" HorizontalAlignment="Center">
-                        <materialIcons:MaterialIcon Kind="PlaylistMusic" Width="36" Height="36" Opacity="0.4"/>
-                        <TextBlock Text="No mixes yet" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center"/>
-                        <TextBlock Text="Click “New Mix”, then paste Spotify or YouTube links, radio stations, or music folders."
-                                   FontSize="12" Opacity="0.6" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360"/>
-                    </StackPanel>
-                </Border>
+                <ui:EmptyState Icon="PlaylistMusic" Title="No mixes yet"
+                               Text="Click “New Mix”, then paste Spotify or YouTube links, radio stations, or music folders."
+                               IsVisible="{Binding !HasMixes}"/>
 
                 <ItemsControl ItemsSource="{Binding Mixes}">
                     <ItemsControl.ItemTemplate>

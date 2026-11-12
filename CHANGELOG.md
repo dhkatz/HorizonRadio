@@ -141,6 +141,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Notices, empty pages and status lights look the same everywhere.** The game's setup banner,
+  the Mod Installer's warnings, Search's source problems and the Events hint are one kind of
+  notice, and long ones wrap instead of running off the edge. Empty History and Mixes say so
+  with the same card, and the Stats page says it's waiting for the game at the top, not under
+  the charts.
 - **Every page is laid out the same way, and cards look like cards.** Pages share one header
   (title, what the page is for, its actions), and their sections sit in cards with a border and a
   raised background; the app's cards had been drawn without either. Settings with a switch or a
