@@ -5,7 +5,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace HorizonRadio.Core.Metadata;
+namespace HorizonRadio.Sdk.Metadata;
 
 /// <summary>
 /// Fetches cover-art / thumbnail bytes for the metadata pipeline. One place so the

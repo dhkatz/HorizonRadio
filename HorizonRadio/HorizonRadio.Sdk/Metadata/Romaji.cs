@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace HorizonRadio.Core.Metadata;
+namespace HorizonRadio.Sdk.Metadata;
 
 /// <summary>
 /// A small, dependency-free Japanese <em>kana</em> romanizer (Hepburn-ish), plus a fuzzy compare.

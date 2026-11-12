@@ -1,3 +1,4 @@
+
 namespace HorizonRadio.Sdk.Sources;
 
 /// <summary>What a <see cref="ContentRef"/> points at, as a list row shows it.</summary>

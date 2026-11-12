@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
+using HorizonRadio.Sdk.Audio;
 using HorizonRadio.Sdk.Sources;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;

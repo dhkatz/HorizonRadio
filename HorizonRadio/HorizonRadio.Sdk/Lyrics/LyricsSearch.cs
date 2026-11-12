@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace HorizonRadio.Core.Lyrics;
+namespace HorizonRadio.Sdk.Lyrics;
 
 /// <summary>Turning a song's display title/artist into what lyric databases index.</summary>
 public static partial class LyricsSearch

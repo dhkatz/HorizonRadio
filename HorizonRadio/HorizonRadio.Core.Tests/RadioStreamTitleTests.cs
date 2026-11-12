@@ -1,5 +1,5 @@
-using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Sources.Radio;
+using HorizonRadio.Sdk.Metadata;
 
 namespace HorizonRadio.Core.Tests;
 

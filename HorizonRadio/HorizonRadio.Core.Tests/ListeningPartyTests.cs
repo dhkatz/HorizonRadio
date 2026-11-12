@@ -1,9 +1,9 @@
 using HorizonRadio.Core.Devices;
 using HorizonRadio.Core.Friends;
 using HorizonRadio.Core.Party;
-using HorizonRadio.Core.Peers;
 using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources.Queue;
+using HorizonRadio.Sdk.Peers;
 
 namespace HorizonRadio.Core.Tests;
 

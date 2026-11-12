@@ -106,7 +106,7 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   through the playback router (`PlaybackRouter.StartSourceAsync`) as the player's
   content.
 - **Your devices (`Core/Devices/`, `Core/Peers/`)** — paired PCs keep their synced settings in
-  step, peer to peer, over the helper (`PeerHelper`, behind `IPeerNetwork`; tests use
+  step, peer to peer, over the helper (`PeerHelper`, behind the SDK's `IPeerNetwork`; tests use
   `MemoryPeerNetwork`). `MyDevices` owns it: pairing (a 12-character `PairingCode`: the first four
   pick the meeting topic, the other eight are a secret both sides prove with a PBKDF2-stretched
   HMAC, one attempt per code), the group (`DeviceSettings`: a shared group key, secret, from which
@@ -197,7 +197,7 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   Fingerprints are stored per song (`ReferenceStore`, `%LOCALAPPDATA%\HorizonRadio\fingerprints`),
   so a song is downloaded once. With matching off or no match, radio lyrics follow the
   title change and can be nudged earlier/later (`LyricsSettings.RadioOffset`).
-- **Metadata matching (`Core/Metadata/`)** — every catalog plugin scores results with
+- **Metadata matching (`Sdk/Metadata/`, `Core/Metadata/`)** — every catalog plugin scores results with
   `SearchTerms.MatchScore`, which only accepts a song whose name and artist agree with the
   query. A query with no artist, or one naming only a singing voice
   (`Voicebanks.IsVoicebankCredit`: "Hatsune Miku"), can't confirm a match, so

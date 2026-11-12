@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core;
 using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Sdk;
 
 namespace HorizonRadio.UI.ViewModels;
 

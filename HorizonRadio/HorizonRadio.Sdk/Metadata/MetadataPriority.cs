@@ -1,6 +1,6 @@
 using System.Threading;
 
-namespace HorizonRadio.Core.Metadata;
+namespace HorizonRadio.Sdk.Metadata;
 
 /// <summary>How urgently a resolve is needed. The song playing right now is
 /// <see cref="Foreground"/>; filling in queue, mix, and History rows is <see cref="Background"/>.</summary>
@@ -27,7 +27,7 @@ public sealed class PriorityTicket(ResolvePriority priority)
 
 /// <summary>
 /// The ambient <see cref="PriorityTicket"/> of the resolve the current async flow belongs
-/// to. The resolver sets it around a lookup; providers never pass it along, their
+/// to. The host's resolver sets it around a lookup; providers never set it or pass it along, their
 /// <see cref="RateGate"/> just reads it. Work outside any resolve has no ticket and counts
 /// as foreground, since it was asked for directly.
 /// </summary>
@@ -38,6 +38,6 @@ public static class MetadataPriority
     public static PriorityTicket? Current
     {
         get => Ambient.Value;
-        internal set => Ambient.Value = value;
+        set => Ambient.Value = value;
     }
 }

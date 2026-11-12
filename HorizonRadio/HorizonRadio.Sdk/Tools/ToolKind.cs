@@ -1,4 +1,4 @@
-namespace HorizonRadio.Core.Tools;
+namespace HorizonRadio.Sdk.Tools;
 
 /// <summary>
 /// Tool-kind identifiers shared across the Core/UI boundary. Source

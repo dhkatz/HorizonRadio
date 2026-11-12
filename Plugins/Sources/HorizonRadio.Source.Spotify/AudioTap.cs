@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Text;
+using HorizonRadio.Sdk.Audio;
 using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.Sources.Spotify;
@@ -50,7 +51,7 @@ public sealed class AudioTap : IAsyncDisposable
     private readonly TaskCompletionSource<bool> _hooked = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private volatile string? _lastLog;
 
-    /// <summary>Frames delivered to the sink so far, at <see cref="Audio.AudioFormat.SampleRate"/>.</summary>
+    /// <summary>Frames delivered to the sink so far, at <see cref="AudioFormat.SampleRate"/>.</summary>
     public long FramesDelivered => Interlocked.Read(ref _framesOut);
 
     /// <summary>Load the tap into <paramref name="process"/> and connect to it.</summary>

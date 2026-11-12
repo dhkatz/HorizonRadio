@@ -14,6 +14,7 @@ using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Queue;
 using HorizonRadio.Sdk;
+using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
 using ShadUI;

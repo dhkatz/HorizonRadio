@@ -6,7 +6,9 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Lyrics;
+using HorizonRadio.Sdk.Metadata;
 
 namespace HorizonRadio.Core.Metadata.VocaDb;
 

@@ -2,8 +2,9 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
-using HorizonRadio.Core.Metadata;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Lyrics;
+using HorizonRadio.Sdk.Metadata;
 
 namespace HorizonRadio.Core.Lyrics.Lrclib;
 

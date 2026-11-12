@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Sources;
+using HorizonRadio.Sdk.Metadata;
 
 namespace HorizonRadio.Tools.YtDlp;
 

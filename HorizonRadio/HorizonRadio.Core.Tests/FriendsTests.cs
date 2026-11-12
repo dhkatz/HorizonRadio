@@ -1,8 +1,8 @@
 using System.Text.Json;
 using HorizonRadio.Core.Devices;
 using HorizonRadio.Core.Friends;
-using HorizonRadio.Core.Peers;
 using HorizonRadio.Core.Settings;
+using HorizonRadio.Sdk.Peers;
 
 namespace HorizonRadio.Core.Tests;
 

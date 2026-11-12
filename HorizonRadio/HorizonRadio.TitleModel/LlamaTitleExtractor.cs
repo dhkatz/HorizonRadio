@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Metadata;
+using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 using LLama;
 using LLama.Common;

@@ -17,6 +17,7 @@ using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Queue;
 using HorizonRadio.Core.Sources.Spotify;
 using HorizonRadio.Sdk;
+using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.UI.Services;

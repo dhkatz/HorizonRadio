@@ -1,3 +1,4 @@
+
 namespace HorizonRadio.Sdk.Sources.Config;
 
 /// <summary>

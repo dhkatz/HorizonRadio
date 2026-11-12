@@ -34,7 +34,9 @@ using HorizonRadio.Core.Sources.YouTube;
 using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Games;
+using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
+using HorizonRadio.Sdk.Tools;
 using HorizonRadio.TitleModel;
 using HorizonRadio.Tools.Librespot;
 using HorizonRadio.Tools.Peer;
@@ -321,7 +323,7 @@ public partial class App : Application
                 // helper, which starts only once this PC is paired (or starts pairing). The mix store
                 // belongs to the UI thread, so merges run there.
                 var peers = new Core.Peers.SharedPeerNetwork(async ct =>
-                    await PeerHelper.StartAsync(PeerHelper.DefaultKeyPath, Core.Peers.PeerDiscovery.All, ct: ct));
+                    await PeerHelper.StartAsync(PeerHelper.DefaultKeyPath, Sdk.Peers.PeerDiscovery.All, ct: ct));
                 var myDevices = new MyDevices(settings, peers.GetAsync,
                     data: [new MixSync(mixStore, action => Dispatcher.UIThread.InvokeAsync(action).GetTask()), new HistorySync(_historyStore)]);
                 _ = myDevices.StartAsync();

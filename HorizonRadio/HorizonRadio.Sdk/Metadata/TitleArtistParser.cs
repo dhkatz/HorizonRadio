@@ -1,7 +1,7 @@
 using System;
 using System.Text.RegularExpressions;
 
-namespace HorizonRadio.Core.Metadata;
+namespace HorizonRadio.Sdk.Metadata;
 
 /// <summary>How sure the parser is about its split — gates whether a smarter
 /// extractor (the future local model) should take over.</summary>

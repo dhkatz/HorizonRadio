@@ -1,3 +1,5 @@
+using HorizonRadio.Sdk.Peers;
+
 namespace HorizonRadio.Core.Peers;
 
 /// <summary>

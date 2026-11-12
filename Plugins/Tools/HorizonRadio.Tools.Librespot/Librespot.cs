@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using HorizonRadio.Core.IO;
 using HorizonRadio.Core.Tools;
+using HorizonRadio.Sdk.Tools;
 
 namespace HorizonRadio.Tools.Librespot;
 

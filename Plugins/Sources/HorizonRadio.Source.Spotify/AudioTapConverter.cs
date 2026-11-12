@@ -1,5 +1,5 @@
 using System.Buffers.Binary;
-using HorizonRadio.Core.Audio;
+using HorizonRadio.Sdk.Audio;
 using NAudio.Dsp;
 
 namespace HorizonRadio.Core.Sources.Spotify;

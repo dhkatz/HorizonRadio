@@ -6,9 +6,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
-using HorizonRadio.Sdk.Lyrics;
 
-namespace HorizonRadio.Core.Lyrics;
+namespace HorizonRadio.Sdk.Lyrics;
 
 /// <summary>
 /// Parses TTML lyrics, the Apple Music format Unison uses. Each <c>&lt;p&gt;</c> is a line with an

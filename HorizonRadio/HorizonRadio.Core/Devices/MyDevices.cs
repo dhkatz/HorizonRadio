@@ -4,8 +4,8 @@ using System.Text;
 using System.Threading.Channels;
 using HorizonRadio.Core.Friends;
 using HorizonRadio.Core.IO;
-using HorizonRadio.Core.Peers;
 using HorizonRadio.Core.Settings;
+using HorizonRadio.Sdk.Peers;
 
 namespace HorizonRadio.Core.Devices;
 

@@ -1,6 +1,5 @@
-using HorizonRadio.Sdk.Sources;
 
-namespace HorizonRadio.Core.Sources;
+namespace HorizonRadio.Sdk.Sources;
 
 /// <summary>
 /// Wraps an <see cref="IPcmSink"/> with a pause gate: while paused, blocks the

@@ -1,4 +1,4 @@
-using HorizonRadio.Core.Audio;
+using HorizonRadio.Sdk.Audio;
 
 namespace HorizonRadio.Core.Fingerprints;
 
