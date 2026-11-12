@@ -172,6 +172,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   color tokens and text styles) is one `HorizonRadioTheme`, which plugin pages use too: the FH6
   plugin now references it instead of reaching ShadUI through the app. Status colors come from
   named tones (`ToneSuccessBrush`…, `Tone` in view models) instead of color literals.
+- **Plugins are built by the app's DI container (internal).** A plugin's constructor can ask for
+  the services the app provides (logging to the Console tab, starting tool processes, the app's
+  folders, finding tools), and a plugin can register its own services or replace or wrap the
+  app's; the Console tab (tag `plugins`) lists each one a plugin replaced. The SDK now references
+  `Microsoft.Extensions.DependencyInjection.Abstractions`.
 - **The plugin SDK is `HorizonRadio.Sdk` (internal).** `Plugins/HorizonRadio.Plugins.Abstractions`
   moved to `HorizonRadio/HorizonRadio.Sdk`, and its types moved from `HorizonRadio.Core.*` and
   `HorizonRadio.Plugins.Abstractions` to `HorizonRadio.Sdk.*` namespaces. It's the first step of

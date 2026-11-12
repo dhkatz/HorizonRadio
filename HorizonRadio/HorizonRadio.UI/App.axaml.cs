@@ -12,6 +12,7 @@ using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Fingerprints;
 using HorizonRadio.Core.Games;
 using HorizonRadio.Core.History;
+using HorizonRadio.Core.Hosting;
 using HorizonRadio.Core.Input;
 using HorizonRadio.Core.Lyrics;
 using HorizonRadio.Core.Metadata;
@@ -95,15 +96,9 @@ public partial class App : Application
             var settings = SettingsStore.Open();
             HorizonRadio.Core.Diagnostics.MetadataTrace.RestoreFromSettings(settings);
 
-            // Discover the source plugins by scanning the loaded plugin assemblies (rather than naming
-            // each here) before anything resolves a source from the catalog — the seam the install
-            // model rests on. SortOrder gives the picker its display order. (The tool catalog is
-            // already seeded in Program.BuildAvaloniaApp, before any source ctor probes it.)
-            SourceCatalog.Initialize(PluginDiscovery.DiscoverPlugins<ISourcePlugin>());
-
             // Build the DI container and resolve the safe-to-own services from it instead of
             // hand-constructing them — moving their ownership/lifetime to DI. AddHorizonCore wires
-            // Core's services (Core owns how to build them); the two UI host services are registered
+            // Core's services (Core owns how to build them); the UI host services are registered
             // here directly since this is their only composition root. Built inside the desktop branch
             // so the XAML designer (which never enters here) is unaffected.
             // ShadUI maps dialog view models to views via its own registry (not
@@ -116,8 +111,20 @@ public partial class App : Application
             var services = new ServiceCollection();
             services.AddHorizonCore(settings);
             services.AddSingleton<ToolRegistry>();
+            services.AddSingleton<IConfirmations>(confirmations);
             services.AddSingleton<IPluginContext>(sp => new HostPluginContext(sp.GetRequiredService<MetadataCache>(), settings, confirmations));
-            var provider = services.BuildServiceProvider();
+            // The plugins, found by scanning the loaded plugin assemblies rather than named here (the
+            // seam the install model rests on), and their modules' services. Last, so a module can
+            // replace or wrap any service above; the Console tab says when one does.
+            services.AddPlugins(PluginDiscovery.PluginTypes(),
+                line => HorizonRadio.Core.Diagnostics.ProcessConsole.Append("plugins", line));
+            // ValidateOnBuild: a plugin asking for a service nobody registers fails here, at startup.
+            var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
+
+            // Before anything resolves a source from the catalog. SortOrder gives the picker its
+            // display order. (The tool catalog is already seeded in Program.BuildAvaloniaApp, before
+            // any source probes it.)
+            SourceCatalog.Initialize(provider.GetServices<ISourcePlugin>().InDisplayOrder());
 
             _store = provider.GetRequiredService<SourceConfigStore>();
 
@@ -125,7 +132,7 @@ public partial class App : Application
             // for a plain player). It's wired into the audio pipeline, events, and pages at startup,
             // so switching games restarts the app (Settings → Game).
             var pluginContext = provider.GetRequiredService<IPluginContext>();
-            var gamePlugins = PluginDiscovery.DiscoverPlugins<IGamePlugin>();
+            var gamePlugins = provider.GetServices<IGamePlugin>().InDisplayOrder();
             // Before any game is built: its settings must already hold anything migrated into them.
             // Saving drops the legacy fields so the migration can't re-apply later.
             var migratedMixes = provider.GetRequiredService<MixStore>();
@@ -210,11 +217,10 @@ public partial class App : Application
                     () => YouTubeTool(YouTubeSourceFactory.KeyYtDlp),
                     () => YouTubeTool(YouTubeSourceFactory.KeyFfmpeg));
 
-                // Discover the metadata plugins by scanning the loaded plugin assemblies (rather than
-                // naming each here) before the config store loads — it derives fresh-install defaults + the
-                // "introduced" set from the catalog, so the catalog must be populated first. SortOrder gives
-                // the provider list its display order.
-                MetadataCatalog.Initialize(PluginDiscovery.DiscoverPlugins<IMetadataPlugin>());
+                // The metadata plugins, before the config store loads — it derives fresh-install
+                // defaults + the "introduced" set from the catalog, so the catalog must be populated
+                // first. SortOrder gives the provider list its display order.
+                MetadataCatalog.Initialize(provider.GetServices<IMetadataPlugin>().InDisplayOrder());
 
                 _metaStore = provider.GetRequiredService<MetadataConfigStore>();
                 // pluginContext (resolved above for the game plugin) is also what metadata provider
@@ -229,7 +235,7 @@ public partial class App : Application
 
                 // Lyrics for the Now Playing page, from every lyrics plugin (Unison, LRCLIB), in
                 // their SortOrder: the service prefers synced lyrics, then the earlier provider.
-                var lyrics = new LyricsService([.. PluginDiscovery.DiscoverPlugins<ILyricsPlugin>()
+                var lyrics = new LyricsService([.. provider.GetServices<ILyricsPlugin>().InDisplayOrder()
                     .Select(p => p.CreateLyricsProvider(pluginContext))]);
                 // Radio lyrics follow the song by lining the station's audio up against a recording
                 // of it (the song's own video, fetched through a source that can, e.g. YouTube).
