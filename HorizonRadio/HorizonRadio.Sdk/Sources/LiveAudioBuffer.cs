@@ -1,17 +1,21 @@
 using HorizonRadio.Sdk.Audio;
 
-namespace HorizonRadio.Core.Fingerprints;
+namespace HorizonRadio.Sdk.Sources;
 
 /// <summary>
 /// The last few minutes of a live stream's audio, kept to line up against a recording of the song.
 /// Takes the engine's PCM as it plays (stereo at <see cref="AudioFormat.SampleRate"/>) and keeps it
-/// mono at <see cref="Chromaprint.SampleRate"/>, low-passed before the rate drops so nothing folds
-/// back into the band the fingerprint looks at. The stream's clock is the audio written: the sample
+/// mono at <see cref="SampleRate"/> (the rate the host fingerprints at), low-passed before the rate
+/// drops so nothing folds back into the band the fingerprint looks at. The stream's clock is the audio written: the sample
 /// written <c>t</c> into the stream has stream time <c>t</c>.
 /// </summary>
 public sealed class LiveAudioBuffer
 {
-    private static readonly int Factor = AudioFormat.SampleRate / Chromaprint.SampleRate;
+    /// <summary>The rate it keeps audio at, mono: the rate the host's song matching (Chromaprint)
+    /// analyses audio at, so what's heard is fingerprinted as is.</summary>
+    public const int SampleRate = 11025;
+
+    private static readonly int Factor = AudioFormat.SampleRate / SampleRate;
     private static readonly float[] Taps = LowPass(Factor);
 
     private readonly Lock _lock = new();
@@ -25,12 +29,12 @@ public sealed class LiveAudioBuffer
 
     static LiveAudioBuffer()
     {
-        if (AudioFormat.SampleRate % Chromaprint.SampleRate != 0 || AudioFormat.Channels != 2)
+        if (AudioFormat.SampleRate % SampleRate != 0 || AudioFormat.Channels != 2)
             throw new InvalidOperationException("the engine's PCM format doesn't divide down to Chromaprint's");
     }
 
     public LiveAudioBuffer(TimeSpan capacity) =>
-        _ring = new short[(int)(capacity.TotalSeconds * Chromaprint.SampleRate)];
+        _ring = new short[(int)(capacity.TotalSeconds * SampleRate)];
 
     /// <summary>How much of the stream has been written: the stream time of its end.</summary>
     public TimeSpan Written
@@ -106,12 +110,12 @@ public sealed class LiveAudioBuffer
         }
     }
 
-    private static TimeSpan Time(long samples) => TimeSpan.FromSeconds((double)samples / Chromaprint.SampleRate);
+    private static TimeSpan Time(long samples) => TimeSpan.FromSeconds((double)samples / SampleRate);
 
-    private static long Samples(TimeSpan time) => (long)Math.Max(0, time.TotalSeconds * Chromaprint.SampleRate);
+    private static long Samples(TimeSpan time) => (long)Math.Max(0, time.TotalSeconds * SampleRate);
 
     // The first sample at or after <paramref name="time"/>.
-    private static long FirstAt(TimeSpan time) => (long)Math.Max(0, Math.Ceiling(time.TotalSeconds * Chromaprint.SampleRate - 1e-6));
+    private static long FirstAt(TimeSpan time) => (long)Math.Max(0, Math.Ceiling(time.TotalSeconds * SampleRate - 1e-6));
 
     // A windowed-sinc low-pass that keeps what Chromaprint looks at (it reads up to ~3.5 kHz) and
     // stops short of the new rate's Nyquist frequency.

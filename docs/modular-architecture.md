@@ -137,8 +137,11 @@ Each step leaves the app working and lands as its own PR or short stack.
      (the host hands out caches, `IAudioCaches`), a source reads its saved settings through
      `ISourceSettings`, and `YouTubeRuntime` is gone. The YouTube and yt-dlp plugins reference only
      the SDK.
-   - [ ] Radio, then Spotify (librespot, Soloist; `SpotifyRuntime` goes), then the peer helper.
-     Until then their audio processes use `StaticHostServices`.
+   - [x] Radio: its services come by constructor (`RadioServices`), the directory client is a
+     service, `LiveAudioBuffer` is in the SDK, and the title model is `ITitleModel`. It references
+     only the SDK.
+   - [ ] Spotify (librespot, Soloist; `SpotifyRuntime` goes), then the peer helper. Until then
+     Spotify's audio processes use `StaticHostServices`.
    - [ ] The audio helpers (the audio cache, subprocess audio, fingerprints) and the title
      extractor, handed out by the host.
    - [ ] The remaining engine coupling (FH6 and Spotify on the queue engine and mixes) goes

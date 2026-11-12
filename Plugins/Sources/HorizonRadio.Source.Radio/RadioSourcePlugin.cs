@@ -13,6 +13,7 @@ public sealed class RadioSourcePlugin : IPlugin, IPluginModule
 
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddSingleton<RadioBrowserClient>();
         services.AddSingleton<IAudioSourceFactory, RadioSourceFactory>();
     }
 }

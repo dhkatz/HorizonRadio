@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,13 +16,13 @@ namespace HorizonRadio.Source.Radio;
 /// A station is a single infinite stream, so <see cref="EnumerateAsync"/> always yields
 /// exactly one <see cref="RadioPlayableItem"/>.
 /// </summary>
-public sealed class RadioContentPlayer(string ffmpegPath, RadioBrowserClient directory)
+public sealed class RadioContentPlayer(RadioServices services, RadioBrowserClient directory)
     : IContentPlayer, IContentDescriber
 {
     public async Task<IReadOnlyList<PlayableItem>> EnumerateAsync(ContentRef content, CancellationToken ct)
     {
         var station = await ResolveStationAsync(content.Locator, directory, ct).ConfigureAwait(false);
-        return [new RadioPlayableItem(station, ffmpegPath)];
+        return [new RadioPlayableItem(station, services)];
     }
 
     /// <summary>The station's name, where it broadcasts from, and its logo. A pasted stream URL

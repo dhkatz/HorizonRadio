@@ -22,9 +22,20 @@ public sealed class NoLog : IPluginLog
     public void Trace(string tag, string text) { }
 }
 
+/// <summary>No title model installed.</summary>
+public sealed class NoTitleModel : Sdk.Metadata.ITitleModel
+{
+    public Sdk.Metadata.ITitleExtractor? Extractor => null;
+
+    public Sdk.Metadata.TitleModelMode Mode => Sdk.Metadata.TitleModelMode.Escalate;
+}
+
 /// <summary>The shipped sources, as the test container built them (<see cref="TestModuleInit"/>).</summary>
 public static class TestSources
 {
+    public static Source.Radio.RadioSourceFactory Radio =>
+        (Source.Radio.RadioSourceFactory)Sources.SourceCatalog.Find(Source.Radio.RadioSourceFactory.SourceId)!;
+
     public static Source.YouTube.YouTubeSourceFactory YouTube =>
         (Source.YouTube.YouTubeSourceFactory)Sources.SourceCatalog.Find(Source.YouTube.YouTubeSourceFactory.SourceId)!;
 }

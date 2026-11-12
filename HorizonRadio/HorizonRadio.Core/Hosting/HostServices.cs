@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.IO;
+using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Tools;
@@ -72,6 +73,14 @@ internal sealed class HostSourceSettings(SourceConfigStore store) : ISourceSetti
         ArgumentNullException.ThrowIfNull(source);
         return store.Load(source.Id, source.Schema);
     }
+}
+
+/// <summary>The title model as the app last set it up (<see cref="TitleExtractorRuntime"/>).</summary>
+internal sealed class HostTitleModel : ITitleModel
+{
+    public ITitleExtractor? Extractor => TitleExtractorRuntime.Current;
+
+    public TitleModelMode Mode => TitleExtractorRuntime.Mode;
 }
 
 /// <summary>The profile's folders (<see cref="AppPaths"/>).</summary>

@@ -1,3 +1,4 @@
+using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Source.Radio;
 
@@ -10,7 +11,9 @@ namespace HorizonRadio.Core.Tests;
 /// </summary>
 public class RadioContentPlayerTests
 {
-    private static RadioContentPlayer Player() => new("ffmpeg.exe", RadioBrowserClient.Shared);
+    private static RadioContentPlayer Player() => new(
+        new RadioServices("ffmpeg.exe", NoProcesses.Instance, NoLog.Instance, IMetadataTrace.Off, new NoTitleModel()),
+        new RadioBrowserClient(NoLog.Instance));
 
     [Fact]
     public async Task Http_locator_yields_one_station_item_without_a_directory_lookup()

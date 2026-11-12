@@ -151,8 +151,8 @@ public class MixEntryDescriberTests
         Assert.False(new LocalFileSourceFactory().Recognizes("Music"));
         Assert.False(new LocalFileSourceFactory().Recognizes("https://youtu.be/abc"));
 
-        Assert.True(new RadioSourceFactory().Recognizes("radio://9617a958-0601-11e8-ae97-52543be04c81"));
+        Assert.True(TestSources.Radio.Recognizes("radio://9617a958-0601-11e8-ae97-52543be04c81"));
         // A bare stream URL could be anything, so no source claims it.
-        Assert.False(new RadioSourceFactory().Recognizes("https://stream.example.com/live.mp3"));
+        Assert.False(TestSources.Radio.Recognizes("https://stream.example.com/live.mp3"));
     }
 }

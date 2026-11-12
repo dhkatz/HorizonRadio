@@ -1,14 +1,7 @@
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Audio;
-using HorizonRadio.Core.Diagnostics;
-using HorizonRadio.Core.Fingerprints;
-using HorizonRadio.Core.Hosting;
-using HorizonRadio.Core.Metadata;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
@@ -30,7 +23,7 @@ namespace HorizonRadio.Source.Radio;
 public sealed class RadioPlayableItem : PlayableItem, ILiveSongAudio
 {
     private RadioStation _station;
-    private readonly string _ffmpegPath;
+    private readonly RadioServices _services;
 
     private byte[]? _stationArt;
     private volatile SubprocessPcmSource? _subproc;
@@ -65,10 +58,10 @@ public sealed class RadioPlayableItem : PlayableItem, ILiveSongAudio
     private static readonly TimeSpan MaxLead = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan MaxLag = TimeSpan.FromSeconds(2);
 
-    public RadioPlayableItem(RadioStation station, string ffmpegPath)
+    public RadioPlayableItem(RadioStation station, RadioServices services)
     {
         _station = station;
-        _ffmpegPath = ffmpegPath;
+        _services = services;
         Metadata = BuildTrack(null, null);
     }
 
@@ -129,7 +122,7 @@ public sealed class RadioPlayableItem : PlayableItem, ILiveSongAudio
 
     // The audio, as the song's; null when there's none or another song began while it was read.
     private LiveAudio? Tagged(long song, (short[] Samples, TimeSpan Start)? heard) =>
-        heard is { } h && SongId == song ? new LiveAudio(song, h.Samples, Chromaprint.SampleRate, h.Start) : null;
+        heard is { } h && SongId == song ? new LiveAudio(song, h.Samples, LiveAudioBuffer.SampleRate, h.Start) : null;
 
     public bool SetSongPosition(long songId, TimeSpan streamTime, TimeSpan songTime)
     {
@@ -214,10 +207,10 @@ public sealed class RadioPlayableItem : PlayableItem, ILiveSongAudio
             // already on screen; the model refines in the background, and its hypotheses are
             // still catalog-validated, so a wrong extraction can't surface. Escalate only on a
             // shaky parse; Always runs on every title and promotes the model to the primary seed.
-            var extractor = TitleExtractorRuntime.Current;
-            var mode = TitleExtractorRuntime.Mode;
+            var extractor = _services.TitleModel.Extractor;
+            var mode = _services.TitleModel.Mode;
             bool runModel = ShouldRunModel(mode, extractor is not null, confidence);
-            MetadataTrace.Song(_station.Name, raw, primary.Artist, title, confidence.ToString(), candidates,
+            _services.Trace.Song(_station.Name, raw, primary.Artist, title, confidence.ToString(), candidates,
                 mode.ToString(), runModel);
             if (!runModel) return;
 
@@ -262,13 +255,13 @@ public sealed class RadioPlayableItem : PlayableItem, ILiveSongAudio
                     var now = decoder.Elapsed;
                     if (clock.PlaysAt(byteOffset) is not { } startsAt || startsAt < now - MaxLag || startsAt > now + MaxLead)
                     {
-                        ProcessConsole.Append("radio", $"song start unknown (rate {clock.Rate?.ToString("0", CultureInfo.InvariantCulture) ?? "?"} B/s): {raw}");
+                        _services.Log.Write("radio", $"song start unknown (rate {clock.Rate?.ToString("0", CultureInfo.InvariantCulture) ?? "?"} B/s): {raw}");
                         SetSongStart(null);
                         OnTitle(raw);
                         return;
                     }
 
-                    ProcessConsole.Append("radio",
+                    _services.Log.Write("radio",
                         $"next song starts in {(startsAt - now).TotalSeconds:0.0} s (at {startsAt.TotalSeconds:0.0} s, {clock.Rate:0} B/s): {raw}");
                     var cts = pending = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     _ = PublishWhenPlayingAsync(decoder, startsAt, raw, cts.Token);
@@ -298,12 +291,12 @@ public sealed class RadioPlayableItem : PlayableItem, ILiveSongAudio
 
                     subproc = new SubprocessPcmSource(new SubprocessPcmSource.Config
                     {
-                        ExecutablePath = _ffmpegPath,
+                        ExecutablePath = _services.FfmpegPath,
                         Args = Ffmpeg.BuildStdinDecodeArgs(),
                         ToolName = "ffmpeg",
                         RedirectStdin = true,
                         OnStderrLine = line => Log($"ffmpeg: {line}"),
-                    }, StaticHostServices.Processes, StaticHostServices.Log);
+                    }, _services.Processes, _services.Log);
                     await subproc.StartAsync(pausing, ct).ConfigureAwait(false);
                     _subproc = subproc;
 
@@ -398,7 +391,7 @@ public sealed class RadioPlayableItem : PlayableItem, ILiveSongAudio
         catch (Exception ex)
         {
             Log($"title model failed: {ex.GetType().Name}: {ex.Message}");
-            MetadataTrace.Model(raw, swModel.ElapsedMilliseconds, [], applied: false);
+            _services.Trace.Model(raw, swModel.ElapsedMilliseconds, [], applied: false);
             return;
         }
         swModel.Stop();
@@ -411,7 +404,7 @@ public sealed class RadioPlayableItem : PlayableItem, ILiveSongAudio
         // The song moved on (or the stream stopped) while the model was thinking → drop it.
         var stale = ct.IsCancellationRequested || !string.Equals(_currentRaw, raw, StringComparison.Ordinal);
         var applied = !stale && model.Count > 0;
-        MetadataTrace.Model(raw, swModel.ElapsedMilliseconds, model, applied);
+        _services.Trace.Model(raw, swModel.ElapsedMilliseconds, model, applied);
         if (!applied) return;
 
         // What OnTitle already published deterministically (its primary on display + alternatives).
