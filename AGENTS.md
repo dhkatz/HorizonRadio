@@ -230,7 +230,8 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   `IPluginSettingsStore` (a plugin's own settings), `INotifications` (a toast, or a log line
   headless),
   `ISourceSettings` (a source's saved settings, for work outside a player such as search),
-  `ITitleModel` (the optional title model, read each time: it's replaced on install),
+  `ITitleModel` (the optional title model, read each time: it's replaced on install; the host's
+  only knows the setting, and `HorizonRadio.TitleModel`'s module wraps it with the installed GGUF),
   `IConfirmations`) and the module's own; tool plugins register their wrappers the same way
   (`YtDlpClient`). Run a tool to its end with `IProcesses.RunToEndAsync` (logs the command and its
   stderr), and stream one's audio with `SubprocessPcmSource`. A game plugin (`IGamePlugin`) is the exception for now: the container builds it,

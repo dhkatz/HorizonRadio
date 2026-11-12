@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+    <ProjectReference Include="..\HorizonRadio.Sdk\HorizonRadio.Sdk.csproj" />
   </ItemGroup>
 
   <!-- The native ML dependency is isolated here so it doesn't bloat Core (or its test runs).
