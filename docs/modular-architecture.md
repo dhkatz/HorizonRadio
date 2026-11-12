@@ -194,7 +194,9 @@ Each step leaves the app working and lands as its own PR or short stack.
        `HorizonHostOptions.Folders`), the settings and the log open in it, and the stores and caches
        (mixes, history, mix entries, metadata, fingerprints) take their paths from `IAppFolders`.
        A store built in memory no longer saves over the app's file.
-     - [ ] Logging: Core's services write to the Console through `IPluginLog`.
+     - [x] Logging: Core's services (actions and event rules, lyrics, metadata, song sync,
+       search, the input backends) write to the Console through `IPluginLog`, taken from the
+       container. (The window's own lines move with its workflows, step 9.)
      - [ ] Metadata diagnostics: `MetadataTrace` is the host's `IMetadataTrace`, a service.
      - [ ] A test runs the whole engine, headless, in a temporary folder.
 8. [ ] Platform interfaces in Core; `HorizonRadio.Platform` with the Windows implementations.

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 
@@ -35,8 +36,10 @@ namespace HorizonRadio.Core.Metadata;
 /// <see cref="EnrichmentService"/> at play time. Lists pass
 /// <see cref="ResolvePriority.Background"/> so the song playing now goes first.
 /// </summary>
-public sealed class MetadataResolver : IAsyncDisposable
+/// <param name="log">Where a provider that couldn't answer is reported (the Console).</param>
+public sealed class MetadataResolver(IPluginLog log) : IAsyncDisposable
 {
+    private readonly IPluginLog _log = log;
     private readonly object _lock = new();
     private IReadOnlyList<IMetadataProvider> _contributors = [];
     private MetadataPolicy _policy = MetadataPolicy.Empty;
@@ -260,7 +263,7 @@ public sealed class MetadataResolver : IAsyncDisposable
     // win ahead of an artist-corroborated one. A clean "Artist - Title" still short-circuits on
     // its first (primary) lookup. If nothing matches, the primary's lookup stands (display =
     // primary parse + station-logo fallback).
-    private static async Task<Lookup> LookupBestAsync(
+    private async Task<Lookup> LookupBestAsync(
         Track seed, IReadOnlyList<IMetadataProvider> contributors, MetadataPolicy policy,
         Action<Lookup> progress, CancellationToken ct)
     {
@@ -293,7 +296,7 @@ public sealed class MetadataResolver : IAsyncDisposable
     // contributors return one only when their own match guard passed, so any entry means a
     // catalog confirmed this interpretation. Each match is reported to progress with the
     // answers so far.
-    private static async Task<Lookup> LookupOneAsync(
+    private async Task<Lookup> LookupOneAsync(
         Interpretation interp, Track seed, IReadOnlyList<IMetadataProvider> contributors,
         MetadataPolicy policy, Action<Lookup> progress, CancellationToken ct)
     {
@@ -347,7 +350,7 @@ public sealed class MetadataResolver : IAsyncDisposable
     }
 
     // One contributor's answer, or null when it had nothing (or failed). Timed for the trace.
-    private static async Task<MetadataContribution?> AskAsync(
+    private async Task<MetadataContribution?> AskAsync(
         IMetadataProvider contributor, MetadataQuery query, CancellationToken ct)
     {
         var elapsed = Stopwatch.StartNew();
@@ -363,7 +366,7 @@ public sealed class MetadataResolver : IAsyncDisposable
             // so the next play asks again. Say so where the user can see it.
             var reason = ex is CatalogUnavailableException ? ex.Message : $"{contributor.Id}: {ex.GetType().Name}: {ex.Message}";
             Log(reason);
-            ProcessConsole.Append("metadata", reason);
+            _log.Write("metadata", reason);
             MetadataTrace.Provider(contributor.Id, matched: false, null, null, null, 0, elapsed.ElapsedMilliseconds,
                 error: ex is CatalogUnavailableException ? ex.Message : $"{ex.GetType().Name}: {ex.Message}");
             return null;

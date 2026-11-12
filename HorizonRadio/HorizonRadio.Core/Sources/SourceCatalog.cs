@@ -16,10 +16,11 @@ public sealed class SourceCatalog
     private readonly IToolLocator? _tools;
 
     /// <param name="tools">Finds the tools the sources run; null finds none (the designer's).</param>
-    public SourceCatalog(IEnumerable<IAudioSourceFactory> sources, IToolLocator? tools = null)
+    /// <param name="log">Where a failed search is reported; null drops it (the designer's).</param>
+    public SourceCatalog(IEnumerable<IAudioSourceFactory> sources, IToolLocator? tools = null, IPluginLog? log = null)
     {
         All = sources.InDisplayOrder();
-        Search = new UnifiedSearch(this);
+        Search = new UnifiedSearch(this, log ?? IPluginLog.None);
         _tools = tools;
     }
 

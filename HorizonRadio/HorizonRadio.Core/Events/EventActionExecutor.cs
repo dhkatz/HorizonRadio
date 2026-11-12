@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Games;
 
 namespace HorizonRadio.Core.Events;
@@ -16,6 +16,7 @@ public sealed class EventActionExecutor : IDisposable
 {
     private readonly EventRuleStore _rules;
     private readonly IActionDispatcher _dispatcher;
+    private readonly IPluginLog _log;
     private readonly IReadOnlyList<IGameEventSource> _sources;
 
     // Collapse the same event kind arriving from overlapping producers
@@ -29,10 +30,12 @@ public sealed class EventActionExecutor : IDisposable
     public EventActionExecutor(
         IEnumerable<IGameEventSource> sources,
         EventRuleStore rules,
-        IActionDispatcher dispatcher)
+        IActionDispatcher dispatcher,
+        IPluginLog log)
     {
         _rules = rules;
         _dispatcher = dispatcher;
+        _log = log;
 
         var list = new List<IGameEventSource>();
         foreach (var s in sources)
@@ -48,7 +51,7 @@ public sealed class EventActionExecutor : IDisposable
         if (!_debounce.ShouldFire(e.Kind)) return;
 
         var action = _rules.GetAction(e.Kind);
-        ProcessConsole.Append("events",
+        _log.Write("events",
             $"{e.Kind} -> {Describe(action)}");
         Handled?.Invoke(e, action);
 

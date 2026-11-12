@@ -61,7 +61,7 @@ public class MetadataResolverConcurrencyTests
 
     private static MetadataResolver Resolver(params IMetadataProvider[] providers)
     {
-        var resolver = new MetadataResolver();
+        var resolver = new MetadataResolver(NoLog.Instance);
         resolver.Configure(providers, new MetadataPolicy(
             [MetadataPolicy.SourceId, .. providers.Select(p => p.Id)], new Dictionary<MetadataField, string>()));
         return resolver;

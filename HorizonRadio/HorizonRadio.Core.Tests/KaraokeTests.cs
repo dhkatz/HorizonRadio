@@ -132,7 +132,7 @@ public class LyricsVersionPreferenceTests
         var bare = new SongLyrics("lrclib", false, [new LyricLine(TimeSpan.Zero, "a")]);
         var rich = new SongLyrics("vocadb", false, [new LyricLine(TimeSpan.Zero, "a")],
             Variants: [new LyricsVariant("English", [new LyricLine(TimeSpan.Zero, "b")])]);
-        var service = new LyricsService([new Stub(bare), new Stub(rich)]);
+        var service = new LyricsService([new Stub(bare), new Stub(rich)], NoLog.Instance);
 
         Assert.Equal("vocadb", (await service.FindAsync(new("Song", "Band"), CancellationToken.None))!.ProviderId);
     }

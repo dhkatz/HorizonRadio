@@ -366,7 +366,7 @@ public class LiveSongSyncTests : IDisposable
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var settled = new TaskCompletionSource();
-        var sync = new LiveSongSync(() => [videos], new ReferenceStore(_dir), resolver: null)
+        var sync = new LiveSongSync(() => [videos], new ReferenceStore(_dir), resolver: null, NoLog.Instance)
         {
             Delay = (wait, ct) =>
             {

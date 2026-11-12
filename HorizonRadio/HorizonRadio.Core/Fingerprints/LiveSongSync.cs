@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Runtime.CompilerServices;
-using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Metadata;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
@@ -67,6 +67,7 @@ public sealed class LiveSongSync
     private readonly Func<IReadOnlyList<IAudioSourceFactory>> _sources;
     private readonly ReferenceStore _store;
     private readonly MetadataResolver? _resolver;
+    private readonly IPluginLog _log;
 
     /// <summary>Waits between tries (a test seam: tests don't wait for real).</summary>
     internal Func<TimeSpan, CancellationToken, Task> Delay { get; init; } = Task.Delay;
@@ -74,11 +75,13 @@ public sealed class LiveSongSync
     /// <param name="sources">The source factories; the ones that can fetch recordings
     /// (<see cref="IReferenceAudioSource"/>) and search for them (<see cref="ISearchSource"/>) are used.</param>
     /// <param name="resolver">For the recordings the song's catalog entries link.</param>
-    public LiveSongSync(Func<IReadOnlyList<IAudioSourceFactory>> sources, ReferenceStore store, MetadataResolver? resolver)
+    public LiveSongSync(Func<IReadOnlyList<IAudioSourceFactory>> sources, ReferenceStore store, MetadataResolver? resolver,
+        IPluginLog log)
     {
         _sources = sources;
         _store = store;
         _resolver = resolver;
+        _log = log;
     }
 
     /// <summary>
@@ -90,7 +93,7 @@ public sealed class LiveSongSync
     public async Task RunAsync(Track track, ILiveSongAudio live, Action<SongSync> onSynced, CancellationToken ct)
     {
         var run = new Run(live, live.SongId, ReferenceStore.SongKey(track.Artist, track.Title),
-            $"{track.Artist} – {track.Title}", onSynced);
+            $"{track.Artist} – {track.Title}", onSynced, _log);
         try
         {
             // The closest version found so far, when it isn't the very recording the station plays.
@@ -113,7 +116,7 @@ public sealed class LiveSongSync
             chosen ??= close;
             if (chosen is not { } best)
             {
-                if (live.SongId == run.Song) ProcessConsole.Append("sync", $"no recording matched {run.Name}");
+                if (live.SongId == run.Song) _log.Write("sync", $"no recording matched {run.Name}");
                 return;
             }
             var reference = best.Reference with { MatchRate = best.Fit.ErrorRate };
@@ -140,7 +143,7 @@ public sealed class LiveSongSync
     private enum Outcome { Exact, Close, Different, SongChanged }
 
     // One song being synced: where its place was last taken from.
-    private sealed class Run(ILiveSongAudio live, long song, string key, string name, Action<SongSync> onSynced)
+    private sealed class Run(ILiveSongAudio live, long song, string key, string name, Action<SongSync> onSynced, IPluginLog log)
     {
         public long Song { get; } = song;
         private TimeSpan _songStart;
@@ -159,7 +162,7 @@ public sealed class LiveSongSync
             {
                 Applied = reference;
                 _songStart = reference.SongStart;
-                ProcessConsole.Append("sync", string.Create(CultureInfo.InvariantCulture,
+                log.Write("sync", string.Create(CultureInfo.InvariantCulture,
                     $"{Name}: {songTime.TotalSeconds:0.00} s into the song, which starts {reference.SongStart.TotalSeconds:0.00} s into {reference.Locator} ({fit.ErrorRate:P0} of bits differ)"));
                 onSynced(new SongSync(reference.Locator, reference.SongLength));
             }
@@ -204,7 +207,7 @@ public sealed class LiveSongSync
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                ProcessConsole.Append("sync", $"couldn't look up the song's recordings: {ex.Message}");
+                _log.Write("sync", $"couldn't look up the song's recordings: {ex.Message}");
             }
             // YouTube first: the same recording downloads in ~3 s there, against 20–40 s from Niconico.
             foreach (var p in playables.OrderBy(p => p.Service.Equals("YouTube", StringComparison.OrdinalIgnoreCase) ? 0 : 1))
@@ -221,14 +224,14 @@ public sealed class LiveSongSync
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                ProcessConsole.Append("sync", $"search for a recording failed: {ex.Message}");
+                _log.Write("sync", $"search for a recording failed: {ex.Message}");
             }
             foreach (var hit in hits.Where(h => h.Kind == SearchResultKind.Track && !(h.Duration > MaxLength)).Take(SearchHits))
                 yield return hit.Locator;
         }
     }
 
-    private static async Task<StoredReference?> FetchAsync(IReferenceAudioSource fetcher, string locator, CancellationToken ct)
+    private async Task<StoredReference?> FetchAsync(IReferenceAudioSource fetcher, string locator, CancellationToken ct)
     {
         try
         {
@@ -240,7 +243,7 @@ public sealed class LiveSongSync
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            ProcessConsole.Append("sync", $"couldn't fetch {locator}: {ex.Message}");
+            _log.Write("sync", $"couldn't fetch {locator}: {ex.Message}");
             return null;
         }
     }
@@ -275,7 +278,7 @@ public sealed class LiveSongSync
                     window = RecordingMatch.Conclusive;
                     break;
                 case MatchVerdict.Different:
-                    ProcessConsole.Append("sync", string.Create(CultureInfo.InvariantCulture,
+                    _log.Write("sync", string.Create(CultureInfo.InvariantCulture,
                         $"{run.Name}: not {reference.Locator} ({fit.ErrorRate:P0} of bits differ)"));
                     return (Outcome.Different, fit);
                 case MatchVerdict.Ambiguous:
@@ -283,7 +286,7 @@ public sealed class LiveSongSync
                     window = Min(MaxWindow, window + TimeSpan.FromSeconds(10));
                     break;
                 case MatchVerdict.Unsure when audio.Length >= RecordingMatch.Conclusive && ++unsure >= MaxUnsure:
-                    ProcessConsole.Append("sync", string.Create(CultureInfo.InvariantCulture,
+                    _log.Write("sync", string.Create(CultureInfo.InvariantCulture,
                         $"{run.Name}: not {reference.Locator} (still {fit.ErrorRate:P0} of bits differ)"));
                     return (Outcome.Different, fit);
                 case MatchVerdict.Unsure:
@@ -293,7 +296,7 @@ public sealed class LiveSongSync
             }
             await Delay(Retry, ct).ConfigureAwait(false);
         }
-        ProcessConsole.Append("sync", $"{run.Name}: gave up on {reference.Locator}");
+        _log.Write("sync", $"{run.Name}: gave up on {reference.Locator}");
         return (Outcome.Different, none);
     }
 
@@ -324,7 +327,7 @@ public sealed class LiveSongSync
 
             var atTitle = placed.SongTime + (title - placed.StreamTime);
             var start = atTitle < s - Prelude ? s - Prelude : atTitle > s + SettleSlack ? s + SettleSlack : atTitle;
-            ProcessConsole.Append("sync", string.Create(CultureInfo.InvariantCulture,
+            _log.Write("sync", string.Create(CultureInfo.InvariantCulture,
                 $"{run.Name}: {reference.Locator} opens with a {(start - reference.LeadIn).TotalSeconds:0.0} s prelude the station doesn't play"));
             return start;
         }
@@ -351,7 +354,7 @@ public sealed class LiveSongSync
             var expected = songTime + (fit.StreamTime - streamTime);
             if ((fit.SongTime - expected).Duration() <= Drift) continue;
             if (!run.Apply(reference, fit)) return;
-            ProcessConsole.Append("sync", string.Create(CultureInfo.InvariantCulture,
+            _log.Write("sync", string.Create(CultureInfo.InvariantCulture,
                 $"{run.Name}: moved {(fit.SongTime - expected).TotalSeconds:+0.00;-0.00} s to stay in step"));
             (streamTime, songTime) = (fit.StreamTime, fit.SongTime);
         }

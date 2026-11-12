@@ -70,8 +70,11 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   kill-on-close job object), so none outlives the app: a stray librespot stays
   logged in as the same Connect device and takes the next session's plays. The
   Console tab and the app's `Trace` lines are also written to
-  `%LOCALAPPDATA%\HorizonRadio\logs` (`LogFile`, one file per session); log with
-  `Trace.WriteLine`, not `Debug.WriteLine`, which no listener can capture. A
+  `%LOCALAPPDATA%\HorizonRadio\logs` (`LogFile`, one file per session). A line for the
+  Console goes through `IPluginLog.Write`, which plugins and Core's services take by
+  constructor (so a module replacing the log gets Core's lines too); detail for the log file
+  only goes through `IPluginLog.Trace` or `Trace.WriteLine`, not `Debug.WriteLine`, which no
+  listener can capture. A
   source setting that's a credential is a `TextField` with `IsSecret`:
   `SourceConfigStore` keeps it as a secret setting (see [Settings](#settings)), written
   encrypted (`SecretText`, DPAPI for the Windows user, `dpapi:<base64>`), and the form masks it.

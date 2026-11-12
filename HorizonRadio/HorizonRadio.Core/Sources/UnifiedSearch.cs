@@ -1,3 +1,4 @@
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.Sources;
@@ -35,7 +36,7 @@ public sealed record UnifiedSearchResult(
 /// so it can't sink results another source returned, yet the failure is still visible.
 /// The aggregator itself only throws on cancellation.
 /// </summary>
-public sealed class UnifiedSearch(SourceCatalog sources)
+public sealed class UnifiedSearch(SourceCatalog sources, IPluginLog log)
 {
     /// <summary>True when at least one source can be searched — lets the UI keep the
     /// search box inert (or hinting) when nothing is wired up yet.</summary>
@@ -83,8 +84,8 @@ public sealed class UnifiedSearch(SourceCatalog sources)
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
             {
-                System.Diagnostics.Trace.WriteLine($"[hzn-search] {factory.Id} failed: {ex.Message}");
-                Diagnostics.ProcessConsole.Append("search", $"{factory.DisplayName} error: {ex.Message}");
+                log.Trace("search", $"{factory.Id} failed: {ex.Message}");
+                log.Write("search", $"{factory.DisplayName} error: {ex.Message}");
                 return new SourceSearchOutcome(factory.Id, factory.DisplayName, [], ex, notConnected);
             }
         })).ConfigureAwait(false);

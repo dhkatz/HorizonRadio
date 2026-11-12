@@ -15,6 +15,7 @@ using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Core.Sources.Queue;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Games;
 using HorizonRadio.Sdk.Lyrics;
 using HorizonRadio.Sdk.Models;
@@ -50,6 +51,7 @@ public sealed class HorizonEngine : IAsyncDisposable
         GameId = gameId;
         Game = game;
         var settings = services.GetRequiredService<SettingsStore>();
+        var log = services.GetRequiredService<IPluginLog>();
         Sources = services.GetRequiredService<SourceCatalog>();
         SourceConfig = services.GetRequiredService<SourceConfigStore>();
         Mixes = services.GetRequiredService<MixStore>();
@@ -63,7 +65,7 @@ public sealed class HorizonEngine : IAsyncDisposable
         // The metadata pipeline: one resolver (the source, then the providers in the user's order,
         // with a policy per field) for play-time enrichment and for lists.
         MetadataConfig = services.GetRequiredService<MetadataConfigStore>();
-        Metadata = new MetadataResolver();
+        Metadata = new MetadataResolver(log);
         var (contributors, policy) = MetadataConfig.Catalog.BuildPipeline(MetadataConfig);
         Metadata.Configure(contributors, policy);
         Enricher = new EnrichmentService(Runner, Metadata);
@@ -71,8 +73,8 @@ public sealed class HorizonEngine : IAsyncDisposable
         // Lyrics from every lyrics plugin, in their order: synced lyrics first, then the earlier
         // provider. Radio lyrics follow the song by lining the station's audio up against a
         // recording of it (fetched through a source that can, e.g. YouTube).
-        Lyrics = new LyricsService(services.GetServices<ILyricsProvider>().InDisplayOrder());
-        SongSync = new LiveSongSync(() => Sources.All, services.GetRequiredService<ReferenceStore>(), Metadata);
+        Lyrics = new LyricsService(services.GetServices<ILyricsProvider>().InDisplayOrder(), log);
+        SongSync = new LiveSongSync(() => Sources.All, services.GetRequiredService<ReferenceStore>(), Metadata, log);
 
         // The router is the one owner of the engine: everything that changes what plays (the game
         // tuning, the queue getting something to play, a source started or stopped) goes through it,
@@ -92,9 +94,9 @@ public sealed class HorizonEngine : IAsyncDisposable
         // One dispatcher turns an action into a transport, source, mix or volume call, for game
         // events (the rules) and bound inputs alike.
         EventRules = services.GetRequiredService<EventRuleStore>();
-        Actions = new ActionDispatcher(Router, SourceConfig, MixSwitcher,
+        Actions = new ActionDispatcher(Router, SourceConfig, log, MixSwitcher,
             game.Volume is { } gameVolume ? gameVolume.SetDuckGain : null);
-        Events = new EventActionExecutor(game.EventSources, EventRules, Actions);
+        Events = new EventActionExecutor(game.EventSources, EventRules, Actions, log);
         InputBindings = services.GetRequiredService<InputBindingStore>();
         Input = new InputBindingService(services.GetServices<IInputBackend>(), InputBindings, Actions);
 

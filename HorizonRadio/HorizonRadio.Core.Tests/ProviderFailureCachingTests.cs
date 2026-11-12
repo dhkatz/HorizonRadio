@@ -141,7 +141,7 @@ public sealed class ProviderFailureCachingTests : IDisposable
     [Fact]
     public async Task One_provider_timing_out_does_not_lose_the_others_answers()
     {
-        var resolver = new MetadataResolver();
+        var resolver = new MetadataResolver(NoLog.Instance);
         resolver.Configure([new TimingOutProvider(), new AlbumProvider()],
             new MetadataPolicy([MetadataPolicy.SourceId, "slow", "ok"], new Dictionary<MetadataField, string>()));
 

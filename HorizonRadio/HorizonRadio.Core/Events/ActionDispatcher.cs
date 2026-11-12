@@ -1,9 +1,9 @@
 using System.Threading.Tasks;
-using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.Events;
@@ -32,11 +32,13 @@ public sealed class ActionDispatcher : IActionDispatcher
     private readonly SourceConfigStore _configStore;
     private readonly MixSwitcher? _mixes;
     private readonly Func<float, bool>? _setGain;
+    private readonly IPluginLog _log;
     private readonly string _logChannel;
 
     public ActionDispatcher(
         PlaybackRouter playback,
         SourceConfigStore configStore,
+        IPluginLog log,
         MixSwitcher? mixes = null,
         Func<float, bool>? setGain = null,
         string logChannel = "events")
@@ -46,6 +48,7 @@ public sealed class ActionDispatcher : IActionDispatcher
         _configStore = configStore;
         _mixes = mixes;
         _setGain = setGain;
+        _log = log;
         _logChannel = logChannel;
     }
 
@@ -93,7 +96,7 @@ public sealed class ActionDispatcher : IActionDispatcher
         }
         catch (Exception ex)
         {
-            ProcessConsole.Append(_logChannel, $"action failed: {ex.GetType().Name}: {ex.Message}");
+            _log.Write(_logChannel, $"action failed: {ex.GetType().Name}: {ex.Message}");
         }
     }
 
@@ -101,12 +104,12 @@ public sealed class ActionDispatcher : IActionDispatcher
     {
         if (_runner.ActiveSource is not ITransportControls tc)
         {
-            ProcessConsole.Append(_logChannel, "transport action ignored: active source has no transport controls");
+            _log.Write(_logChannel, "transport action ignored: active source has no transport controls");
             return;
         }
         if (!can(tc))
         {
-            ProcessConsole.Append(_logChannel, "transport action ignored: not available for this source");
+            _log.Write(_logChannel, "transport action ignored: not available for this source");
             return;
         }
         await act(tc).ConfigureAwait(false);
@@ -118,14 +121,14 @@ public sealed class ActionDispatcher : IActionDispatcher
         var factory = _playback.Sources.Find(sourceId);
         if (factory == null)
         {
-            ProcessConsole.Append(_logChannel, $"switch source: unknown source '{sourceId}'");
+            _log.Write(_logChannel, $"switch source: unknown source '{sourceId}'");
             return;
         }
         if (factory is not ISelfDrivenSourceFactory selfDriven)
         {
             // A content source needs a locator and plays through the queue; the rule
             // editor never offers one, so only a hand-edited rule lands here.
-            ProcessConsole.Append(_logChannel,
+            _log.Write(_logChannel,
                 $"switch source: '{sourceId}' plays through the queue — switch to a mix instead");
             return;
         }
@@ -138,7 +141,7 @@ public sealed class ActionDispatcher : IActionDispatcher
     {
         if (_setGain == null)
         {
-            ProcessConsole.Append(_logChannel, "set volume: no bridge volume path wired");
+            _log.Write(_logChannel, "set volume: no bridge volume path wired");
             return;
         }
         var level = (float)Math.Clamp(EventRuleStore.ParseVolume(param), 0.0, 1.0);

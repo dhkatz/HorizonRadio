@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Lyrics;
 
 namespace HorizonRadio.Core.Lyrics;
@@ -19,11 +19,16 @@ public sealed class LyricsService
     private const int CacheLimit = 256;
 
     private readonly IReadOnlyList<ILyricsProvider> _providers;
+    private readonly IPluginLog _log;
     private readonly Dictionary<string, SongLyrics?> _cache = new(StringComparer.Ordinal);
     private readonly Queue<string> _cacheOrder = new();
     private readonly Lock _lock = new();
 
-    public LyricsService(IReadOnlyList<ILyricsProvider> providers) => _providers = providers;
+    public LyricsService(IReadOnlyList<ILyricsProvider> providers, IPluginLog log)
+    {
+        _providers = providers;
+        _log = log;
+    }
 
     public bool HasProviders => _providers.Count > 0;
 
@@ -72,7 +77,7 @@ public sealed class LyricsService
         return plain;
     }
 
-    private static async Task<(SongLyrics? Lyrics, bool Error)> AskAsync(ILyricsProvider provider, LyricsQuery query, CancellationToken ct)
+    private async Task<(SongLyrics? Lyrics, bool Error)> AskAsync(ILyricsProvider provider, LyricsQuery query, CancellationToken ct)
     {
         var elapsed = Stopwatch.StartNew();
         try
@@ -88,13 +93,13 @@ public sealed class LyricsService
         }
         catch (Exception ex)
         {
-            ProcessConsole.Append("lyrics", $"{provider.Id} unavailable: {ex.GetType().Name}: {ex.Message}");
+            _log.Write("lyrics", $"{provider.Id} unavailable: {ex.GetType().Name}: {ex.Message}");
             return (null, true);
         }
     }
 
-    private static void Report(LyricsQuery query, SongLyrics? lyrics, long ms) =>
-        ProcessConsole.Append("lyrics",
+    private void Report(LyricsQuery query, SongLyrics? lyrics, long ms) =>
+        _log.Write("lyrics",
             $"{query.Artist} – {query.Title}: {(lyrics == null ? "none" : $"{Describe(lyrics)} from {lyrics.ProviderId}")} · {ms} ms");
 
     private static string Describe(SongLyrics? lyrics) => lyrics switch
