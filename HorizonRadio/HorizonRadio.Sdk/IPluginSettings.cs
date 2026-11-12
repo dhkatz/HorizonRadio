@@ -14,7 +14,7 @@ public interface IPluginSettings
     void SetValue(string key, string? value);
 
     /// <summary>A key changed: written here, or (a synced key, see
-    /// <see cref="IPluginContext.GetSettings(string, System.Func{string, bool})"/>) on another of the
+    /// <see cref="IPluginSettingsStore.ForPlugin"/>) on another of the
     /// user's PCs. Raised on any thread.</summary>
     event System.Action<string>? Changed
     {

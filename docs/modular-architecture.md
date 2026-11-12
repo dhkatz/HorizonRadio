@@ -110,7 +110,7 @@ Each step leaves the app working and lands as its own PR or short stack.
    `SongRow`, `ArtTile`).
 4. [x] A confirm service (in the SDK for plugins, used by the app) and confirmation on every
    destructive action.
-5. [ ] Plugins take host services from the container and register their own; plugin helpers
+5. [x] Plugins take host services from the container and register their own; plugin helpers
    move into the SDK; plugins drop their Core reference. (This was two steps, a richer
    `IPluginContext` then plugin-registered services; constructor injection does both, so the
    context goes instead of growing.)
@@ -150,10 +150,12 @@ Each step leaves the app working and lands as its own PR or short stack.
    - [x] The peer helper: its plugin registers the app's peer network (`IPeerNetworkFactory`, in
      the SDK, so a plugin can bring another), started through `IProcesses`; it references only the
      SDK.
-   - [ ] The audio helpers (the audio cache, subprocess audio, fingerprints) and the title
-     extractor, handed out by the host.
-   - [ ] The remaining engine coupling (FH6 and Spotify on the queue engine and mixes) goes
-     through SDK interfaces, the last Core references go, and so does `IPluginContext`.
+   - [x] The audio helpers and the title model reach plugins through the host: caches
+     (`IAudioCaches`), subprocess audio and the heard-audio buffer in the SDK, `ITitleModel`.
+     Fingerprinting stays in Core, which is all that uses it.
+   - [x] FH6 takes its settings (`IPluginSettingsStore`), confirmations and log by constructor, and
+     `IGamePlugin.Create()` no longer gets a context: `IPluginContext` is gone. FH6 already reached
+     the engine only through `IGameHost`. No plugin references Core.
 6. [ ] `App.axaml.cs` stops naming plugin internals: the catalogs (sources, metadata, tools) are
    services, and Core reaches replaceable services through their interfaces.
 7. [ ] `Core/Hosting/`: the startup sequence, plugin discovery, plugin context, game host and

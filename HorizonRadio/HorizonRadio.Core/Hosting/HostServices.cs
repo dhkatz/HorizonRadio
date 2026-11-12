@@ -3,6 +3,8 @@ using System.Diagnostics;
 using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.IO;
 using HorizonRadio.Core.Metadata;
+using HorizonRadio.Core.Plugins;
+using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Tools;
@@ -77,6 +79,13 @@ internal sealed class HostTitleModel : ITitleModel
     public ITitleExtractor? Extractor => TitleExtractorRuntime.Current;
 
     public TitleModelMode Mode => TitleExtractorRuntime.Mode;
+}
+
+/// <summary>Each plugin's settings, in the app's settings store (<see cref="PluginSettings"/>).</summary>
+internal sealed class HostPluginSettingsStore(SettingsStore settings) : IPluginSettingsStore
+{
+    public IPluginSettings ForPlugin(string pluginId, Func<string, bool>? synced = null) =>
+        PluginSettings.For(settings, pluginId, synced);
 }
 
 /// <summary>The profile's folders (<see cref="AppPaths"/>).</summary>

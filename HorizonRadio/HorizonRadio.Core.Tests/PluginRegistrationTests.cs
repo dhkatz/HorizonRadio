@@ -261,7 +261,7 @@ public class PluginRegistrationTests
         public IPluginLog Log { get; } = log;
         public string Id => "game";
         public string DisplayName => "Game";
-        public Sdk.Games.IGameIntegration Create(IPluginContext context) => throw new NotSupportedException();
+        public Sdk.Games.IGameIntegration Create() => throw new NotSupportedException();
     }
 
     public class HostLikeProcesses : IProcesses, IDisposable

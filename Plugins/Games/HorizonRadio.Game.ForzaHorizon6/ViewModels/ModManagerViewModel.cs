@@ -1,7 +1,5 @@
-using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -98,7 +96,7 @@ public sealed partial class ModManagerViewModel : ObservableObject
     {
     }
 
-    /// <param name="confirmations">Asks before uninstalling; the host's, from <see cref="IPluginContext"/>.</param>
+    /// <param name="confirmations">Asks before uninstalling: the host's, which the plugin's constructor takes.</param>
     public ModManagerViewModel(IConfirmations? confirmations)
     {
         _confirm = confirmations ?? ProceedWithoutAsking.Instance;

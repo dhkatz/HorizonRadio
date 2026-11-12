@@ -218,6 +218,7 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   orders it by `SortOrder`, then id (`InDisplayOrder`; `IOrdered`). Contributions are built by the
   container, so their constructors take the host's services (`IPluginLog`, `IProcesses`,
   `IAppFolders`, `IToolLocator`, `IMetadataCache`, `IMetadataTrace`, `IAudioCaches`,
+  `IPluginSettingsStore` (a plugin's own settings),
   `ISourceSettings` (a source's saved settings, for work outside a player such as search),
   `ITitleModel` (the optional title model, read each time: it's replaced on install),
   `IConfirmations`) and the module's own; tool plugins register their wrappers the same way
@@ -227,8 +228,7 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   (`Decorate`); modules run after the host in `Order`, then type name, the last registration wins,
   and the Console tab (tag `plugins`) says what each replaced or wrapped. The container is built
   with `ValidateOnBuild`, so a constructor asking for something nobody registers fails at startup.
-  Plugins still call some Core statics (`ProcessConsole`, `ToolResolver`…); they move to the
-  services plugin by plugin (`docs/modular-architecture.md`, step 5).
+  Plugins reference only the SDK (and other plugins they build on), never Core.
 - **Game plugins (`Plugins/Games/`)** — the Horizon Radio side of a game
   integration. An `IGamePlugin` (SDK) builds one `IGameIntegration`: the game's
   audio output, its event sources, connection state, and optional capabilities
@@ -251,7 +251,7 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
     `…Views.FooView`) in the plugin's own assembly. FH6 contributes Mods and
     Stats. Plugin UI packages must match the UI project's versions.
   - A game owns its game-specific settings, persisted per plugin
-    (`IPluginContext.GetSettings(id)` → `plugin.<id>.<key>` in the settings store). FH6's Stations
+    (`IPluginSettingsStore.ForPlugin(id)` → `plugin.<id>.<key>` in the settings store). FH6's Stations
     page assigns each station the game's music, the app's player, or a mix
     (`StationMap`); as the player tunes, the plugin routes the app's playback
     through `IGameHost.Playback` (`PlaybackRouter`). Mixes stay game-agnostic.
@@ -465,7 +465,7 @@ using var watch = settings.Watch(LyricsSettings.Karaoke, on => ...);
   `source.<id>.<field>` (`SourceConfigStore`), each metadata provider's
   `metadata.provider.<id>.<field>` (`MetadataConfigStore`), both device-only with secret fields
   as secrets. Each plugin's settings are `plugin.<id>.<key>` (`PluginSettings`): device-only unless the plugin
-  names the keys that are preferences (`IPluginContext.GetSettings(id, synced)`; FH6's station
+  names the keys that are preferences (`IPluginSettingsStore.ForPlugin(id, synced)`; FH6's station
   assignments and switch mode are), and it follows changes through `IPluginSettings.Changed`;
   each event rule `event.<kind>` (`EventRuleStore`), and the input bindings one list,
   `controls.bindings` (`InputBindingStore`), since a binding replaces others.

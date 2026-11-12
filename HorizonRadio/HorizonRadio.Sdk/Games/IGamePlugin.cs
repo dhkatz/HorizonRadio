@@ -5,7 +5,8 @@ namespace HorizonRadio.Sdk;
 /// <summary>
 /// A game plugin: connects Horizon Radio to one game. The host discovers game plugins and runs
 /// exactly one integration at a time (the active game); it builds it once at startup via
-/// <see cref="Create"/> and owns the result's lifetime.
+/// <see cref="Create"/> and owns the result's lifetime. The plugin class is built by the host's
+/// container, so its constructor takes the services the integration needs.
 ///
 /// The plugin is the Horizon Radio side of the integration. Whatever runs inside the game (a native
 /// DLL, a scripting-runtime mod, nothing at all) is the plugin's business and lives under
@@ -15,5 +16,5 @@ public interface IGamePlugin : IPlugin
 {
     /// <summary>Build the runtime integration. Must not connect or start background work —
     /// the host wires its event handlers first, then calls <see cref="IGameIntegration.Start"/>.</summary>
-    IGameIntegration Create(IPluginContext context);
+    IGameIntegration Create();
 }

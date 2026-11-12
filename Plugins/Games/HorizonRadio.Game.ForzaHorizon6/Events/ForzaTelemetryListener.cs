@@ -1,12 +1,9 @@
-using System;
 using System.Buffers.Binary;
-using System.Collections.Generic;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Games;
 
 namespace HorizonRadio.Game.ForzaHorizon6.Events;
@@ -50,7 +47,14 @@ public sealed class ForzaTelemetryListener : IGameEventSource, IDisposable
 
     public event Action<GameEvent>? GameEventReceived;
 
-    public ForzaTelemetryListener(int port = DefaultPort) => _port = port;
+    private readonly IPluginLog? _log;
+
+    /// <param name="log">Where it reports binding and errors (the Console tab); null drops them.</param>
+    public ForzaTelemetryListener(int port = DefaultPort, IPluginLog? log = null)
+    {
+        _port = port;
+        _log = log;
+    }
 
     public void Start()
     {
@@ -61,12 +65,12 @@ public sealed class ForzaTelemetryListener : IGameEventSource, IDisposable
         }
         catch (Exception ex)
         {
-            ProcessConsole.Append("telemetry", $"could not bind UDP {_port}: {ex.Message}");
+            _log?.Write("telemetry", $"could not bind UDP {_port}: {ex.Message}");
             return;
         }
         _cts = new CancellationTokenSource();
         _loop = Task.Run(() => ReceiveLoopAsync(_cts.Token));
-        ProcessConsole.Append("telemetry", $"listening for Forza Data Out on 127.0.0.1:{_port}");
+        _log?.Write("telemetry", $"listening for Forza Data Out on 127.0.0.1:{_port}");
     }
 
     private async Task ReceiveLoopAsync(CancellationToken ct)
@@ -82,12 +86,12 @@ public sealed class ForzaTelemetryListener : IGameEventSource, IDisposable
             catch (OperationCanceledException) { return; }
             catch (Exception ex)
             {
-                ProcessConsole.Append("telemetry", $"receive error: {ex.Message}");
+                _log?.Write("telemetry", $"receive error: {ex.Message}");
                 return;
             }
 
             try { Parse(res.Buffer); }
-            catch (Exception ex) { ProcessConsole.Append("telemetry", $"parse error: {ex.Message}"); }
+            catch (Exception ex) { _log?.Write("telemetry", $"parse error: {ex.Message}"); }
         }
     }
 

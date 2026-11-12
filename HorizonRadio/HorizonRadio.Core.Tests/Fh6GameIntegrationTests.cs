@@ -2,7 +2,6 @@ using System.IO.Pipes;
 using System.Text.Json;
 using HorizonRadio.Core.Plugins;
 using HorizonRadio.Core.Settings;
-using HorizonRadio.Core.Sources;
 using HorizonRadio.Game.ForzaHorizon6;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Games;
@@ -14,19 +13,22 @@ namespace HorizonRadio.Core.Tests;
 // integration against a fake mod on pipe names of its own.
 public class Fh6GameIntegrationTests
 {
-    private sealed class TestContext(SettingsStore settings) : IPluginContext
+    private sealed class TestSettings(SettingsStore settings) : IPluginSettingsStore
     {
-
-        public IPluginSettings GetSettings(string pluginId) => PluginSettings.For(settings, pluginId);
+        public IPluginSettings ForPlugin(string pluginId, Func<string, bool>? synced = null) =>
+            PluginSettings.For(settings, pluginId, synced);
     }
+
+    private static Fh6GamePlugin Plugin(SettingsStore settings) =>
+        new(new TestSettings(settings), ProceedWithoutAsking.Instance, NoLog.Instance);
 
     [Fact]
     public async Task Plugin_builds_an_integration_with_every_FH6_capability()
     {
-        var plugin = new Fh6GamePlugin();
+        var plugin = Plugin(SettingsStore.CreateInMemory());
         Assert.Equal("fh6", plugin.Id);
 
-        await using var game = plugin.Create(new TestContext(SettingsStore.CreateInMemory()));
+        await using var game = plugin.Create();
         Assert.Equal("Forza Horizon 6", game.DisplayName);
         Assert.NotNull(game.Output);
         Assert.NotNull(game.Stations);
@@ -140,7 +142,7 @@ public class Fh6GameIntegrationTests
         var store = SettingsStore.CreateInMemory();
         new StationMap(PluginSettings.For(store, "fh6")).Set("Horizon XS", StationAssignment.Player);
 
-        await using var game = new Fh6GamePlugin().Create(new TestContext(store));
+        await using var game = Plugin(store).Create();
         var fh6 = Assert.IsType<Fh6GameIntegration>(game);
         Assert.Equal(StationAssignment.Player, fh6.Map.Get("Horizon XS"));
     }

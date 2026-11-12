@@ -40,6 +40,7 @@ using HorizonRadio.UI.Tools;
 using HorizonRadio.UI.ViewModels;
 using HorizonRadio.UI.Views;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using ShadUI;
 
 namespace HorizonRadio.UI;
@@ -101,8 +102,8 @@ public partial class App : Application
             var services = new ServiceCollection();
             services.AddHorizonCore(settings);
             services.AddSingleton<ToolRegistry>();
-            services.AddSingleton<IConfirmations>(confirmations);
-            services.AddSingleton<IPluginContext>(sp => new HostPluginContext(settings, confirmations));
+            // The app asks with dialogs (Core's default goes ahead without asking).
+            services.Replace(ServiceDescriptor.Singleton<IConfirmations>(confirmations));
             // The plugins, found by scanning the loaded plugin assemblies rather than named here (the
             // seam the install model rests on), and their modules' services. Last, so a module can
             // replace or wrap any service above; the Console tab says when one does.
@@ -121,7 +122,6 @@ public partial class App : Application
             // The active game: one runs at a time, chosen by the user (a game plugin, or "No Game"
             // for a plain player). It's wired into the audio pipeline, events, and pages at startup,
             // so switching games restarts the app (Settings → Game).
-            var pluginContext = provider.GetRequiredService<IPluginContext>();
             var gamePlugins = provider.GetServices<IGamePlugin>().InDisplayOrder();
             // Before any game is built: its settings must already hold anything migrated into them.
             // Saving drops the legacy fields so the migration can't re-apply later.
@@ -157,7 +157,7 @@ public partial class App : Application
             {
                 _game = chosenGameId == NoGameIntegration.Id
                     ? new NoGameIntegration()
-                    : gamePlugins.First(g => g.Id == chosenGameId).Create(pluginContext);
+                    : gamePlugins.First(g => g.Id == chosenGameId).Create();
 
                 // Tee the pipeline so the active source can play to the game
                 // and (optionally) to local speakers for in-app test playback.
