@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Sources.Config;
@@ -10,6 +9,7 @@ public sealed class ItunesProviderFactory(IMetadataCache cache, IMetadataTrace t
     public const string KeyCountry = "country";
 
     public string Id => "itunes";
+    public int SortOrder => 20;
     public string DisplayName => "Apple Music (iTunes)";
     public string? Description => "Free / no-credentials lookup against Apple's iTunes catalog. Strong coverage and cover art, including Japanese / Vocaloid music.";
 

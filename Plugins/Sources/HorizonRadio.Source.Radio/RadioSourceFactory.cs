@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -27,6 +26,7 @@ public sealed class RadioSourceFactory : IContentSourceFactory, ISearchSource
     public const string KeyFfmpeg = "ffmpeg";
 
     public string Id => SourceId;
+    public int SortOrder => 40;
     public string DisplayName => "Internet Radio";
     public string? Description => "Stream and search live internet radio stations (radio-browser.info), with live now-playing.";
 

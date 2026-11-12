@@ -39,6 +39,7 @@ public sealed class SpotifyContentSourceFactory : IContentSourceFactory, IAuthen
     private static readonly string[] BitrateOptions = ["auto", "96", "160", "320"];
 
     public string Id => SourceId;
+    public int SortOrder => 21;
     public string DisplayName => "Spotify";
     public string? Description =>
         "Play Spotify tracks, playlists, and albums — in the queue, in Quick Play, or mixed " +

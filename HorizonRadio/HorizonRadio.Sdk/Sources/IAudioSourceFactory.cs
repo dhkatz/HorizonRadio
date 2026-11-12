@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using HorizonRadio.Sdk.Sources.Config;
 
 namespace HorizonRadio.Sdk.Sources;
@@ -16,12 +15,8 @@ namespace HorizonRadio.Sdk.Sources;
 /// they're enumerated at app startup just to populate the source
 /// picker. All heavy lifting happens when a source or item actually plays.
 /// </summary>
-public interface IAudioSourceFactory
+public interface IAudioSourceFactory : IOrdered
 {
-    /// <summary>Stable lowercase id used as the persistence key and
-    /// as the source's runtime <see cref="IAudioSource.Id"/>.</summary>
-    string Id { get; }
-
     /// <summary>User-facing label, e.g. "Local Files".</summary>
     string DisplayName { get; }
 

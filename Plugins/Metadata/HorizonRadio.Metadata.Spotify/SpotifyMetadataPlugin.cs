@@ -1,14 +1,18 @@
-using System.Collections.Generic;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace HorizonRadio.Metadata.Spotify;
 
 /// <summary>The Spotify metadata plugin — contributes the Spotify Web API provider.</summary>
-public sealed class SpotifyMetadataPlugin(IMetadataCache cache, IMetadataTrace trace) : IMetadataPlugin
+public sealed class SpotifyMetadataPlugin : IPlugin, IPluginModule
 {
     public string Id => "spotify";
     public string DisplayName => "Spotify";
     public int SortOrder => 10;
-    public IReadOnlyList<IMetadataProviderFactory> Providers { get; } = [new SpotifyProviderFactory(cache, trace)];
+
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton<IMetadataProviderFactory, SpotifyProviderFactory>();
+    }
 }

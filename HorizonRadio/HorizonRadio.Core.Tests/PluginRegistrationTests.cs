@@ -3,12 +3,19 @@ using HorizonRadio.Core.Hosting;
 using HorizonRadio.Core.Settings;
 using HorizonRadio.Game.ForzaHorizon6;
 using HorizonRadio.Lyrics.Lrclib;
+using HorizonRadio.Lyrics.Unison;
 using HorizonRadio.Metadata.Apple;
 using HorizonRadio.Metadata.MusicBrainz;
 using HorizonRadio.Metadata.Spotify;
 using HorizonRadio.Metadata.VocaDb;
 using HorizonRadio.Sdk;
+using HorizonRadio.Sdk.Lyrics;
+using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Sources;
+using HorizonRadio.Sdk.Sources.Config;
+using HorizonRadio.Source.Local;
+using HorizonRadio.Source.Radio;
+using HorizonRadio.Source.Spotify;
 using HorizonRadio.Source.Test;
 using HorizonRadio.Source.YouTube;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,38 +23,57 @@ using Microsoft.Extensions.DependencyInjection;
 namespace HorizonRadio.Core.Tests;
 
 /// <summary>
-/// Plugins in the host's container: plugin classes built by it (taking services in their
-/// constructors), and modules adding, replacing and wrapping services.
+/// Plugins in the host's container: plugins listed, their contributions collected and built by the
+/// container (taking services in their constructors), and modules adding, replacing and wrapping
+/// services.
 /// </summary>
 public class PluginRegistrationTests
 {
     [Fact]
-    public void A_plugin_takes_host_services_in_its_constructor()
+    public void A_contribution_takes_host_services_in_its_constructor()
     {
         var log = new RecordingLog();
-        var provider = Build(s => s.AddSingleton<IPluginLog>(log), typeof(LoggingSourcePlugin));
+        var provider = Build(s => s.AddSingleton<IPluginLog>(log), typeof(LoggingPlugin));
 
-        var plugin = Assert.IsType<LoggingSourcePlugin>(Assert.Single(provider.GetServices<ISourcePlugin>()));
-        Assert.Same(log, plugin.Log);
+        var lyrics = Assert.IsType<LoggingLyrics>(Assert.Single(provider.GetServices<ILyricsProvider>()));
+        Assert.Same(log, lyrics.Log);
     }
 
     [Fact]
-    public void A_plugin_of_two_kinds_is_one_instance_under_both()
+    public void A_plugin_that_is_its_own_module_is_listed_once()
     {
-        var provider = Build(_ => { }, typeof(MetadataAndLyricsPlugin));
+        var provider = Build(s => s.AddSingleton<IPluginLog>(new RecordingLog()), typeof(LoggingPlugin));
 
-        Assert.Same(
-            Assert.Single(provider.GetServices<IMetadataPlugin>()),
-            Assert.Single(provider.GetServices<ILyricsPlugin>()));
+        Assert.IsType<LoggingPlugin>(Assert.Single(provider.GetServices<IPlugin>()));
     }
 
     [Fact]
-    public void A_modules_service_reaches_a_plugins_constructor()
+    public void A_plugin_contributes_to_several_kinds()
     {
-        var provider = Build(_ => { }, typeof(ClientSourcePlugin), typeof(ClientModule));
+        var provider = Build(_ => { }, typeof(SourceAndLyricsPlugin));
 
-        var plugin = Assert.IsType<ClientSourcePlugin>(Assert.Single(provider.GetServices<ISourcePlugin>()));
-        Assert.NotNull(plugin.Client);
+        Assert.IsType<SilentSource>(Assert.Single(provider.GetServices<IAudioSourceFactory>()));
+        Assert.IsType<NoLyrics>(Assert.Single(provider.GetServices<ILyricsProvider>()));
+    }
+
+    [Fact]
+    public void A_modules_service_reaches_a_contributions_constructor()
+    {
+        var provider = Build(_ => { }, typeof(ClientPlugin), typeof(ClientModule));
+
+        var lyrics = Assert.IsType<ClientLyrics>(Assert.Single(provider.GetServices<ILyricsProvider>()));
+        Assert.NotNull(lyrics.Client);
+    }
+
+    [Fact]
+    public void A_game_plugin_is_built_by_the_container_and_listed_as_a_plugin_too()
+    {
+        var log = new RecordingLog();
+        var provider = Build(s => s.AddSingleton<IPluginLog>(log), typeof(LoggingGamePlugin));
+
+        var game = Assert.IsType<LoggingGamePlugin>(Assert.Single(provider.GetServices<IGamePlugin>()));
+        Assert.Same(log, game.Log);
+        Assert.Same(game, Assert.Single(provider.GetServices<IPlugin>()));
     }
 
     [Fact]
@@ -112,9 +138,9 @@ public class PluginRegistrationTests
     }
 
     [Fact]
-    public void A_plugin_asking_for_a_service_nobody_registers_fails_at_build()
+    public void A_contribution_asking_for_a_service_nobody_registers_fails_at_build()
     {
-        var services = new ServiceCollection().AddPlugins([typeof(LoggingSourcePlugin)]);
+        var services = new ServiceCollection().AddPlugins([typeof(LoggingPlugin)]);
 
         Assert.Throws<AggregateException>(() =>
             services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true }));
@@ -123,15 +149,21 @@ public class PluginRegistrationTests
     [Fact]
     public void The_shipped_plugins_build_from_the_hosts_services()
     {
-        Type[] assemblies = [typeof(YouTubeSourcePlugin), typeof(TestToneSourcePlugin), typeof(LrclibLyricsPlugin),
+        Type[] assemblies = [typeof(YouTubeSourcePlugin), typeof(TestToneSourcePlugin), typeof(LocalSourcePlugin),
+            typeof(SpotifySourcePlugin), typeof(RadioSourcePlugin), typeof(LrclibLyricsPlugin), typeof(UnisonLyricsPlugin),
             typeof(VocaDbMetadataPlugin), typeof(ItunesMetadataPlugin), typeof(MusicBrainzMetadataPlugin),
             typeof(SpotifyMetadataPlugin), typeof(Fh6GamePlugin)];
         using var settings = SettingsStore.CreateInMemory();
         var provider = Build(s => s.AddHorizonCore(settings), [.. assemblies.SelectMany(a => a.Assembly.GetExportedTypes())]);
 
-        Assert.Contains(provider.GetServices<ISourcePlugin>(), p => p is YouTubeSourcePlugin);
-        Assert.Contains(provider.GetServices<ILyricsPlugin>(), p => p is VocaDbMetadataPlugin);
-        Assert.Equal(4, provider.GetServices<IMetadataPlugin>().Count());
+        Assert.Contains(provider.GetServices<IPlugin>(), p => p is YouTubeSourcePlugin);
+        // The order each list had when it came from the plugins' own SortOrder.
+        Assert.Equal(["local", "spotify", SpotifyContentSourceFactory.SourceId, "youtube", "radio", "testtone"],
+            provider.GetServices<IAudioSourceFactory>().InDisplayOrder().Select(s => s.Id));
+        Assert.Equal(["unison", "lrclib", "vocadb"],
+            provider.GetServices<ILyricsProvider>().InDisplayOrder().Select(l => l.Id));
+        Assert.Equal(["spotify", "itunes", "musicbrainz", "vocadb"],
+            provider.GetServices<IMetadataProviderFactory>().InDisplayOrder().Select(f => f.Id));
         Assert.Contains(provider.GetServices<IGamePlugin>(), p => p is Fh6GamePlugin);
     }
 
@@ -160,20 +192,46 @@ public class PluginRegistrationTests
         public void Trace(string tag, string text) { }
     }
 
-    public sealed class LoggingSourcePlugin(IPluginLog log) : ISourcePlugin
+    public class NoLyrics : ILyricsProvider
     {
-        public IPluginLog Log { get; } = log;
-        public string Id => "logging";
-        public string DisplayName => "Logging";
-        public IReadOnlyList<IAudioSourceFactory> Sources => [];
+        public virtual string Id => "none";
+        public Task<SongLyrics?> FindAsync(LyricsQuery query, CancellationToken ct) => Task.FromResult<SongLyrics?>(null);
+        public ValueTask DisposeAsync()
+        {
+            GC.SuppressFinalize(this);
+            return ValueTask.CompletedTask;
+        }
     }
 
-    public sealed class MetadataAndLyricsPlugin : IMetadataPlugin, ILyricsPlugin
+    public sealed class LoggingLyrics(IPluginLog log) : NoLyrics
+    {
+        public IPluginLog Log { get; } = log;
+    }
+
+    public sealed class LoggingPlugin : IPlugin, IPluginModule
+    {
+        public string Id => "logging";
+        public string DisplayName => "Logging";
+        public void ConfigureServices(IServiceCollection services) => services.AddSingleton<ILyricsProvider, LoggingLyrics>();
+    }
+
+    public sealed class SilentSource : IAudioSourceFactory
+    {
+        public string Id => "silent";
+        public string DisplayName => "Silent";
+        public string? Description => null;
+        public IReadOnlyList<ConfigField> Schema => [];
+    }
+
+    public sealed class SourceAndLyricsPlugin : IPlugin, IPluginModule
     {
         public string Id => "both";
         public string DisplayName => "Both";
-        public IReadOnlyList<Sdk.Metadata.IMetadataProviderFactory> Providers => [];
-        public Sdk.Lyrics.ILyricsProvider CreateLyricsProvider() => throw new NotSupportedException();
+        public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddSingleton<IAudioSourceFactory, SilentSource>();
+            services.AddSingleton<ILyricsProvider, NoLyrics>();
+        }
     }
 
     public sealed class Client;
@@ -183,12 +241,24 @@ public class PluginRegistrationTests
         public void ConfigureServices(IServiceCollection services) => services.AddSingleton<Client>();
     }
 
-    public sealed class ClientSourcePlugin(Client client) : ISourcePlugin
+    public sealed class ClientLyrics(Client client) : NoLyrics
     {
         public Client Client { get; } = client;
+    }
+
+    public sealed class ClientPlugin : IPlugin, IPluginModule
+    {
         public string Id => "client";
         public string DisplayName => "Client";
-        public IReadOnlyList<IAudioSourceFactory> Sources => [];
+        public void ConfigureServices(IServiceCollection services) => services.AddSingleton<ILyricsProvider, ClientLyrics>();
+    }
+
+    public sealed class LoggingGamePlugin(IPluginLog log) : IGamePlugin
+    {
+        public IPluginLog Log { get; } = log;
+        public string Id => "game";
+        public string DisplayName => "Game";
+        public Sdk.Games.IGameIntegration Create(IPluginContext context) => throw new NotSupportedException();
     }
 
     public class HostLikeProcesses : IProcesses, IDisposable

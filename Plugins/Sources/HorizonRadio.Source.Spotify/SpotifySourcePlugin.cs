@@ -1,6 +1,6 @@
-using System.Collections.Generic;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Sources;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace HorizonRadio.Source.Spotify;
 
@@ -9,11 +9,15 @@ namespace HorizonRadio.Source.Spotify;
 /// (<see cref="SpotifySourceFactory"/>) and the driven, mixable source
 /// (<see cref="SpotifyContentSourceFactory"/>) — both drive one librespot device.
 /// </summary>
-public sealed class SpotifySourcePlugin : ISourcePlugin
+public sealed class SpotifySourcePlugin : IPlugin, IPluginModule
 {
     public string Id => "spotify";
     public string DisplayName => "Spotify";
     public int SortOrder => 20;
-    public IReadOnlyList<IAudioSourceFactory> Sources { get; } =
-        [new SpotifySourceFactory(), new SpotifyContentSourceFactory()];
+
+    public void ConfigureServices(IServiceCollection services)
+    {
+        services.AddSingleton<IAudioSourceFactory, SpotifySourceFactory>();
+        services.AddSingleton<IAudioSourceFactory, SpotifyContentSourceFactory>();
+    }
 }

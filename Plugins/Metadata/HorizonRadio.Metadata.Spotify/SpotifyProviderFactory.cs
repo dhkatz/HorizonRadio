@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,6 +15,7 @@ public sealed class SpotifyProviderFactory(IMetadataCache cache, IMetadataTrace 
     public const string KeyClientSecret = "clientSecret";
 
     public string Id => "spotify";
+    public int SortOrder => 10;
     public string DisplayName => "Spotify";
     public string? Description => "Spotify Web API — best for modern releases. By default it reuses your connected Spotify source (Sources tab), so no extra setup is needed. Optionally enter a separate app's Client ID + Secret to look up metadata independently of the source.";
 

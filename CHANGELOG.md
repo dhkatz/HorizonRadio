@@ -110,7 +110,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   [LRCLIB](https://lrclib.net), and synced lyrics are only used when they were timed to a
   recording of the same length, so they don't drift ahead of the singer. Internet radio
   shows the lyrics as text for now, since it can't yet tell where in the song it is.
-  Lyrics providers are plugins (`ILyricsPlugin`, under `Plugins/Lyrics/`).
+  Lyrics providers come from plugins (under `Plugins/Lyrics/`).
 - **Karaoke lyrics.** Synced lyrics fill in as they're sung: word by word (syllable by
   syllable) when the lyrics are word-timed, across the line otherwise. The microphone
   button on the lyrics panel turns it off, to light the whole line at once instead.
@@ -172,11 +172,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   color tokens and text styles) is one `HorizonRadioTheme`, which plugin pages use too: the FH6
   plugin now references it instead of reaching ShadUI through the app. Status colors come from
   named tones (`ToneSuccessBrush`…, `Tone` in view models) instead of color literals.
-- **Plugins are built by the app's DI container (internal).** A plugin's constructor can ask for
-  the services the app provides (logging to the Console tab, starting tool processes, the app's
-  folders, finding tools), and a plugin can register its own services or replace or wrap the
-  app's; the Console tab (tag `plugins`) lists each one a plugin replaced. The SDK now references
-  `Microsoft.Extensions.DependencyInjection.Abstractions`.
+- **Plugins register what they add in the app's DI container (internal).** A plugin registers its
+  sources, metadata providers and lyrics providers (replacing the per-kind `ISourcePlugin`,
+  `IMetadataPlugin` and `ILyricsPlugin`), and the container builds them, so their constructors can
+  ask for the services the app provides (logging to the Console tab, starting tool processes, the
+  app's folders, finding tools, the metadata cache). A plugin can also register its own services, or
+  replace or wrap the app's; the Console tab (tag `plugins`) lists each one a plugin replaced. The
+  SDK now references `Microsoft.Extensions.DependencyInjection.Abstractions`.
 - **The plugin SDK is `HorizonRadio.Sdk` (internal).** `Plugins/HorizonRadio.Plugins.Abstractions`
   moved to `HorizonRadio/HorizonRadio.Sdk`, and its types moved from `HorizonRadio.Core.*` and
   `HorizonRadio.Plugins.Abstractions` to `HorizonRadio.Sdk.*` namespaces. It's the first step of

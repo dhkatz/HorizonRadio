@@ -5,16 +5,15 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace HorizonRadio.Core.Hosting;
 
 /// <summary>
-/// Puts the plugins into the host's container: each plugin class, under every plugin kind it is,
-/// built by the container (so its constructor can ask for services); then each
-/// <see cref="IPluginModule"/>'s own registrations, which may replace or wrap the host's.
+/// Puts the plugins into the host's container: each plugin, listed as an <see cref="IPlugin"/>
+/// (and an <see cref="IGamePlugin"/> if it is one); then each <see cref="IPluginModule"/>'s
+/// registrations: the plugin's contributions (sources, metadata and lyrics providers), the services
+/// they use, and any host service it replaces or wraps.
 /// </summary>
 public static class PluginRegistration
 {
-    /// <summary>The plugin kinds the host collects. A plugin may be several (VocaDB is a metadata
-    /// and a lyrics plugin): it's built once and listed under each.</summary>
-    public static IReadOnlyList<Type> Kinds { get; } =
-        [typeof(ISourcePlugin), typeof(IMetadataPlugin), typeof(ILyricsPlugin), typeof(IGamePlugin)];
+    /// <summary>What the host lists a plugin class as.</summary>
+    public static IReadOnlyList<Type> Kinds { get; } = [typeof(IPlugin), typeof(IGamePlugin)];
 
     /// <summary>
     /// Registers the plugin classes and modules among <paramref name="types"/> (others are
@@ -32,7 +31,19 @@ public static class PluginRegistration
             .ToList();
         var hostServices = services.Where(d => !d.IsKeyedService).Select(d => d.ServiceType).ToHashSet();
 
-        foreach (var type in candidates)
+        // A module is created here, to call it; a plugin that is its own module (the usual shape)
+        // is listed as that instance. Any other plugin class (a game) the container builds, so its
+        // constructor can take services.
+        var modules = candidates
+            .Where(t => typeof(IPluginModule).IsAssignableFrom(t))
+            .Select(CreateModule)
+            .ToList();
+        foreach (var module in modules)
+        {
+            foreach (var kind in Kinds.Where(k => k.IsInstanceOfType(module)))
+                services.AddSingleton(kind, module);
+        }
+        foreach (var type in candidates.Where(t => !typeof(IPluginModule).IsAssignableFrom(t)))
         {
             var kinds = Kinds.Where(k => k.IsAssignableFrom(type)).ToList();
             if (kinds.Count == 0) continue;
@@ -41,13 +52,8 @@ public static class PluginRegistration
                 services.AddSingleton(kind, sp => sp.GetRequiredService(type));
         }
 
-        var modules = candidates
-            .Where(t => typeof(IPluginModule).IsAssignableFrom(t))
-            .Select(CreateModule)
-            .OrderBy(m => m.Order)
-            .ThenBy(m => m.GetType().FullName, StringComparer.Ordinal);
         var replacedBy = new Dictionary<Type, string>();
-        foreach (var module in modules)
+        foreach (var module in modules.OrderBy(m => m.Order).ThenBy(m => m.GetType().FullName, StringComparer.Ordinal))
         {
             var name = ModuleName(module);
             var before = Snapshot(services);
@@ -64,9 +70,10 @@ public static class PluginRegistration
         return services;
     }
 
-    /// <summary>Plugins in the order they're shown: <see cref="IPlugin.SortOrder"/>, then id.</summary>
-    public static IReadOnlyList<T> InDisplayOrder<T>(this IEnumerable<T> plugins) where T : IPlugin =>
-        [.. plugins.OrderBy(p => p.SortOrder).ThenBy(p => p.Id, StringComparer.Ordinal)];
+    /// <summary>Plugins or contributions in the order they're shown (and, for lyrics, asked):
+    /// <see cref="IOrdered.SortOrder"/>, then id.</summary>
+    public static IReadOnlyList<T> InDisplayOrder<T>(this IEnumerable<T> items) where T : IOrdered =>
+        [.. items.OrderBy(p => p.SortOrder).ThenBy(p => p.Id, StringComparer.Ordinal)];
 
     private static IPluginModule CreateModule(Type type) =>
         type.GetConstructor(Type.EmptyTypes) is { } ctor
@@ -75,10 +82,9 @@ public static class PluginRegistration
                 $"The plugin module {type.FullName} needs a public parameterless constructor; " +
                 "the services it needs go in the constructors of the classes it registers.");
 
-    // "youtube (HorizonRadio.Source.YouTube.YouTubeModule)" reads worse than the assembly name,
-    // which is what a user can match to a plugin.
+    // The plugin's id when the module is the plugin; else its assembly, which a user can match to one.
     private static string ModuleName(IPluginModule module) =>
-        module.GetType().Assembly.GetName().Name ?? module.GetType().Name;
+        module is IPlugin plugin ? plugin.Id : module.GetType().Assembly.GetName().Name ?? module.GetType().Name;
 
     private static Dictionary<Type, ServiceDescriptor[]> Snapshot(IServiceCollection services) =>
         services.Where(d => !d.IsKeyedService)
