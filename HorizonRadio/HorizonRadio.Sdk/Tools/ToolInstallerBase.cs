@@ -1,11 +1,4 @@
-using System;
-using System.IO;
-using System.Net.Http;
-using System.Threading;
-using System.Threading.Tasks;
-using HorizonRadio.Sdk.Tools;
-
-namespace HorizonRadio.Core.Tools;
+namespace HorizonRadio.Sdk.Tools;
 
 /// <summary>
 /// Shared plumbing for the per-tool installers: the streaming download
@@ -26,13 +19,9 @@ public abstract class ToolInstallerBase : IToolInstaller
     public abstract string DisplayName { get; }
     public abstract string Description { get; }
 
-    public abstract Task InstallAsync(IProgress<ToolInstallProgress>? progress, CancellationToken ct);
+    public abstract Task InstallAsync(ToolInstallTarget target, IProgress<ToolInstallProgress>? progress, CancellationToken ct);
 
     public abstract Task<string?> GetExpectedHashAsync(HttpClient http, CancellationToken ct);
-
-    /// <summary>Where the installed file lands — a model's data file or an exe, per
-    /// <see cref="ToolsPaths.PathFor"/>. Virtual for an installer with a truly bespoke layout.</summary>
-    protected virtual string InstalledPath => ToolsPaths.PathFor(Kind);
 
     public virtual async Task<string?> GetInstalledHashAsync(InstalledTool installed, CancellationToken ct)
     {
@@ -62,11 +51,12 @@ public abstract class ToolInstallerBase : IToolInstaller
     /// <see cref="InstallAsync"/> directly because it ships an archive.
     /// </summary>
     protected async Task DownloadVerifyInstallAsync(
-        HttpClient http, string url, string label,
+        HttpClient http, string url, string label, ToolInstallTarget target,
         IProgress<ToolInstallProgress>? progress, CancellationToken ct)
     {
-        ToolsPaths.EnsureDir(Kind);
-        var dest = InstalledPath;
+        ArgumentNullException.ThrowIfNull(target);
+        Directory.CreateDirectory(target.Directory);
+        var dest = target.Path;
         var tmp = dest + ".new";
 
         try

@@ -1,4 +1,3 @@
-using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk.Tools;
 
 namespace HorizonRadio.Tools.TitleModel;

@@ -41,6 +41,9 @@ public static class ToolsPaths
         return Path.Combine(DirectoryFor(kind), descriptor.FileName);
     }
 
+    /// <summary>Where the Tools tab installs <paramref name="kind"/>: its folder and file.</summary>
+    public static ToolInstallTarget TargetFor(string kind) => new(DirectoryFor(kind), PathFor(kind));
+
     public static void EnsureDir(string kind) =>
         Directory.CreateDirectory(DirectoryFor(kind));
 }

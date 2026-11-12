@@ -2,7 +2,6 @@ using System;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk.Tools;
 
 namespace HorizonRadio.Tools.YtDlp;
@@ -28,11 +27,11 @@ public sealed class YtDlpInstaller : ToolInstallerBase
     private const string SumsUrl =
         "https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS";
 
-    public override async Task InstallAsync(IProgress<ToolInstallProgress>? progress, CancellationToken ct)
+    public override async Task InstallAsync(ToolInstallTarget target, IProgress<ToolInstallProgress>? progress, CancellationToken ct)
     {
         // ~13 MB; no resume/range support needed.
         using var http = CreateHttpClient(TimeSpan.FromMinutes(5));
-        await DownloadVerifyInstallAsync(http, LatestUrl, "yt-dlp.exe", progress, ct).ConfigureAwait(false);
+        await DownloadVerifyInstallAsync(http, LatestUrl, "yt-dlp.exe", target, progress, ct).ConfigureAwait(false);
     }
 
     public override Task<string?> GetExpectedHashAsync(HttpClient http, CancellationToken ct) =>

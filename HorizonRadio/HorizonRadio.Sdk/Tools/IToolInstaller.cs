@@ -7,9 +7,10 @@ namespace HorizonRadio.Sdk.Tools;
 
 /// <summary>
 /// One installer per tool kind. Implementations download, extract (if
-/// needed), and atomically place the binary at
-/// <see cref="ToolsPaths.PathFor"/>. They are stateless — the registry
-/// owns "what's installed", installers only know "how to install".
+/// needed), and atomically place the binary where the host says
+/// (<see cref="ToolInstallTarget"/>). They are stateless — the registry
+/// owns "what's installed" and the host where tools go; installers only
+/// know "how to install".
 /// </summary>
 public interface IToolInstaller
 {
@@ -22,12 +23,12 @@ public interface IToolInstaller
     /// <summary>Short one-liner about what the tool does.</summary>
     string Description { get; }
 
-    /// <summary>Download + install. Reports progress through
+    /// <summary>Download + install into <paramref name="target"/>. Reports progress through
     /// <paramref name="progress"/> (null is fine). Throws on failure
     /// rather than returning a status — the caller wraps in try/catch
     /// and surfaces the message; that way installers can let HttpClient
     /// and ZipArchive exceptions propagate without translation.</summary>
-    Task InstallAsync(IProgress<ToolInstallProgress>? progress, CancellationToken ct);
+    Task InstallAsync(ToolInstallTarget target, IProgress<ToolInstallProgress>? progress, CancellationToken ct);
 
     /// <summary>
     /// The SHA-256 this installer expects the installed artifact's
@@ -61,3 +62,10 @@ public interface IToolInstaller
 /// shows a spinner instead of a progress bar in that case.
 /// </summary>
 public sealed record ToolInstallProgress(string Status, double? Fraction = null);
+
+/// <summary>
+/// Where an install goes, chosen by the host: the tool's own folder (created by the installer if
+/// missing; an archive's other files go here too) and the file the tool is found by afterwards (the
+/// exe, or a model's data file), which gets the <c>.sha256</c> sidecar.
+/// </summary>
+public sealed record ToolInstallTarget(string Directory, string Path);

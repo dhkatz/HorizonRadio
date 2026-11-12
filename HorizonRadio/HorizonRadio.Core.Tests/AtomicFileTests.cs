@@ -1,4 +1,4 @@
-using HorizonRadio.Core.IO;
+using HorizonRadio.Sdk.IO;
 
 namespace HorizonRadio.Core.Tests;
 
