@@ -172,8 +172,16 @@ Each step leaves the app working and lands as its own PR or short stack.
      launching, folders, the tool locator), so a replacement applies to Core's own use too.
 7. [ ] `Core/Hosting/`: the startup sequence, plugin discovery, plugin context, game host and
    tool registry move out of `HorizonRadio.UI`.
+   - [x] Plugin discovery (`Core/Hosting/PluginDiscovery`), the tool registry (a service, beside the
+     tool catalog) and the game host (`Core/Games/GameHost`) are in Core. (The plugin context is
+     gone: plugins take services by constructor.)
+   - [ ] The engine's services (runner, router, metadata, lyrics, history, devices, friends,
+     parties) are built by the container in Core, in an order Core owns, and stopped in it; they
+     log and find their folders through `IPluginLog` and `IAppFolders`, so a replacement reaches
+     Core too. `App` only adds the window.
 8. [ ] Platform interfaces in Core; `HorizonRadio.Platform` with the Windows implementations.
 9. [ ] Workflows move from view models into Core services; the command list.
 10. [ ] The control endpoint.
-11. [ ] `hzr`: remote commands, then `hzr serve`.
+11. [ ] `hzr`: remote commands, then `hzr serve`. The CLI project emits the same
+    `PluginAssembly_*` metadata the UI's does, which plugin discovery reads to load the plugins.
 12. [ ] OS declarations for plugins and per-platform tool downloads; macOS and Linux platform code.

@@ -1,11 +1,9 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using HorizonRadio.Core.Hosting;
 using HorizonRadio.Sdk;
 
-namespace HorizonRadio.UI.Services;
+namespace HorizonRadio.Core.Hosting;
 
 /// <summary>
 /// Finds the plugin types in the app's plugin assemblies, rather than the composition root naming

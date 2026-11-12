@@ -46,6 +46,7 @@ public static class HorizonCoreServiceCollectionExtensions
         services.AddSingleton(settings);
         services.AddSingleton(_ => new SourceConfigStore(settings));
         services.AddSingleton<ToolCatalog>();
+        services.AddSingleton<ToolRegistry>();
         services.AddSingleton<SourceCatalog>();
         services.AddSingleton<MetadataCatalog>();
         services.AddSingleton(sp => new MetadataConfigStore(settings, sp.GetRequiredService<MetadataCatalog>()));
