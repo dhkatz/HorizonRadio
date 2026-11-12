@@ -51,11 +51,18 @@ public sealed partial class AboutViewModel : ViewModelBase
 
     [ObservableProperty] private string statusText = "";
 
-    public AboutViewModel()
+    private readonly MetadataTrace? _trace;
+
+    /// <summary>For the designer: no diagnostics to switch.</summary>
+    public AboutViewModel() : this(null) { }
+
+    public AboutViewModel(MetadataTrace? trace)
     {
+        _trace = trace;
         StatusText = _build.IsDev ? "Development build — updates disabled." : "";
         // Reflect the persisted/active capture state without re-triggering SetEnabled.
-        isDiagnosticsEnabled = MetadataTrace.Enabled;
+        isDiagnosticsEnabled = trace?.Enabled ?? false;
+        DiagnosticsFolder = trace?.Directory ?? "";
     }
 
     // -- Diagnostics: opt-in metadata-pipeline capture, surfaced here so a user hitting a
@@ -64,13 +71,14 @@ public sealed partial class AboutViewModel : ViewModelBase
     [ObservableProperty]
     private bool isDiagnosticsEnabled;
 
-    public string DiagnosticsFolder { get; } = MetadataTrace.Directory;
+    public string DiagnosticsFolder { get; }
 
-    partial void OnIsDiagnosticsEnabledChanged(bool value) => MetadataTrace.SetEnabled(value);
+    partial void OnIsDiagnosticsEnabledChanged(bool value) => _trace?.SetEnabled(value);
 
     [RelayCommand]
     private void OpenDiagnosticsFolder()
     {
+        if (DiagnosticsFolder.Length == 0) return;
         try { Directory.CreateDirectory(DiagnosticsFolder); } catch { }
         OpenUrl(DiagnosticsFolder);
     }

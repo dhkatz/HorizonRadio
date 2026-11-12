@@ -1,3 +1,4 @@
+using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Fingerprints;
 using HorizonRadio.Core.History;
@@ -65,7 +66,10 @@ public static class HorizonCoreServiceCollectionExtensions
         services.AddSingleton<IProcesses, HostProcesses>();
         services.AddSingleton(folders);
         services.AddSingleton<IToolLocator, HostToolLocator>();
-        services.AddSingleton<IMetadataTrace, HostMetadataTrace>();
+        // The metadata diagnostics (About → diagnostics): the resolver records each lookup in it, and
+        // what sources and providers record reaches it as the IMetadataTrace they take.
+        services.AddSingleton<MetadataTrace>();
+        services.AddSingleton<IMetadataTrace>(sp => sp.GetRequiredService<MetadataTrace>());
         services.AddSingleton<IAudioCaches, HostAudioCaches>();
         services.AddSingleton<ISourceSettings, HostSourceSettings>();
         services.AddSingleton<ITitleModel, HostTitleModel>();

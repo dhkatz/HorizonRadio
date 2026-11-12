@@ -59,7 +59,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public DevicesViewModel Devices { get; }
     public FriendsViewModel Friends { get; }
     public ConsoleViewModel Console { get; } = new();
-    public AboutViewModel About { get; } = new();
+    public AboutViewModel About { get; }
 
     /// <summary>The toggleable right-hand queue sidebar (Spotify-style). Shown when
     /// <see cref="IsQueueVisible"/> is set.</summary>
@@ -90,6 +90,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         ToastManager = new ToastManager();
         DialogManager = new DialogManager();
+        About = new AboutViewModel();
         Sources = new SourcesViewModel();
         NowPlaying = new NowPlayingViewModel();
         GameSettings = new GameSettingsViewModel();
@@ -128,9 +129,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                                IConfirmations confirmations,
                                DevicesViewModel devices,
                                FriendsViewModel friends,
+                               AboutViewModel about,
                                Core.Lyrics.LyricsService? lyrics = null,
                                Core.Fingerprints.LiveSongSync? songSync = null)
     {
+        About = about;
         Devices = devices;
         Friends = friends;
         ToastManager = toasts;

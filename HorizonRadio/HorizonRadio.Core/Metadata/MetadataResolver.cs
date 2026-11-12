@@ -37,9 +37,11 @@ namespace HorizonRadio.Core.Metadata;
 /// <see cref="ResolvePriority.Background"/> so the song playing now goes first.
 /// </summary>
 /// <param name="log">Where a provider that couldn't answer is reported (the Console).</param>
-public sealed class MetadataResolver(IPluginLog log) : IAsyncDisposable
+/// <param name="trace">The metadata diagnostics each lookup is recorded in; null records nothing.</param>
+public sealed class MetadataResolver(IPluginLog log, MetadataTrace? trace = null) : IAsyncDisposable
 {
     private readonly IPluginLog _log = log;
+    private readonly MetadataTrace? _trace = trace;
     private readonly object _lock = new();
     private IReadOnlyList<IMetadataProvider> _contributors = [];
     private MetadataPolicy _policy = MetadataPolicy.Empty;
@@ -220,7 +222,7 @@ public sealed class MetadataResolver(IPluginLog log) : IAsyncDisposable
         MetadataPriority.Current = flight.Ticket;
         var ct = flight.Cts.Token;
         var elapsed = Stopwatch.StartNew();
-        MetadataTrace.BeginResolve(seed);
+        _trace?.BeginResolve(seed);
         try
         {
             // Ambiguous source titles attach alternative (artist, title) interpretations; try the
@@ -228,7 +230,7 @@ public sealed class MetadataResolver(IPluginLog log) : IAsyncDisposable
             var lookup = seed.Candidates is { Count: > 0 }
                 ? await LookupBestAsync(seed, contributors, policy, flight.Report, ct).ConfigureAwait(false)
                 : await LookupOneAsync(Primary(seed), seed, contributors, policy, flight.Report, ct).ConfigureAwait(false);
-            MetadataTrace.EndResolve(Finish(seed, lookup, policy).Track, elapsed.ElapsedMilliseconds);
+            _trace?.EndResolve(Finish(seed, lookup, policy).Track, elapsed.ElapsedMilliseconds);
             return lookup;
         }
         finally
@@ -306,7 +308,7 @@ public sealed class MetadataResolver(IPluginLog log) : IAsyncDisposable
             .OfType<IMetadataProvider>()
             .ToList();
 
-        MetadataTrace.BeginAttempt(interp.Artist, interp.Title, ordered.Select(c => c.Id));
+        _trace?.BeginAttempt(interp.Artist, interp.Title, ordered.Select(c => c.Id));
         var network = new Dictionary<string, MetadataContribution>(StringComparer.Ordinal);
 
         if (!SearchTerms.IsArtistless(interp.Artist))
@@ -367,13 +369,13 @@ public sealed class MetadataResolver(IPluginLog log) : IAsyncDisposable
             var reason = ex is CatalogUnavailableException ? ex.Message : $"{contributor.Id}: {ex.GetType().Name}: {ex.Message}";
             Log(reason);
             _log.Write("metadata", reason);
-            MetadataTrace.Provider(contributor.Id, matched: false, null, null, null, 0, elapsed.ElapsedMilliseconds,
+            _trace?.Provider(contributor.Id, matched: false, null, null, null, 0, elapsed.ElapsedMilliseconds,
                 error: ex is CatalogUnavailableException ? ex.Message : $"{ex.GetType().Name}: {ex.Message}");
             return null;
         }
 
         var matched = contribution is { IsEmpty: false };
-        MetadataTrace.Provider(contributor.Id, matched,
+        _trace?.Provider(contributor.Id, matched,
             contribution?.Artist, contribution?.Title, contribution?.Album, contribution?.Art?.Length ?? 0,
             elapsed.ElapsedMilliseconds);
         return matched ? contribution : null;
