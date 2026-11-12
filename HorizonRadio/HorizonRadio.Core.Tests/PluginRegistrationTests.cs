@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using HorizonRadio.Core.Hosting;
+using HorizonRadio.Core.IO;
 using HorizonRadio.Core.Settings;
 using HorizonRadio.Game.ForzaHorizon6;
 using HorizonRadio.Lyrics.Lrclib;
@@ -159,7 +160,8 @@ public class PluginRegistrationTests
             typeof(HorizonRadio.Tools.FFmpeg.FfmpegToolPlugin), typeof(HorizonRadio.Tools.Librespot.LibrespotToolPlugin),
             typeof(HorizonRadio.Tools.Soloist.SoloistToolPlugin), typeof(HorizonRadio.Tools.TitleModel.TitleModelToolPlugin)];
         using var settings = SettingsStore.CreateInMemory();
-        var provider = Build(s => s.AddHorizonCore(settings), [.. assemblies.SelectMany(a => a.Assembly.GetExportedTypes())]);
+        using var data = TempDir.Create();
+        var provider = Build(s => s.AddHorizonCore(settings, new AppFolders(data.Path)), [.. assemblies.SelectMany(a => a.Assembly.GetExportedTypes())]);
 
         Assert.Contains(provider.GetServices<IPlugin>(), p => p is YouTubeSourcePlugin);
         // The order each list had when it came from the plugins' own SortOrder.

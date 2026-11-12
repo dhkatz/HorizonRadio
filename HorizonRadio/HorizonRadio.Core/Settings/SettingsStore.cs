@@ -72,15 +72,13 @@ public sealed class SettingsStore : IDisposable
     /// <summary>Raised with the key of a setting that changed (or was removed), after the change.</summary>
     public event Action<string>? Changed;
 
-    public static string DefaultPath => AppPaths.In(FileName);
-
     /// <summary>
-    /// Load the settings file at <paramref name="path"/> (default <see cref="DefaultPath"/>). The
+    /// Load the settings file at <paramref name="path"/> (the app's <see cref="FileName"/>). The
     /// settings kept in the older per-feature files beside it are brought over once
     /// (<see cref="LegacySettingsImport"/>), which leaves those files as they were.
     /// An unreadable file is set aside as <c>settings.json.bad</c> rather than overwritten.
     /// </summary>
-    public static SettingsStore Open(string? path = null) => Open(path ?? DefaultPath, DefaultSaveDelay, TimeProvider.System);
+    public static SettingsStore Open(string path) => Open(path, DefaultSaveDelay, TimeProvider.System);
 
     internal static SettingsStore Open(string path, TimeSpan saveDelay, TimeProvider time)
     {

@@ -5,13 +5,12 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using HorizonRadio.Core.IO;
 using HorizonRadio.Sdk.IO;
 
 namespace HorizonRadio.Core.History;
 
 /// <summary>
-/// Persists the play history to <c>%LOCALAPPDATA%\HorizonRadio\history.json</c>, in the same
+/// Persists the play history to <c>history.json</c> in the app's folder, in the same
 /// hand-editable JSON style as the other stores. Entries are kept newest-first and capped at
 /// <see cref="MaxEntries"/> (oldest evicted), so the file stays small — no album art is stored
 /// (the list re-enriches art on demand). Mutations raise <see cref="Changed"/> so the History
@@ -195,15 +194,16 @@ public sealed class PlayHistoryStore
         if (changed) Changed?.Invoke();
     }
 
-    private static string DefaultPath =>
-        AppPaths.In("history.json");
-
     private static void Log(string msg) => Trace.WriteLine($"[hzn-history] {msg}");
 
-    public static PlayHistoryStore LoadFromDisk(string? path = null)
+    /// <summary>The file this store was loaded from, and saves to; null for one kept in memory.</summary>
+    public string? FilePath { get; private set; }
+
+    /// <summary>Loads the store kept at <paramref name="path"/> (an empty one when there's no file),
+    /// which <see cref="SaveToDisk"/> then saves to.</summary>
+    public static PlayHistoryStore LoadFromDisk(string path)
     {
-        path ??= DefaultPath;
-        var store = new PlayHistoryStore();
+        var store = new PlayHistoryStore { FilePath = path };
         try
         {
             if (!File.Exists(path)) return store;
@@ -242,9 +242,12 @@ public sealed class PlayHistoryStore
         return store;
     }
 
+    /// <summary>Saves to <paramref name="path"/>, else the file it was loaded from; a store kept in
+    /// memory (built with <c>new</c>) saves nowhere.</summary>
     public void SaveToDisk(string? path = null)
     {
-        path ??= DefaultPath;
+        path ??= FilePath;
+        if (path == null) return;
 
         // Serialize INSIDE the lock: entries are mutated in place (SetSources/SetMatchState), so
         // reading their fields outside the lock would race a concurrent writer. Building the JSON

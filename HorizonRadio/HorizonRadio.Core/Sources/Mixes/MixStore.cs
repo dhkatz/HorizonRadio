@@ -4,14 +4,13 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using HorizonRadio.Core.IO;
 using HorizonRadio.Sdk.IO;
 using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.Sources.Mixes;
 
 /// <summary>
-/// Persists the user's mixes to <c>%LOCALAPPDATA%\HorizonRadio\mixes.json</c>,
+/// Persists the user's mixes to <c>mixes.json</c> in the app's folder,
 /// in the same hand-editable JSON style as the other stores. CRUD mutations
 /// raise <see cref="Changed"/> so the Mixes tab and the player-bar switcher stay
 /// in sync off one instance; saving is the caller's call via
@@ -178,15 +177,16 @@ public sealed class MixStore
         return now.AddTicks(-(now.Ticks % TimeSpan.TicksPerMillisecond));
     }
 
-    private static string DefaultPath =>
-        AppPaths.In("mixes.json");
-
     private static void Log(string msg) => Trace.WriteLine($"[hzn-mixes] {msg}");
 
-    public static MixStore LoadFromDisk(string? path = null)
+    /// <summary>The file this store was loaded from, and saves to; null for one kept in memory.</summary>
+    public string? FilePath { get; private set; }
+
+    /// <summary>Loads the store kept at <paramref name="path"/> (an empty one when there's no file),
+    /// which <see cref="SaveToDisk"/> then saves to.</summary>
+    public static MixStore LoadFromDisk(string path)
     {
-        path ??= DefaultPath;
-        var store = new MixStore();
+        var store = new MixStore { FilePath = path };
         try
         {
             if (!File.Exists(path)) return store;
@@ -223,9 +223,12 @@ public sealed class MixStore
         return store;
     }
 
+    /// <summary>Saves to <paramref name="path"/>, else the file it was loaded from; a store kept in
+    /// memory (built with <c>new</c>) saves nowhere.</summary>
     public void SaveToDisk(string? path = null)
     {
-        path ??= DefaultPath;
+        path ??= FilePath;
+        if (path == null) return;
         try
         {
             lock (_lock) AtomicFile.Write(path, stream =>

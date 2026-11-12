@@ -114,7 +114,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                                QueuePlayback queue,
                                PlayHistoryStore historyStore,
                                MetadataResolver metaResolver,
-                               Core.Sources.Mixes.MixContentResolver contentResolver,
+                               Core.Sources.Mixes.MixEntryDescriber mixEntries,
                                MetadataViewModel metadata,
                                ToolRegistry registry,
                                System.Collections.Generic.IEnumerable<IToolInstaller> installers,
@@ -156,10 +156,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ToolsTab = new ToolsViewModel(registry, installers, confirmations);
         Events = events;
         Controls = controls;
-        // Mix entries show as what they are (titles, artists, covers), looked up through the same
-        // sources and metadata catalogs the queue uses, and kept on disk between sessions.
-        Mixes = new MixesViewModel(mixStore, mixSwitcher, playback.Sources, DialogManager,
-            new Core.Sources.Mixes.MixEntryDescriber(contentResolver, metaResolver, new Core.Sources.Mixes.MixEntryInfoStore()),
+        Mixes = new MixesViewModel(mixStore, mixSwitcher, playback.Sources, DialogManager, mixEntries,
             songs, confirmations);
         songs.Editor = Mixes;
         songs.ShowMixes = () => SelectedWorkspaceIndex = 9;

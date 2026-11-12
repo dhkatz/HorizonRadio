@@ -3,14 +3,13 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using HorizonRadio.Core.IO;
 
 namespace HorizonRadio.Core.Diagnostics;
 
 /// <summary>
 /// Writes everything the Console tab shows (<see cref="ProcessConsole"/>) plus the app's own
-/// <c>Trace</c> lines (the queue engine, sources) to a file per session under
-/// <c>%LOCALAPPDATA%\HorizonRadio\logs</c>, so a failure can be read after the fact. The newest
+/// <c>Trace</c> lines (the queue engine, sources) to a file per session in a folder (the app's
+/// <c>logs</c>), so a failure can be read after the fact. The newest
 /// <see cref="KeepFiles"/> sessions are kept.
 /// </summary>
 public static class LogFile
@@ -24,19 +23,17 @@ public static class LogFile
     private static StreamWriter? _writer;
     private static Listener? _listener;
 
-    public static string DefaultDirectory => AppPaths.In("logs");
-
     /// <summary>The file this session writes to, or null when not started.</summary>
     public static string? CurrentPath { get; private set; }
 
     /// <summary>Open this session's log, copy in what the Console already holds, and capture from
     /// here on. Failing to open the file only means no log; it never stops the app.</summary>
-    public static void Start(string? directory = null)
+    public static void Start(string directory)
     {
         lock (Gate)
         {
             if (_writer != null) return;
-            var dir = directory ?? DefaultDirectory;
+            var dir = directory;
             try
             {
                 Directory.CreateDirectory(dir);

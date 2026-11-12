@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using HorizonRadio.Core.Hosting;
+using HorizonRadio.Core.IO;
 using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Tools;
@@ -29,8 +30,10 @@ internal static class TestModuleInit
             typeof(RadioSourcePlugin), typeof(TestToneSourcePlugin), typeof(YtDlpToolPlugin),
             typeof(HorizonRadio.Tools.FFmpeg.FfmpegToolPlugin), typeof(HorizonRadio.Tools.Librespot.LibrespotToolPlugin),
             typeof(HorizonRadio.Tools.Soloist.SoloistToolPlugin), typeof(HorizonRadio.Tools.TitleModel.TitleModelToolPlugin)];
+        // Nothing a test builds from this container keeps files in this PC's app folder.
+        var data = Directory.CreateTempSubdirectory("hzr-test-data-").FullName;
         var services = new ServiceCollection()
-            .AddHorizonCore(SettingsStore.CreateInMemory())
+            .AddHorizonCore(SettingsStore.CreateInMemory(), new AppFolders(data))
             .AddPlugins([.. plugins.SelectMany(p => p.Assembly.GetExportedTypes())]);
         // Tools are looked for in empty folders, so no test depends on (or finds) this PC's.
         var noTools = Directory.CreateTempSubdirectory("hzr-test-tools-").FullName;

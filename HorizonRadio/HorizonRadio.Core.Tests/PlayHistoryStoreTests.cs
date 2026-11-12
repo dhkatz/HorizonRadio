@@ -88,6 +88,23 @@ public class PlayHistoryStoreTests
     }
 
     [Fact]
+    public void A_loaded_store_saves_to_its_file_and_one_in_memory_saves_nowhere()
+    {
+        using var dir = TempDir.Create();
+        var path = Path.Combine(dir.Path, "history.json");
+        var loaded = PlayHistoryStore.LoadFromDisk(path);
+        loaded.Add(Entry("a", DateTimeOffset.UtcNow));
+        loaded.SaveToDisk();
+        Assert.Single(PlayHistoryStore.LoadFromDisk(path).All);
+
+        var inMemory = new PlayHistoryStore();
+        Assert.Null(inMemory.FilePath);
+        inMemory.Add(Entry("b", DateTimeOffset.UtcNow));
+        inMemory.SaveToDisk(); // no file to write: not the app's history.json
+        Assert.Single(PlayHistoryStore.LoadFromDisk(path).All);
+    }
+
+    [Fact]
     public void SaveToDisk_overwrites_atomically_without_leaving_temp_files()
     {
         using var dir = TempDir.Create();

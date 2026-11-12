@@ -72,4 +72,15 @@ public sealed class AppPathsTests
         Assert.Equal(AppPaths.SharedRoot, AppPaths.RootFor(null));
         Assert.Equal(Path.Combine(AppPaths.SharedRoot, "profiles", "bob"), AppPaths.RootFor("bob"));
     }
+
+    [Fact]
+    public void Folders_put_everything_under_their_root_and_mark_names_with_the_profile()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "hzr-root");
+        var folders = new AppFolders(root, "bob");
+
+        Assert.Equal(Path.Combine(root, "cache", "audio"), folders.Data("cache", "audio"));
+        Assert.Equal("Horizon Radio [bob]", folders.Label("Horizon Radio"));
+        Assert.Equal("Horizon Radio", new AppFolders(root).Label("Horizon Radio"));
+    }
 }

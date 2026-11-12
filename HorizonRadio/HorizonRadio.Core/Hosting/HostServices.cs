@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using HorizonRadio.Core.Diagnostics;
-using HorizonRadio.Core.IO;
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Plugins;
 using HorizonRadio.Core.Settings;
@@ -94,16 +93,6 @@ internal sealed class LoggedNotifications(IPluginLog log) : INotifications
 {
     public void Show(string title, string message, NotificationKind kind = NotificationKind.Info, TimeSpan? duration = null) =>
         log.Write("notice", $"{kind}: {title}: {message}");
-}
-
-/// <summary>The profile's folders (<see cref="AppPaths"/>).</summary>
-internal sealed class HostAppFolders : IAppFolders
-{
-    public string? Profile => AppPaths.Profile;
-
-    public string Data(params string[] parts) => AppPaths.In(parts);
-
-    public string Label(string name) => AppPaths.Label(name);
 }
 
 /// <summary>The configured, installed or bundled tool (<see cref="ToolCatalog"/>).</summary>

@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
-using HorizonRadio.Core.IO;
 using HorizonRadio.Sdk.Metadata;
 
 namespace HorizonRadio.Core.Metadata;
@@ -11,7 +10,7 @@ namespace HorizonRadio.Core.Metadata;
 /// On-disk cache for <see cref="IMetadataEnricher"/> results, keyed
 /// by a stable hash of (enricher-id, query). Stops us from hammering
 /// MusicBrainz when a track repeats. Stored under
-/// <c>%LOCALAPPDATA%\HorizonRadio\metadata\</c> as one file per cache
+/// <c>metadata\</c> in the app's folder as one file per cache
 /// key (so partial failure doesn't corrupt the whole cache, and
 /// inspecting / nuking individual entries is easy).
 ///
@@ -59,11 +58,11 @@ public sealed class MetadataCache : IMetadataCache
     /// <param name="now">Clock seam for tests. Defaults to <see cref="DateTimeOffset.UtcNow"/>.</param>
     /// <param name="matchVersion">Matching version stamped on writes; a miss or partial hit from
     /// another version is stale. Defaults to <see cref="CurrentMatchVersion"/>.</param>
-    public MetadataCache(string? root = null, TimeSpan? retryTtl = null, int? cacheVersion = null,
+    public MetadataCache(string root, TimeSpan? retryTtl = null, int? cacheVersion = null,
                          Func<DateTimeOffset>? now = null, int? matchVersion = null)
     {
         _matchVersion = matchVersion ?? CurrentMatchVersion;
-        _root = root ?? AppPaths.In("metadata");
+        _root = root;
         _retryTtl = retryTtl ?? DefaultRetryTtl;
         _cacheVersion = cacheVersion ?? CurrentCacheVersion;
         _now = now ?? (() => DateTimeOffset.UtcNow);

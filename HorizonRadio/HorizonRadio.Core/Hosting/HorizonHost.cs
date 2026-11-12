@@ -1,5 +1,6 @@
 using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Games;
+using HorizonRadio.Core.IO;
 using HorizonRadio.Core.Plugins;
 using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources;
@@ -12,8 +13,12 @@ namespace HorizonRadio.Core.Hosting;
 /// <summary>How a front end starts Horizon Radio (<see cref="HorizonHost.Build"/>).</summary>
 public sealed class HorizonHostOptions
 {
-    /// <summary>The settings to run on; the host owns them from here. Default: the profile's
-    /// <c>settings.json</c>.</summary>
+    /// <summary>Where this instance keeps its files: settings, stores, caches, logs. Default: the
+    /// profile's folder (<see cref="AppFolders.ForProfile"/>). A test runs on a temporary one.</summary>
+    public AppFolders? Folders { get; init; }
+
+    /// <summary>The settings to run on; the host owns them from here. Default: <c>settings.json</c>
+    /// in <see cref="Folders"/>.</summary>
     public SettingsStore? Settings { get; init; }
 
     /// <summary>The plugin and module types to register. Default: the scan of the app's plugin
@@ -24,7 +29,7 @@ public sealed class HorizonHostOptions
     /// (dialogs for <c>IConfirmations</c>, say), so a plugin can still replace them.</summary>
     public Action<IServiceCollection>? ConfigureServices { get; init; }
 
-    /// <summary>Whether this session's log goes to a file (<see cref="LogFile"/>). Default: yes.</summary>
+    /// <summary>Whether this session's log goes to a file (<see cref="LogFile"/>, in <c>logs</c>). Default: yes.</summary>
     public bool WriteLogFile { get; init; } = true;
 }
 
@@ -58,17 +63,20 @@ public sealed class HorizonHost : IAsyncDisposable
     public static HorizonHost Build(HorizonHostOptions? options = null)
     {
         options ??= new HorizonHostOptions();
+        // The log and the settings open before the container, so they're in the host's folders even
+        // when a module replaces IAppFolders; the stores and caches follow the replacement.
+        var folders = options.Folders ?? AppFolders.ForProfile();
         // Everything the Console tab shows, and the app's own debug lines, also go to a file per
         // session, so a failure can be read afterwards.
-        if (options.WriteLogFile) LogFile.Start();
+        if (options.WriteLogFile) LogFile.Start(folders.Data("logs"));
         // Every setting, in one file; the first run on it brings over the older per-feature files.
-        var settings = options.Settings ?? SettingsStore.Open();
+        var settings = options.Settings ?? SettingsStore.Open(folders.Data(SettingsStore.FileName));
         // Re-arm opt-in metadata diagnostics before any source can emit, so the first song of the
         // session is captured too.
         MetadataTrace.RestoreFromSettings(settings);
 
         var services = new ServiceCollection();
-        services.AddHorizonCore(settings);
+        services.AddHorizonCore(settings, folders);
         options.ConfigureServices?.Invoke(services);
         // Last, so a module can replace or wrap any service above; the Console tab says when one does.
         services.AddPlugins(options.PluginTypes ?? PluginDiscovery.PluginTypes(),
@@ -80,7 +88,8 @@ public sealed class HorizonHost : IAsyncDisposable
         var mixes = provider.GetRequiredService<MixStore>();
         if (LegacySettingsMigration.MigrateStations(settings, mixes).MixesChanged) mixes.SaveToDisk();
         // A first run on mixes turns the old profiles.json into one-entry mixes.
-        MixMigration.MaybeMigrate(mixes, provider.GetRequiredService<SourceCatalog>());
+        MixMigration.MaybeMigrate(mixes, provider.GetRequiredService<SourceCatalog>(),
+            provider.GetRequiredService<IAppFolders>().Data("profiles.json"));
 
         return new HorizonHost(provider, settings, options.WriteLogFile);
     }

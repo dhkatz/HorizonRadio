@@ -2,7 +2,6 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using HorizonRadio.Core.IO;
 using HorizonRadio.Sdk.IO;
 using HorizonRadio.Sdk.Sources;
 
@@ -11,7 +10,7 @@ namespace HorizonRadio.Core.Sources.Mixes;
 /// <summary>
 /// Keeps what each mix entry was found to be (<see cref="MixEntryInfo"/>), so the Mixes tab shows
 /// titles and covers at once instead of looking every entry up again each session. Stored under
-/// <c>%LOCALAPPDATA%\HorizonRadio\mix-entries\</c>: <c>index.json</c> holds the text, keyed by
+/// <c>mix-entries\</c> in the app's folder: <c>index.json</c> holds the text, keyed by
 /// source and locator, and each cover is its own file beside it. Entries no mix holds any more
 /// are dropped by <see cref="Prune"/>.
 /// </summary>
@@ -27,11 +26,10 @@ public sealed class MixEntryInfoStore
     private readonly Dictionary<string, Row> _rows = new(StringComparer.Ordinal);
     private bool _loaded;
 
-    /// <param name="dir">Where to keep the index and covers; defaults to
-    /// <c>%LOCALAPPDATA%\HorizonRadio\mix-entries</c>.</param>
-    public MixEntryInfoStore(string? dir = null)
+    /// <param name="dir">Where to keep the index and covers (the app's <c>mix-entries</c>).</param>
+    public MixEntryInfoStore(string dir)
     {
-        _dir = dir ?? AppPaths.In("mix-entries");
+        _dir = dir;
     }
 
     private string IndexPath => Path.Combine(_dir, "index.json");

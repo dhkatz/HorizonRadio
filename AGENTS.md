@@ -444,8 +444,11 @@ $env:FH6_DIR = "C:\...\ForzaHorizon6"   # once
 ### Profiles: two instances on one machine
 
 Every file the app keeps (settings, history, mixes, caches, logins, logs) lives under one
-root, `AppPaths.Root` (`Core/IO/AppPaths.cs`): `%LOCALAPPDATA%\HorizonRadio`. Build new
-paths with `AppPaths.In(...)`, never from `SpecialFolder.LocalApplicationData`. Started with
+root, `AppPaths.Root` (`Core/IO/AppPaths.cs`): `%LOCALAPPDATA%\HorizonRadio`. Code finds it
+through `IAppFolders` (`folders.Data("mixes.json")`), taken from the container by plugins and
+Core's services alike, never from `AppPaths` or `SpecialFolder.LocalApplicationData`: the host's
+is an `AppFolders` on the profile's folder, and a test host runs on a temporary one
+(`HorizonHostOptions.Folders`). A store built with `new` (not loaded from a file) saves nowhere. Started with
 `--profile <name>`, the app uses `HorizonRadio\profiles\<name>` instead, so a second instance
 with its own settings and logins can run beside the first (testing multiplayer on one
 machine):
