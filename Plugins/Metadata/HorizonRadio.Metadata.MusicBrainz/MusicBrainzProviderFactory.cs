@@ -5,7 +5,7 @@ using HorizonRadio.Sdk.Sources.Config;
 
 namespace HorizonRadio.Metadata.MusicBrainz;
 
-public sealed class MusicBrainzProviderFactory : IMetadataProviderFactory
+public sealed class MusicBrainzProviderFactory(IMetadataCache cache, IMetadataTrace trace) : IMetadataProviderFactory
 {
     public const string KeyContact = "contact";
 
@@ -23,9 +23,9 @@ public sealed class MusicBrainzProviderFactory : IMetadataProviderFactory
             Description: "Email or URL included in the User-Agent. MB's ToS asks for one; it isn't checked, but it's polite."),
     ];
 
-    public IMetadataProvider Create(ConfigValues values, IPluginContext context)
+    public IMetadataProvider Create(ConfigValues values)
     {
         var contact = values.GetString(KeyContact);
-        return new MusicBrainzProvider(context.Cache, contact: contact);
+        return new MusicBrainzProvider(cache, trace, contact: contact);
     }
 }

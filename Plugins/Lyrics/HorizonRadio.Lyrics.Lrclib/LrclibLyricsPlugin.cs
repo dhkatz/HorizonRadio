@@ -11,5 +11,5 @@ public sealed class LrclibLyricsPlugin : ILyricsPlugin
     public string DisplayName => "LRCLIB";
     public int SortOrder => 20;
 
-    public ILyricsProvider CreateLyricsProvider(IPluginContext context) => new LrclibProvider();
+    public ILyricsProvider CreateLyricsProvider() => new LrclibProvider();
 }

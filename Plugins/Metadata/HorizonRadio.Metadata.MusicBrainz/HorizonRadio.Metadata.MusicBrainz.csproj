@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- MusicBrainz metadata plugin. References the host (Core) for shared helpers + the SDK
-       (Abstractions, transitively). -->
+  <!-- MusicBrainz metadata plugin. References only the SDK: the metadata cache and diagnostics
+       come through its plugin's constructor. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\HorizonRadio\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+    <ProjectReference Include="..\..\..\HorizonRadio\HorizonRadio.Sdk\HorizonRadio.Sdk.csproj" />
   </ItemGroup>
 
   <ItemGroup>

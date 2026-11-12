@@ -18,15 +18,25 @@ public sealed class MetadataConfigMigrationTests : IDisposable
 {
     private readonly TempDir _dir = TempDir.Create();
 
+    // The catalog only reads the providers' ids and settings; nothing is looked up.
+    private static readonly IMetadataCache Cache = new NoCache();
+
+    private sealed class NoCache : IMetadataCache
+    {
+        public MetadataCacheEntry? TryGet(string key) => null;
+        public void Put(string key, MetadataCacheEntry entry) { }
+        public void PutMiss(string key) { }
+    }
+
     // The config store derives its defaults / "introduced" set from the catalog, which the
     // composition root populates at startup. Mirror that here so the migration sees the real
     // provider set (incl. VocaDB, now its own plugin assembly).
     public MetadataConfigMigrationTests() => MetadataCatalog.Initialize(
     [
-        new SpotifyMetadataPlugin(),
-        new ItunesMetadataPlugin(),
-        new MusicBrainzMetadataPlugin(),
-        new VocaDbMetadataPlugin(),
+        new SpotifyMetadataPlugin(Cache, IMetadataTrace.Off),
+        new ItunesMetadataPlugin(Cache, IMetadataTrace.Off),
+        new MusicBrainzMetadataPlugin(Cache, IMetadataTrace.Off),
+        new VocaDbMetadataPlugin(Cache, IMetadataTrace.Off),
     ]);
 
     public void Dispose() => _dir.Dispose();

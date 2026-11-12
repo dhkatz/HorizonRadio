@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using HorizonRadio.Core.IO;
 using HorizonRadio.Core.Settings;
+using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 
 namespace HorizonRadio.Core.Diagnostics;
@@ -185,13 +186,6 @@ public static class MetadataTrace
         public string? Query;
         public List<object>? Considered;
     }
-
-    /// <summary>One raw catalog result a provider considered for an interpretation, with the score
-    /// <see cref="HorizonRadio.Sdk.Metadata.SearchTerms.MatchScore"/> gave it (null = rejected by
-    /// the guard). Captured so a trace line can be replayed offline — feed the attempt's interp
-    /// (title/artist) and each candidate back through MatchScore to test a scoring change without
-    /// re-hitting the network. Providers build these only while <see cref="Enabled"/>.</summary>
-    public readonly record struct CatalogCandidate(string? Title, string? Artist, string? Album, double? Score);
 
     private static readonly AsyncLocal<ResolveScope?> Scope = new();
 

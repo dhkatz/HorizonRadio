@@ -8,10 +8,8 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Metadata;
-using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Sources.Config;
-using HorizonRadio.UI.Services;
 
 namespace HorizonRadio.UI.ViewModels;
 
@@ -24,7 +22,6 @@ namespace HorizonRadio.UI.ViewModels;
 public sealed partial class MetadataViewModel : ViewModelBase
 {
     private readonly MetadataConfigStore _store;
-    private readonly IPluginContext _context;
     private readonly MetadataResolver _resolver;
 
     /// <summary>Providers in priority order (enabled first, then the rest). The user
@@ -37,10 +34,9 @@ public sealed partial class MetadataViewModel : ViewModelBase
     [ObservableProperty] private string statusMessage = "";
     [ObservableProperty] private bool hasError;
 
-    public MetadataViewModel(MetadataConfigStore store, IPluginContext context, MetadataResolver resolver)
+    public MetadataViewModel(MetadataConfigStore store, MetadataResolver resolver)
     {
         _store = store;
-        _context = context;
         _resolver = resolver;
         BuildProviders();
         BuildFields();
@@ -62,7 +58,7 @@ public sealed partial class MetadataViewModel : ViewModelBase
         Fields.Clear();
         BuildProviders();
         BuildFields();
-        var (contributors, policy) = MetadataCatalog.BuildPipeline(_store, _context);
+        var (contributors, policy) = MetadataCatalog.BuildPipeline(_store);
         _resolver.Configure(contributors, policy);
     }
 
@@ -70,7 +66,6 @@ public sealed partial class MetadataViewModel : ViewModelBase
     public MetadataViewModel()
     {
         _store = new MetadataConfigStore();
-        _context = new HostPluginContext(new MetadataCache(), Core.Settings.SettingsStore.CreateInMemory(), Sdk.ProceedWithoutAsking.Instance);
         _resolver = null!;
         BuildProviders();
         BuildFields();
@@ -168,7 +163,7 @@ public sealed partial class MetadataViewModel : ViewModelBase
             _shownOrder = [.. _store.Order];
             _shownForced = new Dictionary<MetadataField, string>(_store.Forced);
 
-            var (contributors, policy) = MetadataCatalog.BuildPipeline(_store, _context);
+            var (contributors, policy) = MetadataCatalog.BuildPipeline(_store);
             _resolver.Configure(contributors, policy);
 
             StatusMessage = _store.Order.Count == 0

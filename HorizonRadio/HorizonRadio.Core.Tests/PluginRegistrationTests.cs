@@ -1,7 +1,11 @@
 using System.Diagnostics;
 using HorizonRadio.Core.Hosting;
+using HorizonRadio.Core.Settings;
 using HorizonRadio.Game.ForzaHorizon6;
 using HorizonRadio.Lyrics.Lrclib;
+using HorizonRadio.Metadata.Apple;
+using HorizonRadio.Metadata.MusicBrainz;
+using HorizonRadio.Metadata.Spotify;
 using HorizonRadio.Metadata.VocaDb;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Sources;
@@ -117,14 +121,17 @@ public class PluginRegistrationTests
     }
 
     [Fact]
-    public void The_shipped_plugins_build_from_the_container()
+    public void The_shipped_plugins_build_from_the_hosts_services()
     {
         Type[] assemblies = [typeof(YouTubeSourcePlugin), typeof(TestToneSourcePlugin), typeof(LrclibLyricsPlugin),
-            typeof(VocaDbMetadataPlugin), typeof(Fh6GamePlugin)];
-        var provider = Build(_ => { }, [.. assemblies.SelectMany(a => a.Assembly.GetExportedTypes())]);
+            typeof(VocaDbMetadataPlugin), typeof(ItunesMetadataPlugin), typeof(MusicBrainzMetadataPlugin),
+            typeof(SpotifyMetadataPlugin), typeof(Fh6GamePlugin)];
+        using var settings = SettingsStore.CreateInMemory();
+        var provider = Build(s => s.AddHorizonCore(settings), [.. assemblies.SelectMany(a => a.Assembly.GetExportedTypes())]);
 
         Assert.Contains(provider.GetServices<ISourcePlugin>(), p => p is YouTubeSourcePlugin);
         Assert.Contains(provider.GetServices<ILyricsPlugin>(), p => p is VocaDbMetadataPlugin);
+        Assert.Equal(4, provider.GetServices<IMetadataPlugin>().Count());
         Assert.Contains(provider.GetServices<IGamePlugin>(), p => p is Fh6GamePlugin);
     }
 
@@ -166,7 +173,7 @@ public class PluginRegistrationTests
         public string Id => "both";
         public string DisplayName => "Both";
         public IReadOnlyList<Sdk.Metadata.IMetadataProviderFactory> Providers => [];
-        public Sdk.Lyrics.ILyricsProvider CreateLyricsProvider(IPluginContext context) => throw new NotSupportedException();
+        public Sdk.Lyrics.ILyricsProvider CreateLyricsProvider() => throw new NotSupportedException();
     }
 
     public sealed class Client;

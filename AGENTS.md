@@ -212,7 +212,7 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   `PluginDiscovery`'s assembly scan). Each plugin class (`ISourcePlugin`, `IMetadataPlugin`,
   `ILyricsPlugin`, `IGamePlugin`) is built by the container, once, under every kind it is, so its
   constructor can take the host's services (`IPluginLog`, `IProcesses`, `IAppFolders`,
-  `IToolLocator`, `IMetadataCache`, `IConfirmations`) and its module's. An `IPluginModule` (public,
+  `IToolLocator`, `IMetadataCache`, `IMetadataTrace`, `IConfirmations`) and its module's. An `IPluginModule` (public,
   parameterless) registers a plugin's own services, and may replace a host service or wrap it
   (`Decorate`); modules run after the host in `Order`, then type name, the last registration wins,
   and the Console tab (tag `plugins`) says what each replaced or wrapped. The container is built

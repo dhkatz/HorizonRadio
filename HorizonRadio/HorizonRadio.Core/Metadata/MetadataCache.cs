@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using HorizonRadio.Core.IO;
@@ -73,13 +72,9 @@ public sealed class MetadataCache : IMetadataCache
 
     private static void Log(string msg) => Trace.WriteLine($"[hzn-cache] {msg}");
 
-    public static string Key(string enricherId, string query)
-    {
-        var bytes = Encoding.UTF8.GetBytes($"{enricherId}:{query}");
-        var hash = SHA256.HashData(bytes);
-        // Hex prefix is enough — full SHA-256 hex is overkill for path safety.
-        return Convert.ToHexString(hash, 0, 16);
-    }
+    /// <summary>The key for <paramref name="enricherId"/>'s <paramref name="query"/>
+    /// (<see cref="MetadataCacheKey.For"/>).</summary>
+    public static string Key(string enricherId, string query) => MetadataCacheKey.For(enricherId, query);
 
     private string PathFor(string key) =>
         Path.Combine(_root, key + ".json");

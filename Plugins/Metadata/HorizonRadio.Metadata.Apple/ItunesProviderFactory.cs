@@ -5,7 +5,7 @@ using HorizonRadio.Sdk.Sources.Config;
 
 namespace HorizonRadio.Metadata.Apple;
 
-public sealed class ItunesProviderFactory : IMetadataProviderFactory
+public sealed class ItunesProviderFactory(IMetadataCache cache, IMetadataTrace trace) : IMetadataProviderFactory
 {
     public const string KeyCountry = "country";
 
@@ -23,6 +23,6 @@ public sealed class ItunesProviderFactory : IMetadataProviderFactory
             Description: "Two-letter Apple storefront to search first. Leave blank for US. Japan and US are always tried as fallbacks, so Japanese releases are found regardless."),
     ];
 
-    public IMetadataProvider Create(ConfigValues values, IPluginContext context)
-        => new ItunesProvider(context.Cache, country: values.GetString(KeyCountry));
+    public IMetadataProvider Create(ConfigValues values)
+        => new ItunesProvider(cache, trace, country: values.GetString(KeyCountry));
 }

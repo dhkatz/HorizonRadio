@@ -46,7 +46,7 @@ public static class MetadataCatalog
     /// the providers in the user's order, and the per-field forced overrides.
     /// </summary>
     public static (IReadOnlyList<IMetadataProvider> Contributors, MetadataPolicy Policy) BuildPipeline(
-        MetadataConfigStore store, IPluginContext context)
+        MetadataConfigStore store)
     {
         var contributors = new List<IMetadataProvider>();
         var enabledIds = new List<string>();
@@ -56,7 +56,7 @@ public static class MetadataCatalog
             try
             {
                 var values = store.Load(factory.Id, factory.Schema);
-                contributors.Add(factory.Create(values, context));
+                contributors.Add(factory.Create(values));
                 enabledIds.Add(factory.Id);
             }
             catch (System.Exception ex)

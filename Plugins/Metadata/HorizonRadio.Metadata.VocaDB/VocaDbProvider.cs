@@ -7,8 +7,6 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Diagnostics;
-using HorizonRadio.Core.Metadata;
 using HorizonRadio.Sdk.Metadata;
 
 namespace HorizonRadio.Metadata.VocaDb;
@@ -39,13 +37,15 @@ public sealed class VocaDbProvider : IMetadataProvider
     private const string Base = "https://vocadb.net/api";
 
     private readonly IMetadataCache _cache;
+    private readonly IMetadataTrace _trace;
     private readonly HttpClient _http;
     private readonly bool _ownsHttp;
     private readonly RateGate _rate = new(TimeSpan.FromMilliseconds(300));
 
-    public VocaDbProvider(IMetadataCache cache, HttpClient? http = null)
+    public VocaDbProvider(IMetadataCache cache, IMetadataTrace trace, HttpClient? http = null)
     {
         _cache = cache;
+        _trace = trace;
         _ownsHttp = http is null;
         _http = http ?? new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
         if (!_http.DefaultRequestHeaders.UserAgent.TryParseAdd("HorizonRadio/0.5 (internet-radio metadata)"))
@@ -60,16 +60,16 @@ public sealed class VocaDbProvider : IMetadataProvider
         if (string.IsNullOrEmpty(title)) return null;
         var artist = SearchTerms.CleanForSearch(query.Artist);
 
-        var cacheKey = MetadataCache.Key(Id, $"{artist.ToLowerInvariant()}|{title.ToLowerInvariant()}");
+        var cacheKey = MetadataCacheKey.For(Id, $"{artist.ToLowerInvariant()}|{title.ToLowerInvariant()}");
         var hit = _cache.TryGet(cacheKey);
         if (hit != null) return ToContribution(hit);
 
         // Cache only what VocaDB actually answered; a failed request is retried next time.
         using var lookup = CatalogLookup.Begin();
-        var capture = MetadataTrace.NewCapture();
+        var capture = _trace.NewCapture();
         var match = await FindSongAsync(query.Title, query.Artist, capture, ct).ConfigureAwait(false);
 
-        MetadataTrace.ProviderSearch(Id, string.IsNullOrEmpty(artist) ? title : $"{artist} {title}", capture);
+        _trace.ProviderSearch(Id, string.IsNullOrEmpty(artist) ? title : $"{artist} {title}", capture);
         if (match is null)
         {
             if (lookup.Failed) throw lookup.Unavailable(Id);
@@ -99,7 +99,7 @@ public sealed class VocaDbProvider : IMetadataProvider
     /// <summary>The VocaDB song for a title and artist name, or null. Not cached: the metadata lookup
     /// caches its own result, and the lyrics lookup is remembered by the lyrics service.</summary>
     internal async Task<Match?> FindSongAsync(string rawTitle, string? rawArtist,
-        ICollection<MetadataTrace.CatalogCandidate>? capture, CancellationToken ct)
+        ICollection<CatalogCandidate>? capture, CancellationToken ct)
     {
         var title = SearchTerms.CleanForSearch(rawTitle);
         if (string.IsNullOrEmpty(title)) return null;
@@ -135,7 +135,7 @@ public sealed class VocaDbProvider : IMetadataProvider
     }
 
     private async Task<Match?> FindByVoiceAsync(string title, string rawTitle, string? rawArtist,
-        IReadOnlyList<string> voices, ICollection<MetadataTrace.CatalogCandidate>? capture, CancellationToken ct)
+        IReadOnlyList<string> voices, ICollection<CatalogCandidate>? capture, CancellationToken ct)
     {
         var url = $"{Base}/songs?query={Uri.EscapeDataString(title)}"
                 + "&maxResults=10&nameMatchMode=Auto&lang=Default&songTypes=Original&sort=RatingScore&fields=" + SongFields
@@ -229,7 +229,7 @@ public sealed class VocaDbProvider : IMetadataProvider
     // -- song search --
 
     private async Task<Match?> SearchSongsAsync(string nameQuery, string rawTitle, string? rawArtist, int? artistId,
-        ICollection<MetadataTrace.CatalogCandidate>? sink, CancellationToken ct, bool remixesOnly = false)
+        ICollection<CatalogCandidate>? sink, CancellationToken ct, bool remixesOnly = false)
     {
         // lang=Default keeps the artistString in its native script (e.g. "文脈 feat. GUMI") rather
         // than translating it (lang=English turns 文脈 into "Context"), which is what lets the
@@ -268,7 +268,7 @@ public sealed class VocaDbProvider : IMetadataProvider
     /// for unit testing without HTTP. <paramref name="sink"/>, when supplied, collects every scored
     /// song (best score across its name variants) for the diagnostics trace.</summary>
     internal static Match? SelectMatch(JsonElement root, string queryTitle, string? queryArtist,
-        bool artistConfirmed = false, ICollection<MetadataTrace.CatalogCandidate>? sink = null) =>
+        bool artistConfirmed = false, ICollection<CatalogCandidate>? sink = null) =>
         SelectMatch(root, queryTitle, queryArtist, artistConfirmed, sink, out _);
 
     /// <param name="originalToFetch">Set when the title-only matches are all versions of one original
@@ -276,7 +276,7 @@ public sealed class VocaDbProvider : IMetadataProvider
     /// <param name="byRating">The results are sorted most popular first, and the first that matches
     /// is the song, however many others share its name (a voice-only credit; see FindByVoiceAsync).</param>
     internal static Match? SelectMatch(JsonElement root, string queryTitle, string? queryArtist,
-        bool artistConfirmed, ICollection<MetadataTrace.CatalogCandidate>? sink, out int? originalToFetch,
+        bool artistConfirmed, ICollection<CatalogCandidate>? sink, out int? originalToFetch,
         bool byRating = false)
     {
         originalToFetch = null;

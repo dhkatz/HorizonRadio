@@ -50,7 +50,7 @@ public sealed class ProviderFailureCachingTests : IDisposable
     public async Task A_throttled_search_is_retried_not_cached_as_a_miss()
     {
         var http = new StubHandler { Respond = _ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) };
-        var provider = new ItunesProvider(new MetadataCache(_cacheDir), new HttpClient(http));
+        var provider = new ItunesProvider(new MetadataCache(_cacheDir), IMetadataTrace.Off, new HttpClient(http));
 
         await Assert.ThrowsAsync<CatalogUnavailableException>(() => provider.ContributeAsync(Query(), CancellationToken.None));
 
@@ -64,7 +64,7 @@ public sealed class ProviderFailureCachingTests : IDisposable
     public async Task A_real_miss_is_cached()
     {
         var http = new StubHandler { Respond = _ => Json("""{"results":[]}""") };
-        var provider = new ItunesProvider(new MetadataCache(_cacheDir), new HttpClient(http));
+        var provider = new ItunesProvider(new MetadataCache(_cacheDir), IMetadataTrace.Off, new HttpClient(http));
 
         Assert.Null(await provider.ContributeAsync(Query(), CancellationToken.None));
         var asked = http.Requests;
@@ -82,7 +82,7 @@ public sealed class ProviderFailureCachingTests : IDisposable
                 ? new HttpResponseMessage(HttpStatusCode.InternalServerError)
                 : Json(ItunesHit),
         };
-        var provider = new ItunesProvider(new MetadataCache(_cacheDir), new HttpClient(http));
+        var provider = new ItunesProvider(new MetadataCache(_cacheDir), IMetadataTrace.Off, new HttpClient(http));
 
         var first = await provider.ContributeAsync(Query(), CancellationToken.None);
         Assert.Equal("Dye - Single", first?.Album); // the text is still shown now
@@ -103,7 +103,7 @@ public sealed class ProviderFailureCachingTests : IDisposable
         {
             Respond = r => r.RequestUri!.Host == "art.example" ? new HttpResponseMessage(HttpStatusCode.NotFound) : Json(ItunesHit),
         };
-        var provider = new ItunesProvider(new MetadataCache(_cacheDir), new HttpClient(http));
+        var provider = new ItunesProvider(new MetadataCache(_cacheDir), IMetadataTrace.Off, new HttpClient(http));
 
         await provider.ContributeAsync(Query(), CancellationToken.None);
         var asked = http.Requests;
@@ -116,7 +116,7 @@ public sealed class ProviderFailureCachingTests : IDisposable
     public async Task VocaDb_network_errors_are_failures_not_misses()
     {
         var http = new StubHandler { Respond = _ => throw new HttpRequestException("connection reset") };
-        var provider = new VocaDbProvider(new MetadataCache(_cacheDir), new HttpClient(http));
+        var provider = new VocaDbProvider(new MetadataCache(_cacheDir), IMetadataTrace.Off, new HttpClient(http));
 
         await Assert.ThrowsAsync<CatalogUnavailableException>(() => provider.ContributeAsync(Query(), CancellationToken.None));
     }
