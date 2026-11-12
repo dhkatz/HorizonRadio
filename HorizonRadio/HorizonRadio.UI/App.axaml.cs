@@ -109,10 +109,9 @@ public partial class App : Application
             // ValidateOnBuild: a plugin asking for a service nobody registers fails here, at startup.
             var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
 
-            // The tools first: sources look theirs up as they're built. Then the sources, before
-            // anything resolves one from the catalog; SortOrder gives the picker its display order.
-            var toolPlugins = provider.GetServices<IToolPlugin>().InDisplayOrder();
-            ToolCatalog.Initialize([.. toolPlugins.Select(t => t.Descriptor)]);
+            // The tools and the sources, in display order (the container builds the tool catalog
+            // first: sources look their tools up as they're built).
+            var tools = provider.GetRequiredService<ToolCatalog>();
             var sources = provider.GetRequiredService<SourceCatalog>();
 
             _store = provider.GetRequiredService<SourceConfigStore>();
@@ -182,7 +181,7 @@ public partial class App : Application
                 var songSync = new LiveSongSync(() => sources.All, new ReferenceStore(), _metaResolver);
 
                 var toolRegistry = provider.GetRequiredService<ToolRegistry>();
-                var installers = toolPlugins.Select(t => t.Installer).ToArray();
+                var installers = tools.Plugins.Select(t => t.Installer).ToArray();
 
                 // Optional local title-extraction model: published to the runtime holder so the
                 // (parameterless) radio source can reach it. Constructed only when a model is actually
@@ -191,7 +190,7 @@ public partial class App : Application
                 // so installing/uninstalling the model mid-session takes effect without a restart.
                 void ReinitTitleModel()
                 {
-                    var path = ToolResolver.Discover(ToolKind.TitleModel);
+                    var path = tools.Discover(ToolKind.TitleModel);
                     long ticks = 0;
                     if (!string.IsNullOrEmpty(path))
                         try { ticks = File.GetLastWriteTimeUtc(path).Ticks; } catch { /* unreadable → 0 */ }
@@ -207,7 +206,7 @@ public partial class App : Application
                     var old = _titleExtractor;
                     _titleExtractor = string.IsNullOrEmpty(path)
                         ? null
-                        : new LlamaTitleExtractor(() => ToolResolver.Discover(ToolKind.TitleModel));
+                        : new LlamaTitleExtractor(() => tools.Discover(ToolKind.TitleModel));
                     TitleExtractorRuntime.Initialize(_titleExtractor, _metaStore!.TitleModelMode);
                     // Dispose the superseded extractor; DisposeAsync waits for any in-flight inference
                     // before freeing the native model, so this is safe to fire-and-forget.

@@ -8,7 +8,7 @@ namespace HorizonRadio.Sdk.Tools;
 ///
 /// Lowercase, hyphen-separated. Don't rename loosely — the strings appear
 /// in serialized factory schemas and on-disk tool paths
-/// (see <see cref="ToolsPaths"/>).
+/// (a tool installs into a folder named for its kind).
 /// </summary>
 public static class ToolKind
 {
@@ -21,6 +21,6 @@ public static class ToolKind
     public const string Soloist = "soloist";
 
     /// <summary>The optional local title-extraction model — a single GGUF file (not an exe),
-    /// downloaded via the Tools tab. See <see cref="ToolsPaths.ModelFor"/>.</summary>
+    /// downloaded via the Tools tab. Its descriptor marks it as data (<see cref="ToolDescriptor.IsData"/>).</summary>
     public const string TitleModel = "title-model";
 }

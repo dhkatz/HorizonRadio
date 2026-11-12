@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -80,7 +79,7 @@ public sealed class QueuePlayback : IDisposable
         if (string.IsNullOrWhiteSpace(locator)) return;
 
         var values = _config.Load(factory.Id, factory.Schema);
-        SourceRequirements.EnsureToolsAvailable(factory, values);
+        Sources.EnsureToolsAvailable(factory, values);
 
         var items = await _resolver.EnumerateAsync(new ContentRef(factory.Id, locator.Trim()), ct)
             .ConfigureAwait(false);
@@ -104,7 +103,7 @@ public sealed class QueuePlayback : IDisposable
         if (factory is not IContentSourceFactory)
             throw new InvalidOperationException($"{factory.DisplayName} can't be added to the queue.");
         var values = _config.Load(factory.Id, factory.Schema);
-        SourceRequirements.EnsureToolsAvailable(factory, values);
+        Sources.EnsureToolsAvailable(factory, values);
 
         var items = await _resolver.EnumerateAsync(new ContentRef(factory.Id, locator.Trim()), ct).ConfigureAwait(false);
         return items.Count > 0 ? items[0] : throw new InvalidOperationException("That didn't resolve to anything playable.");
@@ -176,7 +175,7 @@ public sealed class QueuePlayback : IDisposable
         {
             if (Sources.Find(sourceId) is not IContentSourceFactory factory) continue;
             var values = _config.Load(factory.Id, factory.Schema);
-            SourceRequirements.EnsureToolsAvailable(factory, values);
+            Sources.EnsureToolsAvailable(factory, values);
         }
     }
 

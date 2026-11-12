@@ -11,6 +11,7 @@ using HorizonRadio.Source.Test;
 using HorizonRadio.Source.YouTube;
 using HorizonRadio.Tools.YtDlp;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace HorizonRadio.Core.Tests;
 
@@ -24,23 +25,17 @@ internal static class TestModuleInit
     [ModuleInitializer]
     internal static void Init()
     {
-        // Seed the tool catalog first, mirroring the host (App seeds it before the source plugins).
-        // Some source factories probe for their tool (Spotify → librespot) in their ctor, so the
-        // catalog must be populated before the source factories are constructed.
-        ToolCatalog.Initialize(
-        [
-            new ToolDescriptor(ToolKind.YtDlp, "yt-dlp.exe"),
-            new ToolDescriptor(ToolKind.Ffmpeg, "ffmpeg.exe"),
-            new ToolDescriptor(ToolKind.Librespot, "librespot.exe"),
-            new ToolDescriptor(ToolKind.Soloist, "soloist.exe"),
-            new ToolDescriptor(ToolKind.TitleModel, "title-model.gguf", IsData: true),
-        ]);
-
         Type[] plugins = [typeof(LocalSourcePlugin), typeof(SpotifySourcePlugin), typeof(YouTubeSourcePlugin),
-            typeof(RadioSourcePlugin), typeof(TestToneSourcePlugin), typeof(YtDlpToolPlugin)];
+            typeof(RadioSourcePlugin), typeof(TestToneSourcePlugin), typeof(YtDlpToolPlugin),
+            typeof(HorizonRadio.Tools.FFmpeg.FfmpegToolPlugin), typeof(HorizonRadio.Tools.Librespot.LibrespotToolPlugin),
+            typeof(HorizonRadio.Tools.Soloist.SoloistToolPlugin), typeof(HorizonRadio.Tools.TitleModel.TitleModelToolPlugin)];
         var services = new ServiceCollection()
             .AddHorizonCore(SettingsStore.CreateInMemory())
             .AddPlugins([.. plugins.SelectMany(p => p.Assembly.GetExportedTypes())]);
+        // Tools are looked for in empty folders, so no test depends on (or finds) this PC's.
+        var noTools = Directory.CreateTempSubdirectory("hzr-test-tools-").FullName;
+        services.Replace(ServiceDescriptor.Singleton(sp =>
+            new ToolCatalog(sp.GetServices<IToolPlugin>(), Path.Combine(noTools, "installed"), Path.Combine(noTools, "bundled"))));
         var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
         TestSources.Catalog = provider.GetRequiredService<SourceCatalog>();
     }

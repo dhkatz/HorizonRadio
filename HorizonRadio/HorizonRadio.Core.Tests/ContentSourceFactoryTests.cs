@@ -1,4 +1,3 @@
-using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Sources.Config;
 using HorizonRadio.Source.Local;
@@ -12,7 +11,6 @@ namespace HorizonRadio.Core.Tests;
 /// content field, and build their engine from the environment fields alone —
 /// validating tools (engine) separately from content (locator).
 /// </summary>
-[Collection("tool-resolver")]
 public class ContentSourceFactoryTests
 {
     [Fact]
@@ -55,15 +53,10 @@ public class ContentSourceFactoryTests
     [Fact]
     public void YouTube_create_player_missing_tools_throws()
     {
-        // Simulate a clean machine: nothing configured AND nothing discoverable.
-        ToolResolver.DiscoverOverride = _ => null;
-        try
-        {
-            var f = TestSources.YouTube;
-            var ex = Assert.Throws<InvalidOperationException>(() => f.CreatePlayer(new ConfigValues()));
-            Assert.Contains("yt-dlp", ex.Message);
-        }
-        finally { ToolResolver.DiscoverOverride = null; }
+        // A clean machine: nothing configured, and (in the tests' catalog) nothing installed.
+        var f = TestSources.YouTube;
+        var ex = Assert.Throws<InvalidOperationException>(() => f.CreatePlayer(new ConfigValues()));
+        Assert.Contains("yt-dlp", ex.Message);
     }
 
     [Fact]
