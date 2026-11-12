@@ -227,7 +227,9 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   it shows, then calls `Start()`. Disposing the host stops the engine in its order (the peer helper
   first, so others see this PC leave; the router and runner before the game), then the container,
   the settings and the log. `App` only adds the window: dialogs and toasts for `IConfirmations` and
-  `INotifications`, the view models, and the update checks.
+  `INotifications`, the view models, and the update checks. Everything a host keeps goes in its
+  folder (`HorizonHostOptions.Folders`, default the profile's), so `HeadlessEngineTests` runs the
+  same engine with no window and no game on a temporary folder: extend it to test across services.
 - **Plugins and the container** — `HorizonHost` builds one DI container: Core's services
   (`AddHorizonCore`), the front end's, then the plugins (`PluginRegistration.AddPlugins`, fed by
   `PluginDiscovery`'s assembly scan). A plugin is an `IPlugin` (its id, name and order) and,

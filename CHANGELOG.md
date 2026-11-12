@@ -172,6 +172,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   color tokens and text styles) is one `HorizonRadioTheme`, which plugin pages use too: the FH6
   plugin now references it instead of reaching ShadUI through the app. Status colors come from
   named tones (`ToneSuccessBrush`…, `Tone` in view models) instead of color literals.
+- **The engine runs on any folder, without the window (internal).** Core's stores, caches, log and
+  metadata diagnostics take the app's folder and Console log from the host's services
+  (`IAppFolders`, `IPluginLog`, `IMetadataTrace`) instead of statics, so a plugin replacing one of
+  them reaches Core too, and a test runs the whole engine headless on a temporary folder. A store
+  built in memory no longer saves over the app's `mixes.json` or `history.json`.
 - **Plugins register what they add in the app's DI container (internal).** A plugin registers its
   sources, metadata providers and lyrics providers (replacing the per-kind `ISourcePlugin`,
   `IMetadataPlugin` and `ILyricsPlugin`), and the container builds them, so their constructors can
