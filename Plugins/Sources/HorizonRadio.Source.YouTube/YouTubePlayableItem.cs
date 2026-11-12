@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
-using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Metadata;
+using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Tools.FFmpeg;

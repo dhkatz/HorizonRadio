@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using HorizonRadio.Core.Metadata;
+using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 
 namespace HorizonRadio.Core.Sources.Radio;

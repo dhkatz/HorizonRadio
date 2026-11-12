@@ -1,5 +1,5 @@
-using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Fingerprints;
+using HorizonRadio.Sdk.Audio;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Sources.Config;

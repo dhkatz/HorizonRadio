@@ -1,7 +1,6 @@
 using HorizonRadio.Core.Devices;
 using HorizonRadio.Core.Friends;
 using HorizonRadio.Core.Party;
-using HorizonRadio.Core.Peers;
 using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources;
@@ -9,6 +8,7 @@ using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Core.Sources.Queue;
 using HorizonRadio.Core.Sources.YouTube;
+using HorizonRadio.Sdk.Peers;
 using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.Tests;

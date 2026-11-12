@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Sources;
+using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 
 namespace HorizonRadio.Core.Metadata;

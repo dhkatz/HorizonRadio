@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 
-namespace HorizonRadio.Core.Metadata;
+namespace HorizonRadio.Sdk.Metadata;
 
 /// <summary>
 /// The names of popular singing-synthesizer voices (Vocaloid, UTAU, CeVIO, Synthesizer V, VOICEROID…),

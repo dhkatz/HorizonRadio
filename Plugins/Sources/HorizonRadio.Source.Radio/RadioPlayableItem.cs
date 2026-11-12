@@ -10,6 +10,7 @@ using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Fingerprints;
 using HorizonRadio.Core.Metadata;
+using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Tools.FFmpeg;

@@ -1,7 +1,7 @@
 using System;
 using System.Threading;
 
-namespace HorizonRadio.Core.Metadata;
+namespace HorizonRadio.Sdk.Metadata;
 
 /// <summary>
 /// Tracks whether every request in one provider lookup succeeded, so a lookup that only

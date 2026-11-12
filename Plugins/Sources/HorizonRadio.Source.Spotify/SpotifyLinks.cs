@@ -1,3 +1,4 @@
+
 namespace HorizonRadio.Core.Sources.Spotify;
 
 /// <summary>What a Spotify locator points at.</summary>

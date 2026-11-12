@@ -1,6 +1,7 @@
 using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Sources.Config;
+using HorizonRadio.Sdk.Tools;
 
 namespace HorizonRadio.Core.Sources.YouTube;
 
@@ -50,13 +51,13 @@ public sealed class YouTubeSourceFactory : IContentSourceFactory, ISearchSource,
             new ToolField(
                 Key:         KeyYtDlp,
                 Label:       "yt-dlp.exe",
-                ToolKind:    Tools.ToolKind.YtDlp,
+                ToolKind:    ToolKind.YtDlp,
                 Description: "Install via the Tools tab, or point at an existing yt-dlp.exe."),
 
             new ToolField(
                 Key:         KeyFfmpeg,
                 Label:       "ffmpeg.exe",
-                ToolKind:    Tools.ToolKind.Ffmpeg,
+                ToolKind:    ToolKind.Ffmpeg,
                 Description: "Install via the Tools tab, or point at an existing ffmpeg.exe."),
 
             new BoolField(
@@ -93,11 +94,11 @@ public sealed class YouTubeSourceFactory : IContentSourceFactory, ISearchSource,
     {
         // Prefer the per-source path, but fall back to a managed/bundled copy so a tool
         // installed once (Tools tab) works without re-entering it here.
-        var ytDlp = ToolResolver.Resolve(values.GetString(KeyYtDlp), Tools.ToolKind.YtDlp);
+        var ytDlp = ToolResolver.Resolve(values.GetString(KeyYtDlp), ToolKind.YtDlp);
         if (ytDlp is null)
             throw new InvalidOperationException("YouTube: pick a yt-dlp.exe path.");
 
-        var ffmpeg = ToolResolver.Resolve(values.GetString(KeyFfmpeg), Tools.ToolKind.Ffmpeg);
+        var ffmpeg = ToolResolver.Resolve(values.GetString(KeyFfmpeg), ToolKind.Ffmpeg);
         if (ffmpeg is null)
             throw new InvalidOperationException("YouTube: pick an ffmpeg.exe path.");
 
@@ -131,8 +132,8 @@ public sealed class YouTubeSourceFactory : IContentSourceFactory, ISearchSource,
 
     public Task<ReferenceAudio?> FetchAsync(string locator, int sampleRate, TimeSpan maxLength, CancellationToken ct)
     {
-        var ytDlp = ToolResolver.Resolve(YouTubeRuntime.YtDlpPath, Tools.ToolKind.YtDlp);
-        var ffmpeg = ToolResolver.Resolve(YouTubeRuntime.FfmpegPath, Tools.ToolKind.Ffmpeg);
+        var ytDlp = ToolResolver.Resolve(YouTubeRuntime.YtDlpPath, ToolKind.YtDlp);
+        var ffmpeg = ToolResolver.Resolve(YouTubeRuntime.FfmpegPath, ToolKind.Ffmpeg);
         if (ytDlp is null || ffmpeg is null || !CanFetch(locator)) return Task.FromResult<ReferenceAudio?>(null);
         return YouTubeReferenceAudio.FetchAsync(ytDlp, ffmpeg, locator, sampleRate, maxLength, ct);
     }

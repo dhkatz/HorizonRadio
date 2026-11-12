@@ -10,10 +10,10 @@ using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Devices;
 using HorizonRadio.Core.Friends;
 using HorizonRadio.Core.Party;
-using HorizonRadio.Core.Peers;
 using HorizonRadio.Core.Settings;
 
 using HorizonRadio.Sdk;
+using HorizonRadio.Sdk.Peers;
 
 namespace HorizonRadio.UI.ViewModels;
 

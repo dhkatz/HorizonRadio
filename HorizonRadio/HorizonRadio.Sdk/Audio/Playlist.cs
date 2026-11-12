@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace HorizonRadio.Core.Audio;
+namespace HorizonRadio.Sdk.Audio;
 
 /// <summary>
 /// Resolves a local path into the ordered list of audio files it stands for — a

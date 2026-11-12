@@ -1,3 +1,4 @@
+
 namespace HorizonRadio.Sdk.Sources;
 
 /// <summary>What a <see cref="SearchResult"/> points at — mirrors the locator kinds

@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Sdk.Models;
 
-namespace HorizonRadio.Core.Metadata;
+namespace HorizonRadio.Sdk.Metadata;
 
 /// <summary>
 /// Extracts (artist, title) interpretations from a freeform stream/track title. An optional

@@ -1,6 +1,7 @@
 using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Sources.Config;
+using HorizonRadio.Sdk.Tools;
 using HorizonRadio.Tools.Librespot;
 
 namespace HorizonRadio.Core.Sources.Spotify;
@@ -75,7 +76,7 @@ public sealed class SpotifyContentSourceFactory : IContentSourceFactory, IAuthen
             new ToolField(
                 Key:         KeyExecutable,
                 Label:       "librespot.exe path",
-                ToolKind:    Tools.ToolKind.Librespot,
+                ToolKind:    ToolKind.Librespot,
                 Default:     defaultExe,
                 Description: "Install via the Tools tab, or point at an existing librespot.exe."),
 
@@ -122,8 +123,8 @@ public sealed class SpotifyContentSourceFactory : IContentSourceFactory, IAuthen
             new ToolField(
                 Key:         KeySoloistExecutable,
                 Label:       "soloist.exe path",
-                ToolKind:    Tools.ToolKind.Soloist,
-                Default:     ToolResolver.Discover(Tools.ToolKind.Soloist) ?? "",
+                ToolKind:    ToolKind.Soloist,
+                Default:     ToolResolver.Discover(ToolKind.Soloist) ?? "",
                 Description: "Install via the Tools tab (downloaded from Spotify), or point at an existing soloist.exe."),
         ];
     }

@@ -6,8 +6,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using HorizonRadio.Core.IO;
-using HorizonRadio.Core.Peers;
 using HorizonRadio.Core.Sources;
+using HorizonRadio.Sdk.Peers;
 
 namespace HorizonRadio.Tools.Peer;
 

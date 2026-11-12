@@ -1,4 +1,4 @@
-namespace HorizonRadio.Core.Sources;
+namespace HorizonRadio.Sdk.Metadata;
 
 /// <summary>Helpers for reading artist-credit strings, which sources hand us as a
 /// comma-separated list ("A, B, C"). Centralized so the "primary artist" rule is

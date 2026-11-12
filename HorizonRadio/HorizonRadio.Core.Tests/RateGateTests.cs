@@ -1,4 +1,4 @@
-using HorizonRadio.Core.Metadata;
+using HorizonRadio.Sdk.Metadata;
 using Microsoft.Extensions.Time.Testing;
 
 namespace HorizonRadio.Core.Tests;

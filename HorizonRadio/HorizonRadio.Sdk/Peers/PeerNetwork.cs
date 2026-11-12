@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace HorizonRadio.Core.Peers;
+namespace HorizonRadio.Sdk.Peers;
 
 /// <summary>
 /// The peer-to-peer network as the app's features use it (the helper process implements it;

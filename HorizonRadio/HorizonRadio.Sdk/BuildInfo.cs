@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Reflection;
 
-namespace HorizonRadio.Core;
+namespace HorizonRadio.Sdk;
 
 /// <summary>The distribution channel this build was stamped for.</summary>
 public enum ReleaseChannel

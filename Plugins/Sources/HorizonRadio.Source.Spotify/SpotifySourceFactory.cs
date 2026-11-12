@@ -1,5 +1,6 @@
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Sources.Config;
+using HorizonRadio.Sdk.Tools;
 using HorizonRadio.Tools.Librespot;
 
 namespace HorizonRadio.Core.Sources.Spotify;
@@ -42,7 +43,7 @@ public sealed class SpotifySourceFactory : ISelfDrivenSourceFactory
             new ToolField(
                 Key:         KeyExecutable,
                 Label:       "librespot.exe path",
-                ToolKind:    Tools.ToolKind.Librespot,
+                ToolKind:    ToolKind.Librespot,
                 Default:     defaultExe,
                 Description: "Install via the Tools tab, or point at an existing librespot.exe."),
 

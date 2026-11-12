@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace HorizonRadio.Core.Metadata;
+namespace HorizonRadio.Sdk.Metadata;
 
 /// <summary>
 /// A polite client-side rate limit: callers are let through one at a time, at least

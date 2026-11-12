@@ -187,7 +187,7 @@ public static class MetadataTrace
     }
 
     /// <summary>One raw catalog result a provider considered for an interpretation, with the score
-    /// <see cref="HorizonRadio.Core.Metadata.SearchTerms.MatchScore"/> gave it (null = rejected by
+    /// <see cref="HorizonRadio.Sdk.Metadata.SearchTerms.MatchScore"/> gave it (null = rejected by
     /// the guard). Captured so a trace line can be replayed offline — feed the attempt's interp
     /// (title/artist) and each candidate back through MatchScore to test a scoring change without
     /// re-hitting the network. Providers build these only while <see cref="Enabled"/>.</summary>

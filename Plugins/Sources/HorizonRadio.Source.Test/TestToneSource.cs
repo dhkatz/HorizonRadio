@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using HorizonRadio.Core.Audio;
+using HorizonRadio.Sdk.Audio;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
 

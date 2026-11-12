@@ -1,4 +1,4 @@
-namespace HorizonRadio.Core.Audio;
+namespace HorizonRadio.Sdk.Audio;
 
 /// <summary>
 /// The pipeline's canonical PCM format: s16 interleaved stereo at

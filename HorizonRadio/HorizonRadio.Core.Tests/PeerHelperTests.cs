@@ -3,6 +3,7 @@ using System.IO.Pipes;
 using System.Text;
 using System.Text.Json;
 using HorizonRadio.Core.Peers;
+using HorizonRadio.Sdk.Peers;
 using HorizonRadio.Tools.Peer;
 
 namespace HorizonRadio.Core.Tests;

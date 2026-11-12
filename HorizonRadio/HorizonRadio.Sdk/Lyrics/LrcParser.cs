@@ -3,9 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
-using HorizonRadio.Sdk.Lyrics;
 
-namespace HorizonRadio.Core.Lyrics;
+namespace HorizonRadio.Sdk.Lyrics;
 
 /// <summary>
 /// Parses LRC (and enhanced/A2 LRC) lyrics:

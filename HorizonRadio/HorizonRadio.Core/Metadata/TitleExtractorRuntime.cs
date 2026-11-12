@@ -1,3 +1,5 @@
+using HorizonRadio.Sdk.Metadata;
+
 namespace HorizonRadio.Core.Metadata;
 
 /// <summary>
