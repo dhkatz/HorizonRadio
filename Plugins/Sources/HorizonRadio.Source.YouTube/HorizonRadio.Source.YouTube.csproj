@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- YouTube source plugin: resolves YouTube (and any yt-dlp-supported URL) into audio via yt-dlp +
-       ffmpeg. References the host (Core) for shared playback infra + the SDK (Abstractions,
-       transitively), and the yt-dlp + ffmpeg tool plugins for their invocation clients. -->
+       ffmpeg. References the SDK (the host's services come through the container) and the yt-dlp +
+       ffmpeg tool plugins for their invocation clients. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\HorizonRadio\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+    <ProjectReference Include="..\..\..\HorizonRadio\HorizonRadio.Sdk\HorizonRadio.Sdk.csproj" />
     <ProjectReference Include="..\..\Tools\HorizonRadio.Tools.YtDlp\HorizonRadio.Tools.YtDlp.csproj" />
     <ProjectReference Include="..\..\Tools\HorizonRadio.Tools.FFmpeg\HorizonRadio.Tools.FFmpeg.csproj" />
   </ItemGroup>

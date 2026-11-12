@@ -1,8 +1,8 @@
-using HorizonRadio.Core.Sources;
-using HorizonRadio.Core.Tools;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Sources.Config;
 using HorizonRadio.Sdk.Tools;
+using HorizonRadio.Tools.YtDlp;
 
 namespace HorizonRadio.Source.YouTube;
 
@@ -14,7 +14,7 @@ namespace HorizonRadio.Source.YouTube;
 public sealed class YouTubeSourceFactory : IContentSourceFactory, ISearchSource, IReferenceAudioSource
 {
     /// <summary>Catalog id for the YouTube source — the key search results carry so the
-    /// enqueuer can find this factory again (see <see cref="SourceCatalog.Find"/>).</summary>
+    /// enqueuer can find this factory again.</summary>
     public const string SourceId = "youtube";
 
     public const string KeyYtDlp = "ytDlp";
@@ -40,8 +40,23 @@ public sealed class YouTubeSourceFactory : IContentSourceFactory, ISearchSource,
 
     public IReadOnlyList<ConfigField> Schema { get; }
 
-    public YouTubeSourceFactory()
+    private readonly ISourceSettings _settings;
+    private readonly IToolLocator _tools;
+    private readonly YtDlpClient _ytDlp;
+    private readonly IProcesses _processes;
+    private readonly IPluginLog _log;
+    private readonly IAudioCaches _caches;
+
+    public YouTubeSourceFactory(ISourceSettings settings, IToolLocator tools, YtDlpClient ytDlp,
+        IProcesses processes, IPluginLog log, IAudioCaches caches)
     {
+        _settings = settings;
+        _tools = tools;
+        _ytDlp = ytDlp;
+        _processes = processes;
+        _log = log;
+        _caches = caches;
+
         Schema =
         [
             new TextField(
@@ -94,36 +109,40 @@ public sealed class YouTubeSourceFactory : IContentSourceFactory, ISearchSource,
 
     public IContentPlayer CreatePlayer(ConfigValues values)
     {
-        // Prefer the per-source path, but fall back to a managed/bundled copy so a tool
-        // installed once (Tools tab) works without re-entering it here.
-        var ytDlp = ToolResolver.Resolve(values.GetString(KeyYtDlp), ToolKind.YtDlp);
-        if (ytDlp is null)
-            throw new InvalidOperationException("YouTube: pick a yt-dlp.exe path.");
-
-        var ffmpeg = ToolResolver.Resolve(values.GetString(KeyFfmpeg), ToolKind.Ffmpeg);
-        if (ffmpeg is null)
-            throw new InvalidOperationException("YouTube: pick an ffmpeg.exe path.");
+        var tools = FindTools(values) ?? throw new InvalidOperationException(
+            _tools.Find(ToolKind.YtDlp, values.GetString(KeyYtDlp)) is null
+                ? "YouTube: pick a yt-dlp.exe path."
+                : "YouTube: pick an ffmpeg.exe path.");
 
         AudioCache? cache = null;
         if (values.GetBool(KeyDownloadAhead, true))
         {
-            cache = AudioCache.For(SourceId);
+            cache = _caches.ForSource(SourceId);
             cache.MaxBytes = KeepSizes.GetValueOrDefault(values.GetString(KeyKeepDownloads) ?? "", 1L << 30);
         }
-        return new YouTubeContentPlayer(ytDlp, ffmpeg, values.GetBool(KeyNormalise, false), cache);
+        return new YouTubeContentPlayer(tools, values.GetBool(KeyNormalise, false), cache);
     }
+
+    // The tools to run: the paths set in this source's settings, else the copies installed from
+    // the Tools tab (or shipped with the app). Null when either is missing.
+    private YouTubeTools? FindTools(ConfigValues values) =>
+        _tools.Find(ToolKind.YtDlp, values.GetString(KeyYtDlp)) is { } ytDlp
+        && _tools.Find(ToolKind.Ffmpeg, values.GetString(KeyFfmpeg)) is { } ffmpeg
+            ? new YouTubeTools(_ytDlp, ytDlp, ffmpeg, _processes, _log)
+            : null;
 
     // -- ISearchSource (yt-dlp ytsearch → youtube.com/watch locators) --
 
     public Task<IReadOnlyList<SearchResult>> SearchAsync(string query, int limit, CancellationToken ct = default)
     {
-        var ytDlp = YouTubeRuntime.YtDlpPath;
-        // yt-dlp not installed/configured, or empty query → no results (never throw, so a
-        // missing tool can't break a search that spans other sources).
+        // Read fresh, so installing yt-dlp or changing its path applies at once. Not installed, or
+        // an empty query → no results (never throw, so a missing tool can't break a search that
+        // spans other sources).
+        var ytDlp = _tools.Find(ToolKind.YtDlp, _settings.Load(this).GetString(KeyYtDlp));
         if (ytDlp is null || string.IsNullOrWhiteSpace(query))
             return Task.FromResult<IReadOnlyList<SearchResult>>([]);
 
-        return YouTubeSearch.SearchTracksAsync(ytDlp, query.Trim(), limit, ct);
+        return YouTubeSearch.SearchTracksAsync(_ytDlp, _log, ytDlp, query.Trim(), limit, ct);
     }
 
     // -- IReferenceAudioSource (yt-dlp download → ffmpeg decode, as fast as it downloads) --
@@ -134,9 +153,8 @@ public sealed class YouTubeSourceFactory : IContentSourceFactory, ISearchSource,
 
     public Task<ReferenceAudio?> FetchAsync(string locator, int sampleRate, TimeSpan maxLength, CancellationToken ct)
     {
-        var ytDlp = ToolResolver.Resolve(YouTubeRuntime.YtDlpPath, ToolKind.YtDlp);
-        var ffmpeg = ToolResolver.Resolve(YouTubeRuntime.FfmpegPath, ToolKind.Ffmpeg);
-        if (ytDlp is null || ffmpeg is null || !CanFetch(locator)) return Task.FromResult<ReferenceAudio?>(null);
-        return YouTubeReferenceAudio.FetchAsync(ytDlp, ffmpeg, locator, sampleRate, maxLength, ct);
+        if (!CanFetch(locator) || FindTools(_settings.Load(this)) is not { } tools)
+            return Task.FromResult<ReferenceAudio?>(null);
+        return YouTubeReferenceAudio.FetchAsync(tools, locator, sampleRate, maxLength, ct);
     }
 }

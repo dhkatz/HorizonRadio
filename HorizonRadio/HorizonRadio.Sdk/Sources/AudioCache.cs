@@ -1,37 +1,35 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using HorizonRadio.Core.IO;
 
-namespace HorizonRadio.Core.Sources;
+namespace HorizonRadio.Sdk.Sources;
 
 /// <summary>
 /// Songs a source downloaded ahead of play, kept on disk so they start at once, can be skipped
 /// through, and play again without the network. Each song is a folder named by its key (a YouTube
 /// video id), filled by the source: the audio and whatever it keeps about the song. A download goes
 /// into a folder of its own and is moved into place only once it's complete, so a song that's here
-/// is whole. Downloads of the same song share one run, at most two run at a time, and once the
-/// cache is over <see cref="MaxBytes"/> the songs used longest ago go first.
+/// is whole. Downloads of the same song share one run, at most two run at a time (across every
+/// cache sharing <c>downloads</c>), and once the cache is over <see cref="MaxBytes"/> the songs
+/// used longest ago go first. A source gets its cache from the host (<see cref="IAudioCaches"/>),
+/// which keeps one per source.
 /// </summary>
 public sealed class AudioCache
 {
-    private static readonly ConcurrentDictionary<string, AudioCache> ForSource = new(StringComparer.OrdinalIgnoreCase);
-
     private readonly ConcurrentDictionary<string, Lazy<Task<string?>>> _fetching = new(StringComparer.Ordinal);
-    // Downloads at once, across every source's cache: the app's, for as long as it runs.
-    private static readonly SemaphoreSlim Slots = new(2);
+    private readonly SemaphoreSlim _slots;
     private readonly Lock _trim = new();
     private long _maxBytes = 1L << 30;
 
-    public AudioCache(string directory)
+    /// <param name="directory">The cache's folder; one cache per folder.</param>
+    /// <param name="downloads">Limits downloads at once, shared by every cache that should count
+    /// together (the host's are); null for a limit of two of this cache's own.</param>
+    public AudioCache(string directory, SemaphoreSlim? downloads = null)
     {
         Directory = directory;
+        _slots = downloads ?? new SemaphoreSlim(2);
         // A download the app didn't finish (it closed, or crashed) is never coming.
         TryDeleteDirectory(Incoming);
     }
-
-    /// <summary>The cache for a source's downloads, in the app's data folder (cache\audio\&lt;source&gt;).</summary>
-    public static AudioCache For(string sourceId) =>
-        ForSource.GetOrAdd(AppPaths.In("cache", "audio", sourceId), d => new AudioCache(d));
 
     public string Directory { get; }
 
@@ -77,7 +75,7 @@ public sealed class AudioCache
     {
         try
         {
-            await Slots.WaitAsync().ConfigureAwait(false);
+            await _slots.WaitAsync().ConfigureAwait(false);
             try
             {
                 if (Find(key) is { } here) return here; // finished by a run that just ended
@@ -101,7 +99,7 @@ public sealed class AudioCache
             }
             finally
             {
-                Slots.Release();
+                _slots.Release();
             }
         }
         catch (Exception ex)

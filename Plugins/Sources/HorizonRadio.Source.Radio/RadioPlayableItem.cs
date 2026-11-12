@@ -1,16 +1,14 @@
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Fingerprints;
+using HorizonRadio.Core.Hosting;
 using HorizonRadio.Core.Metadata;
-using HorizonRadio.Core.Sources;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
@@ -305,7 +303,7 @@ public sealed class RadioPlayableItem : PlayableItem, ILiveSongAudio
                         ToolName = "ffmpeg",
                         RedirectStdin = true,
                         OnStderrLine = line => Log($"ffmpeg: {line}"),
-                    });
+                    }, StaticHostServices.Processes, StaticHostServices.Log);
                     await subproc.StartAsync(pausing, ct).ConfigureAwait(false);
                     _subproc = subproc;
 

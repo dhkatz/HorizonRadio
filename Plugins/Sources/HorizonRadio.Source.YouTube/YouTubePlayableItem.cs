@@ -1,7 +1,5 @@
 using System.Diagnostics;
 using System.Text.Json;
-using HorizonRadio.Core.Metadata;
-using HorizonRadio.Core.Sources;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
@@ -24,8 +22,7 @@ public sealed class YouTubePlayableItem : PlayableItem
     private const string ArtFile = "art";
 
     private readonly YtDlpClient.Entry _entry;
-    private readonly string _ytDlpPath;
-    private readonly string _ffmpegPath;
+    private readonly YouTubeTools _tools;
     private readonly bool _normalise;
     private readonly AudioCache? _cache;
 
@@ -38,11 +35,10 @@ public sealed class YouTubePlayableItem : PlayableItem
     private volatile TaskCompletionSource _seeked = NewSignal();
 
     /// <param name="cache">Where songs are downloaded ahead and kept; null to only ever stream.</param>
-    public YouTubePlayableItem(YtDlpClient.Entry entry, string ytDlpPath, string ffmpegPath, bool normalise, AudioCache? cache = null)
+    public YouTubePlayableItem(YtDlpClient.Entry entry, YouTubeTools tools, bool normalise, AudioCache? cache = null)
     {
         _entry = entry;
-        _ytDlpPath = ytDlpPath;
-        _ffmpegPath = ffmpegPath;
+        _tools = tools;
         _normalise = normalise;
         _cache = cache;
 
@@ -125,7 +121,7 @@ public sealed class YouTubePlayableItem : PlayableItem
     // Fill a cache folder: the audio, what's known about the song, and its thumbnail.
     private async Task DownloadAsync(string folder, CancellationToken ct)
     {
-        var got = await YtDlpClient.DownloadAudioAsync(_ytDlpPath, _entry.WebpageUrl, folder, ct).ConfigureAwait(false);
+        var got = await _tools.YtDlp.DownloadAudioAsync(_tools.YtDlpPath, _entry.WebpageUrl, folder, ct).ConfigureAwait(false);
         var meta = got.Meta;
         if (meta.ThumbnailUrl != null && await TryDownloadThumbnailAsync(meta.ThumbnailUrl, ct).ConfigureAwait(false) is { } art)
             await File.WriteAllBytesAsync(Path.Combine(folder, ArtFile), art, ct).ConfigureAwait(false);
@@ -163,7 +159,7 @@ public sealed class YouTubePlayableItem : PlayableItem
     {
         try
         {
-            var resolved = await YtDlpClient.ResolveAsync(_ytDlpPath, _entry.WebpageUrl, ct)
+            var resolved = await _tools.YtDlp.ResolveAsync(_tools.YtDlpPath, _entry.WebpageUrl, ct)
                 .ConfigureAwait(false);
 
             var art = resolved.ThumbnailUrl != null
@@ -248,11 +244,11 @@ public sealed class YouTubePlayableItem : PlayableItem
         var pausing = new PausingSink(ctx.Sink, ctx.IsPaused, ctx.ResumeGate, run.Token);
         await using var subproc = new SubprocessPcmSource(new SubprocessPcmSource.Config
         {
-            ExecutablePath = _ffmpegPath,
+            ExecutablePath = _tools.FfmpegPath,
             Args = args,
             ToolName = "ffmpeg",
             OnStderrLine = line => Log($"ffmpeg: {line}"),
-        });
+        }, _tools.Processes, _tools.Log);
 
         await subproc.StartAsync(pausing, run.Token).ConfigureAwait(false);
         _subproc = subproc;
@@ -288,7 +284,7 @@ public sealed class YouTubePlayableItem : PlayableItem
         // the thumbnail here is a non-square fallback the pipeline replaces with
         // square cover art when a provider matches. Does NOT touch _resolved or the prepare,
         // so playback still does its own fresh resolve.
-        var meta = await YtDlpClient.ResolveMetadataAsync(_ytDlpPath, _entry.WebpageUrl, ct)
+        var meta = await _tools.YtDlp.ResolveMetadataAsync(_tools.YtDlpPath, _entry.WebpageUrl, ct)
             .ConfigureAwait(false);
         if (meta is null) return null;
 

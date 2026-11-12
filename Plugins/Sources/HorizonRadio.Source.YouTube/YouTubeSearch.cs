@@ -1,4 +1,4 @@
-using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Tools.YtDlp;
 
@@ -15,13 +15,11 @@ namespace HorizonRadio.Source.YouTube;
 /// </summary>
 internal static class YouTubeSearch
 {
-    private static void Log(string msg) => ProcessConsole.Append("search", msg);
-
     public static async Task<IReadOnlyList<SearchResult>> SearchTracksAsync(
-        string ytDlpPath, string query, int limit, CancellationToken ct)
+        YtDlpClient client, IPluginLog log, string ytDlpPath, string query, int limit, CancellationToken ct)
     {
-        var hits = await YtDlpClient.SearchAsync(ytDlpPath, query, limit, ct).ConfigureAwait(false);
-        Log($"'{query}' → {hits.Count} YouTube result(s)");
+        var hits = await client.SearchAsync(ytDlpPath, query, limit, ct).ConfigureAwait(false);
+        log.Write("search", $"'{query}' → {hits.Count} YouTube result(s)");
         if (hits.Count == 0) return [];
 
         var results = new List<SearchResult>(hits.Count);

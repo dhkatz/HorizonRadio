@@ -142,7 +142,7 @@ public class MixEntryDescriberTests
         Assert.True(new SpotifyContentSourceFactory().Recognizes("spotify:album:4aawyAB9vmqN3uQ7FjRGTy"));
         Assert.False(new SpotifyContentSourceFactory().Recognizes("https://youtu.be/abc"));
 
-        Assert.True(new YouTubeSourceFactory().Recognizes("https://youtu.be/abc"));
+        Assert.True(TestSources.YouTube.Recognizes("https://youtu.be/abc"));
 
         Assert.True(new LocalFileSourceFactory().Recognizes(dir.Path));
         Assert.True(new LocalFileSourceFactory().Recognizes($"\"{dir.Path}\""));

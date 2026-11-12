@@ -16,7 +16,7 @@ public sealed class QueuePartyPlayerTests : IAsyncDisposable
 {
     private readonly SourceRunner _runner = new(new NullPcmSink());
     private readonly PlaybackRouter _router;
-    private readonly YouTubeSourceFactory _youTube = new();
+    private readonly YouTubeSourceFactory _youTube = TestSources.YouTube;
 
     public QueuePartyPlayerTests()
     {

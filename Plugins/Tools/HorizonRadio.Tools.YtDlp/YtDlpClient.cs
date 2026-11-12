@@ -1,8 +1,6 @@
 using System.Diagnostics;
-using System.Text;
 using System.Text.Json;
-using HorizonRadio.Core.Diagnostics;
-using HorizonRadio.Core.Sources;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
 
 namespace HorizonRadio.Tools.YtDlp;
@@ -21,8 +19,11 @@ namespace HorizonRadio.Tools.YtDlp;
 /// -j --no-playlist emits a single video object on stdout. We don't
 /// stream-parse; resolving one video is fast enough (~1-2s) to just
 /// buffer and parse once.
+///
+/// It runs yt-dlp through the host (<see cref="IProcesses"/>, so it's tied to the app) and logs
+/// each run to the Console tab; the yt-dlp tool plugin registers it, for sources to take.
 /// </summary>
-public static class YtDlpClient
+public sealed class YtDlpClient(IProcesses processes, IPluginLog log)
 {
     public sealed record Entry(
         string Id,
@@ -59,7 +60,7 @@ public static class YtDlpClient
     /// Uses <c>--flat-playlist</c> so we don't trigger per-video format
     /// probing here — that happens lazily in <see cref="ResolveAsync"/>.
     /// </summary>
-    public static async Task<IReadOnlyList<Entry>> EnumerateAsync(
+    public async Task<IReadOnlyList<Entry>> EnumerateAsync(
         string ytDlpPath, string url, CancellationToken ct)
         => (await ListAsync(ytDlpPath, url, ct).ConfigureAwait(false)).Entries;
 
@@ -67,7 +68,7 @@ public static class YtDlpClient
     /// Like <see cref="EnumerateAsync"/>, and also reads the playlist's own title, owner, and
     /// thumbnail, which the same call prints.
     /// </summary>
-    public static async Task<Listing> ListAsync(
+    public async Task<Listing> ListAsync(
         string ytDlpPath, string url, CancellationToken ct)
     {
         // --flat-playlist: don't resolve individual video formats yet,
@@ -128,7 +129,7 @@ public static class YtDlpClient
     /// (one extractor call, no per-video format probing), so a result list is cheap:
     /// flat entries already carry title, channel, duration, and a thumbnail.
     /// </summary>
-    public static async Task<IReadOnlyList<SearchHit>> SearchAsync(
+    public async Task<IReadOnlyList<SearchHit>> SearchAsync(
         string ytDlpPath, string query, int limit, CancellationToken ct)
     {
         // yt-dlp accepts any N; keep it bounded so a stray caller can't ask for hundreds.
@@ -201,7 +202,7 @@ public static class YtDlpClient
     /// no stream URL. Cheap-ish (one extractor call) and safe to run ahead of play
     /// for upcoming queue items, since nothing here expires.
     /// </summary>
-    public static async Task<Meta?> ResolveMetadataAsync(
+    public async Task<Meta?> ResolveMetadataAsync(
         string ytDlpPath, string videoUrl, CancellationToken ct)
     {
         var stdout = await RunCapture(ytDlpPath,
@@ -231,7 +232,7 @@ public static class YtDlpClient
     /// immediately before playback, never cached, because the returned
     /// URL is signed with a short-lived expiry.
     /// </summary>
-    public static async Task<Resolved> ResolveAsync(
+    public async Task<Resolved> ResolveAsync(
         string ytDlpPath, string videoUrl, CancellationToken ct)
     {
         // -f bestaudio: pick the highest-bitrate audio-only format
@@ -273,7 +274,7 @@ public static class YtDlpClient
     /// yt-dlp downloads it itself, in pieces, which YouTube serves far faster than a player's
     /// single request for the stream.
     /// </summary>
-    public static async Task<Downloaded> DownloadAudioAsync(
+    public async Task<Downloaded> DownloadAudioAsync(
         string ytDlpPath, string videoUrl, string folder, CancellationToken ct)
     {
         var stdout = await RunCapture(ytDlpPath,
@@ -351,65 +352,17 @@ public static class YtDlpClient
     private static int? YearFromDate(string? date)
         => date is { Length: >= 4 } && int.TryParse(date.AsSpan(0, 4), out var y) ? y : null;
 
-    private static async Task<string> RunCapture(
-        string exe, string[] args, CancellationToken ct)
+    private async Task<string> RunCapture(string exe, string[] args, CancellationToken ct)
     {
-        var psi = new ProcessStartInfo
-        {
-            FileName = exe,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
-        };
+        var psi = new ProcessStartInfo { FileName = exe };
         foreach (var a in args) psi.ArgumentList.Add(a);
 
-        ProcessConsole.Append("yt-dlp", "$ yt-dlp " + string.Join(' ', args));
-
-        using var proc = Process.Start(psi)
-                         ?? throw new InvalidOperationException($"failed to spawn {exe}");
-        ChildProcesses.TieToApp(proc);
-
-        // Kill the child (and its tree) if the caller cancels — otherwise a cancelled
-        // search/resolve leaves yt-dlp running to completion (a process leak when, e.g.,
-        // the user keeps typing or toggles filters). The await below still throws OCE.
-        using var killOnCancel = ct.Register(() =>
-        {
-            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); }
-            catch { /* already exited / can't kill — nothing to do */ }
-        });
-
-        // Drain stderr in parallel so a verbose run can't deadlock on a
-        // full stderr pipe while we're reading stdout.
-        var stderrTask = Task.Run(async () =>
-        {
-            try
-            {
-                return await proc.StandardError.ReadToEndAsync(ct).ConfigureAwait(false);
-            }
-            catch
-            {
-                return "";
-            }
-        }, ct);
-
-        var stdout = await proc.StandardOutput.ReadToEndAsync(ct).ConfigureAwait(false);
-        await proc.WaitForExitAsync(ct).ConfigureAwait(false);
-        var stderr = await stderrTask.ConfigureAwait(false);
-
-        // yt-dlp writes progress/warnings/errors to stderr; surface them
-        // in the Console tab whether or not the run succeeded.
-        ProcessConsole.AppendBlock("yt-dlp", stderr);
-
-        if (proc.ExitCode != 0)
-        {
-            throw new InvalidOperationException(
-                $"yt-dlp exited {proc.ExitCode}: {Truncate(stderr, 400)}");
-        }
-
-        return stdout;
+        // Cancelling kills yt-dlp (and its tree), so a search the user typed past doesn't run on.
+        // Its stderr (progress, warnings, errors) goes to the Console tab either way.
+        var run = await processes.RunToEndAsync(psi, log, "yt-dlp", ct).ConfigureAwait(false);
+        if (run.ExitCode != 0)
+            throw new InvalidOperationException($"yt-dlp exited {run.ExitCode}: {Truncate(run.Errors, 400)}");
+        return run.Output;
     }
 
     private static string Truncate(string s, int max)

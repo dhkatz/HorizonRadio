@@ -18,6 +18,7 @@ using HorizonRadio.Source.Radio;
 using HorizonRadio.Source.Spotify;
 using HorizonRadio.Source.Test;
 using HorizonRadio.Source.YouTube;
+using HorizonRadio.Tools.YtDlp;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HorizonRadio.Core.Tests;
@@ -152,7 +153,7 @@ public class PluginRegistrationTests
         Type[] assemblies = [typeof(YouTubeSourcePlugin), typeof(TestToneSourcePlugin), typeof(LocalSourcePlugin),
             typeof(SpotifySourcePlugin), typeof(RadioSourcePlugin), typeof(LrclibLyricsPlugin), typeof(UnisonLyricsPlugin),
             typeof(VocaDbMetadataPlugin), typeof(ItunesMetadataPlugin), typeof(MusicBrainzMetadataPlugin),
-            typeof(SpotifyMetadataPlugin), typeof(Fh6GamePlugin)];
+            typeof(SpotifyMetadataPlugin), typeof(Fh6GamePlugin), typeof(YtDlpToolPlugin)];
         using var settings = SettingsStore.CreateInMemory();
         var provider = Build(s => s.AddHorizonCore(settings), [.. assemblies.SelectMany(a => a.Assembly.GetExportedTypes())]);
 

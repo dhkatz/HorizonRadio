@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- yt-dlp tool plugin: owns its own provisioning (download + verify) end to end. References Core
-       for the generic install pipeline (ToolInstallerBase) + the SDK contracts (transitively). -->
+  <!-- yt-dlp tool plugin: owns its own provisioning (download + verify) end to end, and the client
+       sources run yt-dlp through (YtDlpClient, registered in the container). References only the SDK. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\HorizonRadio\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+    <ProjectReference Include="..\..\..\HorizonRadio\HorizonRadio.Sdk\HorizonRadio.Sdk.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,18 +1,23 @@
 using System.Runtime.CompilerServices;
+using HorizonRadio.Core.Hosting;
+using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Tools;
+using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Tools;
 using HorizonRadio.Source.Local;
 using HorizonRadio.Source.Radio;
 using HorizonRadio.Source.Spotify;
 using HorizonRadio.Source.Test;
 using HorizonRadio.Source.YouTube;
+using HorizonRadio.Tools.YtDlp;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace HorizonRadio.Core.Tests;
 
 /// <summary>
 /// Populates the source catalog once for the whole test assembly, mirroring what the composition
-/// root does at startup. The queue/mix engine resolves content via <see cref="SourceCatalog"/>, so
+/// root does at startup: the sources come from a container with Core's services and the plugins'. The queue/mix engine resolves content via <see cref="SourceCatalog"/>, so
 /// tests that exercise it need the catalog populated; without this it'd be empty (only the app's
 /// <c>App</c> calls <see cref="SourceCatalog.Initialize"/>).
 /// </summary>
@@ -33,14 +38,12 @@ internal static class TestModuleInit
             new ToolDescriptor(ToolKind.TitleModel, "title-model.gguf", IsData: true),
         ]);
 
-        SourceCatalog.Initialize(
-        [
-            new LocalFileSourceFactory(),
-            new SpotifySourceFactory(),
-            new SpotifyContentSourceFactory(),
-            new YouTubeSourceFactory(),
-            new RadioSourceFactory(),
-            new TestToneSourceFactory(),
-        ]);
+        Type[] plugins = [typeof(LocalSourcePlugin), typeof(SpotifySourcePlugin), typeof(YouTubeSourcePlugin),
+            typeof(RadioSourcePlugin), typeof(TestToneSourcePlugin), typeof(YtDlpToolPlugin)];
+        var services = new ServiceCollection()
+            .AddHorizonCore(SettingsStore.CreateInMemory())
+            .AddPlugins([.. plugins.SelectMany(p => p.Assembly.GetExportedTypes())]);
+        var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
+        SourceCatalog.Initialize(provider.GetServices<IAudioSourceFactory>().InDisplayOrder());
     }
 }
