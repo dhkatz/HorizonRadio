@@ -2,7 +2,6 @@ using System;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk.Tools;
 
 namespace HorizonRadio.Tools.Librespot;
@@ -27,10 +26,10 @@ public sealed class LibrespotInstaller : ToolInstallerBase
     private const string Sha256 =
         "a7175f4e2df83489c01da71122b4fb685d08ae0d0ee65d4b166722bda13ec1c3";
 
-    public override async Task InstallAsync(IProgress<ToolInstallProgress>? progress, CancellationToken ct)
+    public override async Task InstallAsync(ToolInstallTarget target, IProgress<ToolInstallProgress>? progress, CancellationToken ct)
     {
         using var http = CreateHttpClient(TimeSpan.FromMinutes(5));
-        await DownloadVerifyInstallAsync(http, Url, "librespot.exe", progress, ct).ConfigureAwait(false);
+        await DownloadVerifyInstallAsync(http, Url, "librespot.exe", target, progress, ct).ConfigureAwait(false);
     }
 
     /// <summary>The freshness baseline is our pinned hash, read offline (never the network) —

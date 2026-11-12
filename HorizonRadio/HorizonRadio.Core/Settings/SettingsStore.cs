@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using HorizonRadio.Core.IO;
+using HorizonRadio.Sdk.IO;
 
 namespace HorizonRadio.Core.Settings;
 

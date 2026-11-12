@@ -5,7 +5,6 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk.Tools;
 
 namespace HorizonRadio.Tools.FFmpeg;
@@ -13,7 +12,7 @@ namespace HorizonRadio.Tools.FFmpeg;
 /// <summary>
 /// Downloads the gyan.dev "release-essentials" ffmpeg build and extracts
 /// the contents of its <c>bin/</c> folder (ffmpeg.exe, ffprobe.exe,
-/// ffplay.exe) into <see cref="ToolsPaths.DirectoryFor"/>.
+/// ffplay.exe) into the install target's folder.
 ///
 /// gyan.dev ships static MSVC builds at a stable URL that always points
 /// to the current release. The archive's top-level folder name embeds the
@@ -42,10 +41,11 @@ public sealed class FfmpegInstaller : ToolInstallerBase
     private const string SumsUrl =
         "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip.sha256";
 
-    public override async Task InstallAsync(IProgress<ToolInstallProgress>? progress, CancellationToken ct)
+    public override async Task InstallAsync(ToolInstallTarget target, IProgress<ToolInstallProgress>? progress, CancellationToken ct)
     {
-        ToolsPaths.EnsureDir(Kind);
-        var targetDir = ToolsPaths.DirectoryFor(Kind);
+        ArgumentNullException.ThrowIfNull(target);
+        Directory.CreateDirectory(target.Directory);
+        var targetDir = target.Directory;
         var tmpZip = Path.Combine(targetDir, "ffmpeg.zip.tmp");
 
         using var http = CreateHttpClient(TimeSpan.FromMinutes(15));
@@ -69,7 +69,7 @@ public sealed class FfmpegInstaller : ToolInstallerBase
             // the file the registry surfaces, and it's the same hash chain
             // (zip integrity ⇒ contents integrity) the freshness check
             // re-compares against the current upstream zip hash.
-            HashVerification.WriteSidecar(ToolsPaths.PathFor(Kind), expected ?? actual);
+            HashVerification.WriteSidecar(target.Path, expected ?? actual);
 
             progress?.Report(new ToolInstallProgress("Done", Fraction: 1.0));
         }

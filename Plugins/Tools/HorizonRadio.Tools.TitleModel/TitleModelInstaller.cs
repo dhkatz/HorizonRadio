@@ -2,7 +2,6 @@ using System;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk.Tools;
 
 namespace HorizonRadio.Tools.TitleModel;
@@ -12,7 +11,7 @@ namespace HorizonRadio.Tools.TitleModel;
 /// specific asset WE pin (a chosen model build), not an upstream "latest", so we download the exact
 /// URL and verify against our own SHA-256 (both pinned here — the tool owns its provisioning).
 /// Unlike the exe tools it's a data file with no version probe; the base resolves its path via
-/// <see cref="ToolsPaths.PathFor"/> (a .gguf, per the tool descriptor).
+/// the install target's path (a .gguf, per the tool descriptor).
 ///
 /// The model is large (hundreds of MB) and entirely optional — radio works without it (deterministic
 /// parsing). Installing it lets the local LLM extract artist/title from freeform stream titles the
@@ -31,11 +30,11 @@ public sealed class TitleModelInstaller : ToolInstallerBase
     private const string Sha256 =
         "6eb923e7d26e9cea28811e1a8e852009b21242fb157b26149d3b188f3a8c8653";
 
-    public override async Task InstallAsync(IProgress<ToolInstallProgress>? progress, CancellationToken ct)
+    public override async Task InstallAsync(ToolInstallTarget target, IProgress<ToolInstallProgress>? progress, CancellationToken ct)
     {
         // Generous timeout: the model is hundreds of MB on a possibly-slow connection.
         using var http = CreateHttpClient(TimeSpan.FromMinutes(30));
-        await DownloadVerifyInstallAsync(http, Url, "title model", progress, ct).ConfigureAwait(false);
+        await DownloadVerifyInstallAsync(http, Url, "title model", target, progress, ct).ConfigureAwait(false);
     }
 
     /// <summary>Freshness baseline is our pinned hash, read offline.</summary>

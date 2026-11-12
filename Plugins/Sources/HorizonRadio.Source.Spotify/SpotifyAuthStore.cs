@@ -5,6 +5,7 @@ using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 using HorizonRadio.Core.IO;
+using HorizonRadio.Sdk.IO;
 
 namespace HorizonRadio.Source.Spotify;
 

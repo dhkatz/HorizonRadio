@@ -119,11 +119,13 @@ Each step leaves the app working and lands as its own PR or short stack.
    - [x] The host's container builds the plugin classes; `IPluginModule`s add a plugin's services
      and may replace or wrap the host's; the SDK declares the host's services (log, processes,
      app folders, tool locator), implemented over Core's existing code.
-   - [ ] Tool plugins: the wrappers (yt-dlp, ffmpeg, librespot, Soloist, the peer helper) become
-     services; `ToolInstallerBase` and `AtomicFile` move to the SDK, installers getting their
-     install folder per call.
+   - [x] Tool installers: `ToolInstallerBase` and `AtomicFile` are in the SDK, and the host says
+     where each install goes (`ToolInstallTarget`); the ffmpeg and title-model plugins reference
+     only the SDK.
    - [ ] Metadata plugins: diagnostics (`MetadataTrace`) and the cache through services.
-   - [ ] Source plugins: YouTube, Radio, then Spotify; `SpotifyRuntime` and `YouTubeRuntime` go.
+   - [ ] Source plugins, each with the tool wrappers it runs, which become services: YouTube
+     (yt-dlp, ffmpeg), Radio, then Spotify (librespot, Soloist); `SpotifyRuntime` and
+     `YouTubeRuntime` go. The peer helper with them.
    - [ ] The audio helpers (the audio cache, subprocess audio, fingerprints) and the title
      extractor, handed out by the host.
    - [ ] The remaining engine coupling (FH6 and Spotify on the queue engine and mixes) goes

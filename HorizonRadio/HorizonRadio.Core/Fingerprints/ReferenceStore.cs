@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using HorizonRadio.Core.IO;
+using HorizonRadio.Sdk.IO;
 
 namespace HorizonRadio.Core.Fingerprints;
 

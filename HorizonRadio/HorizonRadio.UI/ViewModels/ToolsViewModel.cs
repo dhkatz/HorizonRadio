@@ -218,7 +218,7 @@ public sealed partial class ToolItemViewModel : ViewModelBase, IDisposable
         ProcessConsole.Append(_installer.Kind, "install: starting…");
         try
         {
-            await _installer.InstallAsync(progress, _cts.Token).ConfigureAwait(true);
+            await _installer.InstallAsync(ToolsPaths.TargetFor(_installer.Kind), progress, _cts.Token).ConfigureAwait(true);
             _registry.Rescan();
             // We just installed exactly what the app expects (latest for
             // latest-policy tools, the manifest pin for librespot), so the

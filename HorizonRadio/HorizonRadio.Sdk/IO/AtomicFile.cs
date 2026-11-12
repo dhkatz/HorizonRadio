@@ -1,7 +1,4 @@
-using System;
-using System.IO;
-
-namespace HorizonRadio.Core.IO;
+namespace HorizonRadio.Sdk.IO;
 
 /// <summary>
 /// Replaces a file all at once: the content is written to a unique temp file next to it,

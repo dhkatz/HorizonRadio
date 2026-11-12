@@ -1,6 +1,5 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
-using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk.Tools;
 
 namespace HorizonRadio.Tools.Soloist;
@@ -30,10 +29,11 @@ public sealed class SoloistInstaller : ToolInstallerBase
     // The files worth keeping from the archive; anything else in it is skipped.
     private static readonly string[] Keep = [Soloist.ExeName, "CHANGELOG.md", "THIRD_PARTY_LICENSES.txt"];
 
-    public override async Task InstallAsync(IProgress<ToolInstallProgress>? progress, CancellationToken ct)
+    public override async Task InstallAsync(ToolInstallTarget target, IProgress<ToolInstallProgress>? progress, CancellationToken ct)
     {
-        ToolsPaths.EnsureDir(Kind);
-        var targetDir = ToolsPaths.DirectoryFor(Kind);
+        ArgumentNullException.ThrowIfNull(target);
+        Directory.CreateDirectory(target.Directory);
+        var targetDir = target.Directory;
         var tmpZip = Path.Combine(targetDir, "soloist.zip.tmp");
         TryDelete(Path.Combine(targetDir, Soloist.ExeName + MovedAside)); // left by the last update
 
@@ -55,7 +55,7 @@ public sealed class SoloistInstaller : ToolInstallerBase
             progress?.Report(new ToolInstallProgress("Extracting…"));
             Extract(tmpZip, targetDir, ct);
             var sha256 = await HashVerification.ComputeFileSha256Async(tmpZip, ct).ConfigureAwait(false);
-            HashVerification.WriteSidecar(ToolsPaths.PathFor(Kind), sha256);
+            HashVerification.WriteSidecar(target.Path, sha256);
             await File.WriteAllTextAsync(Path.Combine(targetDir, Md5FileName), actual, ct).ConfigureAwait(false);
             progress?.Report(new ToolInstallProgress("Done", Fraction: 1.0));
         }
@@ -87,7 +87,9 @@ public sealed class SoloistInstaller : ToolInstallerBase
     public override async Task<string?> GetInstalledHashAsync(InstalledTool installed, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(installed);
-        var path = Path.Combine(ToolsPaths.DirectoryFor(Kind), Md5FileName);
+        // Next to the installed exe: the install target's folder.
+        if (Path.GetDirectoryName(installed.Path) is not { Length: > 0 } dir) return null;
+        var path = Path.Combine(dir, Md5FileName);
         if (!File.Exists(path)) return null;
         var text = (await File.ReadAllTextAsync(path, ct).ConfigureAwait(false)).Trim();
         return Md5FromEtag(text);
