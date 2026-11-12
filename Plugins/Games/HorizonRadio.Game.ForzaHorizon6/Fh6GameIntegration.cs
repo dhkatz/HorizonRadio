@@ -29,6 +29,7 @@ public sealed class Fh6GameIntegration : IGameIntegration, IStationTargeting, IG
     private volatile int _state = (int)ConnectionState.Disconnected;
     private IReadOnlyList<GamePage>? _pages;
     private ModManagerViewModel? _modManager;
+    private readonly IConfirmations? _confirmations;
 
     private IGameHost? _host;
     private volatile string? _currentStation;
@@ -45,10 +46,12 @@ public sealed class Fh6GameIntegration : IGameIntegration, IStationTargeting, IG
     /// <param name="displayName">The game's name.</param>
     /// <param name="settings">Where station assignments persist; <see langword="null"/> keeps them
     /// in memory only (tests).</param>
-    public Fh6GameIntegration(string displayName, IPluginSettings? settings = null)
+    /// <param name="confirmations">Asks before the Mods page uninstalls the mod; none goes ahead.</param>
+    public Fh6GameIntegration(string displayName, IPluginSettings? settings = null, IConfirmations? confirmations = null)
         : this(displayName, settings, IpcClient.DefaultPipeName, PcmPipeClient.DefaultPipeName,
             ForzaTelemetryListener.DefaultPort)
     {
+        _confirmations = confirmations;
     }
 
     /// <summary>Tests: talk to a fake mod on other pipes (and another telemetry port, 0 for any).</summary>
@@ -138,7 +141,7 @@ public sealed class Fh6GameIntegration : IGameIntegration, IStationTargeting, IG
 
     private IReadOnlyList<GamePage> BuildPages()
     {
-        _modManager = new ModManagerViewModel();
+        _modManager = new ModManagerViewModel(_confirmations);
         _modManager.PropertyChanged += OnModManagerChanged;
 
         var stations = new StationsViewModel(this);

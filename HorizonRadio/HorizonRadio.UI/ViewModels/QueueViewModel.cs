@@ -13,6 +13,7 @@ using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Queue;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
 using ShadUI;
@@ -111,11 +112,13 @@ public sealed partial class QueueViewModel : ViewModelBase, IDisposable
     /// re-fires (a launcher, not a persistent selection — like the player bar).</summary>
     [ObservableProperty] private IAudioSourceFactory? selectedAddSource;
     private bool _suppressAdd;
+    private readonly IConfirmations _confirm = ProceedWithoutAsking.Instance;
 
     public QueueViewModel(QueuePlayback queue, DialogManager? dialogs = null, MetadataResolver? resolver = null,
-        SongActions? songs = null)
+        SongActions? songs = null, IConfirmations? confirmations = null)
     {
         _queue = queue;
+        _confirm = confirmations ?? ProceedWithoutAsking.Instance;
         _dialogs = dialogs;
         _resolver = resolver;
         _songs = songs;
@@ -364,7 +367,16 @@ public sealed partial class QueueViewModel : ViewModelBase, IDisposable
         _queue?.Model.MoveExplicitTo(sourceId, targetId);
 
     [RelayCommand]
-    private void ClearQueue() => _queue?.Model.ClearExplicit();
+    private async Task ClearQueueAsync()
+    {
+        if (_queue is null) return;
+        if (!await _confirm.ConfirmAsync(new Confirmation(
+                "Clear the queue?",
+                "The songs waiting in the queue are removed. What's playing keeps playing.",
+                "Clear Queue")))
+            return;
+        _queue.Model.ClearExplicit();
+    }
 
     // Picking a source from the + flyout launches its quick-play dialog. Reset the
     // selection (suppressed) so picking the same source again re-opens the dialog.
