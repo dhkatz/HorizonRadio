@@ -214,8 +214,19 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   parties) and raises events on the thread that made the change; a view model that updates bound
   state from one marshals it (`Dispatcher.UIThread.Post`). Local preview (`PreviewController`) runs
   its state machine under a lock and hands device callbacks to the thread pool.
-- **Plugins and the container** — `App` builds one DI container: Core's services
-  (`AddHorizonCore`), the host's, then the plugins (`PluginRegistration.AddPlugins`, fed by
+- **Starting up (`Core/Hosting/`)** — any front end starts the same way: `HorizonHost.Build`
+  starts the session's log file, opens the settings, builds the container (below), and brings old
+  settings over; `ChosenGame()` says which game to run (null: the front end asks, as the window's
+  first-run picker does); `StartEngine(gameId)` builds the `HorizonEngine` for it: the pipeline into
+  the game and the local speaker, the runner and router, metadata, lyrics, history, events and bound
+  inputs, devices, friends and parties, with what passes between them (the track to the game's
+  title and your friends, the master volume to the game's pre-amp). The front end subscribes to what
+  it shows, then calls `Start()`. Disposing the host stops the engine in its order (the peer helper
+  first, so others see this PC leave; the router and runner before the game), then the container,
+  the settings and the log. `App` only adds the window: dialogs and toasts for `IConfirmations` and
+  `INotifications`, the view models, and the update checks.
+- **Plugins and the container** — `HorizonHost` builds one DI container: Core's services
+  (`AddHorizonCore`), the front end's, then the plugins (`PluginRegistration.AddPlugins`, fed by
   `PluginDiscovery`'s assembly scan). A plugin is an `IPlugin` (its id, name and order) and,
   usually in the same class, an `IPluginModule` (public, parameterless) that registers what it
   contributes: sources (`IAudioSourceFactory`), metadata providers (`IMetadataProviderFactory`:
@@ -482,7 +493,7 @@ using var watch = settings.Watch(LyricsSettings.Karaoke, on => ...);
   `controls.bindings` (`InputBindingStore`), since a binding replaces others.
 - Enums are stored by name. Every write is saved without being asked: there are no
   `SaveToDisk` calls for settings.
-- The store is opened before anything else at startup (`App`), registered in DI, and
+- The store is opened before anything else at startup (`HorizonHost`), registered in DI, and
   disposed last, which writes anything still pending.
 - `settings.json` replaced `sources.json`, `plugin-settings.json`, `metadata-config.json`,
   `events-config.json`, `controls-config.json` and `diagnostics\settings.json`.

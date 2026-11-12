@@ -100,6 +100,9 @@ public sealed class PreviewController : IDisposable
     /// <summary>Where local monitoring stands. Changes raise <see cref="StateChanged"/>.</summary>
     public SpeakerState State { get; private set; } = SpeakerState.Off;
 
+    /// <summary>Raised when <see cref="Volume"/> changes, on the thread that changed it.</summary>
+    public event Action<double>? VolumeChanged;
+
     /// <summary>Raised when <see cref="State"/> changes, on the thread that changed it.</summary>
     public event Action? StateChanged;
 
@@ -170,6 +173,7 @@ public sealed class PreviewController : IDisposable
             _speaker.Volume = VolumeTaper.ToGain(volume);
             _settings.Set(PreviewSettings.Volume, volume);
         }
+        VolumeChanged?.Invoke(volume);
     }
 
     // Device callbacks: any thread. Hand off; never act here (the speaker may be

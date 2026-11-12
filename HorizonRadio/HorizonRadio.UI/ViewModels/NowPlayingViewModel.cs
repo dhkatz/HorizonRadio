@@ -99,13 +99,8 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     /// <summary>Master volume slider <em>position</em> (0..1). Governs both
     /// outputs: it's tapered to a perceptual gain and applied to the local
     /// monitor (<see cref="PreviewController"/>) and, as a pre-amp, to the
-    /// in-game bridge (via <see cref="MasterVolumeChanged"/>).</summary>
+    /// in-game bridge (the engine sends it on).</summary>
     [ObservableProperty] private double previewVolume = 1.0;
-
-    /// <summary>Raised when the master volume position changes, so the app can
-    /// push the (tapered) pre-amp gain to the in-game bridge. The VM stays
-    /// IPC-unaware — mirrors the station-target wiring.</summary>
-    public event Action<double>? MasterVolumeChanged;
 
     /// <summary>Mute state for the master volume. Toggled by clicking the volume
     /// icon; remembers the pre-mute level to restore on unmute.</summary>
@@ -389,8 +384,6 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     partial void OnPreviewVolumeChanged(double value)
     {
         _preview?.SetVolume(value);
-        // Also drive the in-game bridge pre-amp (App pushes it over IPC).
-        MasterVolumeChanged?.Invoke(value);
         // Dragging the slider up unmutes; keeps the icon honest.
         if (value > 0 && IsMuted) IsMuted = false;
     }
