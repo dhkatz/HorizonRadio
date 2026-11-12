@@ -7,8 +7,9 @@ namespace HorizonRadio.UI.Services;
 
 /// <summary>
 /// The host's <see cref="IPluginContext"/> — the shared services the app hands to plugin factories
-/// when it builds them. For now it carries the metadata cache; it grows as more plugin kinds come
-/// online (a tool resolver, HTTP client, diagnostics, cross-plugin service lookup).
+/// when it builds them (game integrations, lyrics and metadata providers). It isn't growing:
+/// plugins now take services in their constructors from the container, and this goes once the
+/// factories that take it do (docs/modular-architecture.md, step 5).
 /// </summary>
 internal sealed class HostPluginContext(IMetadataCache cache, SettingsStore settings, IConfirmations confirmations) : IPluginContext
 {

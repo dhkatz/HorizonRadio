@@ -15,10 +15,10 @@ a small set of projects with one direction of dependency, so that:
 
 | Project | What it is | References |
 |---|---|---|
-| `HorizonRadio.Sdk` | The plugin contract: plugin, source, metadata, lyrics, game and tool interfaces, the plain models they pass (`Track`, `PlayableItem`, `ConfigField`…), and helpers that need nothing beyond .NET. | nothing of ours |
+| `HorizonRadio.Sdk` | The plugin contract: plugin, source, metadata, lyrics, game and tool interfaces, the services the host provides (`IPluginLog`, `IProcesses`, `IAppFolders`, `IToolLocator`…), the plain models they pass (`Track`, `PlayableItem`, `ConfigField`…), and helpers that need nothing beyond .NET. | nothing of ours; one package, the DI abstractions |
 | `HorizonRadio.Sdk.UI` | The app's look: color tokens, text styles, list-row styles, and the controls pages are built from (`PageHeader`, `Section`, `SettingRow`, `Notice`, `EmptyState`, `StatusAvatar`, `PathPicker`, `SongRow`, `ArtTile`…). | Avalonia, ShadUI, Material.Icons |
 | `HorizonRadio.Core` | The engine: playback, queue, mixes, history, metadata, lyrics, settings, devices, friends, party; the command list every front end drives; the interfaces it reaches the OS through; and starting an instance (`Core/Hosting/`: plugin discovery, startup order, the control endpoint). | `Sdk` |
-| `HorizonRadio.Platform` | The OS behind Core's interfaces: audio output, secret storage, child processes, app folders. One project, a folder per OS, picked at run time. | `Core` |
+| `HorizonRadio.Platform` | The OS behind Core's interfaces: audio output, secret storage, child processes, app folders. One project, a folder per OS, picked at run time; it registers like a plugin module, replacing Core's portable defaults. | `Core` |
 | `HorizonRadio.UI` | The Avalonia front end: views and view models, plus components that need the app's view models (the song right-click menu, `SongMenu`). | `Core`, `Platform`, `Sdk.UI`, plugins |
 | `HorizonRadio.Cli` | `hzr`, the command-line front end. | `Core`, `Platform`, plugins |
 | `Plugins/*` | Sources, metadata, lyrics, tools, games. A plugin may reference another plugin it builds on (Spotify on librespot). | `Sdk`, plus `Sdk.UI` for plugins with pages |
@@ -38,10 +38,18 @@ HorizonRadio.Cli ─┬─ Core
 Each rule says where a kind of code goes; the reason follows it.
 
 - **A plugin references `HorizonRadio.Sdk*` and other plugins.** What a plugin needs from the
-  host (app folders, launching processes, logging, the tool resolver, diagnostics) comes through
-  `IPluginContext`, so a test host, the CLI, or another OS can supply its own.
-- **A plugin registers its own services.** Spotify builds its connection and players itself;
-  the host only discovers plugins and runs them, so it never names a plugin's internals.
+  host (app folders, launching processes, logging, the tool locator, diagnostics) it takes in its
+  constructor: the host's DI container builds plugin classes, so a test host, the CLI, or another
+  OS supplies its own by registering it.
+- **A plugin registers its own services** in an `IPluginModule`. Spotify builds its connection
+  and players itself; the host only discovers plugins and runs them, so it never names a
+  plugin's internals.
+- **A plugin may replace or wrap a host service.** Modules run after the host's registrations,
+  in a fixed order (`Order`, then type name), so for a single service the last registration wins;
+  `Decorate` wraps one instead. The host logs each replacement and warns when two modules replace
+  the same service. Contracts with many implementations (sources, metadata providers) are
+  collected, so a plugin adds one alongside the others. For a replacement to take effect
+  everywhere, Core reaches anything replaceable through its SDK interface, not a static.
 - **A view model only translates between the engine and the screen.** Logic the CLI would also
   need is a Core service the view model calls (`MixPlayer.PlayAsync(mix, mode)`), and a question
   the UI asks the user (replace or add?) is a parameter of that service.
@@ -99,18 +107,29 @@ Each step leaves the app working and lands as its own PR or short stack.
    `SongRow`, `ArtTile`).
 4. [x] A confirm service (in the SDK for plugins, used by the app) and confirmation on every
    destructive action.
-5. [ ] Host services on `IPluginContext`; plugin helpers move into the SDK; plugins drop their
-   Core reference.
+5. [ ] Plugins take host services from the container and register their own; plugin helpers
+   move into the SDK; plugins drop their Core reference. (This was two steps, a richer
+   `IPluginContext` then plugin-registered services; constructor injection does both, so the
+   context goes instead of growing.)
    - [x] The self-contained helpers (search-term matching, lyrics parsing, audio format and
      playlists, tool hash checks, the peer-network contract, build info) are in the SDK; the
      LRCLIB, Unison, local-files and test-tone plugins reference only the SDK.
    - [x] Plugin namespaces match their assemblies (`HorizonRadio.Lyrics.Lrclib`; they were
      under `HorizonRadio.Core`), so every Core type a plugin uses takes a `using` line and shows.
-   - [ ] Every plugin gets the context, which carries app folders, process launching, logging,
-     diagnostics and the tool resolver.
+   - [x] The host's container builds the plugin classes; `IPluginModule`s add a plugin's services
+     and may replace or wrap the host's; the SDK declares the host's services (log, processes,
+     app folders, tool locator), implemented over Core's existing code.
+   - [ ] Tool plugins: the wrappers (yt-dlp, ffmpeg, librespot, Soloist, the peer helper) become
+     services; `ToolInstallerBase` and `AtomicFile` move to the SDK, installers getting their
+     install folder per call.
+   - [ ] Metadata plugins: diagnostics (`MetadataTrace`) and the cache through services.
+   - [ ] Source plugins: YouTube, Radio, then Spotify; `SpotifyRuntime` and `YouTubeRuntime` go.
+   - [ ] The audio helpers (the audio cache, subprocess audio, fingerprints) and the title
+     extractor, handed out by the host.
    - [ ] The remaining engine coupling (FH6 and Spotify on the queue engine and mixes) goes
-     through SDK interfaces, and the last Core references go.
-6. [ ] Plugins register their own services; `App.axaml.cs` stops naming plugin internals.
+     through SDK interfaces, the last Core references go, and so does `IPluginContext`.
+6. [ ] `App.axaml.cs` stops naming plugin internals: the catalogs (sources, metadata, tools) are
+   services, and Core reaches replaceable services through their interfaces.
 7. [ ] `Core/Hosting/`: the startup sequence, plugin discovery, plugin context, game host and
    tool registry move out of `HorizonRadio.UI`.
 8. [ ] Platform interfaces in Core; `HorizonRadio.Platform` with the Windows implementations.

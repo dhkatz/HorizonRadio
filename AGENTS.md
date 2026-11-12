@@ -207,6 +207,18 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   Each catalog caches its answers (`MetadataCache`); a miss is kept for two weeks, so when
   matching improves, bump `MetadataCache.CurrentMatchVersion`: misses from older matching
   are then looked up again at once.
+- **Plugins and the container** — `App` builds one DI container: Core's services
+  (`AddHorizonCore`), the host's, then the plugins (`PluginRegistration.AddPlugins`, fed by
+  `PluginDiscovery`'s assembly scan). Each plugin class (`ISourcePlugin`, `IMetadataPlugin`,
+  `ILyricsPlugin`, `IGamePlugin`) is built by the container, once, under every kind it is, so its
+  constructor can take the host's services (`IPluginLog`, `IProcesses`, `IAppFolders`,
+  `IToolLocator`, `IMetadataCache`, `IConfirmations`) and its module's. An `IPluginModule` (public,
+  parameterless) registers a plugin's own services, and may replace a host service or wrap it
+  (`Decorate`); modules run after the host in `Order`, then type name, the last registration wins,
+  and the Console tab (tag `plugins`) says what each replaced or wrapped. The container is built
+  with `ValidateOnBuild`, so a constructor asking for something nobody registers fails at startup.
+  Plugins still call some Core statics (`ProcessConsole`, `ToolResolver`…); they move to the
+  services plugin by plugin (`docs/modular-architecture.md`, step 5).
 - **Game plugins (`Plugins/Games/`)** — the Horizon Radio side of a game
   integration. An `IGamePlugin` (SDK) builds one `IGameIntegration`: the game's
   audio output, its event sources, connection state, and optional capabilities

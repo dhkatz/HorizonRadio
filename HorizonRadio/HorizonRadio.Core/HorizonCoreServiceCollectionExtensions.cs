@@ -1,10 +1,13 @@
 using HorizonRadio.Core.Events;
 using HorizonRadio.Core.History;
+using HorizonRadio.Core.Hosting;
 using HorizonRadio.Core.Input;
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
+using HorizonRadio.Sdk;
+using HorizonRadio.Sdk.Metadata;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HorizonRadio.Core;
@@ -21,6 +24,11 @@ namespace HorizonRadio.Core;
 /// so resolution is behavior-identical. The heavier engine services (source runner, queue, resolver,
 /// IPC, Spotify, …) stay App-owned for now: App disposes them in a specific order at shutdown, which
 /// container-managed disposal would not preserve. They move once that ordering is handled.
+///
+/// It also registers the host's side of the plugin SDK: the services plugin constructors take
+/// (<see cref="IPluginLog"/>, <see cref="IProcesses"/>, <see cref="IAppFolders"/>,
+/// <see cref="IToolLocator"/>, <see cref="IMetadataCache"/>), each of which a plugin module may
+/// replace (<see cref="Hosting.PluginRegistration.AddPlugins"/>).
 /// </summary>
 public static class HorizonCoreServiceCollectionExtensions
 {
@@ -36,6 +44,14 @@ public static class HorizonCoreServiceCollectionExtensions
         services.AddSingleton(_ => new EventRuleStore(settings));
         services.AddSingleton(_ => new InputBindingStore(settings));
         services.AddSingleton(_ => new MetadataCache());
+        services.AddSingleton<IMetadataCache>(sp => sp.GetRequiredService<MetadataCache>());
+
+        // What plugins take in their constructors, as the host provides it. A plugin module can
+        // replace or wrap any of these (see PluginRegistration.AddPlugins).
+        services.AddSingleton<IPluginLog, HostPluginLog>();
+        services.AddSingleton<IProcesses, HostProcesses>();
+        services.AddSingleton<IAppFolders, HostAppFolders>();
+        services.AddSingleton<IToolLocator, HostToolLocator>();
 
         // Resolves a mix entry to playable content from the source config; non-disposable and its
         // only dependency (the source config store) is registered above, so it's safe to own here.

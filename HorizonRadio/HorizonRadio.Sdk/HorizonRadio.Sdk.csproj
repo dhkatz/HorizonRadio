@@ -4,16 +4,21 @@
     The plugin SDK: the contract plugins and the host share (plugin, source, metadata, lyrics,
     game and tool interfaces, the config-field schema, and the plain models they pass), and the
     helpers plugins share that need nothing beyond .NET (search-term matching, lyrics parsing,
-    tool hash checks). Keep it free of packages (no NAudio, Spotify or Avalonia) and of host
-    state, so it stays a stable, safely shared contract with one type identity across the host
-    and every plugin. Plugins are moving to reference only this (see
-    docs/modular-architecture.md).
+    tool hash checks). Keep it free of host state and of packages (no NAudio, Spotify or
+    Avalonia), so it stays a stable, safely shared contract with one type identity across the
+    host and every plugin. The one package is the DI abstractions: plugins register their
+    services into the host's container (IPluginModule) and take the host's in their
+    constructors. Plugins are moving to reference only this (see docs/modular-architecture.md).
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.9" />
+  </ItemGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="HorizonRadio.Core.Tests" />
