@@ -182,5 +182,6 @@ Each step leaves the app working and lands as its own PR or short stack.
 8. [ ] Platform interfaces in Core; `HorizonRadio.Platform` with the Windows implementations.
 9. [ ] Workflows move from view models into Core services; the command list.
 10. [ ] The control endpoint.
-11. [ ] `hzr`: remote commands, then `hzr serve`.
+11. [ ] `hzr`: remote commands, then `hzr serve`. The CLI project emits the same
+    `PluginAssembly_*` metadata the UI's does, which plugin discovery reads to load the plugins.
 12. [ ] OS declarations for plugins and per-platform tool downloads; macOS and Linux platform code.
