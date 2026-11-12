@@ -27,7 +27,8 @@
                     <ItemsControl ItemsSource="{Binding Devices}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:DeviceRow}">
-                                <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,4">
+                                <Border Classes="listRow" Margin="-8,0">
+                                <Grid ColumnDefinitions="Auto,*,Auto">
                                     <material:MaterialIcon Grid.Column="0" Kind="Monitor" Width="20" Height="20"
                                                            Margin="0,0,12,0" VerticalAlignment="Center"
                                                            Opacity="{Binding IconOpacity}"/>
@@ -35,10 +36,12 @@
                                         <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Medium"/>
                                         <TextBlock Classes="caption" Text="{Binding State}"/>
                                     </StackPanel>
-                                    <Button Grid.Column="2" Classes="Secondary" Content="Remove"
+                                    <Button Grid.Column="2" Classes="Ghost rowActions" Content="Remove"
                                             Command="{Binding RemoveCommand}"
-                                            IsVisible="{Binding CanRemove}"/>
+                                            IsVisible="{Binding CanRemove}"
+                                            ToolTip.Tip="{Binding Name, StringFormat='Remove {0} From Your Devices'}"/>
                                 </Grid>
+                                </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>

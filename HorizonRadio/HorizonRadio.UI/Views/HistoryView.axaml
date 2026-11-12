@@ -14,18 +14,6 @@
         <vm:HistoryViewModel />
     </Design.DataContext>
 
-    <UserControl.Styles>
-        <!-- Reveal a row's actions on hover (instant, theme-independent). -->
-        <Style Selector="StackPanel.rowActions">
-            <Setter Property="Opacity" Value="0"/>
-            <Setter Property="IsHitTestVisible" Value="False"/>
-        </Style>
-        <Style Selector="Border.historyRow:pointerover StackPanel.rowActions">
-            <Setter Property="Opacity" Value="1"/>
-            <Setter Property="IsHitTestVisible" Value="True"/>
-        </Style>
-    </UserControl.Styles>
-
     <ScrollViewer>
         <StackPanel Margin="24" Spacing="16">
 
@@ -43,50 +31,28 @@
             <ItemsControl ItemsSource="{Binding Items}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate DataType="{x:Type vm:HistoryRowViewModel}">
-                        <Border Classes="Card historyRow" Padding="10" Margin="0,0,0,8"
-                                views:SongMenu.Target="{Binding Song}">
-                            <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center"
-                                  Background="Transparent">
-
-                                <!-- Thumbnail over a placeholder tile -->
-                                <Border Grid.Column="0" Width="48" Height="48" CornerRadius="4"
-                                        ClipToBounds="True" Margin="0,0,12,0"
-                                        Background="{DynamicResource SecondaryColor}">
-                                    <Panel>
-                                        <material:MaterialIcon Kind="MusicNote" Width="20" Height="20" Opacity="0.5"
-                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        <Image Source="{Binding Thumbnail}" Stretch="UniformToFill"
-                                               IsVisible="{Binding HasThumbnail}"/>
-                                    </Panel>
-                                </Border>
-
-                                <!-- Title (+ warning) and metadata line -->
-                                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center" Margin="0,0,8,0">
-                                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="Medium"
-                                                   TextTrimming="CharacterEllipsis"/>
-                                        <!-- Warning doubles as the report button. -->
-                                        <Button Classes="Ghost" Padding="2" VerticalAlignment="Center"
-                                                Command="{Binding ReportCommand}"
-                                                IsVisible="{Binding ShowWarning}"
-                                                ToolTip.Tip="We couldn't identify this song — click to report a metadata issue">
-                                            <material:MaterialIcon Kind="AlertCircleOutline" Width="15" Height="15"
-                                                                   Foreground="{DynamicResource ToneWarningBrush}"/>
-                                        </Button>
-                                    </StackPanel>
-                                    <TextBlock FontSize="12" Opacity="0.6" TextTrimming="CharacterEllipsis"
-                                               IsVisible="{Binding HasSubtitle}"
-                                               Text="{Binding Subtitle}"/>
-                                    <StackPanel Orientation="Horizontal" Spacing="6" Opacity="0.45">
-                                        <TextBlock Text="{Binding SourceLabel}" FontSize="10"/>
-                                        <TextBlock Text="·" FontSize="10"/>
-                                        <TextBlock Text="{Binding PlayedAtLabel}" FontSize="10"/>
-                                    </StackPanel>
+                        <ui:SongRow Art="{Binding Thumbnail}" Title="{Binding Title}" Subtitle="{Binding Subtitle}"
+                                    PlayCommand="{Binding PlayCommand}"
+                                    views:SongMenu.Target="{Binding Song}">
+                            <ui:SongRow.TitleAdornment>
+                                <!-- The warning doubles as the report button. -->
+                                <Button Classes="Ghost" Padding="2" Margin="0,0,6,0"
+                                        Command="{Binding ReportCommand}"
+                                        IsVisible="{Binding ShowWarning}"
+                                        ToolTip.Tip="We couldn't identify this song. Click to report a metadata issue.">
+                                    <material:MaterialIcon Kind="AlertCircleOutline" Width="15" Height="15"
+                                                           Foreground="{DynamicResource ToneWarningBrush}"/>
+                                </Button>
+                            </ui:SongRow.TitleAdornment>
+                            <ui:SongRow.Detail>
+                                <StackPanel Orientation="Horizontal" Spacing="6" Opacity="0.45">
+                                    <TextBlock Text="{Binding SourceLabel}" FontSize="10"/>
+                                    <TextBlock Text="·" FontSize="10"/>
+                                    <TextBlock Text="{Binding PlayedAtLabel}" FontSize="10"/>
                                 </StackPanel>
-
-                                <!-- Actions -->
-                                <StackPanel Grid.Column="2" Classes="rowActions" Orientation="Horizontal"
-                                            Spacing="6" VerticalAlignment="Center" Background="Transparent">
+                            </ui:SongRow.Detail>
+                            <ui:SongRow.Actions>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
                                     <!-- One playable service: a single Play button. -->
                                     <Button Classes="Primary" Content="Play" Command="{Binding PlayCommand}"
                                             IsVisible="{Binding !HasMultipleSources}"/>
@@ -101,7 +67,8 @@
                                         </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate DataType="{x:Type vm:ReplaySourceOption}">
-                                                <Button Classes="Outline" Command="{Binding PlayCommand}">
+                                                <Button Classes="Outline" Command="{Binding PlayCommand}"
+                                                        ToolTip.Tip="{Binding Label, StringFormat='Play From {0}'}">
                                                     <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                                                         <material:MaterialIcon Kind="Play" Width="14" Height="14"/>
                                                         <TextBlock Text="{Binding Label}"/>
@@ -121,12 +88,12 @@
                                         <material:MaterialIcon Kind="PlaylistPlus" Width="16" Height="16"/>
                                     </Button>
                                     <Button Classes="Ghost" Padding="6" Command="{Binding RemoveCommand}"
-                                            ToolTip.Tip="Remove from history">
+                                            ToolTip.Tip="Remove From History">
                                         <material:MaterialIcon Kind="Close" Width="16" Height="16"/>
                                     </Button>
                                 </StackPanel>
-                            </Grid>
-                        </Border>
+                            </ui:SongRow.Actions>
+                        </ui:SongRow>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>

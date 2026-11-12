@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:HorizonRadio.Sdk.UI.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="using:HorizonRadio.UI.ViewModels"
@@ -14,8 +15,6 @@
     </Design.DataContext>
 
     <UserControl.Styles>
-        <!-- Compact result row: Add/Play sit at the right, always visible (the dropdown
-             is a quick-action peek, so no hover-reveal dance like the queue rows). -->
         <Style Selector="Border.searchPill:pointerover">
             <Setter Property="BorderBrush" Value="{DynamicResource HighlightBrush}"/>
         </Style>
@@ -81,53 +80,38 @@
                                        Opacity="0.55" Margin="10,8" TextWrapping="Wrap"
                                        IsVisible="{Binding NeedsConnection}"/>
 
-                            <ItemsControl ItemsSource="{Binding LiveResults}"
-                                          IsVisible="{Binding !IsSearching}">
+                            <ScrollViewer IsVisible="{Binding !IsSearching}">
+                            <ItemsControl ItemsSource="{Binding LiveResults}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate DataType="{x:Type vm:SearchResultRowViewModel}">
-                                        <Border Background="Transparent" Padding="6" CornerRadius="6"
-                                                views:SongMenu.Target="{Binding Song}">
-                                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" VerticalAlignment="Center">
-                                                <!-- Art over a placeholder tile -->
-                                                <Border Grid.Column="0" Width="40" Height="40" CornerRadius="4"
-                                                        ClipToBounds="True" Margin="0,0,10,0"
-                                                        Background="{DynamicResource SecondaryColor}">
-                                                    <Panel>
-                                                        <material:MaterialIcon Kind="MusicNote" Width="18" Height="18" Opacity="0.5"
-                                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                        <Image Source="{Binding Art}" Stretch="UniformToFill"
-                                                               IsVisible="{Binding HasArt}"/>
-                                                    </Panel>
-                                                </Border>
-                                                <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="Medium"
-                                                               TextTrimming="CharacterEllipsis"/>
-                                                    <TextBlock Text="{Binding Subtitle}" FontSize="11" Opacity="0.6"
-                                                               IsVisible="{Binding HasSubtitle}"
-                                                               TextTrimming="CharacterEllipsis"/>
+                                        <!-- A quick-action peek: Play and Add stay visible. -->
+                                        <ui:SongRow ArtSize="40" Art="{Binding Art}" Title="{Binding Title}"
+                                                    Subtitle="{Binding Subtitle}" PlayCommand="{Binding PlayCommand}"
+                                                    views:SongMenu.Target="{Binding Song}">
+                                            <ui:SongRow.Trailing>
+                                                <StackPanel Orientation="Horizontal" Spacing="2">
+                                                    <!-- Which source plays; only when >1 source is searchable -->
+                                                    <Border IsVisible="{Binding ShowSourceLabels}"
+                                                            Background="{DynamicResource SecondaryColor}"
+                                                            CornerRadius="10" Padding="8,2" Margin="0,0,4,0"
+                                                            VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding SelectedSourceName}" FontSize="10" Opacity="0.75"/>
+                                                    </Border>
+                                                    <Button Classes="Ghost" Padding="5"
+                                                            Command="{Binding PlayCommand}" ToolTip.Tip="Play Now">
+                                                        <material:MaterialIcon Kind="Play" Width="16" Height="16"/>
+                                                    </Button>
+                                                    <Button Classes="Ghost" Padding="5"
+                                                            Command="{Binding AddCommand}" ToolTip.Tip="Add To Queue">
+                                                        <material:MaterialIcon Kind="PlaylistPlay" Width="16" Height="16"/>
+                                                    </Button>
                                                 </StackPanel>
-                                                <!-- Source label (which source plays); only when >1 source is searchable -->
-                                                <Border Grid.Column="2" IsVisible="{Binding ShowSourceLabels}"
-                                                        Background="{DynamicResource SecondaryColor}"
-                                                        CornerRadius="10" Padding="8,2" Margin="6,0"
-                                                        VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding SelectedSourceName}" FontSize="10" Opacity="0.75"/>
-                                                </Border>
-                                                <Button Grid.Column="3" Classes="Ghost" Padding="5"
-                                                        Command="{Binding PlayCommand}"
-                                                        VerticalAlignment="Center" ToolTip.Tip="Play Now">
-                                                    <material:MaterialIcon Kind="Play" Width="16" Height="16"/>
-                                                </Button>
-                                                <Button Grid.Column="4" Classes="Ghost" Padding="5"
-                                                        Command="{Binding AddCommand}"
-                                                        VerticalAlignment="Center" ToolTip.Tip="Add To Queue">
-                                                    <material:MaterialIcon Kind="PlaylistPlay" Width="16" Height="16"/>
-                                                </Button>
-                                            </Grid>
-                                        </Border>
+                                            </ui:SongRow.Trailing>
+                                        </ui:SongRow>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
+                            </ScrollViewer>
                         </Panel>
                     </Border>
                 </Popup>

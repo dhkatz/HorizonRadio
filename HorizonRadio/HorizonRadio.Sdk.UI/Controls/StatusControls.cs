@@ -164,4 +164,8 @@ public static class SizeConverters
     /// <summary>The icon size that sits well in a circle of the given diameter (a little over half).</summary>
     public static readonly IValueConverter IconForCircle =
         new FuncValueConverter<double, double>(diameter => Math.Round(diameter * 0.53));
+
+    /// <summary>The placeholder or play icon that sits well in a square tile of the given size.</summary>
+    public static readonly IValueConverter IconForTile =
+        new FuncValueConverter<double, double>(side => Math.Round(side * 0.42));
 }

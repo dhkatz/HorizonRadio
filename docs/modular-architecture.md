@@ -16,10 +16,10 @@ a small set of projects with one direction of dependency, so that:
 | Project | What it is | References |
 |---|---|---|
 | `HorizonRadio.Sdk` | The plugin contract: plugin, source, metadata, lyrics, game and tool interfaces, the plain models they pass (`Track`, `PlayableItem`, `ConfigField`…), and helpers that need nothing beyond .NET. | nothing of ours |
-| `HorizonRadio.Sdk.UI` | The app's look: color tokens, text styles, shared row styles, and the controls pages are built from (`PageHeader`, `SectionCard`, `Notice`, `EmptyState`, `PathPicker`…). | Avalonia, ShadUI, Material.Icons |
+| `HorizonRadio.Sdk.UI` | The app's look: color tokens, text styles, list-row styles, and the controls pages are built from (`PageHeader`, `SectionCard`, `SettingRow`, `Notice`, `EmptyState`, `StatusAvatar`, `PathPicker`, `SongRow`, `ArtTile`…). | Avalonia, ShadUI, Material.Icons |
 | `HorizonRadio.Core` | The engine: playback, queue, mixes, history, metadata, lyrics, settings, devices, friends, party; the command list every front end drives; the interfaces it reaches the OS through; and starting an instance (`Core/Hosting/`: plugin discovery, startup order, the control endpoint). | `Sdk` |
 | `HorizonRadio.Platform` | The OS behind Core's interfaces: audio output, secret storage, child processes, app folders. One project, a folder per OS, picked at run time. | `Core` |
-| `HorizonRadio.UI` | The Avalonia front end: views and view models, plus app-only components that need the app's view models (`SongRow`, `ArtTile`). | `Core`, `Platform`, `Sdk.UI`, plugins |
+| `HorizonRadio.UI` | The Avalonia front end: views and view models, plus components that need the app's view models (the song right-click menu, `SongMenu`). | `Core`, `Platform`, `Sdk.UI`, plugins |
 | `HorizonRadio.Cli` | `hzr`, the command-line front end. | `Core`, `Platform`, plugins |
 | `Plugins/*` | Sources, metadata, lyrics, tools, games. A plugin may reference another plugin it builds on (Spotify on librespot). | `Sdk`, plus `Sdk.UI` for plugins with pages |
 
@@ -94,9 +94,9 @@ Each step leaves the app working and lands as its own PR or short stack.
    its types in `HorizonRadio.Sdk.*` namespaces.
 2. [x] `HorizonRadio.Sdk.UI`: color tokens and text styles; the app and FH6 reference it, and
    hard-coded colors go.
-3. [ ] `Sdk.UI` controls: page layout (`PageHeader`, `SectionCard`, `SettingRow`), status
-   (`Notice`, `EmptyState`, `StatusAvatar`, `StatusDot`), `PathPicker`, the shared row and
-   icon-button styles; app-only `SongRow` and `ArtTile`.
+3. [x] `Sdk.UI` controls: page layout (`PageHeader`, `SectionCard`, `SettingRow`), status
+   (`Notice`, `EmptyState`, `StatusAvatar`, `StatusDot`), `PathPicker`, list rows (`listRow`,
+   `SongRow`, `ArtTile`).
 4. [ ] A confirm service (in the SDK for plugins, used by the app) and confirmation on every
    destructive action.
 5. [ ] Host services on `IPluginContext`; plugin helpers move into the SDK; plugins drop their

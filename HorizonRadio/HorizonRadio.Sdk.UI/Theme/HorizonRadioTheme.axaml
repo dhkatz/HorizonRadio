@@ -14,6 +14,7 @@
                 <ResourceInclude Source="avares://HorizonRadio.Sdk.UI/Controls/Layout.axaml"/>
                 <ResourceInclude Source="avares://HorizonRadio.Sdk.UI/Controls/Status.axaml"/>
                 <ResourceInclude Source="avares://HorizonRadio.Sdk.UI/Controls/Inputs.axaml"/>
+                <ResourceInclude Source="avares://HorizonRadio.Sdk.UI/Controls/Songs.axaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Styles.Resources>
@@ -24,5 +25,6 @@
     <materialIcons:MaterialIconStyles/>
     <StyleInclude Source="avares://HorizonRadio.Sdk.UI/Theme/Typography.axaml"/>
     <StyleInclude Source="avares://HorizonRadio.Sdk.UI/Theme/Surfaces.axaml"/>
+    <StyleInclude Source="avares://HorizonRadio.Sdk.UI/Theme/Lists.axaml"/>
     <StyleInclude Source="avares://HorizonRadio.Sdk.UI/Theme/Window.axaml"/>
 </Styles>

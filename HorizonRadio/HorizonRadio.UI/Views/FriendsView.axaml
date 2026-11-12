@@ -42,7 +42,10 @@
                     <ItemsControl ItemsSource="{Binding Friends}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type vm:FriendRow}">
-                                <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,4">
+                                <!-- Remove shows under the pointer (or with keyboard focus), so the
+                                     list isn't a column of Remove buttons. -->
+                                <Border Classes="listRow" Margin="-8,0">
+                                <Grid ColumnDefinitions="Auto,*,Auto,Auto">
                                     <material:MaterialIcon Grid.Column="0" Kind="Account" Width="20" Height="20"
                                                            Margin="0,0,12,0" VerticalAlignment="Center"
                                                            Opacity="{Binding IconOpacity}"/>
@@ -52,9 +55,11 @@
                                     </StackPanel>
                                     <Button Grid.Column="2" Classes="Primary" Content="Join Party" Margin="0,0,8,0"
                                             Command="{Binding JoinCommand}" IsVisible="{Binding CanJoin}"/>
-                                    <Button Grid.Column="3" Classes="Secondary" Content="Remove"
-                                            Command="{Binding RemoveCommand}"/>
+                                    <Button Grid.Column="3" Classes="Ghost rowActions" Content="Remove"
+                                            Command="{Binding RemoveCommand}"
+                                            ToolTip.Tip="{Binding Name, StringFormat='Remove {0} From Your Friends'}"/>
                                 </Grid>
+                                </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>

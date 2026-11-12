@@ -141,6 +141,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Lists show which row you're pointing at (History, Queue, Search, Mixes, Friends, Devices).**
+  The row under the pointer highlights, and its buttons appear over the end of it, also when you
+  Tab to them. Every row button says what it does when you hover it. Double-click a song in
+  History or Search to play it, as in the queue, and the play button over a song's art is in
+  History, Search and the title-bar search too. Friends and Devices no longer show a Remove
+  button on every row, only on the one you point at. Long History titles end in "…" instead of
+  running under the buttons, the title-bar search results scroll, and a queue song can't be
+  moved past the top or bottom. Right-clicking a queue song's art opens its menu instead of
+  playing it.
 - **Every folder and file field has a Browse button that starts where you are.** A metadata
   provider's folder setting gains the Browse button it was missing, and Browse now opens in the
   folder the field already points to. The Metadata page reuses the Sources page's settings form.

@@ -1,0 +1,104 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:ui="using:HorizonRadio.Sdk.UI.Controls"
+                    xmlns:material="clr-namespace:Material.Icons.Avalonia;assembly=Material.Icons.Avalonia">
+
+    <!-- <ui:ArtTile Source="{Binding Thumbnail}" Size="48" PlayCommand="{Binding PlayCommand}"/> -->
+    <ControlTheme x:Key="{x:Type ui:ArtTile}" TargetType="ui:ArtTile">
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Width="{TemplateBinding Size}" Height="{TemplateBinding Size}"
+                        CornerRadius="4" ClipToBounds="True"
+                        Background="{DynamicResource SecondaryColor}">
+                    <Panel>
+                        <material:MaterialIcon Kind="{TemplateBinding Icon}" Opacity="0.5"
+                                               Width="{Binding Size, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static ui:SizeConverters.IconForTile}}"
+                                               Height="{Binding Size, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static ui:SizeConverters.IconForTile}}"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <Image Source="{TemplateBinding Source}" Stretch="UniformToFill"
+                               IsVisible="{Binding Source, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                        <Button Name="PART_Play" Command="{TemplateBinding PlayCommand}"
+                                IsVisible="{Binding PlayCommand, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                ToolTip.Tip="Play Now">
+                            <material:MaterialIcon Kind="Play" Foreground="{DynamicResource OnToneBrush}"
+                                                   Width="{Binding Size, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static ui:SizeConverters.IconForTile}}"
+                                                   Height="{Binding Size, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static ui:SizeConverters.IconForTile}}"/>
+                        </Button>
+                    </Panel>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+
+        <!-- The play button fills the tile, dimming the art, and shows under the pointer or
+             with keyboard focus. -->
+        <Style Selector="^ /template/ Button#PART_Play">
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="VerticalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="CornerRadius" Value="0"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="{DynamicResource ScrimBrush}"/>
+            <Setter Property="Opacity" Value="0"/>
+            <!-- A bare template: the button theme's own hover fill would hide the art. -->
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Background="{TemplateBinding Background}"
+                                      Content="{TemplateBinding Content}"
+                                      HorizontalContentAlignment="Center"
+                                      VerticalContentAlignment="Center"/>
+                </ControlTemplate>
+            </Setter>
+        </Style>
+        <Style Selector="^:pointerover /template/ Button#PART_Play, ^ /template/ Button#PART_Play:focus-visible">
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+    </ControlTheme>
+
+    <!-- <ui:SongRow Art="{Binding Thumbnail}" Title="{Binding Title}" Subtitle="{Binding Subtitle}"
+                     PlayCommand="{Binding PlayCommand}">
+             <ui:SongRow.Actions><StackPanel Orientation="Horizontal">…</StackPanel></ui:SongRow.Actions>
+         </ui:SongRow> -->
+    <ControlTheme x:Key="{x:Type ui:SongRow}" TargetType="ui:SongRow">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Classes="listRow">
+                    <Grid ColumnDefinitions="Auto,Auto,*,Auto" VerticalAlignment="Center">
+                        <ContentPresenter Grid.Column="0" Content="{TemplateBinding Leading}" VerticalAlignment="Center"
+                                          IsVisible="{Binding Leading, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                        <ui:ArtTile Grid.Column="1" Margin="0,0,12,0"
+                                    Source="{TemplateBinding Art}" Icon="{TemplateBinding ArtIcon}"
+                                    Size="{TemplateBinding ArtSize}" PlayCommand="{TemplateBinding PlayCommand}"/>
+                        <Panel Grid.Column="2">
+                            <StackPanel Spacing="2" VerticalAlignment="Center">
+                                <Grid ColumnDefinitions="Auto,*">
+                                    <ContentPresenter Grid.Column="0" Content="{TemplateBinding TitleAdornment}"
+                                                      VerticalAlignment="Center"
+                                                      IsVisible="{Binding TitleAdornment, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                    <TextBlock Grid.Column="1" Text="{TemplateBinding Title}" FontSize="14" FontWeight="Medium"
+                                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                </Grid>
+                                <TextBlock Text="{TemplateBinding Subtitle}" FontSize="12" Opacity="0.6"
+                                           TextTrimming="CharacterEllipsis"
+                                           IsVisible="{Binding Subtitle, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                                <ContentPresenter Content="{TemplateBinding Detail}"
+                                                  IsVisible="{Binding Detail, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                            </StackPanel>
+                            <!-- The actions cover the end of the text in the row's hover color. -->
+                            <ContentPresenter Classes="rowActions" Content="{TemplateBinding Actions}"
+                                              HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                                              VerticalContentAlignment="Center" Padding="12,0,0,0"
+                                              Background="{DynamicResource SecondaryColor}"
+                                              IsVisible="{Binding Actions, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                        </Panel>
+                        <ContentPresenter Grid.Column="3" Content="{TemplateBinding Trailing}"
+                                          VerticalAlignment="Center" Margin="8,0,0,0"
+                                          IsVisible="{Binding Trailing, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+</ResourceDictionary>

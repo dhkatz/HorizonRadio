@@ -1,0 +1,28 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- A row in a list you can act on (SongRow uses these; any list can):
+         <Border Classes="listRow"> … <StackPanel Classes="rowActions">buttons</StackPanel> </Border>
+         The row highlights under the pointer, so it's clear which row a click lands on. Actions
+         drawn over the row's text should have the hover color behind them (SongRow's do). -->
+    <Style Selector="Border.listRow">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource MdCornerRadius}"/>
+        <Setter Property="Padding" Value="8"/>
+    </Style>
+    <Style Selector="Border.listRow:pointerover">
+        <Setter Property="Background" Value="{DynamicResource SecondaryColor}"/>
+    </Style>
+
+    <!-- A row's actions show under the pointer, or once Tab reaches one of them. The reveal is
+         instant: a fade reads as flicker when the pointer crosses rows. While hidden they can't
+         catch the pointer, so they can't hold the row's hover. -->
+    <Style Selector="Border.listRow :is(Control).rowActions">
+        <Setter Property="Opacity" Value="0"/>
+        <Setter Property="IsHitTestVisible" Value="False"/>
+    </Style>
+    <Style Selector="Border.listRow:pointerover :is(Control).rowActions, Border.listRow:focus-within :is(Control).rowActions">
+        <Setter Property="Opacity" Value="1"/>
+        <Setter Property="IsHitTestVisible" Value="True"/>
+    </Style>
+</Styles>
