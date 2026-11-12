@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="using:HorizonRadio.UI.Views"
              xmlns:ui="using:HorizonRadio.Sdk.UI.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -13,53 +14,11 @@
         <vm:MetadataViewModel/>
     </Design.DataContext>
 
-    <UserControl.DataTemplates>
-        <DataTemplate DataType="{x:Type vm:DirectoryFieldViewModel}">
-            <StackPanel Spacing="4">
-                <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="Medium"/>
-                <TextBox Text="{Binding Path, Mode=TwoWay}" PlaceholderText="Pick a folder..."/>
-                <TextBlock Text="{Binding Description}"
-                           FontSize="11" Opacity="0.55" TextWrapping="Wrap"
-                           IsVisible="{Binding Description, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-            </StackPanel>
-        </DataTemplate>
-
-        <DataTemplate DataType="{x:Type vm:TextFieldViewModel}">
-            <StackPanel Spacing="4">
-                <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="Medium"/>
-                <TextBox Text="{Binding Text, Mode=TwoWay}"
-                         PlaceholderText="{Binding Placeholder}"
-                         PasswordChar="{Binding PasswordChar}"/>
-                <TextBlock Text="{Binding Description}"
-                           FontSize="11" Opacity="0.55" TextWrapping="Wrap"
-                           IsVisible="{Binding Description, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-            </StackPanel>
-        </DataTemplate>
-
-        <DataTemplate DataType="{x:Type vm:BoolFieldViewModel}">
-            <ui:SettingRow Label="{Binding Label}" Description="{Binding Description}">
-                <ToggleSwitch IsChecked="{Binding IsOn, Mode=TwoWay}"/>
-            </ui:SettingRow>
-        </DataTemplate>
-
-        <DataTemplate DataType="{x:Type vm:EnumFieldViewModel}">
-            <StackPanel Spacing="4">
-                <TextBlock Text="{Binding Label}" FontSize="12" FontWeight="Medium"/>
-                <ComboBox ItemsSource="{Binding Options}"
-                          SelectedItem="{Binding Selected, Mode=TwoWay}"
-                          HorizontalAlignment="Stretch"/>
-                <TextBlock Text="{Binding Description}"
-                           FontSize="11" Opacity="0.55" TextWrapping="Wrap"
-                           IsVisible="{Binding Description, Converter={x:Static ObjectConverters.IsNotNull}}"/>
-            </StackPanel>
-        </DataTemplate>
-    </UserControl.DataTemplates>
-
     <ScrollViewer>
         <StackPanel Margin="24" Spacing="16">
 
             <ui:PageHeader Title="Metadata"
-                           Description="Where to look up canonical titles, artists, and album art. Providers run after the source in the order below; each fills only what's still missing — unless you override a field on the right."/>
+                           Description="Where to look up canonical titles, artists, and album art. Providers run after the source in the order below; each fills only what's still missing, unless you pin a field to one provider below."/>
 
             <!-- Providers: enable + order + credentials -->
             <StackPanel Spacing="6">
@@ -91,12 +50,8 @@
                                         </StackPanel>
                                     </Grid>
 
-                                    <ItemsControl ItemsSource="{Binding Fields}" IsVisible="{Binding HasFields}"
-                                                  Margin="34,0,0,0">
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate><StackPanel Spacing="10"/></ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-                                    </ItemsControl>
+                                    <views:ConfigFormView Fields="{Binding Fields}" IsVisible="{Binding HasFields}"
+                                                          Margin="34,0,0,0"/>
                                 </StackPanel>
                             </Border>
                         </DataTemplate>

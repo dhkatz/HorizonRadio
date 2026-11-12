@@ -46,16 +46,8 @@
 
                     <StackPanel Spacing="6">
                         <TextBlock Classes="fieldLabel" Text="Path"/>
-                        <Grid ColumnDefinitions="*,Auto">
-                            <TextBox Grid.Column="0"
-                                     Text="{Binding GamePath, Mode=TwoWay}"
-                                     PlaceholderText="C:\Path\To\Forza Horizon 6"/>
-                            <Button Grid.Column="1"
-                                    Classes="Outline"
-                                    Content="Browse"
-                                    Margin="6,0,0,0"
-                                    Click="Browse_Click"/>
-                        </Grid>
+                        <ui:PathPicker Path="{Binding GamePath}" Placeholder="C:\Path\To\Forza Horizon 6"
+                                       DialogTitle="Pick your Forza Horizon 6 install folder"/>
                     </StackPanel>
                 </StackPanel>
             </ui:SectionCard>

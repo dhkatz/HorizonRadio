@@ -1,0 +1,20 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:ui="using:HorizonRadio.Sdk.UI.Controls">
+
+    <!-- <ui:PathPicker Path="{Binding GamePath}" DialogTitle="Pick your game folder"/>
+         Kind="File" FileExtensions="{Binding Extensions}" for a file. -->
+    <ControlTheme x:Key="{x:Type ui:PathPicker}" TargetType="ui:PathPicker">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBox Grid.Column="0"
+                             Text="{Binding Path, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                             PlaceholderText="{TemplateBinding Placeholder}"/>
+                    <Button Grid.Column="1" Name="PART_Browse" Classes="Outline" Content="Browse"
+                            Margin="6,0,0,0"/>
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+</ResourceDictionary>

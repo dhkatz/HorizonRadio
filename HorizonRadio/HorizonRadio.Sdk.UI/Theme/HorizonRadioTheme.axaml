@@ -13,6 +13,7 @@
                 <ResourceInclude Source="avares://HorizonRadio.Sdk.UI/Theme/Colors.axaml"/>
                 <ResourceInclude Source="avares://HorizonRadio.Sdk.UI/Controls/Layout.axaml"/>
                 <ResourceInclude Source="avares://HorizonRadio.Sdk.UI/Controls/Status.axaml"/>
+                <ResourceInclude Source="avares://HorizonRadio.Sdk.UI/Controls/Inputs.axaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Styles.Resources>
