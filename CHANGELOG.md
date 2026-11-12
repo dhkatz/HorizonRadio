@@ -158,14 +158,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   folder the field already points to. The Metadata page reuses the Sources page's settings form.
 - **Notices, empty pages and status lights look the same everywhere.** The game's setup banner,
   the Mod Installer's warnings, Search's source problems and the Events hint are one kind of
-  notice, and long ones wrap instead of running off the edge. Empty History and Mixes say so
-  with the same card, and the Stats page says it's waiting for the game at the top, not under
-  the charts.
-- **Every page is laid out the same way, and cards look like cards.** Pages share one header
-  (title, what the page is for, its actions), and their sections sit in cards with a border and a
-  raised background; the app's cards had been drawn without either. Settings with a switch or a
-  choice put their name and explanation on the left and the control on the right everywhere, the
-  Stats page gets a title, and Sources no longer says "(This source has no settings.)".
+  notice, a band tinted with its color, and long ones wrap instead of running off the edge. Empty
+  History and Mixes say so the same way, and the Stats page says it's waiting for the game at the
+  top, not under the charts.
+- **Every page is laid out the same way, flat, without cards.** Pages share one header (title,
+  what the page is for, its actions), and are split into titled sections by a hairline instead of
+  boxes. Lists (tools, mixes, metadata providers, event rules, control bindings) are rows split by
+  hairlines, so nothing sits in a box inside another box; the Tools page is a list instead of a
+  grid of cards. Settings with a switch or a choice put their name and explanation on the left and
+  the control on the right everywhere, the Stats page gets a title, Sources' account and Quick Play
+  get sections of their own, and Sources no longer says "(This source has no settings.)".
 - **The app's look lives in `HorizonRadio.Sdk.UI` (internal).** The theme (ShadUI, Material icons,
   color tokens and text styles) is one `HorizonRadioTheme`, which plugin pages use too: the FH6
   plugin now references it instead of reaching ShadUI through the app. Status colors come from

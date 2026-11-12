@@ -20,7 +20,7 @@
 
             <TextBlock Classes="body" Text="{Binding Status}" IsVisible="{Binding HasStatus}"/>
 
-            <ui:SectionCard Title="Listening Party" IsVisible="{Binding HasParty}">
+            <ui:Section Title="Listening Party" IsVisible="{Binding HasParty}">
                 <StackPanel Spacing="12">
                     <TextBlock Classes="body" Text="{Binding PartyTitle}"/>
                     <TextBlock Classes="description" Text="{Binding PartyDetail}" IsVisible="{Binding HasPartyDetail}"/>
@@ -34,9 +34,9 @@
                                 IsVisible="{Binding IsInParty}"/>
                     </StackPanel>
                 </StackPanel>
-            </ui:SectionCard>
+            </ui:Section>
 
-            <ui:SectionCard Title="Your Friends">
+            <ui:Section Title="Your Friends">
                 <StackPanel Spacing="12">
                     <TextBlock Classes="description" Text="None yet. Add one below." IsVisible="{Binding !HasFriends}"/>
                     <ItemsControl ItemsSource="{Binding Friends}">
@@ -64,9 +64,9 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </StackPanel>
-            </ui:SectionCard>
+            </ui:Section>
 
-            <ui:SectionCard Title="Add a Friend"
+            <ui:Section Title="Add a Friend"
                             Description="One of you shows a code; the other types it on their Friends page. You're then friends on all your PCs.">
                 <StackPanel Spacing="12">
                     <StackPanel Spacing="6" IsVisible="{Binding IsShowingCode}">
@@ -90,15 +90,15 @@
                                 IsEnabled="{Binding !IsBusy}"/>
                     </Grid>
                 </StackPanel>
-            </ui:SectionCard>
+            </ui:Section>
 
-            <ui:SectionCard Title="You"
+            <ui:Section Title="You"
                             Description="What your friends see you as. Your friends see the song you're playing while Horizon Radio is open.">
                 <Grid ColumnDefinitions="*,Auto">
                     <TextBox Grid.Column="0" Text="{Binding MyName, Mode=TwoWay}" Margin="0,0,8,0"/>
                     <Button Grid.Column="1" Classes="Secondary" Content="Rename" Command="{Binding RenameCommand}"/>
                 </Grid>
-            </ui:SectionCard>
+            </ui:Section>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

@@ -22,22 +22,30 @@
         </Setter>
     </ControlTheme>
 
-    <!-- <ui:SectionCard Title="Your Friends" Description="…"> content </ui:SectionCard> -->
-    <ControlTheme x:Key="{x:Type ui:SectionCard}" TargetType="ui:SectionCard">
-        <Setter Property="Padding" Value="20"/>
+    <!-- <ui:Section Title="Your Friends" Description="…"> content </ui:Section>
+         No surface of its own: a hairline above it and space around it set it apart, so sections
+         read as parts of one page rather than boxes on it. -->
+    <ControlTheme x:Key="{x:Type ui:Section}" TargetType="ui:Section">
+        <Setter Property="Padding" Value="0,20,0,8"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
+        <Setter Property="BorderThickness" Value="0,1,0,0"/>
         <Setter Property="Template">
             <ControlTemplate>
-                <Border Classes="Card" Padding="{TemplateBinding Padding}">
-                    <StackPanel Spacing="12">
-                        <Grid ColumnDefinitions="*,Auto"
-                              IsVisible="{Binding Title, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                            <TextBlock Grid.Column="0" Classes="sectionTitle" Text="{TemplateBinding Title}"
-                                       VerticalAlignment="Center"/>
-                            <ContentPresenter Grid.Column="1" Content="{TemplateBinding Actions}"
-                                              VerticalAlignment="Center" Margin="12,0,0,0"/>
-                        </Grid>
-                        <TextBlock Classes="description" Text="{TemplateBinding Description}"
-                                   IsVisible="{Binding Description, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                <Border BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        Padding="{TemplateBinding Padding}">
+                    <StackPanel Spacing="14">
+                        <StackPanel Spacing="4">
+                            <Grid ColumnDefinitions="*,Auto"
+                                  IsVisible="{Binding Title, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                                <TextBlock Grid.Column="0" Classes="sectionTitle" Text="{TemplateBinding Title}"
+                                           VerticalAlignment="Center"/>
+                                <ContentPresenter Grid.Column="1" Content="{TemplateBinding Actions}"
+                                                  VerticalAlignment="Center" Margin="12,0,0,0"/>
+                            </Grid>
+                            <TextBlock Classes="description" Text="{TemplateBinding Description}"
+                                       IsVisible="{Binding Description, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
+                        </StackPanel>
                         <ContentPresenter Name="PART_ContentPresenter"
                                           Content="{TemplateBinding Content}"
                                           ContentTemplate="{TemplateBinding ContentTemplate}"

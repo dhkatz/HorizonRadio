@@ -18,7 +18,7 @@
             <ui:PageHeader Title="Game"
                            Description="The game Horizon Radio plays into, or none to use it as a music player."/>
 
-            <ui:SectionCard>
+            <ui:Section>
                 <StackPanel Spacing="12">
                     <TextBlock FontSize="13">
                         <Run Text="Current:" Foreground="{DynamicResource MutedForegroundColor}"/>
@@ -33,7 +33,7 @@
                                 Command="{Binding SwitchCommand}"/>
                     </StackPanel>
                 </StackPanel>
-            </ui:SectionCard>
+            </ui:Section>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

@@ -20,7 +20,7 @@
 
             <TextBlock Classes="body" Text="{Binding Status}" IsVisible="{Binding HasStatus}"/>
 
-            <ui:SectionCard Title="Your Devices">
+            <ui:Section Title="Your Devices">
                 <StackPanel Spacing="12">
                     <TextBlock Classes="description" Text="Only this one so far. Add another below."
                                IsVisible="{Binding !IsPaired}"/>
@@ -46,9 +46,9 @@
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </StackPanel>
-            </ui:SectionCard>
+            </ui:Section>
 
-            <ui:SectionCard Title="Add a Device"
+            <ui:Section Title="Add a Device"
                             Description="Show a code here, then type it on the other PC's Devices page.">
                 <StackPanel Spacing="12">
                     <StackPanel Spacing="6" IsVisible="{Binding IsShowingCode}">
@@ -65,9 +65,9 @@
                                 IsVisible="{Binding IsShowingCode}"/>
                     </StackPanel>
                 </StackPanel>
-            </ui:SectionCard>
+            </ui:Section>
 
-            <ui:SectionCard Title="Join Your Other Devices" IsVisible="{Binding CanJoin}"
+            <ui:Section Title="Join Your Other Devices" IsVisible="{Binding CanJoin}"
                             Description="On a PC that's already set up, open Devices and choose Show Code. Type the code here; this PC then takes its synced settings where they're newer.">
                 <Grid ColumnDefinitions="*,Auto">
                     <TextBox Grid.Column="0" Text="{Binding JoinCode, Mode=TwoWay}" PlaceholderText="ABCD-EFGH-JKLM"
@@ -75,9 +75,9 @@
                     <Button Grid.Column="1" Classes="Primary" Content="Join" Command="{Binding JoinCommand}"
                             IsEnabled="{Binding !IsBusy}"/>
                 </Grid>
-            </ui:SectionCard>
+            </ui:Section>
 
-            <ui:SectionCard Title="This Device">
+            <ui:Section Title="This Device">
                 <StackPanel Spacing="12">
                     <Grid ColumnDefinitions="*,Auto">
                         <TextBox Grid.Column="0" Text="{Binding ThisDeviceName, Mode=TwoWay}" Margin="0,0,8,0"/>
@@ -88,7 +88,7 @@
                     <Button Classes="Secondary" Content="Leave My Devices" Command="{Binding LeaveCommand}"
                             IsVisible="{Binding IsPaired}" HorizontalAlignment="Left"/>
                 </StackPanel>
-            </ui:SectionCard>
+            </ui:Section>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

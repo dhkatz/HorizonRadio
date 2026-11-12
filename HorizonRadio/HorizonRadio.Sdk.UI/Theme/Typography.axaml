@@ -15,9 +15,9 @@
         <Setter Property="TextWrapping" Value="Wrap"/>
     </Style>
 
-    <!-- A card's or section's heading. -->
+    <!-- A section's heading. -->
     <Style Selector=":is(TextBlock).sectionTitle">
-        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontSize" Value="15"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
     </Style>
 

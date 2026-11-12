@@ -16,7 +16,7 @@ a small set of projects with one direction of dependency, so that:
 | Project | What it is | References |
 |---|---|---|
 | `HorizonRadio.Sdk` | The plugin contract: plugin, source, metadata, lyrics, game and tool interfaces, the plain models they pass (`Track`, `PlayableItem`, `ConfigField`…), and helpers that need nothing beyond .NET. | nothing of ours |
-| `HorizonRadio.Sdk.UI` | The app's look: color tokens, text styles, list-row styles, and the controls pages are built from (`PageHeader`, `SectionCard`, `SettingRow`, `Notice`, `EmptyState`, `StatusAvatar`, `PathPicker`, `SongRow`, `ArtTile`…). | Avalonia, ShadUI, Material.Icons |
+| `HorizonRadio.Sdk.UI` | The app's look: color tokens, text styles, list-row styles, and the controls pages are built from (`PageHeader`, `Section`, `SettingRow`, `Notice`, `EmptyState`, `StatusAvatar`, `PathPicker`, `SongRow`, `ArtTile`…). | Avalonia, ShadUI, Material.Icons |
 | `HorizonRadio.Core` | The engine: playback, queue, mixes, history, metadata, lyrics, settings, devices, friends, party; the command list every front end drives; the interfaces it reaches the OS through; and starting an instance (`Core/Hosting/`: plugin discovery, startup order, the control endpoint). | `Sdk` |
 | `HorizonRadio.Platform` | The OS behind Core's interfaces: audio output, secret storage, child processes, app folders. One project, a folder per OS, picked at run time. | `Core` |
 | `HorizonRadio.UI` | The Avalonia front end: views and view models, plus components that need the app's view models (the song right-click menu, `SongMenu`). | `Core`, `Platform`, `Sdk.UI`, plugins |
@@ -94,7 +94,7 @@ Each step leaves the app working and lands as its own PR or short stack.
    its types in `HorizonRadio.Sdk.*` namespaces.
 2. [x] `HorizonRadio.Sdk.UI`: color tokens and text styles; the app and FH6 reference it, and
    hard-coded colors go.
-3. [x] `Sdk.UI` controls: page layout (`PageHeader`, `SectionCard`, `SettingRow`), status
+3. [x] `Sdk.UI` controls: page layout (`PageHeader`, `Section`, `SettingRow`), status
    (`Notice`, `EmptyState`, `StatusAvatar`, `StatusDot`), `PathPicker`, list rows (`listRow`,
    `SongRow`, `ArtTile`).
 4. [x] A confirm service (in the SDK for plugins, used by the app) and confirmation on every

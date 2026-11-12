@@ -20,7 +20,7 @@
                            Description="Version, updates, and links."/>
 
             <!-- App identity + update -->
-            <Border Classes="Card" Padding="20">
+            <Border Padding="0,4,0,4">
                 <StackPanel Spacing="14">
                     <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
                         <Border Width="38" Height="38"
@@ -61,16 +61,16 @@
                 </StackPanel>
             </Border>
 
-            <ui:SectionCard Title="Links">
+            <ui:Section Title="Links">
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button Classes="Ghost" Content="GitHub" Command="{Binding OpenRepoCommand}"/>
                     <Button Classes="Ghost" Content="Releases" Command="{Binding OpenReleasesCommand}"/>
                     <Button Classes="Ghost" Content="Report an Issue" Command="{Binding OpenIssuesCommand}"/>
                     <Button Classes="Ghost" Content="License" Command="{Binding OpenLicenseCommand}"/>
                 </StackPanel>
-            </ui:SectionCard>
+            </ui:Section>
 
-            <ui:SectionCard Title="Diagnostics" Description="Developer tools for troubleshooting metadata issues.">
+            <ui:Section Title="Diagnostics" Description="Developer tools for troubleshooting metadata issues.">
                 <StackPanel Spacing="12">
                     <ui:SettingRow Label="Capture Metadata Diagnostics"
                                    Description="Logs each song's raw title, the title-model extraction, and every metadata provider's result to a file you can attach to a bug report. Off by default; song titles and artists are recorded — no account credentials.">
@@ -84,7 +84,7 @@
                                    VerticalAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
                     </Grid>
                 </StackPanel>
-            </ui:SectionCard>
+            </ui:Section>
 
         </StackPanel>
     </ScrollViewer>

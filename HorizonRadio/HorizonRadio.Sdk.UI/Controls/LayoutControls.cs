@@ -36,18 +36,18 @@ public class PageHeader : TemplatedControl
     }
 }
 
-/// <summary>A card holding one part of a page: an optional title and description, actions beside
-/// the title, and the content under them.</summary>
-public class SectionCard : ContentControl
+/// <summary>One part of a page: an optional title and description, actions beside the title, and
+/// the content under them. Flat on the page, set off from what's above it by a hairline.</summary>
+public class Section : ContentControl
 {
     public static readonly StyledProperty<string?> TitleProperty =
-        AvaloniaProperty.Register<SectionCard, string?>(nameof(Title));
+        AvaloniaProperty.Register<Section, string?>(nameof(Title));
 
     public static readonly StyledProperty<string?> DescriptionProperty =
-        AvaloniaProperty.Register<SectionCard, string?>(nameof(Description));
+        AvaloniaProperty.Register<Section, string?>(nameof(Description));
 
     public static readonly StyledProperty<object?> ActionsProperty =
-        AvaloniaProperty.Register<SectionCard, object?>(nameof(Actions));
+        AvaloniaProperty.Register<Section, object?>(nameof(Actions));
 
     public string? Title
     {

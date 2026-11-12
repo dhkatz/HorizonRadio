@@ -21,12 +21,11 @@
                            Description="Where to look up canonical titles, artists, and album art. Providers run after the source in the order below; each fills only what's still missing, unless you pin a field to one provider below."/>
 
             <!-- Providers: enable + order + credentials -->
-            <StackPanel Spacing="6">
-                <TextBlock Classes="groupLabel" Text="Providers, in Priority Order"/>
-                <ItemsControl ItemsSource="{Binding Providers}">
+            <ui:Section Title="Providers" Description="Asked in this order.">
+                <ItemsControl Classes="divided" ItemsSource="{Binding Providers}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:MetadataProviderRow}">
-                            <Border Classes="Card" Padding="14" Margin="0,0,0,8">
+                            <Border Padding="0,10">
                                 <StackPanel Spacing="10">
                                     <Grid ColumnDefinitions="Auto,*,Auto">
                                         <CheckBox Grid.Column="0" IsChecked="{Binding IsEnabled, Mode=TwoWay}"
@@ -57,38 +56,32 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-            </StackPanel>
+            </ui:Section>
 
             <!-- Per-field overrides -->
-            <StackPanel Spacing="6">
-                <TextBlock Classes="groupLabel" Text="Field Sources"/>
-                <TextBlock Text="Pin a field to one provider, or leave it on Auto to use the order above."
-                           FontSize="11" Opacity="0.55" TextWrapping="Wrap"/>
-                <Border Classes="Card" Padding="14">
-                    <ItemsControl ItemsSource="{Binding Fields}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate><StackPanel Spacing="8"/></ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type vm:MetadataFieldRow}">
-                                <Grid ColumnDefinitions="120,*" VerticalAlignment="Center">
-                                    <TextBlock Grid.Column="0" Text="{Binding Label}" FontSize="12"
-                                               VerticalAlignment="Center"/>
-                                    <ComboBox Grid.Column="1" ItemsSource="{Binding Options}"
-                                              SelectedItem="{Binding Selected, Mode=TwoWay}"
-                                              HorizontalAlignment="Stretch">
-                                        <ComboBox.ItemTemplate>
-                                            <DataTemplate DataType="{x:Type vm:OverrideOption}">
-                                                <TextBlock Text="{Binding Label}"/>
-                                            </DataTemplate>
-                                        </ComboBox.ItemTemplate>
-                                    </ComboBox>
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </Border>
-            </StackPanel>
+            <ui:Section Title="Field Sources"
+                        Description="Pin a field to one provider, or leave it on Auto to use the order above.">
+                <ItemsControl ItemsSource="{Binding Fields}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Spacing="8"/></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:MetadataFieldRow}">
+                            <ui:SettingRow Label="{Binding Label}">
+                                <ComboBox ItemsSource="{Binding Options}"
+                                          SelectedItem="{Binding Selected, Mode=TwoWay}"
+                                          MinWidth="240">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:OverrideOption}">
+                                            <TextBlock Text="{Binding Label}"/>
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </ui:SettingRow>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ui:Section>
 
             <TextBlock Text="{Binding StatusMessage}"
                        FontSize="11" TextWrapping="Wrap"
