@@ -2,9 +2,10 @@
 
   <!-- Spotify source plugin: the user's account connection (PKCE Web API), the driven librespot
        playback service, the zero-config Connect receiver, search, and link parsing. References the
-       host (Core) for shared playback infra + the SDK (Abstractions, transitively). Owns the
-       SpotifyAPI.Web dependency (moved here from Core — no other Core code uses it). The Spotify
-       metadata plugin takes a companion dependency on this assembly to reuse the live connection. -->
+       SDK (the host's services come through the container; the plugin registers its connection and
+       players there). Owns the SpotifyAPI.Web dependency, and NAudio for resampling what Soloist
+       plays. The Spotify metadata plugin takes a companion dependency on this assembly to reuse the
+       live connection. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -12,13 +13,17 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\HorizonRadio\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+    <ProjectReference Include="..\..\..\HorizonRadio\HorizonRadio.Sdk\HorizonRadio.Sdk.csproj" />
     <ProjectReference Include="..\..\Tools\HorizonRadio.Tools.Librespot\HorizonRadio.Tools.Librespot.csproj" />
     <ProjectReference Include="..\..\Tools\HorizonRadio.Tools.Soloist\HorizonRadio.Tools.Soloist.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.3.0" />
     <PackageReference Include="SpotifyAPI.Web" Version="7.4.2" />
+    <!-- The login token is kept encrypted with DPAPI (SpotifyAuthStore); moves to a host secret
+         service with the Platform step (docs/modular-architecture.md). -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.9" />
   </ItemGroup>
 
   <!--

@@ -6,6 +6,7 @@ using HorizonRadio.Metadata.Spotify;
 using HorizonRadio.Metadata.VocaDb;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Sources.Config;
+using HorizonRadio.Source.Spotify;
 
 namespace HorizonRadio.Core.Tests;
 
@@ -33,7 +34,8 @@ public sealed class MetadataConfigMigrationTests : IDisposable
     // provider set (incl. VocaDB, now its own plugin assembly).
     public MetadataConfigMigrationTests() => MetadataCatalog.Initialize(
     [
-        new SpotifyProviderFactory(Cache, IMetadataTrace.Off),
+        new SpotifyProviderFactory(Cache, IMetadataTrace.Off,
+            new SpotifyConnection(new SpotifyAuthStore(Path.Combine(_dir.Path, "spotify-auth.dat")), "", NoLog.Instance)),
         new ItunesProviderFactory(Cache, IMetadataTrace.Off),
         new MusicBrainzProviderFactory(Cache, IMetadataTrace.Off),
         new VocaDbProviderFactory(Cache, IMetadataTrace.Off),

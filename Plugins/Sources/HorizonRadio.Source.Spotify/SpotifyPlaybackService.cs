@@ -1,7 +1,5 @@
 using System.Diagnostics;
-using HorizonRadio.Core.Audio;
-using HorizonRadio.Core.Diagnostics;
-using HorizonRadio.Core.Hosting;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Audio;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Tools.Librespot;
@@ -43,7 +41,9 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
     private string? _deviceId;
     // The device name librespot was last launched with — what EnsureDeviceAsync looks
     // up. Captured at launch (options are read fresh each launch, so this tracks them).
-    private string _deviceName = Librespot.DefaultDeviceName;
+    // The Connect device librespot registers as: set on each launch, read before the first from the settings.
+    private string? _deviceName;
+    private string DeviceName => _deviceName ?? _options().DeviceName;
 
     // Per-track signalling, swapped under _sync at the start of each PlayTrackAsync
     // and read from the stderr-drain thread.
@@ -90,23 +90,29 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
     /// <param name="options">Read fresh on each librespot launch, so installing
     /// librespot or editing the Spotify config mid-session takes effect on the next
     /// (re)launch instead of being frozen at app startup.</param>
-    public SpotifyPlaybackService(SpotifyConnection connection, Func<LibrespotOptions> options)
+    public SpotifyPlaybackService(SpotifyConnection connection, Func<LibrespotOptions> options,
+        IProcesses processes, IPluginLog log)
     {
         _connection = connection;
         _options = options;
+        _processes = processes;
+        _log = log;
     }
+
+    private readonly IProcesses _processes;
+    private readonly IPluginLog _log;
 
     // Surface to the Console tab (alongside librespot's own lines) as well as the
     // debugger, so pause/resume/recovery behaviour is diagnosable from a normal run.
-    private static void Log(string msg)
+    private void Log(string msg)
     {
-        Trace.WriteLine($"[hzn-spotify-svc] {msg}");
-        ProcessConsole.Append("spotify", msg);
+        _log.Trace("spotify-svc", msg);
+        _log.Write("spotify", msg);
     }
 
     // Run a Web API control call, logging failures (with HTTP status) instead of
     // throwing — except cancellation, which propagates.
-    private static async Task TryControlAsync(Func<Task> action, string label)
+    private async Task TryControlAsync(Func<Task> action, string label)
     {
         try { await action().ConfigureAwait(false); }
         catch (OperationCanceledException) { throw; }
@@ -427,7 +433,7 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
                 Args = Librespot.BuildArgs(o, autoplay: false),
                 ToolName = "librespot",
                 OnStderrLine = OnStderr,
-            }, StaticHostServices.Processes, StaticHostServices.Log);
+            }, _processes, _log);
             await subproc.StartAsync(_routing, _serviceCts.Token).ConfigureAwait(false);
             _librespot = subproc;
         }
@@ -445,7 +451,7 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
             var device = (await client.Player.GetCurrentPlayback(ct).ConfigureAwait(false))?.Device;
             if (device is not { IsActive: true }) return null;
             if (device.Id == deviceId || device.Id == _deviceId) return null;
-            if (string.Equals(device.Name, _deviceName, StringComparison.OrdinalIgnoreCase)) return null;
+            if (string.Equals(device.Name, DeviceName, StringComparison.OrdinalIgnoreCase)) return null;
             return device.Name ?? device.Id ?? "another device";
         }
         catch (OperationCanceledException) { throw; }
@@ -469,7 +475,7 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
             {
                 var devices = await client.Player.GetAvailableDevices(ct).ConfigureAwait(false);
                 var match = devices.Devices.FirstOrDefault(d =>
-                    string.Equals(d.Name, _deviceName, StringComparison.OrdinalIgnoreCase));
+                    string.Equals(d.Name, DeviceName, StringComparison.OrdinalIgnoreCase));
                 if (match?.Id is { } id)
                 {
                     _deviceId = id;
@@ -482,7 +488,7 @@ public sealed class SpotifyPlaybackService : IAsyncDisposable
         }
 
         throw new InvalidOperationException(
-            $"Spotify device \"{_deviceName}\" never appeared. Make sure librespot is logged in " +
+            $"Spotify device \"{DeviceName}\" never appeared. Make sure librespot is logged in " +
             "(cast to it once from your Spotify app) and the account is Premium.");
     }
 

@@ -1,8 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
-using HorizonRadio.Core.IO;
-using HorizonRadio.Core.Tools;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Tools;
 
 namespace HorizonRadio.Tools.Soloist;
@@ -15,8 +14,8 @@ public sealed record SoloistOptions
     /// <summary>The user's own Soloist key (developer.spotify.com/dashboard/soloist).</summary>
     public required string ApiKey { get; init; }
 
-    public string DeviceName { get; init; } = Soloist.DefaultDeviceName;
-    public string DataDirectory { get; init; } = Soloist.DefaultDataDir;
+    public required string DeviceName { get; init; }
+    public required string DataDirectory { get; init; }
 }
 
 /// <summary>A Soloist build, from <c>soloist.exe --version</c>.</summary>
@@ -35,7 +34,7 @@ public static partial class Soloist
     public const string ExeName = "soloist.exe";
 
     /// <summary>The Connect device Soloist shows in the Spotify app (librespot is "Horizon Radio").</summary>
-    public static string DefaultDeviceName => AppPaths.Label("Horizon Radio (Soloist)");
+    public static string DefaultDeviceName(IAppFolders folders) => folders.Label("Horizon Radio (Soloist)");
 
     /// <summary>Spotify's own download link for the Windows build. Spotify asks that Soloist isn't
     /// redistributed, so the app fetches it from here on the user's request rather than shipping it.</summary>
@@ -53,10 +52,10 @@ public static partial class Soloist
     public const int ExpiredExitCode = 10;
 
     /// <summary>Soloist's pairing, settings and audio cache, kept with the app's data.</summary>
-    public static string DefaultDataDir => AppPaths.In("soloist");
+    public static string DefaultDataDir(IAppFolders folders) => folders.Data("soloist");
 
     /// <summary>The installed soloist.exe (managed tools dir, or next to the app), or null.</summary>
-    public static string? DiscoverExe() => ToolResolver.Discover(ToolKind.Soloist);
+    public static string? DiscoverExe(IToolLocator tools) => tools.Find(ToolKind.Soloist);
 
     /// <summary>
     /// The command line: the user's key, our data directory (so pairing persists), the local
@@ -94,7 +93,7 @@ public static partial class Soloist
     }
 
     /// <summary>Ask an installed soloist.exe which build it is. Null if it can't say.</summary>
-    public static async Task<SoloistBuild?> GetBuildAsync(string exePath, CancellationToken ct)
+    public static async Task<SoloistBuild?> GetBuildAsync(IProcesses processes, string exePath, CancellationToken ct)
     {
         var psi = new ProcessStartInfo(exePath, "--version")
         {
@@ -105,14 +104,12 @@ public static partial class Soloist
         };
         try
         {
-            using var process = Process.Start(psi);
-            if (process == null) return null;
-            HorizonRadio.Core.Sources.ChildProcesses.TieToApp(process);
+            using var process = processes.Start(psi);
             var output = await process.StandardOutput.ReadToEndAsync(ct).ConfigureAwait(false);
             await process.WaitForExitAsync(ct).ConfigureAwait(false);
             return ParseVersion(output);
         }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException)
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
         {
             return null;
         }

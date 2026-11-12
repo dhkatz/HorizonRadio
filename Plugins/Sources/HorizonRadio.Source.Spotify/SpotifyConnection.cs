@@ -1,11 +1,9 @@
-using System;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Sdk;
 using SpotifyAPI.Web;
 
 namespace HorizonRadio.Source.Spotify;
@@ -42,17 +40,20 @@ public sealed class SpotifyConnection : IAsyncDisposable
     private string _clientId;
     private SpotifyClient? _client;
 
-    public SpotifyConnection(SpotifyAuthStore store, string clientId, int redirectPort = 5599)
+    private readonly IPluginLog _log;
+
+    public SpotifyConnection(SpotifyAuthStore store, string clientId, IPluginLog log, int redirectPort = 5599)
     {
         _store = store;
+        _log = log;
         _clientId = clientId;
         _redirectPort = redirectPort;
     }
 
-    private static void Log(string msg)
+    private void Log(string msg)
     {
-        Trace.WriteLine($"[hzn-spotify-conn] {msg}");
-        ProcessConsole.Append("spotify", msg);
+        _log.Trace("spotify-conn", msg);
+        _log.Write("spotify", msg);
     }
 
     /// <summary>The loopback redirect URI; must be registered on the Spotify app.</summary>
@@ -204,7 +205,7 @@ public sealed class SpotifyConnection : IAsyncDisposable
         return null;
     }
 
-    private static void OpenBrowser(string url)
+    private void OpenBrowser(string url)
     {
         try { Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true }); }
         catch (Exception ex) { Log($"open browser failed: {ex.Message}"); }

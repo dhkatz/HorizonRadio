@@ -1,3 +1,4 @@
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Sources.Config;
 using HorizonRadio.Sdk.Tools;
@@ -27,10 +28,21 @@ public sealed class SpotifySourceFactory : ISelfDrivenSourceFactory
 
     public IReadOnlyList<ConfigField> Schema { get; }
 
-    public SpotifySourceFactory()
+    private readonly IAppFolders _folders;
+    private readonly IProcesses _processes;
+    private readonly IPluginLog _log;
+    private readonly SpotifyPlaybackService _driven;
+
+    /// <param name="driven">The driven Spotify source's librespot, released when this one starts.</param>
+    public SpotifySourceFactory(IToolLocator tools, IAppFolders folders, IProcesses processes, IPluginLog log,
+        SpotifyPlaybackService driven)
     {
-        var defaultExe = Librespot.DiscoverExe() ?? "";
-        var defaultCache = Librespot.DefaultCacheDir;
+        _folders = folders;
+        _processes = processes;
+        _log = log;
+        _driven = driven;
+        var defaultExe = Librespot.DiscoverExe(tools) ?? "";
+        var defaultCache = Librespot.DefaultCacheDir(folders);
 
         Schema = new ConfigField[]
         {
@@ -51,8 +63,8 @@ public sealed class SpotifySourceFactory : ISelfDrivenSourceFactory
             new TextField(
                 Key:         KeyDeviceName,
                 Label:       "Cast device name",
-                Default:     Librespot.DefaultDeviceName,
-                Placeholder: Librespot.DefaultDeviceName,
+                Default:     Librespot.DefaultDeviceName(folders),
+                Placeholder: Librespot.DefaultDeviceName(folders),
                 Description: "Shown in your Spotify app's Connect device list."),
 
             new DirectoryField(
@@ -84,10 +96,10 @@ public sealed class SpotifySourceFactory : ISelfDrivenSourceFactory
             throw new InvalidOperationException("Spotify: pick a librespot.exe path.");
 
         var device = values.GetString(KeyDeviceName);
-        if (string.IsNullOrWhiteSpace(device)) device = Librespot.DefaultDeviceName;
+        if (string.IsNullOrWhiteSpace(device)) device = Librespot.DefaultDeviceName(_folders);
 
         var cache = values.GetString(KeyCacheDir);
-        if (string.IsNullOrWhiteSpace(cache)) cache = Librespot.DefaultCacheDir;
+        if (string.IsNullOrWhiteSpace(cache)) cache = Librespot.DefaultCacheDir(_folders);
 
         var bitrate = values.GetString(KeyBitrate) ?? "auto";
         var norm = values.GetBool(KeyNormalise, true);
@@ -99,6 +111,6 @@ public sealed class SpotifySourceFactory : ISelfDrivenSourceFactory
             CacheDirectory = cache!,
             Bitrate = bitrate,
             EnableVolumeNormalisation = norm,
-        });
+        }, _processes, _log, _driven.ReleaseAsync);
     }
 }

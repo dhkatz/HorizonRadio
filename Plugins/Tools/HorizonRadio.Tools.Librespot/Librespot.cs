@@ -1,6 +1,4 @@
-using System.Collections.Generic;
-using HorizonRadio.Core.IO;
-using HorizonRadio.Core.Tools;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Tools;
 
 namespace HorizonRadio.Tools.Librespot;
@@ -26,18 +24,18 @@ public sealed record LibrespotOptions
 public static class Librespot
 {
     /// <summary>The Connect device the user sees, marked with the profile when there is one
-    /// (<see cref="AppPaths.Label"/>), so two instances' devices can be told apart.</summary>
-    public static string DefaultDeviceName => AppPaths.Label("Horizon Radio");
+    /// (<see cref="IAppFolders.Label"/>), so two instances' devices can be told apart.</summary>
+    public static string DefaultDeviceName(IAppFolders folders) => folders.Label("Horizon Radio");
 
     /// <summary>librespot's login + audio cache (so it stays logged in across restarts).</summary>
-    public static string DefaultCacheDir => AppPaths.In("librespot");
+    public static string DefaultCacheDir(IAppFolders folders) => folders.Data("librespot");
 
     /// <summary>Locate a librespot.exe next to the app, in the managed tools dir, or in
     /// a dev build output. Null if none found.</summary>
-    public static string? DiscoverExe()
+    public static string? DiscoverExe(IToolLocator tools)
     {
         // Standard locations (app dir + managed tools dir) are shared with every other tool.
-        if (ToolResolver.Discover(ToolKind.Librespot) is { } found) return found;
+        if (tools.Find(ToolKind.Librespot) is { } found) return found;
 
         // Dev build output (not a normal install location), so it stays local to librespot.
         var here = AppContext.BaseDirectory;

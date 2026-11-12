@@ -3,7 +3,7 @@
   <!--
     Spotify metadata plugin. References the SDK, SpotifyAPI.Web for the Web API client, and — when
     no app credentials are set — the Spotify SOURCE plugin to ride on its connected Web API client
-    (SpotifyRuntime.Connection).
+    (its SpotifyConnection, a service that plugin registers).
 
     That source reference is a deliberate "companion dependency": the Spotify metadata + source
     plugins are the same vendor integration split across two plugin types, so metadata depending on

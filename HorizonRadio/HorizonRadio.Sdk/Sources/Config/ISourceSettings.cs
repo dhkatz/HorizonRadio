@@ -7,6 +7,15 @@ namespace HorizonRadio.Sdk.Sources.Config;
 /// </summary>
 public interface ISourceSettings
 {
+    /// <summary>The saved settings of the source with id <paramref name="sourceId"/> and settings
+    /// <paramref name="schema"/>, read now (the schema's defaults where unset). For code that needs
+    /// a source's settings without the source itself (a service the source is built from).</summary>
+    ConfigValues Load(string sourceId, IReadOnlyList<ConfigField> schema);
+
     /// <summary><paramref name="source"/>'s saved settings, read now (its schema's defaults where unset).</summary>
-    ConfigValues Load(IAudioSourceFactory source);
+    ConfigValues Load(IAudioSourceFactory source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        return Load(source.Id, source.Schema);
+    }
 }

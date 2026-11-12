@@ -1,4 +1,4 @@
-using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Sources;
 using SpotifyAPI.Web;
 
@@ -23,11 +23,11 @@ internal static class SpotifySearch
 
     // v1 returns tracks only. Albums/playlists slot in later behind SearchResultKind
     // (and enqueue the same way, since the queue resolver already enumerates them).
-    private static void Log(string msg) => ProcessConsole.Append("search", msg);
-
     public static async Task<IReadOnlyList<SearchResult>> SearchTracksAsync(
-        SpotifyConnection connection, string query, int limit, CancellationToken ct)
+        SpotifyConnection connection, IPluginLog log, string query, int limit, CancellationToken ct)
     {
+        void Log(string msg) => log.Write("search", msg);
+
         var client = await connection.GetClientAsync(ct).ConfigureAwait(false);
         if (client is null)
         {

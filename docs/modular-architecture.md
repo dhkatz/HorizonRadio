@@ -140,8 +140,14 @@ Each step leaves the app working and lands as its own PR or short stack.
    - [x] Radio: its services come by constructor (`RadioServices`), the directory client is a
      service, `LiveAudioBuffer` is in the SDK, and the title model is `ITitleModel`. It references
      only the SDK.
-   - [ ] Spotify (librespot, Soloist; `SpotifyRuntime` goes), then the peer helper. Until then
-     Spotify's audio processes use `StaticHostServices`.
+   - [x] Spotify, with librespot and Soloist: the plugin registers its connection, players and
+     settings (`SpotifySettings`), its sources and the Spotify metadata provider take them by
+     constructor, and `SpotifyRuntime` and the app's Spotify wiring are gone (the Connect receiver
+     frees the driven librespot itself). The Spotify, librespot and Soloist plugins reference only
+     the SDK. Left for later: the login token's DPAPI encryption (a host secret service, with the
+     Platform step) and the Soloist pairing toast (`App` listens for it until plugins can show a
+     notice).
+   - [ ] The peer helper.
    - [ ] The audio helpers (the audio cache, subprocess audio, fingerprints) and the title
      extractor, handed out by the host.
    - [ ] The remaining engine coupling (FH6 and Spotify on the queue engine and mixes) goes

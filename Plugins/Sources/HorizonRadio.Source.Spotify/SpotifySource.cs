@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using HorizonRadio.Core.Hosting;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Tools.Librespot;
@@ -32,7 +32,10 @@ namespace HorizonRadio.Source.Spotify;
 /// and we don't ship a Spotify Web API client. Users pause/skip from
 /// their Spotify app.
 /// </summary>
-public sealed class SpotifySource(LibrespotOptions options) : IAudioSource, IPlaybackProgress
+/// <param name="releaseDriven">Frees the driven Spotify service's librespot, which uses the same device
+/// and cache: called before this one starts, so the two don't fight over them.</param>
+public sealed class SpotifySource(LibrespotOptions options, IProcesses processes, IPluginLog log, Func<Task> releaseDriven)
+    : IAudioSource, IPlaybackProgress
 {
     public string Id => "spotify";
     public string DisplayName => "Spotify Connect";
@@ -79,6 +82,7 @@ public sealed class SpotifySource(LibrespotOptions options) : IAudioSource, IPla
     {
         if (_subprocess != null) return;
 
+        await releaseDriven().ConfigureAwait(false);
         Directory.CreateDirectory(options.CacheDirectory);
 
         var args = Librespot.BuildArgs(options, autoplay: true);
@@ -88,7 +92,7 @@ public sealed class SpotifySource(LibrespotOptions options) : IAudioSource, IPla
             Args = args,
             ToolName = "librespot",
             OnStderrLine = OnStderr,
-        }, StaticHostServices.Processes, StaticHostServices.Log);
+        }, processes, log);
         await _subprocess.StartAsync(sink, ct).ConfigureAwait(false);
 
         // Publish a placeholder so the HUD shows "Spotify Connect" right

@@ -2,7 +2,6 @@ using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Source.Local;
-using HorizonRadio.Source.Radio;
 using HorizonRadio.Source.Spotify;
 using HorizonRadio.Source.YouTube;
 
@@ -138,9 +137,9 @@ public class MixEntryDescriberTests
     {
         using var dir = TempDir.Create();
 
-        Assert.True(new SpotifyContentSourceFactory().Recognizes("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"));
-        Assert.True(new SpotifyContentSourceFactory().Recognizes("spotify:album:4aawyAB9vmqN3uQ7FjRGTy"));
-        Assert.False(new SpotifyContentSourceFactory().Recognizes("https://youtu.be/abc"));
+        Assert.True(TestSources.Spotify.Recognizes("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"));
+        Assert.True(TestSources.Spotify.Recognizes("spotify:album:4aawyAB9vmqN3uQ7FjRGTy"));
+        Assert.False(TestSources.Spotify.Recognizes("https://youtu.be/abc"));
 
         Assert.True(TestSources.YouTube.Recognizes("https://youtu.be/abc"));
 
