@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -26,6 +25,9 @@ public sealed class QueuePlayback : IDisposable
     private readonly SourceRunner _runner;
     private readonly SourceConfigStore _config;
     private readonly MixContentResolver _resolver;
+
+    /// <summary>The sources it plays from.</summary>
+    public SourceCatalog Sources => _resolver.Sources;
     private readonly Func<Task> _requestPlay;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -172,7 +174,7 @@ public sealed class QueuePlayback : IDisposable
     {
         foreach (var sourceId in mix.Entries.Select(e => e.SourceId).Distinct())
         {
-            if (SourceCatalog.Find(sourceId) is not IContentSourceFactory factory) continue;
+            if (Sources.Find(sourceId) is not IContentSourceFactory factory) continue;
             var values = _config.Load(factory.Id, factory.Schema);
             SourceRequirements.EnsureToolsAvailable(factory, values);
         }

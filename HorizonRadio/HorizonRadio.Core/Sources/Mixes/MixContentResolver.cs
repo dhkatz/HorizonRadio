@@ -13,15 +13,18 @@ namespace HorizonRadio.Core.Sources.Mixes;
 /// mix entry only carries a (source id, locator); the tool paths and behavior
 /// come from the same global config the Sources tab edits.
 /// </summary>
-public sealed class MixContentResolver(SourceConfigStore configStore)
+public sealed class MixContentResolver(SourceConfigStore configStore, SourceCatalog sources)
 {
+    /// <summary>The sources content can come from.</summary>
+    public SourceCatalog Sources { get; } = sources;
+
     /// <summary>Build the player for <paramref name="content"/>'s source. Throws
     /// <see cref="InvalidOperationException"/> if the source id is unknown or not
     /// content-addressable (self-driven sources can't be mix entries), or if a
     /// required tool path is unset (propagated from <c>CreatePlayer</c>).</summary>
     public IContentPlayer ResolvePlayer(ContentRef content)
     {
-        if (SourceCatalog.Find(content.SourceId) is not IContentSourceFactory factory)
+        if (Sources.Find(content.SourceId) is not IContentSourceFactory factory)
             throw new InvalidOperationException(
                 $"'{content.SourceId}' can't be played in a mix (unknown or self-driven source).");
 

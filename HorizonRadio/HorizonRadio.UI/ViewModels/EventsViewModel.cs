@@ -32,13 +32,14 @@ public sealed partial class EventsViewModel : ViewModelBase, IDisposable
     public EventsViewModel() : this(new EventRuleStore(), null, GameEventKinds.Catalog, null) { }
 
     /// <param name="catalog">The events the active game reports (its own list).</param>
+    /// <param name="sources">The sources, whose self-driven ones an event can switch to.</param>
     public EventsViewModel(EventRuleStore rules, EventActionExecutor? executor,
-                           IReadOnlyList<GameEventInfo> catalog, string? setupHint)
+                           IReadOnlyList<GameEventInfo> catalog, string? setupHint, SourceCatalog? sources = null)
     {
         _executor = executor;
         SetupHint = setupHint;
 
-        var options = BuildOptions();
+        var options = BuildOptions(sources ?? SourceCatalog.Empty);
         foreach (var category in catalog.GroupBy(i => i.Category))
         {
             var rows = category.Select(info => new EventRuleRow(info, options, rules)).ToList();
@@ -64,7 +65,7 @@ public sealed partial class EventsViewModel : ViewModelBase, IDisposable
         });
     }
 
-    private static List<EventActionOption> BuildOptions()
+    private static List<EventActionOption> BuildOptions(SourceCatalog sources)
     {
         var list = new List<EventActionOption>
         {
@@ -79,7 +80,7 @@ public sealed partial class EventsViewModel : ViewModelBase, IDisposable
         };
         // Only self-driven sources are directly switchable (Spotify Connect, the
         // test tone). Content sources play via mixes, so they aren't offered here.
-        foreach (var f in SourceCatalog.All.Where(f => f is ISelfDrivenSourceFactory))
+        foreach (var f in sources.All.Where(f => f is ISelfDrivenSourceFactory))
             list.Add(new EventActionOption($"Switch to: {f.DisplayName}",
                 new EventAction(EventActionType.SwitchSource, f.Id)));
         list.Add(new EventActionOption("Duck volume (30%)",

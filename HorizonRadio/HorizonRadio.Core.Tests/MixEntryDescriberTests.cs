@@ -15,7 +15,7 @@ namespace HorizonRadio.Core.Tests;
 public class MixEntryDescriberTests
 {
     private static MixEntryDescriber Describer(MixEntryInfoStore? store = null) =>
-        new(new MixContentResolver(new SourceConfigStore()), metadata: null, store);
+        new(new MixContentResolver(new SourceConfigStore(), TestSources.Catalog), metadata: null, store);
 
     [Fact]
     public async Task A_folder_is_described_by_its_name_size_and_cover()

@@ -1,6 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using HorizonRadio.Core.Sources;
 using HorizonRadio.Sdk.Sources;
 using ShadUI;
 
@@ -33,7 +32,15 @@ public sealed partial class QuickPlayDialogViewModel : ViewModelBase
     }
 
     /// <summary>Designer-only ctor.</summary>
-    public QuickPlayDialogViewModel() : this(new DialogManager(), SourceCatalog.All[0]) { }
+    public QuickPlayDialogViewModel() : this(new DialogManager(), new DesignerSource()) { }
+
+    private sealed class DesignerSource : IAudioSourceFactory
+    {
+        public string Id => "designer";
+        public string DisplayName => "Local Files";
+        public string? Description => null;
+        public System.Collections.Generic.IReadOnlyList<HorizonRadio.Sdk.Sources.Config.ConfigField> Schema => [];
+    }
 
     private bool CanPlay => !string.IsNullOrWhiteSpace(Locator);
 

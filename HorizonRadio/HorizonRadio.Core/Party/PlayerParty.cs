@@ -192,7 +192,7 @@ public sealed class QueuePartyPlayer : IPartyPlayer
     private volatile string? _key;
 
     /// <param name="search">Finds a song on this PC's sources (default: <see cref="SongSources.SearchAsync"/>).</param>
-    /// <param name="find">A source by id (default: <see cref="SourceCatalog.Find"/>).</param>
+    /// <param name="find">A source by id (default: the queue's sources).</param>
     public QueuePartyPlayer(QueuePlayback queue, Func<PartySong, CancellationToken, Task<IReadOnlyList<PartySource>>>? search = null,
         Func<string, IAudioSourceFactory?>? find = null)
         : this(queue, new PartySongFinder(queue, search, find))

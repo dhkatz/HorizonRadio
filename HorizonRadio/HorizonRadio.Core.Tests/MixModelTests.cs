@@ -79,7 +79,7 @@ public class MixModelTests
     [Fact]
     public void Resolver_returns_player_for_content_source()
     {
-        var resolver = new MixContentResolver(new SourceConfigStore());
+        var resolver = new MixContentResolver(new SourceConfigStore(), TestSources.Catalog);
         var player = resolver.ResolvePlayer(new ContentRef("local", @"C:\Music"));
         Assert.IsType<LocalContentPlayer>(player);
     }
@@ -87,7 +87,7 @@ public class MixModelTests
     [Fact]
     public void Resolver_rejects_self_driven_and_unknown_sources()
     {
-        var resolver = new MixContentResolver(new SourceConfigStore());
+        var resolver = new MixContentResolver(new SourceConfigStore(), TestSources.Catalog);
         // Spotify is self-driven (not IContentSourceFactory); "nope" is unknown.
         Assert.Throws<InvalidOperationException>(
             () => resolver.ResolvePlayer(new ContentRef("spotify", "whatever")));
@@ -110,7 +110,7 @@ public class MixModelTests
         }
         """);
 
-        var mixes = MixMigration.FromLegacyProfiles(path);
+        var mixes = MixMigration.FromLegacyProfiles(path, TestSources.Catalog);
 
         Assert.Equal(2, mixes.Count); // self-driven Spotify profile dropped
         Assert.DoesNotContain(mixes, m => m.Id == "b");

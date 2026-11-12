@@ -161,8 +161,10 @@ Each step leaves the app working and lands as its own PR or short stack.
    - [x] `App` names no plugin: tool plugins come from the container like the rest (the static
      tool list is gone), and plugins tell the user things through `INotifications` (the Soloist
      pairing prompt is the Spotify plugin's).
-   - [ ] The catalogs (`SourceCatalog`, `MetadataCatalog`, `ToolCatalog`) are services instead of
-     statics filled at startup.
+   - [x] `SourceCatalog` and `MetadataCatalog` are services built from the container (the source
+     catalog carries its `UnifiedSearch`; the mix resolver, the queue and the router expose it, so
+     most of the app reaches it through what it already holds).
+   - [ ] `ToolCatalog`, with `ToolsPaths` and `ToolResolver` behind the tool locator.
    - [ ] Core reaches what a plugin can replace through its interface (the Console log, process
      launching, folders, the tool locator), so a replacement applies to Core's own use too.
 7. [ ] `Core/Hosting/`: the startup sequence, plugin discovery, plugin context, game host and

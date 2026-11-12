@@ -1,4 +1,3 @@
-using System;
 using System.Linq;
 using System.Threading;
 using HorizonRadio.Core.Sources;
@@ -41,21 +40,27 @@ public sealed class PlayHistoryService : IDisposable
 
     private readonly Timer? _saveTimer;
 
+    // A source's name for a replay source; without it (tests), the track's own.
+    private readonly SourceCatalog? _sources;
+
     public PlayHistoryService(
         PlayHistoryStore store,
         SourceRunner runner,
+        SourceCatalog sources,
         Func<DateTimeOffset>? clock = null,
         bool persist = true)
-        : this(store, clock, persist)
+        : this(store, clock, persist, sources)
     {
         _runner = runner;
         _runner.TrackChanged += OnTrackChanged;
     }
 
     // Core ctor without the runner subscription — the seam unit tests drive via Record().
-    internal PlayHistoryService(PlayHistoryStore store, Func<DateTimeOffset>? clock, bool persist)
+    internal PlayHistoryService(PlayHistoryStore store, Func<DateTimeOffset>? clock, bool persist,
+        SourceCatalog? sources = null)
     {
         _store = store;
+        _sources = sources;
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
         _persist = persist;
         if (_persist)
@@ -91,7 +96,7 @@ public sealed class PlayHistoryService : IDisposable
         }
     }
 
-    private static PlayHistoryEntry BuildEntry(Track t, DateTimeOffset now)
+    private PlayHistoryEntry BuildEntry(Track t, DateTimeOffset now)
     {
         var (replaySourceId, locator) = HistoryReplay.DeriveOrigin(t.ExternalId);
         var directlyReplayable = replaySourceId != null && locator != null;
@@ -100,7 +105,7 @@ public sealed class PlayHistoryService : IDisposable
         // and is "matched" by definition; a freeform song starts with no sources and an unknown
         // verdict, both filled in when the History view resolves it.
         IReadOnlyList<ReplaySource> sources = directlyReplayable
-            ? [new ReplaySource(replaySourceId!, SourceCatalog.Find(replaySourceId!)?.DisplayName ?? t.SourceDisplay, locator!)]
+            ? [new ReplaySource(replaySourceId!, _sources?.Find(replaySourceId!)?.DisplayName ?? t.SourceDisplay, locator!)]
             : [];
 
         return new PlayHistoryEntry

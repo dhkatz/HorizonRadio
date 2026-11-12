@@ -42,12 +42,15 @@ public sealed class NoTitleModel : Sdk.Metadata.ITitleModel
 /// <summary>The shipped sources, as the test container built them (<see cref="TestModuleInit"/>).</summary>
 public static class TestSources
 {
+    /// <summary>The shipped sources, built by the test container (<see cref="TestModuleInit"/>).</summary>
+    public static Sources.SourceCatalog Catalog { get; internal set; } = Sources.SourceCatalog.Empty;
+
     public static Source.Spotify.SpotifyContentSourceFactory Spotify =>
-        (Source.Spotify.SpotifyContentSourceFactory)Sources.SourceCatalog.Find(Source.Spotify.SpotifyContentSourceFactory.SourceId)!;
+        (Source.Spotify.SpotifyContentSourceFactory)Catalog.Find(Source.Spotify.SpotifyContentSourceFactory.SourceId)!;
 
     public static Source.Radio.RadioSourceFactory Radio =>
-        (Source.Radio.RadioSourceFactory)Sources.SourceCatalog.Find(Source.Radio.RadioSourceFactory.SourceId)!;
+        (Source.Radio.RadioSourceFactory)Catalog.Find(Source.Radio.RadioSourceFactory.SourceId)!;
 
     public static Source.YouTube.YouTubeSourceFactory YouTube =>
-        (Source.YouTube.YouTubeSourceFactory)Sources.SourceCatalog.Find(Source.YouTube.YouTubeSourceFactory.SourceId)!;
+        (Source.YouTube.YouTubeSourceFactory)Catalog.Find(Source.YouTube.YouTubeSourceFactory.SourceId)!;
 }

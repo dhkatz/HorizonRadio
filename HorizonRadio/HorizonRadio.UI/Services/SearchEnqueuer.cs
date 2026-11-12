@@ -1,7 +1,6 @@
 using System;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Diagnostics;
-using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Queue;
 using HorizonRadio.Sdk.Sources;
 using ShadUI;
@@ -33,7 +32,7 @@ public sealed class SearchEnqueuer
     /// it starts immediately (the row's Play action) rather than appending (Add).</summary>
     public async Task EnqueueAsync(SearchResult result, bool playNow)
     {
-        if (SourceCatalog.Find(result.SourceId) is not { } factory)
+        if (_queue.Sources.Find(result.SourceId) is not { } factory)
         {
             ProcessConsole.Append("search", $"no factory for source '{result.SourceId}'");
             return;

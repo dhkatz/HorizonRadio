@@ -3,7 +3,6 @@ using HorizonRadio.Core.Hosting;
 using HorizonRadio.Core.Settings;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Tools;
-using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Tools;
 using HorizonRadio.Source.Local;
 using HorizonRadio.Source.Radio;
@@ -16,10 +15,9 @@ using Microsoft.Extensions.DependencyInjection;
 namespace HorizonRadio.Core.Tests;
 
 /// <summary>
-/// Populates the source catalog once for the whole test assembly, mirroring what the composition
-/// root does at startup: the sources come from a container with Core's services and the plugins'. The queue/mix engine resolves content via <see cref="SourceCatalog"/>, so
-/// tests that exercise it need the catalog populated; without this it'd be empty (only the app's
-/// <c>App</c> calls <see cref="SourceCatalog.Initialize"/>).
+/// Builds the shipped sources once for the whole test assembly, the way the app does at startup:
+/// a container with Core's services and the plugins', whose <see cref="SourceCatalog"/> becomes
+/// <see cref="TestSources.Catalog"/>. Tests that build the queue or mix engine hand it that.
 /// </summary>
 internal static class TestModuleInit
 {
@@ -44,6 +42,6 @@ internal static class TestModuleInit
             .AddHorizonCore(SettingsStore.CreateInMemory())
             .AddPlugins([.. plugins.SelectMany(p => p.Assembly.GetExportedTypes())]);
         var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
-        SourceCatalog.Initialize(provider.GetServices<IAudioSourceFactory>().InDisplayOrder());
+        TestSources.Catalog = provider.GetRequiredService<SourceCatalog>();
     }
 }

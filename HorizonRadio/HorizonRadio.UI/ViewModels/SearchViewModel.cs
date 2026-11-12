@@ -70,7 +70,7 @@ public sealed partial class SearchViewModel : ViewModelBase, IDisposable
     {
         _enqueuer = enqueuer;
         _context = context;
-        foreach (var s in UnifiedSearch.SearchableSources)
+        foreach (var s in context.Search.SearchableSources)
             Filters.Add(new SourceFilterChipViewModel(s.Id, s.DisplayName, OnFilterChanged));
     }
 
@@ -130,7 +130,7 @@ public sealed partial class SearchViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(HasResults));
 
         UnifiedSearchResult result;
-        try { result = await UnifiedSearch.SearchAsync(searchQuery, PageLimit, include, cts.Token); }
+        try { result = await _context!.Search.SearchAsync(searchQuery, PageLimit, include, cts.Token); }
         catch (System.OperationCanceledException) { return; }
         catch (System.Exception ex)
         {

@@ -171,7 +171,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         // Self-driven sources (Spotify Connect, the test tone) start directly;
         // content sources open a quick-play dialog when picked (see
         // OnSelectedFactoryChanged) — both live in this one picker.
-        AvailableSources = SourceCatalog.All;
+        AvailableSources = playback.Sources.All;
 
         _mixes.Changed += () => Dispatcher.UIThread.Post(RefreshMixes);
         RefreshMixes();
@@ -520,7 +520,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     /// <summary>Designer ctor — no runner, dropdown is inert.</summary>
     public NowPlayingViewModel()
     {
-        AvailableSources = SourceCatalog.All;
+        AvailableSources = [];
         Lyrics = new LyricsViewModel(null, () => null);
     }
 

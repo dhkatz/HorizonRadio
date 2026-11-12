@@ -216,7 +216,9 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   contributes: sources (`IAudioSourceFactory`), metadata providers (`IMetadataProviderFactory`:
   factories, since they're built from the user's settings) and lyrics providers
   (`ILyricsProvider`). Tool plugins (`IToolPlugin`: a tool's descriptor and installer) are found
-  the same way and ordered like the rest. The app collects each kind from the container (`GetServices<T>()`) and
+  the same way and ordered like the rest. The app collects each kind from the container (`GetServices<T>()`;
+  the sources as the `SourceCatalog` service, which also searches them, and the metadata providers as
+  `MetadataCatalog`) and
   orders it by `SortOrder`, then id (`InDisplayOrder`; `IOrdered`). Contributions are built by the
   container, so their constructors take the host's services (`IPluginLog`, `IProcesses`,
   `IAppFolders`, `IToolLocator`, `IMetadataCache`, `IMetadataTrace`, `IAudioCaches`,

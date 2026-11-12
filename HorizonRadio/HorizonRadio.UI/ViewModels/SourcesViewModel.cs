@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
@@ -79,12 +78,12 @@ public sealed partial class SourcesViewModel : ViewModelBase
         _queue = playback.Player;
         _registry = registry;
 
-        foreach (var f in SourceCatalog.All) AvailableSources.Add(f);
+        foreach (var f in playback.Sources.All) AvailableSources.Add(f);
 
         _runner.ActiveSourceChanged += _ =>
             Avalonia.Threading.Dispatcher.UIThread.Post(() => IsRunning = _runner.IsRunning);
 
-        var initial = SourceCatalog.Find(store.Settings.Get(SourceSettings.LastSelected) ?? "")
+        var initial = playback.Sources.Find(store.Settings.Get(SourceSettings.LastSelected) ?? "")
                    ?? AvailableSources.FirstOrDefault();
         SelectedFactory = initial;
     }
@@ -95,7 +94,7 @@ public sealed partial class SourcesViewModel : ViewModelBase
     { }
 
     private SourcesViewModel(SourceConfigStore store)
-        : this(new PlaybackRouter(new SourceRunner(new NullSink()), store, new MixStore(), new MixContentResolver(store)),
+        : this(new PlaybackRouter(new SourceRunner(new NullSink()), store, new MixStore(), new MixContentResolver(store, SourceCatalog.Empty)),
                store)
     { }
 

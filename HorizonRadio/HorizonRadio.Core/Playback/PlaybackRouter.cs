@@ -143,6 +143,9 @@ public sealed class PlaybackRouter : IPlaybackRouter, IAsyncDisposable
     /// <summary>The player channel: the app's queue.</summary>
     public QueuePlayback Player { get; }
 
+    /// <summary>The sources it plays from.</summary>
+    public SourceCatalog Sources => Player.Sources;
+
     /// <summary>Builds the context a mix channel plays (tests swap in their own).</summary>
     internal Func<Mix, bool, IQueueContext> MixContexts { get; set; }
 

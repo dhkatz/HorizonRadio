@@ -83,7 +83,7 @@ public class QueueModelTests
         model.WorkAvailable += () => work++;
 
         var mix = new Mix("m", "M", [new ContentRef("local", "C:/music")]);
-        model.SetContext(new MixContextProvider(mix, new MixContentResolver(new SourceConfigStore())), "m");
+        model.SetContext(new MixContextProvider(mix, new MixContentResolver(new SourceConfigStore(), TestSources.Catalog)), "m");
 
         Assert.True(model.HasContext);
         Assert.Equal("m", model.ContextMixId);
@@ -97,7 +97,7 @@ public class QueueModelTests
         using var dir = TempDir.Create();
         foreach (var n in new[] { "a", "b", "c", "d", "e", "f" }) dir.Touch($"{n}.mp3");
         var provider = new MixContextProvider(
-            new Mix("m", "M", [new ContentRef("local", dir.Path)]), new MixContentResolver(new SourceConfigStore()));
+            new Mix("m", "M", [new ContentRef("local", dir.Path)]), new MixContentResolver(new SourceConfigStore(), TestSources.Catalog));
         var model = new QueueModel();
         model.SetContext(provider, "m");
         Assert.Equal("a", (await provider.NextAsync(CancellationToken.None))?.Metadata.Title);

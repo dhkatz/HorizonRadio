@@ -1,4 +1,3 @@
-using System;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Playback;
@@ -116,7 +115,7 @@ public sealed class ActionDispatcher : IActionDispatcher
     private async Task SwitchSourceAsync(string? sourceId)
     {
         if (string.IsNullOrEmpty(sourceId)) return;
-        var factory = SourceCatalog.Find(sourceId);
+        var factory = _playback.Sources.Find(sourceId);
         if (factory == null)
         {
             ProcessConsole.Append(_logChannel, $"switch source: unknown source '{sourceId}'");

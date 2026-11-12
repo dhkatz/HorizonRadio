@@ -21,7 +21,7 @@ public sealed class QueuePartyPlayerTests : IAsyncDisposable
     public QueuePartyPlayerTests()
     {
         var config = new SourceConfigStore();
-        _router = new PlaybackRouter(_runner, config, new MixStore(), new MixContentResolver(config));
+        _router = new PlaybackRouter(_runner, config, new MixStore(), new MixContentResolver(config, TestSources.Catalog));
         ToolResolver.DiscoverOverride = _ => null; // a PC without yt-dlp or ffmpeg
     }
 

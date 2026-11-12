@@ -23,7 +23,7 @@ public class MixSwitcherTests
     {
         var runner = new SourceRunner(new NullSink());
         var config = new SourceConfigStore();
-        var playback = new PlaybackRouter(runner, config, store, new MixContentResolver(config));
+        var playback = new PlaybackRouter(runner, config, store, new MixContentResolver(config, TestSources.Catalog));
         var switcher = new MixSwitcher(store, playback.Player, runner);
         return (switcher, runner, playback);
     }

@@ -23,7 +23,7 @@ public class MixContextProviderTests
 
 {
 
-    private static MixContentResolver Resolver() => new(new SourceConfigStore());
+    private static MixContentResolver Resolver() => new(new SourceConfigStore(), TestSources.Catalog);
 
 
 

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
@@ -92,7 +91,7 @@ public sealed partial class TopBarViewModel : ViewModelBase
         HasNoResults = false;
 
         UnifiedSearchResult result;
-        try { result = await UnifiedSearch.SearchAsync(query, SearchLimit, ct: ct); }
+        try { result = await _context!.Search.SearchAsync(query, SearchLimit, ct: ct); }
         catch (OperationCanceledException) { return; }
         catch { result = new UnifiedSearchResult([], []); }
 
@@ -112,7 +111,7 @@ public sealed partial class TopBarViewModel : ViewModelBase
         IsSearching = false;
         // Empty because nothing matched vs. because no source is connected — show the
         // right hint for each.
-        NeedsConnection = result.Results.Count == 0 && !UnifiedSearch.HasReadySource;
+        NeedsConnection = result.Results.Count == 0 && !_context!.Search.HasReadySource;
         HasNoResults = result.Results.Count == 0 && !NeedsConnection;
     }
 

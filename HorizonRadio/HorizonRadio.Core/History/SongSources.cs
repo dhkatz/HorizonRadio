@@ -1,7 +1,5 @@
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Metadata;
@@ -23,19 +21,20 @@ public static class SongSources
     /// <summary>Search the services for an identified song and keep the hits that are it, at most
     /// one per service. <c>Ran</c> is false when no search source was ready or the search failed,
     /// so a caller can try again later rather than take "couldn't search" for "nowhere has it".</summary>
-    public static async Task<(IReadOnlyList<ReplaySource> Sources, bool Ran)> SearchAsync(Track song, CancellationToken ct)
+    public static async Task<(IReadOnlyList<ReplaySource> Sources, bool Ran)> SearchAsync(
+        SourceCatalog catalog, Track song, CancellationToken ct)
     {
-        if (!UnifiedSearch.HasReadySource) return ([], false);
+        if (!catalog.Search.HasReadySource) return ([], false);
         var query = $"{song.Artist} {song.Title}".Trim();
         if (string.IsNullOrWhiteSpace(query)) return ([], true);
 
         UnifiedSearchResult result;
-        try { result = await UnifiedSearch.SearchAsync(query, SearchLimit, ct: ct).ConfigureAwait(false); }
+        try { result = await catalog.Search.SearchAsync(query, SearchLimit, ct: ct).ConfigureAwait(false); }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex) { Trace.WriteLine($"[hzn-song-sources] search: {ex.Message}"); return ([], false); }
 
         var sources = HistorySourceMatch.Select(song.Artist, song.Title, result.Results)
-            .Select(r => new ReplaySource(r.SourceId, SourceCatalog.Find(r.SourceId)?.DisplayName ?? r.SourceId, r.Locator))
+            .Select(r => new ReplaySource(r.SourceId, catalog.Find(r.SourceId)?.DisplayName ?? r.SourceId, r.Locator))
             .ToList();
         return (sources, true);
     }
@@ -44,12 +43,13 @@ public static class SongSources
     /// official videos VocaDB links), then a search of the services. Only a song the catalogs
     /// confirm is searched for, so a loosely parsed title can't pick another artist's song of the
     /// same name. Empty when it couldn't be identified or found.</summary>
-    public static async Task<IReadOnlyList<ReplaySource>> FindAsync(MetadataResolver? resolver, Track seed, CancellationToken ct)
+    public static async Task<IReadOnlyList<ReplaySource>> FindAsync(
+        SourceCatalog catalog, MetadataResolver? resolver, Track seed, CancellationToken ct)
     {
         if (resolver is not { HasContributors: true }) return [];
         var resolved = await resolver.ResolveDetailedAsync(seed, ct).ConfigureAwait(false);
         if (!resolved.Matched) return [];
-        var (hits, _) = await SearchAsync(resolved.Track, ct).ConfigureAwait(false);
+        var (hits, _) = await SearchAsync(catalog, resolved.Track, ct).ConfigureAwait(false);
         return HistorySourceMatch.Combine(HistorySourceMatch.FromPvs(resolved.Playables), hits);
     }
 }

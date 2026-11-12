@@ -1,7 +1,5 @@
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Text.Json;
 using HorizonRadio.Core.IO;
 using HorizonRadio.Sdk.Sources;
@@ -28,11 +26,11 @@ public static class MixMigration
     /// profiles file (if present) and persist. No-op once any mix exists, so it
     /// runs at most once. Returns the number of mixes migrated.
     /// </summary>
-    public static int MaybeMigrate(MixStore store, string? profilesPath = null)
+    public static int MaybeMigrate(MixStore store, SourceCatalog sources, string? profilesPath = null)
     {
         if (store.All.Count > 0) return 0;
 
-        var migrated = FromLegacyProfiles(profilesPath ?? DefaultProfilesPath);
+        var migrated = FromLegacyProfiles(profilesPath ?? DefaultProfilesPath, sources);
         if (migrated.Count == 0) return 0;
 
         foreach (var mix in migrated) store.AddOrUpdate(mix);
@@ -41,7 +39,7 @@ public static class MixMigration
         return migrated.Count;
     }
 
-    public static IReadOnlyList<Mix> FromLegacyProfiles(string profilesPath)
+    public static IReadOnlyList<Mix> FromLegacyProfiles(string profilesPath, SourceCatalog sources)
     {
         var mixes = new List<Mix>();
         if (!File.Exists(profilesPath)) return mixes;
@@ -64,7 +62,7 @@ public static class MixMigration
 
                 // Only content-addressable sources carry a playable locator; a
                 // self-driven or unknown source can't become a mix entry.
-                if (SourceCatalog.Find(source) is not IContentSourceFactory factory) continue;
+                if (sources.Find(source) is not IContentSourceFactory factory) continue;
 
                 string? locator = null;
                 if (p.TryGetProperty("content", out var content) && content.ValueKind == JsonValueKind.Object &&

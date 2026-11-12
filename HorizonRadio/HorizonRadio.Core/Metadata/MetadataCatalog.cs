@@ -1,22 +1,20 @@
 using System.Diagnostics;
-using HorizonRadio.Sdk;
+using HorizonRadio.Core.Hosting;
 using HorizonRadio.Sdk.Metadata;
 
 namespace HorizonRadio.Core.Metadata;
 
-public static class MetadataCatalog
+/// <summary>
+/// Every metadata provider the plugins contribute (their factories), in display order. A service built
+/// from the container; <see cref="MetadataConfigStore"/> derives its fresh-install defaults and
+/// "introduced" set from it.
+/// </summary>
+public sealed class MetadataCatalog(IEnumerable<IMetadataProviderFactory> providers)
 {
     public const string NoneId = "none";
 
-    /// <summary>Register the available metadata providers, in display order. Called once by the
-    /// composition root, from what the plugins registered in the container, BEFORE any provider
-    /// config is loaded (<see cref="MetadataConfigStore"/> derives its fresh-install defaults and
-    /// "introduced" set from <see cref="All"/>, so the catalog must be populated first).</summary>
-    public static void Initialize(IReadOnlyList<IMetadataProviderFactory> providers) => All = providers;
-
-    /// <summary>Every provider factory the plugins contribute, in display order. Empty until
-    /// <see cref="Initialize"/> runs.</summary>
-    public static IReadOnlyList<IMetadataProviderFactory> All { get; private set; } = [];
+    /// <summary>Every provider factory the plugins contribute, in display order.</summary>
+    public IReadOnlyList<IMetadataProviderFactory> All { get; } = providers.InDisplayOrder();
 
     /// <summary>Providers enabled out of the box (keyless, no setup), highest priority
     /// first. Spotify is excluded — it needs credentials. VocaDB is last: it fills the
@@ -25,7 +23,7 @@ public static class MetadataCatalog
     /// defaults and the one-time migration that enables a newly-shipped provider.</summary>
     public static IReadOnlyList<string> DefaultEnabledOrder { get; } = ["itunes", "musicbrainz", "vocadb"];
 
-    public static IMetadataProviderFactory? Find(string id) =>
+    public IMetadataProviderFactory? Find(string id) =>
         All.FirstOrDefault(f => f.Id == id);
 
     /// <summary>
@@ -34,7 +32,7 @@ public static class MetadataCatalog
     /// credentials) and assemble a <see cref="MetadataPolicy"/> with the source first,
     /// the providers in the user's order, and the per-field forced overrides.
     /// </summary>
-    public static (IReadOnlyList<IMetadataProvider> Contributors, MetadataPolicy Policy) BuildPipeline(
+    public (IReadOnlyList<IMetadataProvider> Contributors, MetadataPolicy Policy) BuildPipeline(
         MetadataConfigStore store)
     {
         var contributors = new List<IMetadataProvider>();
