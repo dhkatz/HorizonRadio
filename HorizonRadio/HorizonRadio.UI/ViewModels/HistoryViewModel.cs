@@ -13,7 +13,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.History;
 using HorizonRadio.Core.Metadata;
-using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Queue;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
@@ -123,7 +122,7 @@ public sealed partial class HistoryViewModel : ViewModelBase
         // (needs a searchable source). Run if either is available. Every row is enriched (not just
         // a fixed window) so songs deep in the list still get art, a verdict, and replay sources;
         // the shared gate keeps the actual work trickling a few at a time.
-        if (_resolver is not { HasContributors: true } && !UnifiedSearch.HasReadySource) return;
+        if (_resolver is not { HasContributors: true } && !_queue!.Sources.Search.HasReadySource) return;
         foreach (var row in Items)
             if (_enriched.Add(row.Id)) _ = EnrichRowAsync(row);
     }
@@ -157,14 +156,14 @@ public sealed partial class HistoryViewModel : ViewModelBase
                     // service (e.g. Spotify). Searching only when matched is what keeps a fuzzy
                     // title-only parse from latching onto the wrong artist's same-titled track.
                     var pvSources = HistorySourceMatch.FromPvs(resolved.Playables);
-                    var (searchHits, ran) = await SongSources.SearchAsync(final, CancellationToken.None).ConfigureAwait(false);
+                    var (searchHits, ran) = await SongSources.SearchAsync(_queue!.Sources, final, CancellationToken.None).ConfigureAwait(false);
                     foundSources = HistorySourceMatch.Combine(pvSources, searchHits);
                     newState = HistoryMatchState.Matched;
                     // Settle when the search actually ran, or when we have PVs and there's no search
                     // source that could ever add more. If a search source exists but wasn't ready yet
                     // (ran == false), stay unsettled so a later pass can still add e.g. Spotify —
                     // having a PV mustn't permanently suppress the other services.
-                    settled = ran || (pvSources.Count > 0 && !UnifiedSearch.HasSearchableSource);
+                    settled = ran || (pvSources.Count > 0 && !_queue!.Sources.Search.HasSearchableSource);
                 }
                 else
                 {
@@ -219,7 +218,7 @@ public sealed partial class HistoryViewModel : ViewModelBase
     {
         if (_queue == null) return;
         var target = source ?? (e.Sources.Count > 0 ? e.Sources[0] : null);
-        if (target != null && SourceCatalog.Find(target.SourceId) is IContentSourceFactory factory)
+        if (target != null && _queue!.Sources.Find(target.SourceId) is IContentSourceFactory factory)
         {
             try
             {

@@ -84,8 +84,9 @@ public sealed partial class MixesViewModel : ViewModelBase
     private IReadOnlyList<ContentRef> _openedEntries = [];
 
     private readonly IConfirmations _confirm = ProceedWithoutAsking.Instance;
+    private readonly SourceCatalog _sources = SourceCatalog.Empty;
 
-    public MixesViewModel(MixStore store, MixSwitcher switcher,
+    public MixesViewModel(MixStore store, MixSwitcher switcher, SourceCatalog sources,
                           DialogManager? dialogs = null, MixEntryDescriber? describer = null,
                           SongActions? songs = null, IConfirmations? confirmations = null)
     {
@@ -95,7 +96,8 @@ public sealed partial class MixesViewModel : ViewModelBase
         _dialogs = dialogs;
         _describer = describer;
         _songs = songs;
-        EntrySources = SourceCatalog.All.Where(f => f is IContentSourceFactory).ToList();
+        _sources = sources;
+        EntrySources = sources.All.Where(f => f is IContentSourceFactory).ToList();
         newSource = EntrySources.Count > 0 ? EntrySources[0] : null;
 
         EditEntries.CollectionChanged += (_, _) => OnEditEntriesChanged();
@@ -106,14 +108,15 @@ public sealed partial class MixesViewModel : ViewModelBase
     /// <summary>Designer-only ctor.</summary>
     public MixesViewModel() : this(
         new MixStore(),
-        DesignerSwitcher())
+        DesignerSwitcher(),
+        SourceCatalog.Empty)
     { }
 
     private static MixSwitcher DesignerSwitcher()
     {
         var runner = new SourceRunner(new NullSink());
         var config = new SourceConfigStore();
-        var playback = new PlaybackRouter(runner, config, new MixStore(), new MixContentResolver(config));
+        var playback = new PlaybackRouter(runner, config, new MixStore(), new MixContentResolver(config, SourceCatalog.Empty));
         return new MixSwitcher(new MixStore(), playback.Player, runner);
     }
 
@@ -290,7 +293,7 @@ public sealed partial class MixesViewModel : ViewModelBase
     // the item template binds straight to the row instead of reaching up the tree.
     private MixEntryRowViewModel NewEntryRow(ContentRef entry)
     {
-        var source = SourceCatalog.Find(entry.SourceId);
+        var source = _sources.Find(entry.SourceId);
         var row = new MixEntryRowViewModel(entry, source?.DisplayName ?? entry.SourceId,
             RemoveEntryRow, MoveEntryRow, r => LoadRow(r, force: true));
         row.Song = _songs?.For(Song.FromEntry(entry, row.Title));

@@ -35,31 +35,31 @@ public sealed record UnifiedSearchResult(
 /// so it can't sink results another source returned, yet the failure is still visible.
 /// The aggregator itself only throws on cancellation.
 /// </summary>
-public static class UnifiedSearch
+public sealed class UnifiedSearch(SourceCatalog sources)
 {
     /// <summary>True when at least one source can be searched — lets the UI keep the
     /// search box inert (or hinting) when nothing is wired up yet.</summary>
-    public static bool HasSearchableSource => SourceCatalog.All.OfType<ISearchSource>().Any();
+    public bool HasSearchableSource => sources.All.OfType<ISearchSource>().Any();
 
     /// <summary>True when at least one search source is actually usable right now: it
     /// either needs no account, or its account is connected. Lets the UI tell "nothing
     /// matched" apart from "you're not connected".</summary>
-    public static bool HasReadySource =>
-        SourceCatalog.All.OfType<ISearchSource>()
+    public bool HasReadySource =>
+        sources.All.OfType<ISearchSource>()
             .Any(s => s is not IAuthenticatingSource auth || auth.IsConnected);
 
     // The factories that can be searched, in catalog order. One definition so the chips
     // (built from SearchableSources) and the actual query (SearchAsync) can't disagree.
-    private static IEnumerable<IAudioSourceFactory> SearchableFactories =>
-        SourceCatalog.All.OfType<IAudioSourceFactory>().Where(f => f is ISearchSource);
+    private IEnumerable<IAudioSourceFactory> SearchableFactories =>
+        sources.All.OfType<IAudioSourceFactory>().Where(f => f is ISearchSource);
 
     /// <summary>The searchable sources, in catalog order — for filter chips and labels.</summary>
-    public static IReadOnlyList<SearchSourceInfo> SearchableSources =>
+    public IReadOnlyList<SearchSourceInfo> SearchableSources =>
         SearchableFactories.Select(f => new SearchSourceInfo(f.Id, f.DisplayName)).ToList();
 
     /// <param name="includeSourceIds">When non-null, only these source ids are queried
     /// (the filter chips). Null = all searchable sources.</param>
-    public static async Task<UnifiedSearchResult> SearchAsync(
+    public async Task<UnifiedSearchResult> SearchAsync(
         string query, int limit, IReadOnlySet<string>? includeSourceIds = null, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(query))

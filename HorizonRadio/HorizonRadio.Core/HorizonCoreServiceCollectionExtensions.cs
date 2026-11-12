@@ -4,6 +4,7 @@ using HorizonRadio.Core.Hosting;
 using HorizonRadio.Core.Input;
 using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Settings;
+using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Sdk;
@@ -43,7 +44,9 @@ public static class HorizonCoreServiceCollectionExtensions
     {
         services.AddSingleton(settings);
         services.AddSingleton(_ => new SourceConfigStore(settings));
-        services.AddSingleton(_ => new MetadataConfigStore(settings));
+        services.AddSingleton<SourceCatalog>();
+        services.AddSingleton<MetadataCatalog>();
+        services.AddSingleton(sp => new MetadataConfigStore(settings, sp.GetRequiredService<MetadataCatalog>()));
         services.AddSingleton(_ => MixStore.LoadFromDisk());
         services.AddSingleton(_ => PlayHistoryStore.LoadFromDisk());
         services.AddSingleton(_ => new EventRuleStore(settings));
@@ -68,7 +71,8 @@ public static class HorizonCoreServiceCollectionExtensions
 
         // Resolves a mix entry to playable content from the source config; non-disposable and its
         // only dependency (the source config store) is registered above, so it's safe to own here.
-        services.AddSingleton(sp => new MixContentResolver(sp.GetRequiredService<SourceConfigStore>()));
+        services.AddSingleton(sp => new MixContentResolver(
+            sp.GetRequiredService<SourceConfigStore>(), sp.GetRequiredService<SourceCatalog>()));
         return services;
     }
 }

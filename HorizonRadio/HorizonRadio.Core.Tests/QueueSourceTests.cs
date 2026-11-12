@@ -28,7 +28,7 @@ public class QueueSourceTests
         }
     }
 
-    private static MixContentResolver Resolver() => new(new SourceConfigStore());
+    private static MixContentResolver Resolver() => new(new SourceConfigStore(), TestSources.Catalog);
 
     // Bound actions reach the engine through the router; these tests put a queue engine of
     // their own on its runner.

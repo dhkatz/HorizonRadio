@@ -1,26 +1,29 @@
-using System.Linq;
-using HorizonRadio.Sdk;
+using HorizonRadio.Core.Hosting;
 using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.Sources;
 
 /// <summary>
-/// Registry of every <see cref="IAudioSourceFactory"/> the app knows about. The UI's source picker
-/// is bound to <see cref="All"/>; <see cref="Find"/> resolves an id to its factory.
-///
-/// Populated by the composition root via <see cref="Initialize"/>, from the sources the plugins
-/// registered in the container, before any source is resolved. Until then the catalog is empty.
+/// Every <see cref="IAudioSourceFactory"/> the plugins contribute, in display order: the UI's source
+/// picker is bound to <see cref="All"/>; <see cref="Find"/> resolves an id to its factory, and
+/// <see cref="Search"/> searches the ones that can be. A service built from the container (resolve it
+/// once the tool catalog is filled: sources look their tools up as they're built).
 /// </summary>
-public static class SourceCatalog
+public sealed class SourceCatalog
 {
-    /// <summary>Register the available sources (in display order). Called once at startup, before
-    /// the catalog is read.</summary>
-    public static void Initialize(IReadOnlyList<IAudioSourceFactory> sources) => All = sources;
+    public SourceCatalog(IEnumerable<IAudioSourceFactory> sources)
+    {
+        All = sources.InDisplayOrder();
+        Search = new UnifiedSearch(this);
+    }
 
-    /// <summary>Every source the plugins contribute, in display order. Empty until
-    /// <see cref="Initialize"/> runs.</summary>
-    public static IReadOnlyList<IAudioSourceFactory> All { get; private set; } = [];
+    /// <summary>No sources: the designer's, and a fallback where none are wired.</summary>
+    public static SourceCatalog Empty { get; } = new([]);
 
-    public static IAudioSourceFactory? Find(string id) =>
-        All.FirstOrDefault(f => f.Id == id);
+    public IReadOnlyList<IAudioSourceFactory> All { get; }
+
+    /// <summary>Searches the sources that can be searched.</summary>
+    public UnifiedSearch Search { get; }
+
+    public IAudioSourceFactory? Find(string id) => All.FirstOrDefault(f => f.Id == id);
 }

@@ -1,7 +1,5 @@
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Audio;
@@ -281,7 +279,7 @@ public sealed class MixContextProvider : IQueueContext
                 foreach (var entryIdx in _entryOrder.RemainingIndices().Skip(1))
                 {
                     if (result.Count >= count) return result;
-                    result.Add(QueuePreview.ForEntry(_mix.Entries[entryIdx]));
+                    result.Add(QueuePreview.ForEntry(_mix.Entries[entryIdx], _resolver.Sources));
                 }
             }
         }

@@ -58,7 +58,7 @@ public sealed partial class MetadataViewModel : ViewModelBase
         Fields.Clear();
         BuildProviders();
         BuildFields();
-        var (contributors, policy) = MetadataCatalog.BuildPipeline(_store);
+        var (contributors, policy) = _store.Catalog.BuildPipeline(_store);
         _resolver.Configure(contributors, policy);
     }
 
@@ -77,8 +77,8 @@ public sealed partial class MetadataViewModel : ViewModelBase
         // Enabled providers first, in saved order; then any remaining (disabled).
         var ordered = new List<IMetadataProviderFactory>();
         foreach (var id in _store.Order)
-            if (MetadataCatalog.Find(id) is { } f && !ordered.Contains(f)) ordered.Add(f);
-        foreach (var f in MetadataCatalog.All)
+            if (_store.Catalog.Find(id) is { } f && !ordered.Contains(f)) ordered.Add(f);
+        foreach (var f in _store.Catalog.All)
             if (!ordered.Contains(f)) ordered.Add(f);
 
         foreach (var factory in ordered)
@@ -101,7 +101,7 @@ public sealed partial class MetadataViewModel : ViewModelBase
     {
         _shownForced = new Dictionary<MetadataField, string>(_store.Forced);
         // Option set shared by every field: Auto + Source + each provider.
-        var providerOptions = MetadataCatalog.All
+        var providerOptions = _store.Catalog.All
             .Select(f => new OverrideOption(f.DisplayName, f.Id))
             .ToList();
 
@@ -163,7 +163,7 @@ public sealed partial class MetadataViewModel : ViewModelBase
             _shownOrder = [.. _store.Order];
             _shownForced = new Dictionary<MetadataField, string>(_store.Forced);
 
-            var (contributors, policy) = MetadataCatalog.BuildPipeline(_store);
+            var (contributors, policy) = _store.Catalog.BuildPipeline(_store);
             _resolver.Configure(contributors, policy);
 
             StatusMessage = _store.Order.Count == 0

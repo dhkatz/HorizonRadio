@@ -18,7 +18,7 @@ public sealed class PlayerPartySourceTests : IAsyncDisposable
     public PlayerPartySourceTests()
     {
         var config = new SourceConfigStore();
-        _router = new PlaybackRouter(_runner, config, new MixStore(), new MixContentResolver(config));
+        _router = new PlaybackRouter(_runner, config, new MixStore(), new MixContentResolver(config, TestSources.Catalog));
         _host = new PlayerPartySource(_runner, _router.Player);
     }
 

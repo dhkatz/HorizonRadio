@@ -158,7 +158,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Controls = controls;
         // Mix entries show as what they are (titles, artists, covers), looked up through the same
         // sources and metadata catalogs the queue uses, and kept on disk between sessions.
-        Mixes = new MixesViewModel(mixStore, mixSwitcher, DialogManager,
+        Mixes = new MixesViewModel(mixStore, mixSwitcher, playback.Sources, DialogManager,
             new Core.Sources.Mixes.MixEntryDescriber(contentResolver, metaResolver, new Core.Sources.Mixes.MixEntryInfoStore()),
             songs, confirmations);
         songs.Editor = Mixes;
@@ -170,7 +170,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         // The shared context carries source names + the user's source priority so a merged
         // result row can label its sources and default Play to the preferred one.
         var searchEnqueuer = new SearchEnqueuer(queue, toasts) { Songs = songs };
-        var searchContext = SearchSourceContext.Build(store.Settings);
+        var searchContext = SearchSourceContext.Build(store.Settings, playback.Sources);
         Search = new SearchViewModel(searchEnqueuer, searchContext);
         TopBar = new TopBarViewModel(searchEnqueuer, searchContext, ShowSearch);
 

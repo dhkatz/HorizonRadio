@@ -21,17 +21,21 @@ public sealed class SearchSourceContext
     /// their keep then; with a single source the rows look exactly as before.</summary>
     public bool ShowLabels { get; }
 
-    private SearchSourceContext(
+    /// <summary>Searches the sources.</summary>
+    public UnifiedSearch Search { get; }
+
+    private SearchSourceContext(UnifiedSearch search,
         IReadOnlyDictionary<string, string> names, IReadOnlyList<string> priority, bool showLabels)
     {
+        Search = search;
         _names = names;
         _priority = priority;
         ShowLabels = showLabels;
     }
 
-    public static SearchSourceContext Build(SettingsStore settings)
+    public static SearchSourceContext Build(SettingsStore settings, SourceCatalog catalog)
     {
-        var sources = UnifiedSearch.SearchableSources;            // catalog order
+        var sources = catalog.Search.SearchableSources;           // catalog order
         var names = sources.ToDictionary(s => s.Id, s => s.DisplayName);
 
         // User priority first, then any remaining searchable sources in catalog order, so
@@ -42,7 +46,7 @@ public sealed class SearchSourceContext
             .Distinct()
             .ToList();
 
-        var context = new SearchSourceContext(names, Priority(settings.Get(SourceSettings.SearchPriority)), sources.Count > 1);
+        var context = new SearchSourceContext(catalog.Search, names, Priority(settings.Get(SourceSettings.SearchPriority)), sources.Count > 1);
         _ = settings.Watch(SourceSettings.SearchPriority, chosen => context._priority = Priority(chosen));
         return context;
     }

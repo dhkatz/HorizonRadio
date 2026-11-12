@@ -75,6 +75,6 @@ public class HistoryReplayTests
         Assert.Equal(new ContentRef("local", @"C:\Music\Song.mp3", "Song"), QueuePreview.ForTrack(track).Origin);
 
         var entry = new ContentRef("spotify-driven", "spotify:playlist:abc", "Road Trip");
-        Assert.Equal(entry, QueuePreview.ForEntry(entry).Origin);
+        Assert.Equal(entry, QueuePreview.ForEntry(entry, TestSources.Catalog).Origin);
     }
 }

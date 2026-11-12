@@ -28,7 +28,6 @@ using HorizonRadio.Sdk.Games;
 using HorizonRadio.Sdk.Lyrics;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
-using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Tools;
 using HorizonRadio.TitleModel;
 using HorizonRadio.UI.Services;
@@ -114,7 +113,7 @@ public partial class App : Application
             // anything resolves one from the catalog; SortOrder gives the picker its display order.
             var toolPlugins = provider.GetServices<IToolPlugin>().InDisplayOrder();
             ToolCatalog.Initialize([.. toolPlugins.Select(t => t.Descriptor)]);
-            SourceCatalog.Initialize(provider.GetServices<IAudioSourceFactory>().InDisplayOrder());
+            var sources = provider.GetRequiredService<SourceCatalog>();
 
             _store = provider.GetRequiredService<SourceConfigStore>();
 
@@ -165,16 +164,12 @@ public partial class App : Application
 
                 _runner = new SourceRunner(tee);
 
-                // The metadata providers, before the config store loads — it derives fresh-install
-                // defaults + the "introduced" set from the catalog, so the catalog must be populated
-                // first. SortOrder gives the provider list its display order.
-                MetadataCatalog.Initialize(provider.GetServices<IMetadataProviderFactory>().InDisplayOrder());
 
                 _metaStore = provider.GetRequiredService<MetadataConfigStore>();
                 // The metadata pipeline: a shared resolver (source + ordered providers,
                 // per-field policy) drives both play-time enrichment and list enrichment.
                 _metaResolver = new MetadataResolver();
-                var (metaContributors, metaPolicy) = MetadataCatalog.BuildPipeline(_metaStore);
+                var (metaContributors, metaPolicy) = _metaStore.Catalog.BuildPipeline(_metaStore);
                 _metaResolver.Configure(metaContributors, metaPolicy);
                 _enricher = new EnrichmentService(_runner, _metaResolver);
                 var metaVm = new MetadataViewModel(_metaStore, _metaResolver);
@@ -184,7 +179,7 @@ public partial class App : Application
                 var lyrics = new LyricsService(provider.GetServices<ILyricsProvider>().InDisplayOrder());
                 // Radio lyrics follow the song by lining the station's audio up against a recording
                 // of it (the song's own video, fetched through a source that can, e.g. YouTube).
-                var songSync = new LiveSongSync(() => SourceCatalog.All, new ReferenceStore(), _metaResolver);
+                var songSync = new LiveSongSync(() => sources.All, new ReferenceStore(), _metaResolver);
 
                 var toolRegistry = provider.GetRequiredService<ToolRegistry>();
                 var installers = toolPlugins.Select(t => t.Installer).ToArray();
@@ -230,7 +225,7 @@ public partial class App : Application
                 // the "current mix" notion for Next/Previous). One-time migrate any
                 // legacy profiles.json into one-entry mixes on first run.
                 var mixStore = provider.GetRequiredService<MixStore>();
-                MixMigration.MaybeMigrate(mixStore);
+                MixMigration.MaybeMigrate(mixStore, sources);
 
                 // The playback router is the one owner of the engine: everything that changes what
                 // plays (the game tuning, the queue getting something to play, a source the user
@@ -248,7 +243,7 @@ public partial class App : Application
                 // Play history: records every song the runner reports (deduped), tags freeform songs
                 // it can't identify via the metadata pipeline, and persists (debounced) to history.json.
                 _historyStore = provider.GetRequiredService<PlayHistoryStore>();
-                _historyService = new PlayHistoryService(_historyStore, _runner);
+                _historyService = new PlayHistoryService(_historyStore, _runner, sources);
 
                 // One dispatcher turns an EventAction into a transport/source/mix/
                 // volume call; both the Events tab (game events) and the Controls tab
@@ -256,7 +251,7 @@ public partial class App : Application
                 var dispatcher = new ActionDispatcher(router, _store, mixSwitcher,
                     _game.Volume is { } gameVolume ? gameVolume.SetDuckGain : null);
                 _eventExecutor = new EventActionExecutor(_game.EventSources, eventRules, dispatcher);
-                var eventsVm = new EventsViewModel(eventRules, _eventExecutor, _game.EventCatalog, _game.EventsHint);
+                var eventsVm = new EventsViewModel(eventRules, _eventExecutor, _game.EventCatalog, _game.EventsHint, sources);
 
                 // Controls: global keyboard/mouse (SharpHook) + controllers (SDL),
                 // mapped to the same actions through the shared dispatcher.

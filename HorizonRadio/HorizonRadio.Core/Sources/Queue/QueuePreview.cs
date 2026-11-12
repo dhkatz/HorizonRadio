@@ -20,9 +20,9 @@ public sealed record QueuePreview(string Title, string Subtitle, bool IsPlacehol
         IsPlaceholder: false,
         History.HistoryReplay.OriginOf(t));
 
-    public static QueuePreview ForEntry(ContentRef entry)
+    public static QueuePreview ForEntry(ContentRef entry, SourceCatalog sources)
     {
-        var source = SourceCatalog.Find(entry.SourceId)?.DisplayName ?? entry.SourceId;
+        var source = sources.Find(entry.SourceId)?.DisplayName ?? entry.SourceId;
         return new(entry.DisplayName ?? entry.Locator, source, IsPlaceholder: true, entry);
     }
 }

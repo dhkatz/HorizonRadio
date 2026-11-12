@@ -18,21 +18,23 @@ public sealed class PartySongFinder
     private readonly Func<PartySong, CancellationToken, Task<IReadOnlyList<PartySource>>> _search;
     private readonly Func<string, IAudioSourceFactory?> _find;
 
-    /// <param name="search">Finds a song on this PC's sources (default: <see cref="SongSources.SearchAsync"/>).</param>
-    /// <param name="find">A source by id (default: <see cref="SourceCatalog.Find"/>).</param>
+    /// <param name="search">Finds a song on this PC's sources (default: <see cref="SongSources.SearchAsync"/>
+    /// over the queue's sources).</param>
+    /// <param name="find">A source by id (default: the queue's sources).</param>
     public PartySongFinder(QueuePlayback queue, Func<PartySong, CancellationToken, Task<IReadOnlyList<PartySource>>>? search = null,
         Func<string, IAudioSourceFactory?>? find = null)
-        : this((factory, locator, ct) => queue.ResolveAsync(factory, locator, ct), search, find)
+        : this((factory, locator, ct) => queue.ResolveAsync(factory, locator, ct),
+            search ?? ((song, ct) => SearchAsync(queue.Sources, song, ct)), find ?? queue.Sources.Find)
     {
     }
 
     /// <param name="resolve">What a source here plays for a locator.</param>
     internal PartySongFinder(Func<IAudioSourceFactory, string, CancellationToken, Task<PlayableItem>> resolve,
-        Func<PartySong, CancellationToken, Task<IReadOnlyList<PartySource>>>? search = null, Func<string, IAudioSourceFactory?>? find = null)
+        Func<PartySong, CancellationToken, Task<IReadOnlyList<PartySource>>> search, Func<string, IAudioSourceFactory?> find)
     {
         _resolve = resolve;
-        _search = search ?? SearchAsync;
-        _find = find ?? SourceCatalog.Find;
+        _search = search;
+        _find = find;
     }
 
     /// <summary>The song, to play here; null when nothing here has it.</summary>
@@ -90,9 +92,9 @@ public sealed class PartySongFinder
         return null;
     }
 
-    private static async Task<IReadOnlyList<PartySource>> SearchAsync(PartySong song, CancellationToken ct)
+    private static async Task<IReadOnlyList<PartySource>> SearchAsync(SourceCatalog sources, PartySong song, CancellationToken ct)
     {
-        var (found, _) = await SongSources.SearchAsync(new Track(song.Title, song.Artist, null, null, "", ""), ct).ConfigureAwait(false);
+        var (found, _) = await SongSources.SearchAsync(sources, new Track(song.Title, song.Artist, null, null, "", ""), ct).ConfigureAwait(false);
         return [.. found.Select(s => new PartySource(s.SourceId, s.Locator))];
     }
 

@@ -88,7 +88,7 @@ public sealed class PartyQueueTests : IAsyncDisposable
             presenceInterval: TimeSpan.FromMilliseconds(100), joinTimeout: TimeSpan.FromSeconds(20));
         var runner = new SourceRunner(new NullPcmSink());
         var config = new SourceConfigStore();
-        var router = new PlaybackRouter(runner, config, new MixStore(), new MixContentResolver(config));
+        var router = new PlaybackRouter(runner, config, new MixStore(), new MixContentResolver(config, TestSources.Catalog));
         var finder = new PartySongFinder((_, locator, _) => pc.FindAsync(locator),
             (_, _) => Task.FromResult<IReadOnlyList<PartySource>>([]), id => id == _youTube.Id ? _youTube : null);
         var host = new PlayerPartySource(runner, router.Player, finder);

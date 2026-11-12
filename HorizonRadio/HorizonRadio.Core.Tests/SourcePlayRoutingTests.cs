@@ -36,7 +36,7 @@ public class SourcePlayRoutingTests
     {
         var config = new SourceConfigStore();
         await using var runner = new SourceRunner(new NullSink());
-        await using var playback = new PlaybackRouter(runner, config, new MixStore(), new MixContentResolver(config));
+        await using var playback = new PlaybackRouter(runner, config, new MixStore(), new MixContentResolver(config, TestSources.Catalog));
         var queue = playback.Player;
         var titles = new List<string>();
         runner.TrackChanged += t =>
@@ -49,7 +49,7 @@ public class SourcePlayRoutingTests
         first.WriteSilentWav("first.wav", seconds: 5);
         using var second = TempDir.Create();
         second.WriteSilentWav("second.wav", seconds: 5);
-        var local = SourceCatalog.Find("local")!;
+        var local = TestSources.Catalog.Find("local")!;
 
         await queue.EnqueueLocatorAsync(local, first.Path);
         await WaitUntilAsync(() => Last() == "first");
@@ -65,7 +65,7 @@ public class SourcePlayRoutingTests
     private static PlaybackRouter Router(SourceRunner runner)
     {
         var config = new SourceConfigStore();
-        return new PlaybackRouter(runner, config, new MixStore(), new MixContentResolver(config));
+        return new PlaybackRouter(runner, config, new MixStore(), new MixContentResolver(config, TestSources.Catalog));
     }
 
     [Fact]

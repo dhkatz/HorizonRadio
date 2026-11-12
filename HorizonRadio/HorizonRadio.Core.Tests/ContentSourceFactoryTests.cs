@@ -1,4 +1,3 @@
-using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Sources.Config;
@@ -31,7 +30,7 @@ public class ContentSourceFactoryTests
     public void Content_factories_are_not_self_driven()
     {
         // A content source only plays through the queue; it can't be started on the runner.
-        Assert.All(SourceCatalog.All.OfType<IContentSourceFactory>(),
+        Assert.All(TestSources.Catalog.All.OfType<IContentSourceFactory>(),
             f => Assert.IsNotAssignableFrom<ISelfDrivenSourceFactory>(f));
     }
 

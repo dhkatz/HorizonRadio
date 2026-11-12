@@ -43,7 +43,7 @@ public class PlaybackRouterTests
         public Harness()
         {
             var config = new SourceConfigStore();
-            var resolver = new MixContentResolver(config);
+            var resolver = new MixContentResolver(config, TestSources.Catalog);
             Runner = new SourceRunner(new NullSink());
             Router = new PlaybackRouter(Runner, config, Mixes, resolver, Time);
             Player = Router.Player;
@@ -182,7 +182,7 @@ public class PlaybackRouterTests
     {
         var sink = new LastSampleSink();
         var config = new SourceConfigStore();
-        var resolver = new MixContentResolver(config);
+        var resolver = new MixContentResolver(config, TestSources.Catalog);
         await using var runner = new SourceRunner(sink);
         var mixes = new MixStore();
         await using var router = new PlaybackRouter(runner, config, mixes, resolver);
@@ -194,7 +194,7 @@ public class PlaybackRouterTests
         other.WriteSilentWav("other.wav", 4);
         mixes.AddOrUpdate(new Mix("other", "Other", [new ContentRef("local", other.Path)]));
 
-        await player.EnqueueLocatorAsync(SourceCatalog.Find("local")!, dir.Path);
+        await player.EnqueueLocatorAsync(TestSources.Catalog.Find("local")!, dir.Path);
         await WaitUntilAsync(() => AudioSeconds(sink) >= 1.5);
         var leftAt = AudioSeconds(sink);
 
@@ -271,7 +271,7 @@ public class PlaybackRouterTests
         await WaitUntilAsync(() => h.LastTitle == "a1");
 
         // Queued while a mix station is on: lands in the queue, doesn't take the engine.
-        await h.Player.EnqueueLocatorAsync(SourceCatalog.Find("local")!, q.Path);
+        await h.Player.EnqueueLocatorAsync(TestSources.Catalog.Find("local")!, q.Path);
         Assert.False(h.Player.IsActive);
         Assert.Equal("a1", h.LastTitle);
 

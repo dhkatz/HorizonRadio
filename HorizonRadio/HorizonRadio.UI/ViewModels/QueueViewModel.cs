@@ -11,7 +11,6 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Metadata;
-using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Queue;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
@@ -123,7 +122,7 @@ public sealed partial class QueueViewModel : ViewModelBase, IDisposable
         _dialogs = dialogs;
         _resolver = resolver;
         _songs = songs;
-        ContentSources = SourceCatalog.All.Where(f => f is IContentSourceFactory).ToList();
+        ContentSources = queue.Sources.All.Where(f => f is IContentSourceFactory).ToList();
 
         _queue.Model.Changed += OnModelChanged;
         Rebuild();
@@ -132,7 +131,7 @@ public sealed partial class QueueViewModel : ViewModelBase, IDisposable
     /// <summary>Designer ctor — inert.</summary>
     public QueueViewModel()
     {
-        ContentSources = SourceCatalog.All.Where(f => f is IContentSourceFactory).ToList();
+        ContentSources = [];
     }
 
     private void OnModelChanged() => Dispatcher.UIThread.Post(Rebuild);

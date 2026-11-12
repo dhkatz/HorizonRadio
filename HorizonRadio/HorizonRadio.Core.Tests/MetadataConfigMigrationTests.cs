@@ -32,7 +32,9 @@ public sealed class MetadataConfigMigrationTests : IDisposable
     // The config store derives its defaults / "introduced" set from the catalog, which the
     // composition root populates at startup. Mirror that here so the migration sees the real
     // provider set (incl. VocaDB, now its own plugin assembly).
-    public MetadataConfigMigrationTests() => MetadataCatalog.Initialize(
+    private readonly MetadataCatalog _catalog;
+
+    public MetadataConfigMigrationTests() => _catalog = new MetadataCatalog(
     [
         new SpotifyProviderFactory(Cache, IMetadataTrace.Off,
             new SpotifyConnection(new SpotifyAuthStore(Path.Combine(_dir.Path, "spotify-auth.dat")), "", NoLog.Instance)),
@@ -55,10 +57,10 @@ public sealed class MetadataConfigMigrationTests : IDisposable
     [Fact]
     public void Fresh_install_enables_keyless_defaults()
     {
-        var store = new MetadataConfigStore(SettingsStore.CreateInMemory());
+        var store = new MetadataConfigStore(SettingsStore.CreateInMemory(), _catalog);
 
         Assert.Equal(MetadataCatalog.DefaultEnabledOrder, store.Order);
-        Assert.Equal(MetadataCatalog.All.Select(f => f.Id), store.Settings.Get(MetadataSettings.Introduced));
+        Assert.Equal(_catalog.All.Select(f => f.Id), store.Settings.Get(MetadataSettings.Introduced));
     }
 
     [Fact]
@@ -66,7 +68,7 @@ public sealed class MetadataConfigMigrationTests : IDisposable
     {
         using var settings = OpenWithLegacy("""{ "order": ["musicbrainz"] }""");
 
-        var store = new MetadataConfigStore(settings);
+        var store = new MetadataConfigStore(settings, _catalog);
 
         // Newly-shipped keyless defaults (iTunes, VocaDB) are appended, NOT inserted ahead
         // of the user's existing provider.
@@ -81,7 +83,7 @@ public sealed class MetadataConfigMigrationTests : IDisposable
         // User deliberately made Spotify their #1 metadata source.
         using var settings = OpenWithLegacy("""{ "order": ["spotify", "musicbrainz"] }""");
 
-        var store = new MetadataConfigStore(settings);
+        var store = new MetadataConfigStore(settings, _catalog);
 
         // Spotify stays first; the new defaults go after it.
         Assert.Equal(["spotify", "musicbrainz", "itunes", "vocadb"], store.Order);
@@ -95,7 +97,7 @@ public sealed class MetadataConfigMigrationTests : IDisposable
         { "order": ["musicbrainz"], "introduced": ["itunes", "musicbrainz", "spotify", "vocadb"] }
         """);
 
-        Assert.Equal(["musicbrainz"], new MetadataConfigStore(settings).Order);
+        Assert.Equal(["musicbrainz"], new MetadataConfigStore(settings, _catalog).Order);
     }
 
     [Fact]
@@ -105,14 +107,14 @@ public sealed class MetadataConfigMigrationTests : IDisposable
         { "order": [], "introduced": ["itunes", "musicbrainz", "spotify", "vocadb"] }
         """);
 
-        Assert.Empty(new MetadataConfigStore(settings).Order);
+        Assert.Empty(new MetadataConfigStore(settings, _catalog).Order);
     }
 
     [Fact]
     public void Migration_persists_across_a_restart()
     {
         using (var settings = OpenWithLegacy("""{ "order": ["musicbrainz"] }"""))
-            _ = new MetadataConfigStore(settings);
+            _ = new MetadataConfigStore(settings, _catalog);
 
         using var reopened = SettingsStore.Open(SettingsPath);
         Assert.Equal(["musicbrainz", "itunes", "vocadb"], reopened.Get(MetadataSettings.Order));
@@ -124,7 +126,7 @@ public sealed class MetadataConfigMigrationTests : IDisposable
     {
         using var settings = OpenWithLegacy("""{ "selected": "spotify" }""");
 
-        Assert.Equal(["spotify", "itunes", "musicbrainz", "vocadb"], new MetadataConfigStore(settings).Order);
+        Assert.Equal(["spotify", "itunes", "musicbrainz", "vocadb"], new MetadataConfigStore(settings, _catalog).Order);
     }
 
     [Fact]
@@ -139,11 +141,11 @@ public sealed class MetadataConfigMigrationTests : IDisposable
         }
         """);
 
-        var store = new MetadataConfigStore(settings);
+        var store = new MetadataConfigStore(settings, _catalog);
 
         Assert.Equal(new Dictionary<MetadataField, string> { [MetadataField.Art] = "spotify" }, store.Forced);
         Assert.Equal(TitleModelMode.Always, store.TitleModelMode);
-        var schema = MetadataCatalog.Find("spotify")!.Schema;
+        var schema = _catalog.Find("spotify")!.Schema;
         var values = store.Load("spotify", schema);
         Assert.Equal("abc", values.GetString("clientId"));
         Assert.Equal("s3cret", values.GetString("clientSecret"));
@@ -158,7 +160,7 @@ public sealed class MetadataConfigMigrationTests : IDisposable
             var key = MetadataConfigStore.KeyFor("spotify", "clientSecret");
             Assert.Equal(SettingScope.Device, settings.ScopeOf(key));
 
-            new MetadataConfigStore(settings).Load("spotify", MetadataCatalog.Find("spotify")!.Schema);
+            new MetadataConfigStore(settings, _catalog).Load("spotify", _catalog.Find("spotify")!.Schema);
 
             Assert.Equal(SettingScope.Secret, settings.ScopeOf(key));
         }
@@ -170,7 +172,7 @@ public sealed class MetadataConfigMigrationTests : IDisposable
     public void Order_and_overrides_are_written_to_the_settings()
     {
         var settings = SettingsStore.CreateInMemory();
-        var store = new MetadataConfigStore(settings);
+        var store = new MetadataConfigStore(settings, _catalog);
 
         store.Order = ["vocadb"];
         store.Forced = new Dictionary<MetadataField, string> { [MetadataField.Year] = "musicbrainz" };
@@ -178,7 +180,7 @@ public sealed class MetadataConfigMigrationTests : IDisposable
         contact.Set("contact", "me@example.com");
         store.Save("musicbrainz", contact);
 
-        var again = new MetadataConfigStore(settings);
+        var again = new MetadataConfigStore(settings, _catalog);
         Assert.Equal(["vocadb"], again.Order);
         Assert.Equal("musicbrainz", again.Forced[MetadataField.Year]);
         Assert.Equal(SettingScope.Synced, settings.ScopeOf(MetadataSettings.Order.Key));

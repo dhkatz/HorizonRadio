@@ -112,7 +112,7 @@ public sealed class SongActions
         if (_queue is null) return;
         var entry = await EntryForAsync(song);
         if (entry is null) return;
-        if (SourceCatalog.Find(entry.SourceId) is not { } factory)
+        if (_queue.Sources.Find(entry.SourceId) is not { } factory)
         {
             Toast("Couldn't add that to the queue", $"{entry.SourceId} isn't available.").ShowError();
             return;
@@ -180,7 +180,7 @@ public sealed class SongActions
         Toast($"Looking for “{song.Title}”…", "Finding it on your music services.").ShowInfo();
         try
         {
-            var sources = await SongSources.FindAsync(_resolver, seed, CancellationToken.None);
+            var sources = await SongSources.FindAsync(_queue?.Sources ?? SourceCatalog.Empty, _resolver, seed, CancellationToken.None);
             if (sources.Count == 0)
             {
                 NotFound(song);

@@ -1,4 +1,3 @@
-using System.Linq;
 using HorizonRadio.Core.Settings;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Sources.Config;
@@ -20,19 +19,22 @@ public sealed class MetadataConfigStore
 
     private readonly ConfigFormSettings _forms;
 
-    /// <summary>A store kept in memory only (tests, the designer).</summary>
-    public MetadataConfigStore() : this(SettingsStore.CreateInMemory())
+    /// <summary>A store kept in memory only, with no providers (the designer).</summary>
+    public MetadataConfigStore() : this(SettingsStore.CreateInMemory(), new MetadataCatalog([]))
     {
     }
 
     /// <summary>Opens the configuration in <paramref name="settings"/>, enabling any newly shipped
-    /// default provider (see <see cref="MetadataSettings.Introduced"/>). Needs the catalog
-    /// (<see cref="MetadataCatalog.Initialize"/>) filled first.</summary>
-    public MetadataConfigStore(SettingsStore settings)
+    /// default provider among <paramref name="catalog"/>'s (see <see cref="MetadataSettings.Introduced"/>).</summary>
+    public MetadataConfigStore(SettingsStore settings, MetadataCatalog catalog)
     {
         _forms = new ConfigFormSettings(settings, Prefix, FieldScope);
+        Catalog = catalog;
         EnableNewDefaultProviders();
     }
+
+    /// <summary>The providers this configuration is for.</summary>
+    public MetadataCatalog Catalog { get; }
 
     public SettingsStore Settings => _forms.Settings;
 
@@ -72,7 +74,7 @@ public sealed class MetadataConfigStore
         var added = MetadataCatalog.DefaultEnabledOrder.Where(id => !introduced.Contains(id) && !order.Contains(id)).ToList();
         if (added.Count > 0) Order = [.. order, .. added];
 
-        var offered = MetadataCatalog.All.Select(f => f.Id).Where(id => !introduced.Contains(id)).ToList();
+        var offered = Catalog.All.Select(f => f.Id).Where(id => !introduced.Contains(id)).ToList();
         if (offered.Count > 0) Settings.Set(MetadataSettings.Introduced, [.. introduced, .. offered]);
     }
 }
