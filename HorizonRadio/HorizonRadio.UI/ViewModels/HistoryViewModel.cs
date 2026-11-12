@@ -16,6 +16,7 @@ using HorizonRadio.Core.Metadata;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Queue;
 using HorizonRadio.Core.Sources.Spotify;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.UI.Services;
@@ -40,6 +41,7 @@ public sealed partial class HistoryViewModel : ViewModelBase
     private readonly Action<string>? _openSearch;
     private readonly ToastManager? _toasts;
     private readonly SongActions? _songs;
+    private readonly IConfirmations _confirm = ProceedWithoutAsking.Instance;
 
     // Rows whose enrichment has settled (art + verdict + any playable sources resolved). A row is
     // removed from here if its enrichment couldn't complete (no search source ready yet, or a
@@ -56,9 +58,11 @@ public sealed partial class HistoryViewModel : ViewModelBase
         MetadataResolver? resolver,
         Action<string>? openSearch,
         ToastManager? toasts,
-        SongActions? songs = null)
+        SongActions? songs = null,
+        IConfirmations? confirmations = null)
     {
         _store = store;
+        _confirm = confirmations ?? ProceedWithoutAsking.Instance;
         _queue = queue;
         _resolver = resolver;
         _openSearch = openSearch;
@@ -238,7 +242,16 @@ public sealed partial class HistoryViewModel : ViewModelBase
     private static Bitmap? DecodeArt(byte[]? bytes) => Imaging.ImageBytes.ToBitmap(bytes);
 
     [RelayCommand]
-    private void Clear() => _store?.Clear();
+    private async Task ClearAsync()
+    {
+        if (_store is null) return;
+        if (!await _confirm.ConfirmAsync(new Confirmation(
+                "Clear your history?",
+                "Every song you've played is removed from History, on your other devices too if you've paired them. This can't be undone.",
+                "Clear History")))
+            return;
+        _store.Clear();
+    }
 }
 
 /// <summary>One play target offered by a row's Play picker (a service + its action).</summary>

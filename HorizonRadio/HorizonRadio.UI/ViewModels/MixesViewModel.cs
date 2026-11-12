@@ -17,6 +17,7 @@ using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Core.Sources.Queue;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Sources;
 using Material.Icons;
 using ShadUI;
@@ -78,11 +79,18 @@ public sealed partial class MixesViewModel : ViewModelBase
     // null = creating; otherwise the id being edited.
     private string? _editingId;
 
+    // The mix as the editor opened it, to tell whether Cancel throws edits away.
+    private string _openedName = "";
+    private IReadOnlyList<ContentRef> _openedEntries = [];
+
+    private readonly IConfirmations _confirm = ProceedWithoutAsking.Instance;
+
     public MixesViewModel(MixStore store, MixSwitcher switcher,
                           DialogManager? dialogs = null, MixEntryDescriber? describer = null,
-                          SongActions? songs = null)
+                          SongActions? songs = null, IConfirmations? confirmations = null)
     {
         _store = store;
+        _confirm = confirmations ?? ProceedWithoutAsking.Instance;
         _switcher = switcher;
         _dialogs = dialogs;
         _describer = describer;
@@ -135,7 +143,7 @@ public sealed partial class MixesViewModel : ViewModelBase
         {
             PlayCommand = new RelayCommand(() => PlayMix(id)),
             EditCommand = new RelayCommand(() => EditMix(id)),
-            DeleteCommand = new RelayCommand(() => DeleteMix(id)),
+            DeleteCommand = new AsyncRelayCommand(() => DeleteMixAsync(id)),
         };
 
         var preview = m.Entries.Take(CardPreviewEntries).ToList();
@@ -187,6 +195,8 @@ public sealed partial class MixesViewModel : ViewModelBase
     private void OpenEditor(string name, IReadOnlyList<ContentRef> entries)
     {
         EditingName = name;
+        _openedName = name;
+        _openedEntries = entries;
         StatusMessage = "";
         HasError = false;
         NewLocator = "";
@@ -198,8 +208,15 @@ public sealed partial class MixesViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void Cancel()
+    private async Task CancelAsync()
     {
+        var edited = EditingName != _openedName
+                     || !EditEntries.Select(e => e.Entry).SequenceEqual(_openedEntries);
+        if (edited && !await _confirm.ConfirmAsync(new Confirmation(
+                "Discard your changes?",
+                "Your changes to this mix haven't been saved.",
+                "Discard")))
+            return;
         IsEditing = false;
         EditEntries.Clear();
     }
@@ -416,8 +433,14 @@ public sealed partial class MixesViewModel : ViewModelBase
         HasError = false;
     }
 
-    private void DeleteMix(string id)
+    private async Task DeleteMixAsync(string id)
     {
+        var name = _store.Get(id)?.Name ?? "this mix";
+        if (!await _confirm.ConfirmAsync(new Confirmation(
+                $"Delete “{name}”?",
+                "The mix is deleted, on your other devices too if you've paired them. The songs in it aren't affected.",
+                "Delete Mix")))
+            return;
         _store.Remove(id);
         _store.SaveToDisk();
         _describer?.KeepOnly(_store.All.SelectMany(m => m.Entries));

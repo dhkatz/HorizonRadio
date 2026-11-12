@@ -104,10 +104,17 @@ public partial class App : Application
             // Core's services (Core owns how to build them); the two UI host services are registered
             // here directly since this is their only composition root. Built inside the desktop branch
             // so the XAML designer (which never enters here) is unaffected.
+            // ShadUI maps dialog view models to views via its own registry (not
+            // the app ViewLocator), so custom dialog content must be registered.
+            var dialogManager = new ShadUI.DialogManager();
+            dialogManager.Register<QuickPlayDialogView, QuickPlayDialogViewModel>();
+            dialogManager.Register<QueueAddModeDialogView, QueueAddModeDialogViewModel>();
+            var confirmations = new DialogConfirmations(dialogManager);
+
             var services = new ServiceCollection();
             services.AddHorizonCore(settings);
             services.AddSingleton<ToolRegistry>();
-            services.AddSingleton<IPluginContext>(sp => new HostPluginContext(sp.GetRequiredService<MetadataCache>(), settings));
+            services.AddSingleton<IPluginContext>(sp => new HostPluginContext(sp.GetRequiredService<MetadataCache>(), settings, confirmations));
             var provider = services.BuildServiceProvider();
 
             _store = provider.GetRequiredService<SourceConfigStore>();
@@ -308,12 +315,6 @@ public partial class App : Application
 
                 var toasts = new ShadUI.ToastManager();
 
-                // ShadUI maps dialog view models to views via its own registry (not
-                // the app ViewLocator), so custom dialog content must be registered.
-                var dialogManager = new ShadUI.DialogManager();
-                dialogManager.Register<QuickPlayDialogView, QuickPlayDialogViewModel>();
-                dialogManager.Register<QueueAddModeDialogView, QueueAddModeDialogViewModel>();
-
                 var gameSettings = new GameSettingsViewModel(gamePlugins, settings, chosenGameId);
                 gameSettings.RestartRequested += () => Restart(desktop);
                 // Your devices: paired PCs keep their synced settings, mixes and history in step over the peer
@@ -324,7 +325,7 @@ public partial class App : Application
                 var myDevices = new MyDevices(settings, peers.GetAsync,
                     data: [new MixSync(mixStore, action => Dispatcher.UIThread.InvokeAsync(action).GetTask()), new HistorySync(_historyStore)]);
                 _ = myDevices.StartAsync();
-                var devicesVm = new DevicesViewModel(myDevices);
+                var devicesVm = new DevicesViewModel(myDevices, confirmations);
 
                 // Your friends, over the same helper: they see what you're playing, and you them.
                 var friends = new Core.Friends.Friends(settings, peers.GetAsync);
@@ -334,9 +335,9 @@ public partial class App : Application
                 var partyHost = new Core.Party.PlayerPartySource(_runner, queuePlayback);
                 var party = new Core.Party.ListeningParty(friends, partyHost, new Core.Party.QueuePartyPlayer(queuePlayback));
                 party.Start();
-                var friendsVm = new FriendsViewModel(friends, party);
+                var friendsVm = new FriendsViewModel(friends, party, confirmations);
 
-                var vm = new MainWindowViewModel(router, _store, mixStore, mixSwitcher, queuePlayback, _historyStore, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, _game, gameSettings, toasts, dialogManager, devicesVm, friendsVm, lyrics, songSync);
+                var vm = new MainWindowViewModel(router, _store, mixStore, mixSwitcher, queuePlayback, _historyStore, _metaResolver, contentResolver, metaVm, toolRegistry, installers, eventsVm, controlsVm, _preview, _game, gameSettings, toasts, dialogManager, confirmations, devicesVm, friendsVm, lyrics, songSync);
                 var mainWindow = new MainWindow { DataContext = vm };
                 desktop.MainWindow = mainWindow;
                 // Composed after startup (the first-run picker), so show it ourselves.

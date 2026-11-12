@@ -13,6 +13,8 @@ using HorizonRadio.Core.Party;
 using HorizonRadio.Core.Peers;
 using HorizonRadio.Core.Settings;
 
+using HorizonRadio.Sdk;
+
 namespace HorizonRadio.UI.ViewModels;
 
 /// <summary>
@@ -24,6 +26,7 @@ public sealed partial class FriendsViewModel : ViewModelBase
 {
     private readonly Core.Friends.Friends _friends;
     private readonly ListeningParty? _party;
+    private readonly IConfirmations _confirm;
     private readonly DispatcherTimer _clock;
 
     public ObservableCollection<FriendRow> Friends { get; } = new();
@@ -49,10 +52,12 @@ public sealed partial class FriendsViewModel : ViewModelBase
     public bool HasPartyDetail => !string.IsNullOrEmpty(PartyDetail);
     public bool HasPartyProblem => !string.IsNullOrEmpty(PartyProblem);
 
-    public FriendsViewModel(Core.Friends.Friends friends, ListeningParty? party = null)
+    public FriendsViewModel(Core.Friends.Friends friends, ListeningParty? party = null,
+        IConfirmations? confirmations = null)
     {
         _friends = friends;
         _party = party;
+        _confirm = confirmations ?? ProceedWithoutAsking.Instance;
         _friends.Changed += () => Dispatcher.UIThread.Post(Refresh);
         if (_party != null) _party.Changed += () => Dispatcher.UIThread.Post(Refresh);
         _clock = new DispatcherTimer(TimeSpan.FromSeconds(15), DispatcherPriority.Background, (_, _) => Refresh());
@@ -186,11 +191,19 @@ public sealed partial class FriendsViewModel : ViewModelBase
         Refresh();
     });
 
-    private async Task RemoveAsync(FriendRow row) => await RunAsync(async () =>
+    private async Task RemoveAsync(FriendRow row)
     {
-        await _friends.RemoveAsync(row.UserId);
-        Refresh();
-    });
+        if (!await _confirm.ConfirmAsync(new Confirmation(
+                $"Remove {row.Name}?",
+                "You stop seeing each other online, on all your PCs. To be friends again, one of you shows a code.",
+                "Remove")))
+            return;
+        await RunAsync(async () =>
+        {
+            await _friends.RemoveAsync(row.UserId);
+            Refresh();
+        });
+    }
 
     private async Task RunAsync(Func<Task> action)
     {

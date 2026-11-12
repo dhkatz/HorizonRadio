@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Tools;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Tools;
 using HorizonRadio.Sdk.UI.Theme;
 using HorizonRadio.UI.Tools;
@@ -36,11 +37,12 @@ public sealed partial class ToolsViewModel : ViewModelBase
 
     public string CheckLabel => IsChecking ? "Checking…" : "Check for Updates";
 
-    public ToolsViewModel(ToolRegistry registry, IEnumerable<IToolInstaller> installers)
+    public ToolsViewModel(ToolRegistry registry, IEnumerable<IToolInstaller> installers,
+        IConfirmations? confirmations = null)
     {
         _registry = registry;
         foreach (var installer in installers)
-            Items.Add(new ToolItemViewModel(installer, registry));
+            Items.Add(new ToolItemViewModel(installer, registry, confirmations));
     }
 
     public ToolsViewModel() : this(new ToolRegistry(), ToolInstallers.CreateAll()) { }
@@ -88,6 +90,7 @@ public sealed partial class ToolItemViewModel : ViewModelBase, IDisposable
 {
     private readonly IToolInstaller _installer;
     private readonly ToolRegistry _registry;
+    private readonly IConfirmations _confirm;
 
     private CancellationTokenSource? _cts;
 
@@ -160,10 +163,11 @@ public sealed partial class ToolItemViewModel : ViewModelBase, IDisposable
     public bool CanInstall => !IsWorking;
     public bool CanUninstall => IsInstalled && !IsWorking;
 
-    public ToolItemViewModel(IToolInstaller installer, ToolRegistry registry)
+    public ToolItemViewModel(IToolInstaller installer, ToolRegistry registry, IConfirmations? confirmations = null)
     {
         _installer = installer;
         _registry = registry;
+        _confirm = confirmations ?? ProceedWithoutAsking.Instance;
 
         registry.Changed += OnRegistryChanged;
         RefreshFromRegistry();
@@ -245,9 +249,14 @@ public sealed partial class ToolItemViewModel : ViewModelBase, IDisposable
     }
 
     [RelayCommand]
-    private void Uninstall()
+    private async Task UninstallAsync()
     {
         if (IsWorking || !IsInstalled) return;
+        if (!await _confirm.ConfirmAsync(new Confirmation(
+                $"Uninstall {DisplayName}?",
+                "Sources that use it stop working until you install it again.",
+                "Uninstall")))
+            return;
         try
         {
             var dir = ToolsPaths.DirectoryFor(_installer.Kind);

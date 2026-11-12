@@ -11,6 +11,8 @@ using HorizonRadio.Core.Devices;
 using HorizonRadio.Core.Peers;
 using HorizonRadio.Core.Settings;
 
+using HorizonRadio.Sdk;
+
 namespace HorizonRadio.UI.ViewModels;
 
 /// <summary>
@@ -22,6 +24,7 @@ public sealed partial class DevicesViewModel : ViewModelBase
 {
     private readonly MyDevices _devices;
     private readonly DispatcherTimer _clock;
+    private readonly IConfirmations _confirm;
 
     public ObservableCollection<DeviceRow> Devices { get; } = new();
 
@@ -37,9 +40,10 @@ public sealed partial class DevicesViewModel : ViewModelBase
     public bool CanJoin => !IsPaired;
     public bool HasStatus => !string.IsNullOrEmpty(Status);
 
-    public DevicesViewModel(MyDevices devices)
+    public DevicesViewModel(MyDevices devices, IConfirmations? confirmations = null)
     {
         _devices = devices;
+        _confirm = confirmations ?? ProceedWithoutAsking.Instance;
         _devices.Changed += () => Dispatcher.UIThread.Post(Refresh);
         _clock = new DispatcherTimer(TimeSpan.FromSeconds(15), DispatcherPriority.Background, (_, _) => Refresh());
         _clock.Start();
@@ -126,17 +130,33 @@ public sealed partial class DevicesViewModel : ViewModelBase
     });
 
     [RelayCommand]
-    private async Task LeaveAsync() => await RunAsync(async () =>
+    private async Task LeaveAsync()
     {
-        await _devices.LeaveAsync();
-        Refresh();
-    });
+        if (!await _confirm.ConfirmAsync(new Confirmation(
+                "Leave your devices?",
+                "This PC stops keeping its settings, mixes and history in step with your other devices. It keeps its own copies. To join again, pair it with a code.",
+                "Leave")))
+            return;
+        await RunAsync(async () =>
+        {
+            await _devices.LeaveAsync();
+            Refresh();
+        });
+    }
 
-    private async Task RemoveAsync(DeviceRow row) => await RunAsync(async () =>
+    private async Task RemoveAsync(DeviceRow row)
     {
-        await _devices.RemoveAsync(row.PeerId);
-        Refresh();
-    });
+        if (!await _confirm.ConfirmAsync(new Confirmation(
+                $"Remove {row.Name}?",
+                "It stops keeping its settings, mixes and history in step with this PC and your other devices. To add it back, pair it again with a code.",
+                "Remove")))
+            return;
+        await RunAsync(async () =>
+        {
+            await _devices.RemoveAsync(row.PeerId);
+            Refresh();
+        });
+    }
 
     private async Task RunAsync(Func<Task> action)
     {

@@ -9,6 +9,7 @@ using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Core.Sources.Queue;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Games;
 using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Tools;
@@ -124,6 +125,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                                GameSettingsViewModel gameSettings,
                                ToastManager toasts,
                                DialogManager dialogManager,
+                               IConfirmations confirmations,
                                DevicesViewModel devices,
                                FriendsViewModel friends,
                                Core.Lyrics.LyricsService? lyrics = null,
@@ -151,17 +153,17 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             Songs = songs,
         };
         Metadata = metadata;
-        ToolsTab = new ToolsViewModel(registry, installers);
+        ToolsTab = new ToolsViewModel(registry, installers, confirmations);
         Events = events;
         Controls = controls;
         // Mix entries show as what they are (titles, artists, covers), looked up through the same
         // sources and metadata catalogs the queue uses, and kept on disk between sessions.
         Mixes = new MixesViewModel(mixStore, mixSwitcher, DialogManager,
             new Core.Sources.Mixes.MixEntryDescriber(contentResolver, metaResolver, new Core.Sources.Mixes.MixEntryInfoStore()),
-            songs);
+            songs, confirmations);
         songs.Editor = Mixes;
         songs.ShowMixes = () => SelectedWorkspaceIndex = 9;
-        Queue = new QueueViewModel(queue, DialogManager, metaResolver, songs);
+        Queue = new QueueViewModel(queue, DialogManager, metaResolver, songs, confirmations);
 
         // Unified search: both the top-bar dropdown and the search page enqueue through
         // the shared SearchEnqueuer; submitting from the bar opens the page (index 11).
@@ -174,7 +176,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         // History replays directly when it can; otherwise it re-searches the song on the
         // full search page (the same picker), so no-locator (radio) songs stay playable.
-        History = new HistoryViewModel(historyStore, queue, metaResolver, OpenSearchFor, toasts, songs);
+        History = new HistoryViewModel(historyStore, queue, metaResolver, OpenSearchFor, toasts, songs, confirmations);
 
         // The game's own pages plus the host's game-related ones (Events, when the game reports
         // any), under the game's name in the sidebar.

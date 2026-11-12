@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HorizonRadio.Core.ModInstall;
-
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.UI.Theme;
 
 namespace HorizonRadio.Game.ForzaHorizon6.ViewModels;
@@ -26,6 +26,7 @@ namespace HorizonRadio.Game.ForzaHorizon6.ViewModels;
 public sealed partial class ModManagerViewModel : ObservableObject
 {
     private readonly ModInstaller _installer = new();
+    private readonly IConfirmations _confirm;
 
     public ObservableCollection<DetectedInstall> Detected { get; } = new();
 
@@ -92,8 +93,15 @@ public sealed partial class ModManagerViewModel : ObservableObject
     /// doesn't silently ship/install the stale copy. False in a published build.</summary>
     public bool BundledDllStale => _installer.BundledDllStale;
 
-    public ModManagerViewModel()
+    /// <summary>Designer ctor.</summary>
+    public ModManagerViewModel() : this(null)
     {
+    }
+
+    /// <param name="confirmations">Asks before uninstalling; the host's, from <see cref="IPluginContext"/>.</param>
+    public ModManagerViewModel(IConfirmations? confirmations)
+    {
+        _confirm = confirmations ?? ProceedWithoutAsking.Instance;
         // Run detection once at construction. If exactly one install
         // turned up, pre-select it so the user lands on a ready-to-go
         // state. Multiple hits surface as a dropdown; zero hits fall
@@ -159,6 +167,11 @@ public sealed partial class ModManagerViewModel : ObservableObject
     private async Task UninstallAsync()
     {
         if (string.IsNullOrEmpty(GamePath)) return;
+        if (!await _confirm.ConfirmAsync(new Confirmation(
+                "Uninstall the mod?",
+                "Horizon Radio's mod is removed from your Forza Horizon 6 folder, and the in-game radio plays only the game's own music. You can install it again any time.",
+                "Uninstall")))
+            return;
         LastActionMessage = "Uninstalling…";
         LastActionFailed = false;
         var result = await Task.Run(() => _installer.Uninstall(GamePath!));

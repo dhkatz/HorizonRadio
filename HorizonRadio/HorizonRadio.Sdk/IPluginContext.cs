@@ -24,4 +24,7 @@ public interface IPluginContext
     /// user to their other PCs (when they've paired them): preferences, not paths or facts about this
     /// machine. Watch <see cref="IPluginSettings.Changed"/> to follow a change made elsewhere.</summary>
     IPluginSettings GetSettings(string pluginId, System.Func<string, bool> synced) => GetSettings(pluginId);
+
+    /// <summary>Asks the user before something that can't be undone (uninstalling, deleting).</summary>
+    IConfirmations Confirmations => ProceedWithoutAsking.Instance;
 }

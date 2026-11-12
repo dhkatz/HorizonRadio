@@ -97,7 +97,7 @@ Each step leaves the app working and lands as its own PR or short stack.
 3. [x] `Sdk.UI` controls: page layout (`PageHeader`, `SectionCard`, `SettingRow`), status
    (`Notice`, `EmptyState`, `StatusAvatar`, `StatusDot`), `PathPicker`, list rows (`listRow`,
    `SongRow`, `ArtTile`).
-4. [ ] A confirm service (in the SDK for plugins, used by the app) and confirmation on every
+4. [x] A confirm service (in the SDK for plugins, used by the app) and confirmation on every
    destructive action.
 5. [ ] Host services on `IPluginContext`; plugin helpers move into the SDK; plugins drop their
    Core reference.

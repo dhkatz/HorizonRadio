@@ -141,6 +141,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Horizon Radio asks before it deletes or removes something.** Deleting a mix, clearing History
+  or the queue, removing a friend or a device, leaving your devices, and uninstalling a tool or the
+  game mod each ask first, and Cancel in the mix editor asks before throwing away changes.
 - **Lists show which row you're pointing at (History, Queue, Search, Mixes, Friends, Devices).**
   The row under the pointer highlights, and its buttons appear over the end of it, also when you
   Tab to them. Every row button says what it does when you hover it. Double-click a song in
