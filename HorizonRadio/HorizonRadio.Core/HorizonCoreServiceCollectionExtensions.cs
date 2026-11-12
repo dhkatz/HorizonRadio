@@ -54,6 +54,10 @@ public static class HorizonCoreServiceCollectionExtensions
         services.AddSingleton(_ => PlayHistoryStore.LoadFromDisk());
         services.AddSingleton(_ => new EventRuleStore(settings));
         services.AddSingleton(_ => new InputBindingStore(settings));
+        // Global keyboard and mouse, and controllers: what bound inputs listen to (the engine's
+        // InputBindingService starts and stops them). A module can add one, or a host drop them.
+        services.AddSingleton<IInputBackend, SharpHookBackend>();
+        services.AddSingleton<IInputBackend, SdlInputBackend>();
         services.AddSingleton(_ => new MetadataCache());
         services.AddSingleton<IMetadataCache>(sp => sp.GetRequiredService<MetadataCache>());
 

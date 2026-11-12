@@ -182,10 +182,14 @@ Each step leaves the app working and lands as its own PR or short stack.
    - [x] Core has no UI thread: local preview keeps its state machine under a lock of its own and
      the mix store is safe from any thread, so a merge from another device no longer goes through
      the window's dispatcher. Front ends marshal the events they show.
-   - [ ] The engine's services (runner, router, metadata, lyrics, history, devices, friends,
-     parties) are built by the container in Core, in an order Core owns, and stopped in it; they
-     log and find their folders through `IPluginLog` and `IAppFolders`, so a replacement reaches
-     Core too. `App` only adds the window.
+   - [x] Starting up is Core's: `HorizonHost` (log file, settings, the container with the plugins,
+     migrations, the game to run) and `HorizonEngine` (the engine's services for that game, wired
+     together, started once the front end has subscribed, and stopped in the order that matters).
+     The title model is a module wrapping the host's `ITitleModel`. `App` only adds the window; a
+     headless host runs the same engine.
+   - [ ] Core's own services log and find their folders through `IPluginLog` and `IAppFolders`
+     (the stores, the caches, the fingerprint store), so a replacement reaches Core too, and a test
+     host can run the whole engine against a temporary folder.
 8. [ ] Platform interfaces in Core; `HorizonRadio.Platform` with the Windows implementations.
 9. [ ] Workflows move from view models into Core services; the command list.
 10. [ ] The control endpoint.
