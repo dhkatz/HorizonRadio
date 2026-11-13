@@ -1,5 +1,5 @@
 using System.Diagnostics;
-using HorizonRadio.Core.Sources;
+using HorizonRadio.Platform.Windows;
 using Xunit;
 
 namespace HorizonRadio.Core.Tests;

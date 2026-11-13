@@ -211,8 +211,8 @@ Each step leaves the app working and lands as its own PR or short stack.
      local speakers are the first service (`ISpeakers`: WASAPI on Windows, none by default), so
      NAudio leaves Core. App folders stay in Core: .NET already finds the per-user data folder on
      each OS.
-   - [ ] Child processes: tying a tool to the app's lifetime (a job object on Windows) is the
-     platform's `IProcesses`.
+   - [x] Child processes: Core's `IProcesses` only starts a process; the Windows platform wraps it
+     to tie each one to the app's lifetime (`ChildProcesses`, a kill-on-close job object).
    - [ ] Secrets: the SDK's `ISecretProtector` (DPAPI on Windows), which the settings store and
      the Spotify login keep their secrets with.
 9. [ ] Workflows move from view models into Core services; the command list.

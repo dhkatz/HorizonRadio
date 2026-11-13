@@ -1,8 +1,9 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 
-namespace HorizonRadio.Core.Sources;
+namespace HorizonRadio.Platform.Windows;
 
 /// <summary>
 /// Ties the tools Horizon Radio starts (librespot, ffmpeg, yt-dlp) to the app's own lifetime: each
@@ -11,6 +12,7 @@ namespace HorizonRadio.Core.Sources;
 /// it a librespot outlives the app and stays logged in as the same Spotify Connect device, so the
 /// next session's play commands go to it instead and nothing is heard.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public static class ChildProcesses
 {
     private const int JobObjectExtendedLimitInformation = 9;
@@ -22,11 +24,10 @@ public static class ChildProcesses
 
     /// <summary>Put <paramref name="process"/> in the app's job, so it ends when the app does
     /// (and so do the processes it starts later). Best effort: false when it couldn't be tied
-    /// (not Windows, or the process already exited).</summary>
+    /// (the process already exited).</summary>
     public static bool TieToApp(Process process)
     {
         ArgumentNullException.ThrowIfNull(process);
-        if (!OperatingSystem.IsWindows()) return false;
         var job = Job();
         if (job == IntPtr.Zero) return false;
         try

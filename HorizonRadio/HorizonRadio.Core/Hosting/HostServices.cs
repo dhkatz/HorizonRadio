@@ -25,15 +25,12 @@ internal sealed class HostPluginLog : IPluginLog
     public void Trace(string tag, string text) => System.Diagnostics.Trace.WriteLine($"[hzn-{tag}] {text}");
 }
 
-/// <summary>Starts a process and ties it to the app (<see cref="ChildProcesses.TieToApp"/>).</summary>
+/// <summary>Starts a process. The platform (<see cref="IHostPlatform"/>) wraps it to tie each
+/// process to the app's lifetime, where the OS can (a job object on Windows).</summary>
 internal sealed class HostProcesses : IProcesses
 {
-    public Process Start(ProcessStartInfo info)
-    {
-        var process = Process.Start(info) ?? throw new InvalidOperationException($"Couldn't start {info.FileName}.");
-        ChildProcesses.TieToApp(process);
-        return process;
-    }
+    public Process Start(ProcessStartInfo info) =>
+        Process.Start(info) ?? throw new InvalidOperationException($"Couldn't start {info.FileName}.");
 }
 
 /// <summary>One audio cache per source under the profile's data folder (<c>cache\audio\&lt;source&gt;</c>),

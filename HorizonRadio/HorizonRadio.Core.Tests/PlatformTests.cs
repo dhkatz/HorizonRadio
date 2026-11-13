@@ -1,8 +1,10 @@
 using HorizonRadio.Core.Audio;
+using HorizonRadio.Core.Hosting;
 using HorizonRadio.Core.IO;
 using HorizonRadio.Core.Settings;
 using HorizonRadio.Platform;
 using HorizonRadio.Platform.Windows;
+using HorizonRadio.Sdk;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HorizonRadio.Core.Tests;
@@ -34,7 +36,19 @@ public sealed class PlatformTests : IDisposable
     }
 
     [Fact]
-    public void On_Windows_the_platform_brings_its_speakers()
+    public void Without_a_platform_a_process_is_only_started()
+    {
+        using var settings = SettingsStore.CreateInMemory();
+        using var provider = new ServiceCollection()
+            .AddHorizonCore(settings, new AppFolders(_dir.Path))
+            .BuildServiceProvider();
+
+        // Core's own, which ties nothing to the app: that's the platform's.
+        Assert.Same(typeof(HorizonHost).Assembly, provider.GetRequiredService<IProcesses>().GetType().Assembly);
+    }
+
+    [Fact]
+    public void On_Windows_the_platform_brings_its_speakers_and_ties_tools_to_the_app()
     {
         if (!OperatingSystem.IsWindows()) return;
 
@@ -45,5 +59,6 @@ public sealed class PlatformTests : IDisposable
         using var provider = services.BuildServiceProvider();
 
         Assert.IsType<WasapiSpeakers>(provider.GetRequiredService<ISpeakers>());
+        Assert.IsType<AppTiedProcesses>(provider.GetRequiredService<IProcesses>());
     }
 }
