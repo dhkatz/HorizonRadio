@@ -61,7 +61,10 @@ public sealed class HorizonEngine : IAsyncDisposable
         // to a local speaker instead.
         var tee = new TeePcmSink(game.Output);
         Preview = new PreviewController(tee, settings, services.GetRequiredService<ISpeakers>());
+        // With no game to play into, the local speakers are the only place to hear anything.
+        if (game.Output == null && !Preview.Enabled) Preview.SetEnabled(true);
         Runner = new SourceRunner(tee);
+        OutputGuard = new OutputGuard(Runner, Preview, game);
 
         // The metadata pipeline: one resolver (the source, then the providers in the user's order,
         // with a policy per field) for play-time enrichment and for lists.
@@ -127,6 +130,9 @@ public sealed class HorizonEngine : IAsyncDisposable
     public SourceConfigStore SourceConfig { get; }
     public MixStore Mixes { get; }
     public PreviewController Preview { get; }
+
+    /// <summary>Pauses what's playing when the chosen output can't be heard (the front end says so).</summary>
+    public OutputGuard OutputGuard { get; }
     public SourceRunner Runner { get; }
     public MetadataConfigStore MetadataConfig { get; }
     public MetadataResolver Metadata { get; }
@@ -244,6 +250,7 @@ public sealed class HorizonEngine : IAsyncDisposable
 
         Events.Dispose();
         Input.Dispose();
+        OutputGuard.Dispose();
         History.Dispose(); // unsubscribes from the runner and writes the last save
         MixLibrary.Dispose();
         MetadataPipeline.Dispose();

@@ -274,8 +274,9 @@ Each step leaves the app working and lands as its own PR or short stack.
    - [x] Synced preferences the window passed on: the router follows the shuffle setting, and
      `MetadataPipeline` rebuilds the resolver when the provider order or a field's provider changes
      (the Metadata page saves through it).
-   - [ ] What else only the window does: pausing when the chosen output can't be reached, and
-     turning the local speakers on when there's no game.
+   - [x] What else only the window did: `OutputGuard` (the engine's) pauses once when the chosen
+     output can't be heard and says so (`OutputLost`, which the window toasts), and the engine turns
+     the local speakers on when there's no game.
    - [ ] The command list: named actions (the event-rule and key-binding ones, then the services
      above) for bindings, rules, the control endpoint, and plugins' own commands.
 10. [ ] The control endpoint.

@@ -50,6 +50,9 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     /// <summary>Adds songs to the queue or a mix (set by the shell).</summary>
     public SongActions? Songs { get; set; }
 
+    /// <summary>The engine's output guard: a play or pause here tells it the user took over.</summary>
+    public Core.Audio.OutputGuard? OutputGuard { get; set; }
+
     /// <summary>True once a source has actually emitted a track. The
     /// "Source: …" pill in the Now Playing card binds to this so the
     /// pill stays hidden during the empty-state placeholder, where
@@ -134,8 +137,6 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     // unreachable output (game closed / dead device) pauses + toasts once. We
     // deliberately do NOT auto-resume when it's reachable again — the user
     // presses play, so a burst of audio can't catch them off guard.
-    private bool _outputAvailable = true;
-    private bool _needsOutputPause;
 
     public IReadOnlyList<IAudioSourceFactory> AvailableSources { get; }
 
@@ -186,11 +187,10 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         if (_preview != null)
         {
             // The game's output first, if the game has one ("No Game" doesn't: local speakers
-            // are the only destination then, so make sure they're on).
+            // are the only destination then, and the engine has turned them on).
             if (gameOutputName != null) OutputTargets.Add(OutputTarget.Game(gameOutputName));
             foreach (var d in _preview.Devices)
                 OutputTargets.Add(new OutputTarget(false, d.Id, d.Name));
-            if (gameOutputName == null && !_preview.Enabled) _preview.SetEnabled(true);
 
             // When enabled, reflect the controller's actual destination. If the
             // saved device is gone, the controller falls back to the default
@@ -202,11 +202,6 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
                   ?? OutputTargets[0]
                 : OutputTargets[0];
             previewVolume = _preview.Volume;
-
-            // The speaker can fail or recover on its own (unplugged, default device
-            // changed, device back): re-check reachability so a lost device pauses + toasts.
-            // Raised on whichever thread changed it.
-            _preview.StateChanged += () => Dispatcher.UIThread.Post(ReevaluateOutput);
         }
 
         // Keep the dropdown in sync when the runner is driven from the
@@ -223,22 +218,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
                 SelectedFactory = factory;
                 _suppressSwitch = false;
                 RebindTransport();
-
-                // Key output handling off whether a source is actually playing,
-                // not off a null factory — a mix plays factory-less but is live, so
-                // it must still get output-reachability evaluation/pause.
-                if (_runner?.ActiveSource is null)
-                {
-                    Lyrics.Clear();
-                    // Nothing playing: clear the output-pause state so the next
-                    // start re-evaluates reachability from a clean slate.
-                    _outputAvailable = true;
-                    _needsOutputPause = false;
-                }
-                else
-                {
-                    ReevaluateOutput();
-                }
+                if (_runner?.ActiveSource is null) Lyrics.Clear();
             });
     }
 
@@ -368,9 +348,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         {
             _preview.SelectDevice(value.DeviceId);
         }
-        // The destination changed under a (possibly running) source — re-check
-        // reachability so we pause/resume + toast as appropriate.
-        ReevaluateOutput();
+        // The engine's OutputGuard pauses (and OnOutputLost says so) if the new one can't be heard.
     }
 
     partial void OnPreviewVolumeChanged(double value)
@@ -396,61 +374,16 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Output-availability guard. When the active output can't be
-    /// played to, pause the source (keeping its metadata + position) and toast.
-    /// We intentionally never auto-resume — the user presses play once they've
-    /// picked a working output, so audio can't suddenly blare. Safe to call
-    /// repeatedly: the toast fires only on the reachable→unreachable edge (so
-    /// reconnect ticks don't spam it), and the pause fires at most once per
-    /// episode (a source's CanPause may only flip true after its first track
-    /// loads, so we keep the intent pending until it can act on it).</summary>
-    private void ReevaluateOutput()
-    {
-        if (_runner?.IsRunning != true) return;
-
-        var nowAvailable = IsCurrentOutputAvailable();
-
-        if (nowAvailable != _outputAvailable)
-        {
-            _outputAvailable = nowAvailable;
-            if (!nowAvailable)
-            {
-                _needsOutputPause = true;
-                ShowOutputUnavailableToast();
-            }
-            else
-            {
-                // Reachable again — stop trying to auto-pause, but don't resume.
-                _needsOutputPause = false;
-            }
-        }
-
-        // Carry out a pending auto-pause once the source can actually pause.
-        // Clearing the flag after means we pause at most once, so a manual
-        // resume while still unreachable isn't overridden.
-        if (_needsOutputPause && _transport is { CanPause: true, IsPaused: false })
-        {
-            _ = PauseForOutputAsync();
-            _needsOutputPause = false;
-        }
-    }
-
-    private bool IsCurrentOutputAvailable()
-    {
-        var target = SelectedOutput;
-        if (target == null) return true;          // no picker (designer) — assume reachable
-        return target.IsBridge
-            ? IsConnected                          // bridge reachable iff the game/DLL is connected
-            : _preview?.IsSpeakerActive == true;   // local device opened successfully
-    }
-
-    private void ShowOutputUnavailableToast()
+    /// <summary>The engine paused what's playing because its output can't be heard
+    /// (<see cref="Core.Audio.OutputGuard"/>): say so, and what to do.</summary>
+    public void OnOutputLost(Core.Audio.OutputLoss loss)
     {
         if (_toasts == null) return;
-        if (SelectedOutput is { IsBridge: false } device)
+        if (loss == Core.Audio.OutputLoss.Speaker)
         {
+            var device = SelectedOutput is { IsBridge: false } d ? d.Name : "the speaker";
             _toasts.CreateToast("Output unavailable")
-                .WithContent($"Couldn't play to “{device.Name}”. Playback paused — pick another output device.")
+                .WithContent($"Couldn't play to “{device}”. Playback paused — pick another output device.")
                 .WithDelay(6)
                 .DismissOnClick()
                 .ShowError();
@@ -465,14 +398,6 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         }
     }
 
-    // Pause, not toggle: a play/pause that lands in between can't turn this into a resume.
-    private async Task PauseForOutputAsync()
-    {
-        if (_transport == null) return;
-        try { await _transport.SetPausedAsync(true); }
-        catch (Exception ex) { Trace.WriteLine($"[hzn-now-vm] output-pause: {ex.Message}"); }
-    }
-
     private void OnPausedChanged(bool paused) =>
         Dispatcher.UIThread.Post(() => IsPaused = paused);
 
@@ -482,7 +407,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         if (_transport == null) return;
         // A manual play/pause means the user is in control — cancel any pending
         // output auto-pause so we don't override their choice.
-        _needsOutputPause = false;
+        OutputGuard?.UserTookControl();
         try { await _transport.TogglePauseAsync(); }
         catch (Exception ex) { Trace.WriteLine($"[hzn-now-vm] pause: {ex.Message}"); }
     }
@@ -719,11 +644,6 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         // Capabilities may have only just become known (e.g. YouTube finished
         // resolving its playlist), so re-evaluate them as tracks come in.
         RefreshCapabilities();
-
-        // Now that CanPause may have flipped true, enforce the output-pause if
-        // the destination is unreachable (the start-time check can run before a
-        // source knows it can pause).
-        ReevaluateOutput();
     }
 
     public void SetConnectionState(bool connected)
@@ -746,10 +666,6 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
             Lyrics.Clear();
         }
 
-        // The bridge's reachability tracks the game connection, so a source
-        // playing to the bridge pauses when the game quits and resumes when it
-        // returns.
-        ReevaluateOutput();
     }
 
     private static Bitmap? DecodeArt(byte[]? bytes) => Imaging.ImageBytes.ToBitmap(bytes);
