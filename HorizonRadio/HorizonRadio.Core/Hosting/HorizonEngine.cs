@@ -83,7 +83,7 @@ public sealed class HorizonEngine : IAsyncDisposable
         // its endless tail, which the switcher sets.
         ContentResolver = services.GetRequiredService<MixContentResolver>();
         Router = new PlaybackRouter(Runner, SourceConfig, Mixes, ContentResolver, log: log);
-        MixSwitcher = new MixSwitcher(Mixes, Player, Runner);
+        MixSwitcher = new MixSwitcher(Mixes, Player, Runner, log);
         // Mix entries shown as what they are (titles, artists, covers), looked up through the same
         // sources and metadata the queue uses, and kept on disk between sessions.
         MixEntries = new MixEntryDescriber(ContentResolver, Metadata, services.GetRequiredService<MixEntryInfoStore>());
@@ -99,6 +99,7 @@ public sealed class HorizonEngine : IAsyncDisposable
             game.Volume is { } gameVolume ? gameVolume.SetDuckGain : null);
         Events = new EventActionExecutor(game.EventSources, EventRules, Actions, log);
         InputBindings = services.GetRequiredService<InputBindingStore>();
+        MixLibrary = new MixLibrary(Mixes, MixEntries, InputBindings, log);
         Input = new InputBindingService(services.GetServices<IInputBackend>(), InputBindings, Actions);
 
         // Your devices and your friends share the peer helper, which starts once either needs it
@@ -148,6 +149,9 @@ public sealed class HorizonEngine : IAsyncDisposable
     public ActionDispatcher Actions { get; }
     public EventActionExecutor Events { get; }
     public InputBindingStore InputBindings { get; }
+
+    /// <summary>Saving, deleting and adding to mixes (playing one is <see cref="MixSwitcher"/>'s).</summary>
+    public MixLibrary MixLibrary { get; }
     public InputBindingService Input { get; }
     public MyDevices Devices { get; }
     public FriendsService Friends { get; }
@@ -234,6 +238,7 @@ public sealed class HorizonEngine : IAsyncDisposable
         Events.Dispose();
         Input.Dispose();
         History.Dispose(); // unsubscribes from the runner and writes the last save
+        MixLibrary.Dispose();
         MixSwitcher.Dispose();
         Preview.Dispose();
         await Enricher.DisposeAsync().ConfigureAwait(false);

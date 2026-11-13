@@ -261,8 +261,10 @@ Each step leaves the app working and lands as its own PR or short stack.
      queues it and tells the Console. Search, history, a song's menu, quick play, the Queue page
      and the Sources tab call it; each had its own copy, with its own error handling. A
      self-driven source starts by id with its saved settings (`PlaybackRouter.StartSourceAsync(id)`).
-   - [ ] Mixes: save, delete, add a song, play (replace or add) as a mix library service.
-     Deleting a mix also clears its key bindings, which only the Controls page did.
+   - [x] Mixes: `MixLibrary` saves, deletes and adds a song to a mix (saving the file, trimming
+     the entry lookups, telling the Console), and clears a deleted mix's key bindings, also when
+     another PC deleted it (only the Controls page did); `MixSwitcher.PlayAsync(id, mode)` plays
+     one in place of the queue's mix or added to it, the mode being the window's question.
    - [ ] History: identifying a radio song and finding where to replay it runs in Core, not only
      while the History page is open.
    - [ ] Tools: install, uninstall and update checks, with their Console lines.

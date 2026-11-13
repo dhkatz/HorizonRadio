@@ -112,6 +112,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                                SourceConfigStore store,
                                MixStore mixStore,
                                MixSwitcher mixSwitcher,
+                               MixLibrary mixLibrary,
                                QueuePlayback queue,
                                PlayHistoryStore historyStore,
                                MetadataResolver metaResolver,
@@ -159,7 +160,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ToolsTab = new ToolsViewModel(registry, installers, confirmations);
         Events = events;
         Controls = controls;
-        Mixes = new MixesViewModel(mixStore, mixSwitcher, playback.Sources, DialogManager, mixEntries,
+        Mixes = new MixesViewModel(mixStore, mixLibrary, mixSwitcher, playback.Sources, DialogManager, mixEntries,
             songs, confirmations);
         songs.Editor = Mixes;
         songs.ShowMixes = () => SelectedWorkspaceIndex = 9;

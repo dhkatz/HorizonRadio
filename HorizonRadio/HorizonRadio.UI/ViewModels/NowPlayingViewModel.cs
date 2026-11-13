@@ -686,13 +686,11 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
             : $"Starting {mix.Name}...";
         try
         {
-            if (mode == QueueAddMode.Add) await _switcher.AddToQueueAsync(mix.Id);
-            else await _switcher.SwitchToAsync(mix.Id);
+            await _switcher.PlayAsync(mix.Id, mode);
             SwitchStatus = null;
         }
         catch (MissingToolException ex)
         {
-            Trace.WriteLine($"[hzn-now-vm] mix switch blocked: {ex.Message}");
             SwitchStatus = ex.Message;
             _toasts?.CreateToast("Tool required")
                 .WithContent(ex.Message)
@@ -702,7 +700,6 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            Trace.WriteLine($"[hzn-now-vm] mix switch failed: {ex.Message}");
             SwitchStatus = ex.Message; // already includes the mix name
             _toasts?.CreateToast($"Couldn't start “{mix.Name}”")
                 .WithContent(ex.Message)

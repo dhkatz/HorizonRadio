@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Sources.Queue;
+using HorizonRadio.Sdk;
 
 namespace HorizonRadio.Core.Sources.Mixes;
 
@@ -25,6 +26,7 @@ public sealed class MixSwitcher : IDisposable
     private readonly MixStore _mixes;
     private readonly QueuePlayback _queue;
     private readonly SourceRunner _runner;
+    private readonly IPluginLog _log;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     /// <summary>Id of the mix currently driving the queue's tail, or null when the
@@ -37,11 +39,37 @@ public sealed class MixSwitcher : IDisposable
     /// override, else the global default).</summary>
     public event Action<Mix>? Switched;
 
-    public MixSwitcher(MixStore mixes, QueuePlayback queue, SourceRunner runner)
+    /// <param name="log">The Console (a mix played, or why it couldn't be). Default: nowhere.</param>
+    public MixSwitcher(MixStore mixes, QueuePlayback queue, SourceRunner runner, IPluginLog? log = null)
     {
         _mixes = mixes;
         _queue = queue;
         _runner = runner;
+        _log = log ?? IPluginLog.None;
+    }
+
+    /// <summary>
+    /// Play a mix (its Play button, the player bar's mix list): in place of the queue's mix
+    /// (<see cref="QueueAddMode.Replace"/>, <see cref="SwitchToAsync"/>), or one lap of it added to
+    /// the queue (<see cref="QueueAddMode.Add"/>, <see cref="AddToQueueAsync"/>). A front end asks
+    /// which when <see cref="QueueHasContent"/>. The Console says what happened.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">No such mix, or nothing in it plays.</exception>
+    /// <exception cref="MissingToolException">An entry's source needs a tool that isn't installed.</exception>
+    public async Task PlayAsync(string mixId, QueueAddMode mode)
+    {
+        var name = _mixes.Get(mixId)?.Name ?? mixId;
+        try
+        {
+            if (mode == QueueAddMode.Add) await AddToQueueAsync(mixId).ConfigureAwait(false);
+            else await SwitchToAsync(mixId).ConfigureAwait(false);
+            _log.Write(MixLibrary.ConsoleTag, mode == QueueAddMode.Add ? $"added {name} to the queue" : $"playing {name}");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.Write(MixLibrary.ConsoleTag, $"couldn't play {name}: {ex.Message}");
+            throw;
+        }
     }
 
     /// <summary>Switch to a specific mix (replacing the queue's context). Throws

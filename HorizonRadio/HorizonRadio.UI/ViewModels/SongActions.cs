@@ -64,8 +64,6 @@ public sealed class SongTarget
 }
 
 /// <summary>Whether adding an entry to a mix did anything.</summary>
-public enum MixAddResult { Added, AlreadyInMix, NoSuchMix }
-
 /// <summary>
 /// Adds songs to the queue or a mix from anywhere they show (History, search, the queue, the song
 /// playing now, a mix's entries). A song with an entry of its own adds that; a radio song is first
