@@ -1,7 +1,14 @@
 using System.Diagnostics;
+using HorizonRadio.Platform;
 using HorizonRadio.Sdk;
 
 namespace HorizonRadio.Core.Tests;
+
+/// <summary>What the app protects secrets with on this OS, as its host has it (DPAPI on Windows).</summary>
+public static class TestSecrets
+{
+    public static ISecretProtector ThisOs { get; } = HostPlatforms.Current()?.Secrets ?? ISecretProtector.None;
+}
 
 /// <summary>Process launching that refuses: for code that mustn't start a process in a test.</summary>
 public sealed class NoProcesses : IProcesses

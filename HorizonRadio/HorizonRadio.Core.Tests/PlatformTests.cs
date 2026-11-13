@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Hosting;
 using HorizonRadio.Core.IO;
@@ -5,6 +7,7 @@ using HorizonRadio.Core.Settings;
 using HorizonRadio.Platform;
 using HorizonRadio.Platform.Windows;
 using HorizonRadio.Sdk;
+using HorizonRadio.Source.Spotify;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HorizonRadio.Core.Tests;
@@ -48,6 +51,52 @@ public sealed class PlatformTests : IDisposable
     }
 
     [Fact]
+    public void Without_a_platform_secrets_are_kept_as_written_and_a_protected_one_is_kept_unread()
+    {
+        var path = Path.Combine(_dir.Path, SettingsStore.FileName);
+        const string protectedElsewhere = "dpapi:AAECAwQFBgcICQ==";
+        File.WriteAllText(path, $$"""
+            { "version": 1, "settings": {
+              "copied": { "value": "{{protectedElsewhere}}", "scope": "secret" } } }
+            """);
+        var copied = new Setting<string?>("copied", SettingScope.Secret, null);
+        var typed = new Setting<string?>("typed", SettingScope.Secret, null);
+
+        using (var settings = SettingsStore.Open(path))
+        {
+            Assert.Null(settings.Get(copied));
+            settings.Set(typed, "hunter2");
+        }
+
+        var onDisk = File.ReadAllText(path);
+        Assert.Contains(protectedElsewhere, onDisk, StringComparison.Ordinal);
+        Assert.Contains("\"hunter2\"", onDisk, StringComparison.Ordinal);
+
+        // And Spotify keeps no login it can't protect: the user signs in again next time.
+        var spotify = new SpotifyAuthStore(Path.Combine(_dir.Path, "spotify-auth.dat"), ISecretProtector.None);
+        spotify.Save("refresh-token");
+        Assert.Null(spotify.Load());
+        Assert.False(File.Exists(Path.Combine(_dir.Path, "spotify-auth.dat")));
+    }
+
+    [Fact]
+    public void On_Windows_secrets_kept_before_the_platform_existed_still_read()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        // As SecretText and SpotifyAuthStore wrote them: DPAPI for this user, their own entropy.
+        var setting = "dpapi:" + Convert.ToBase64String(ProtectedData.Protect(Encoding.UTF8.GetBytes("my-soloist-key"),
+            Encoding.UTF8.GetBytes("HorizonRadio.SecretSetting.v1"), DataProtectionScope.CurrentUser));
+        var token = Path.Combine(_dir.Path, "spotify-auth.dat");
+        File.WriteAllBytes(token, ProtectedData.Protect(Encoding.UTF8.GetBytes("refresh-token"),
+            Encoding.UTF8.GetBytes("HorizonRadio.Spotify.RefreshToken.v1"), DataProtectionScope.CurrentUser));
+
+        var secrets = Assert.IsType<WindowsPlatform>(HostPlatforms.Current()).Secrets;
+        Assert.Equal("my-soloist-key", new SecretText(secrets).Unprotect(setting));
+        Assert.Equal("refresh-token", new SpotifyAuthStore(token, secrets).Load());
+    }
+
+    [Fact]
     public void On_Windows_the_platform_brings_its_speakers_and_ties_tools_to_the_app()
     {
         if (!OperatingSystem.IsWindows()) return;
@@ -60,5 +109,6 @@ public sealed class PlatformTests : IDisposable
 
         Assert.IsType<WasapiSpeakers>(provider.GetRequiredService<ISpeakers>());
         Assert.IsType<AppTiedProcesses>(provider.GetRequiredService<IProcesses>());
+        Assert.Same(platform.Secrets, provider.GetRequiredService<ISecretProtector>());
     }
 }

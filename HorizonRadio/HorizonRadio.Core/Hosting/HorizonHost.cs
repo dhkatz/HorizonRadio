@@ -22,7 +22,8 @@ public sealed class HorizonHostOptions
     public SettingsStore? Settings { get; init; }
 
     /// <summary>The OS code to run on (<c>HorizonRadio.Platform</c>'s <c>HostPlatforms.Current()</c>).
-    /// Default: none, Core's portable defaults (no speakers), which is what a test wants.</summary>
+    /// Default: none, Core's portable defaults (no speakers, secrets kept as written), which is what
+    /// a test wants.</summary>
     public IHostPlatform? Platform { get; init; }
 
     /// <summary>The plugin and module types to register. Default: the scan of the app's plugin
@@ -74,7 +75,7 @@ public sealed class HorizonHost : IAsyncDisposable
         // session, so a failure can be read afterwards.
         if (options.WriteLogFile) LogFile.Start(folders.Data("logs"));
         // Every setting, in one file; the first run on it brings over the older per-feature files.
-        var settings = options.Settings ?? SettingsStore.Open(folders.Data(SettingsStore.FileName));
+        var settings = options.Settings ?? SettingsStore.Open(folders.Data(SettingsStore.FileName), options.Platform?.Secrets);
         var services = new ServiceCollection();
         services.AddHorizonCore(settings, folders);
         // The OS's services over Core's portable defaults; the front end and the plugins come after,

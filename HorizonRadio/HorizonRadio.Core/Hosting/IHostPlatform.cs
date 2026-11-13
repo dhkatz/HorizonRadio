@@ -1,3 +1,4 @@
+using HorizonRadio.Sdk;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HorizonRadio.Core.Hosting;
@@ -14,6 +15,11 @@ public interface IHostPlatform
 {
     /// <summary>The OS, for the log ("Windows").</summary>
     string Name { get; }
+
+    /// <summary>What secrets are protected with. The host needs it before the container (the
+    /// settings open first, and their secret settings are protected on disk); register the same
+    /// one in <see cref="ConfigureServices"/>.</summary>
+    ISecretProtector Secrets { get; }
 
     void ConfigureServices(IServiceCollection services);
 }

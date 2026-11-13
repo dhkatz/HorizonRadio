@@ -28,7 +28,8 @@ namespace HorizonRadio.Core;
 /// (<see cref="IPluginLog"/>, <see cref="IProcesses"/>, <see cref="IAppFolders"/>,
 /// <see cref="IToolLocator"/>, <see cref="IMetadataCache"/>, <see cref="IMetadataTrace"/>,
 /// <see cref="IAudioCaches"/>, <see cref="ISourceSettings"/>, <see cref="ITitleModel"/>,
-/// <see cref="IPluginSettingsStore"/>, <see cref="IConfirmations"/>, <see cref="INotifications"/>),
+/// <see cref="IPluginSettingsStore"/>, <see cref="IConfirmations"/>, <see cref="INotifications"/>,
+/// <see cref="ISecretProtector"/>),
 /// each of which a plugin module may replace (<see cref="Hosting.PluginRegistration.AddPlugins"/>).
 /// Core's own services take them from the container too, so a replacement reaches Core as well.
 /// </summary>
@@ -62,6 +63,7 @@ public static class HorizonCoreServiceCollectionExtensions
         services.AddSingleton<IMetadataCache>(sp => sp.GetRequiredService<MetadataCache>());
         // What reaches the OS, portable defaults: the platform (IHostPlatform) registers its own.
         services.AddSingleton<ISpeakers, NoSpeakers>();
+        services.AddSingleton(ISecretProtector.None);
 
         // What plugins take in their constructors, as the host provides it. A plugin module can
         // replace or wrap any of these (see PluginRegistration.AddPlugins).

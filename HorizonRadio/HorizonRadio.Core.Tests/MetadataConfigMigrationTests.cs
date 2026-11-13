@@ -4,6 +4,7 @@ using HorizonRadio.Metadata.Apple;
 using HorizonRadio.Metadata.MusicBrainz;
 using HorizonRadio.Metadata.Spotify;
 using HorizonRadio.Metadata.VocaDb;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Sources.Config;
 using HorizonRadio.Source.Spotify;
@@ -37,7 +38,7 @@ public sealed class MetadataConfigMigrationTests : IDisposable
     public MetadataConfigMigrationTests() => _catalog = new MetadataCatalog(
     [
         new SpotifyProviderFactory(Cache, IMetadataTrace.Off,
-            new SpotifyConnection(new SpotifyAuthStore(Path.Combine(_dir.Path, "spotify-auth.dat")), "", NoLog.Instance)),
+            new SpotifyConnection(new SpotifyAuthStore(Path.Combine(_dir.Path, "spotify-auth.dat"), ISecretProtector.None), "", NoLog.Instance)),
         new ItunesProviderFactory(Cache, IMetadataTrace.Off),
         new MusicBrainzProviderFactory(Cache, IMetadataTrace.Off),
         new VocaDbProviderFactory(Cache, IMetadataTrace.Off),
@@ -51,7 +52,7 @@ public sealed class MetadataConfigMigrationTests : IDisposable
     private SettingsStore OpenWithLegacy(string json)
     {
         File.WriteAllText(Path.Combine(_dir.Path, "metadata-config.json"), json);
-        return SettingsStore.Open(SettingsPath);
+        return SettingsStore.Open(SettingsPath, TestSecrets.ThisOs);
     }
 
     [Fact]
@@ -116,7 +117,7 @@ public sealed class MetadataConfigMigrationTests : IDisposable
         using (var settings = OpenWithLegacy("""{ "order": ["musicbrainz"] }"""))
             _ = new MetadataConfigStore(settings, _catalog);
 
-        using var reopened = SettingsStore.Open(SettingsPath);
+        using var reopened = SettingsStore.Open(SettingsPath, TestSecrets.ThisOs);
         Assert.Equal(["musicbrainz", "itunes", "vocadb"], reopened.Get(MetadataSettings.Order));
         Assert.Contains("itunes", reopened.Get(MetadataSettings.Introduced));
     }

@@ -78,7 +78,9 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   listener can capture. A
   source setting that's a credential is a `TextField` with `IsSecret`:
   `SourceConfigStore` keeps it as a secret setting (see [Settings](#settings)), written
-  encrypted (`SecretText`, DPAPI for the Windows user, `dpapi:<base64>`), and the form masks it.
+  encrypted (`SecretText`, through the host's `ISecretProtector`: the Windows platform's is DPAPI
+  for the Windows user, `dpapi:<base64>`), and the form masks it. Spotify's login is protected the
+  same way (`SpotifyAuthStore`).
   Spotify playback uses librespot; for a track Spotify refuses librespot the audio of,
   the Spotify plugin can play it through Spotify Soloist instead (Spotify's own Connect
   client), taking what Soloist plays with `horizon_audio_tap.dll` (`Native/`, `AudioTap`):
@@ -220,7 +222,9 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   its state machine under a lock and hands device callbacks to the thread pool.
 - **Starting up (`Core/Hosting/`)** — any front end starts the same way: `HorizonHost.Build`
   starts the session's log file, opens the settings, builds the container (below; the OS's services
-  come from the platform the front end passes, `HorizonHostOptions.Platform`), and brings old
+  come from the platform the front end passes, `HorizonHostOptions.Platform`: `HostPlatforms.Current()`
+  in `HorizonRadio.Platform`, a folder per OS; Core registers a portable default for each, so a
+  host with no platform runs with no speakers and keeps secrets as written), and brings old
   settings over; `ChosenGame()` says which game to run (null: the front end asks, as the window's
   first-run picker does); `StartEngine(gameId)` builds the `HorizonEngine` for it: the pipeline into
   the game and the local speaker, the runner and router, metadata, lyrics, history, events and bound
@@ -250,7 +254,8 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   `ISourceSettings` (a source's saved settings, for work outside a player such as search),
   `ITitleModel` (the optional title model, read each time: it's replaced on install; the host's
   only knows the setting, and `HorizonRadio.TitleModel`'s module wraps it with the installed GGUF),
-  `IConfirmations`) and the module's own; tool plugins register their wrappers the same way
+  `IConfirmations`, `ISecretProtector` (keeps a secret for this user on this machine)) and the
+  module's own; tool plugins register their wrappers the same way
   (`YtDlpClient`). Run a tool to its end with `IProcesses.RunToEndAsync` (logs the command and its
   stderr), and stream one's audio with `SubprocessPcmSource`. A game plugin (`IGamePlugin`) is the exception for now: the container builds it,
   and it builds its integration. A module may also replace a host service or wrap it

@@ -23,7 +23,6 @@
     <PackageReference Include="SpotifyAPI.Web" Version="7.4.2" />
     <!-- The login token is kept encrypted with DPAPI (SpotifyAuthStore); moves to a host secret
          service with the Platform step (docs/modular-architecture.md). -->
-    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.9" />
   </ItemGroup>
 
   <!--

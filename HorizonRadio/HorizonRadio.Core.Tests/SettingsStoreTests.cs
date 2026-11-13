@@ -30,7 +30,7 @@ public sealed class SettingsStoreTests : IDisposable
 
     // A store that only saves when told to, so a test sees exactly when the file is written.
     private SettingsStore OpenManual(TimeProvider? time = null) =>
-        SettingsStore.Open(SettingsPath, TimeSpan.FromHours(1), time ?? TimeProvider.System);
+        SettingsStore.Open(SettingsPath, TimeSpan.FromHours(1), time ?? TimeProvider.System, TestSecrets.ThisOs);
 
     public void Dispose() => _dir.Dispose();
 
@@ -180,7 +180,7 @@ public sealed class SettingsStoreTests : IDisposable
 
         var onDisk = File.ReadAllText(SettingsPath);
         Assert.DoesNotContain("hunter2", onDisk, StringComparison.Ordinal);
-        Assert.Contains(SecretText.Prefix, onDisk, StringComparison.Ordinal);
+        Assert.Contains("dpapi:", onDisk, StringComparison.Ordinal);
         using var reopened = OpenManual();
         Assert.Equal("hunter2", reopened.Get(Token));
     }
@@ -293,7 +293,7 @@ public sealed class SettingsStoreTests : IDisposable
     public void Imported_settings_keep_their_scopes_and_secrets_stay_encrypted()
     {
         if (!OperatingSystem.IsWindows()) return;
-        WriteLegacyFiles(protectedKey: SecretText.Protect("my-soloist-key"));
+        WriteLegacyFiles(protectedKey: new SecretText(TestSecrets.ThisOs).Protect("my-soloist-key"));
 
         using (var store = OpenManual())
         {
