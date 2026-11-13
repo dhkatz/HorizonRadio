@@ -67,8 +67,7 @@ public sealed class HorizonEngine : IAsyncDisposable
         // with a policy per field) for play-time enrichment and for lists.
         MetadataConfig = services.GetRequiredService<MetadataConfigStore>();
         Metadata = new MetadataResolver(log, services.GetRequiredService<MetadataTrace>());
-        var (contributors, policy) = MetadataConfig.Catalog.BuildPipeline(MetadataConfig);
-        Metadata.Configure(contributors, policy);
+        MetadataPipeline = new MetadataPipeline(MetadataConfig, Metadata);
         Enricher = new EnrichmentService(Runner, Metadata);
 
         // Lyrics from every lyrics plugin, in their order: synced lyrics first, then the earlier
@@ -149,6 +148,9 @@ public sealed class HorizonEngine : IAsyncDisposable
 
     /// <summary>Identifies the radio songs in the history and finds where to replay them.</summary>
     public HistoryIdentifier HistoryIdentifier { get; }
+
+    /// <summary>Keeps <see cref="Metadata"/> on the user's metadata settings, synced ones too.</summary>
+    public MetadataPipeline MetadataPipeline { get; }
     public EventRuleStore EventRules { get; }
     public ActionDispatcher Actions { get; }
     public EventActionExecutor Events { get; }
@@ -244,6 +246,8 @@ public sealed class HorizonEngine : IAsyncDisposable
         Input.Dispose();
         History.Dispose(); // unsubscribes from the runner and writes the last save
         MixLibrary.Dispose();
+        MetadataPipeline.Dispose();
+        HistoryIdentifier.Dispose();
         MixSwitcher.Dispose();
         Preview.Dispose();
         await Enricher.DisposeAsync().ConfigureAwait(false);

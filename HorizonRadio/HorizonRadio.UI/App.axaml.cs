@@ -81,7 +81,7 @@ public partial class App : Application
                 var engine = host.StartEngine(chosenGameId);
                 var services = host.Services;
 
-                var metaVm = new MetadataViewModel(engine.MetadataConfig, engine.Metadata);
+                var metaVm = new MetadataViewModel(engine.MetadataConfig, engine.MetadataPipeline);
                 var eventsVm = new EventsViewModel(engine.EventRules, engine.Events, engine.Game.EventCatalog,
                     engine.Game.EventsHint, engine.Sources);
                 var controlsVm = new ControlsViewModel(engine.InputBindings, engine.Input, engine.Mixes);

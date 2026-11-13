@@ -154,8 +154,8 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         var queue = playback.Player;
         Lyrics = new LyricsViewModel(lyrics, () => _runner?.ActiveSource as IPlaybackProgress, store.Settings, songSync);
         _store = store;
-        // Another of your devices can turn shuffle on or off (Devices): follow it, which also
-        // hands it to the router (OnIsShuffleEnabledChanged).
+        // Another of your devices can turn shuffle on or off (Devices): show it. The router follows
+        // the setting itself.
         _ = store.Settings.Watch(PlaybackSettings.Shuffle, on => Dispatcher.UIThread.Post(() => IsShuffleEnabled = on));
         _mixes = mixes;
         _switcher = switcher;
@@ -352,17 +352,9 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
     {
         if (_suppressShuffle) return;
 
-        // Persist as a global preference, and hand it to the router: it applies it live to
-        // what's playing (keeps the current track, shuffles the rest) and to every channel as
-        // it starts or comes back, so a station parked meanwhile follows it too.
+        // The preference: the router follows it, live for what's playing (keeps the current
+        // track, shuffles the rest) and for every channel as it starts or comes back.
         _store?.Settings.Set(PlaybackSettings.Shuffle, value);
-        if (_playback != null) _ = ApplyShuffleAsync(_playback, value);
-    }
-
-    private static async Task ApplyShuffleAsync(PlaybackRouter playback, bool value)
-    {
-        try { await playback.SetShuffleAsync(value); }
-        catch (Exception ex) { Trace.WriteLine($"[hzn-now-vm] shuffle: {ex.Message}"); }
     }
 
     partial void OnSelectedOutputChanged(OutputTarget? value)

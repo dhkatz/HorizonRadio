@@ -22,7 +22,7 @@ namespace HorizonRadio.UI.ViewModels;
 public sealed partial class MetadataViewModel : ViewModelBase
 {
     private readonly MetadataConfigStore _store;
-    private readonly MetadataResolver _resolver;
+    private readonly MetadataPipeline? _pipeline;
 
     /// <summary>Providers in priority order (enabled first, then the rest). The user
     /// reorders and toggles these.</summary>
@@ -34,14 +34,14 @@ public sealed partial class MetadataViewModel : ViewModelBase
     [ObservableProperty] private string statusMessage = "";
     [ObservableProperty] private bool hasError;
 
-    public MetadataViewModel(MetadataConfigStore store, MetadataResolver resolver)
+    public MetadataViewModel(MetadataConfigStore store, MetadataPipeline pipeline)
     {
         _store = store;
-        _resolver = resolver;
+        _pipeline = pipeline;
         BuildProviders();
         BuildFields();
         // The order and overrides sync between your devices (Devices): when they change
-        // elsewhere, the page shows them and the resolver uses them.
+        // elsewhere, the page shows them (the pipeline puts them to use).
         _ = store.Settings.Watch(MetadataSettings.Order, _ => Dispatcher.UIThread.Post(Reload));
         _ = store.Settings.Watch(MetadataSettings.Forced, _ => Dispatcher.UIThread.Post(Reload));
     }
@@ -58,15 +58,13 @@ public sealed partial class MetadataViewModel : ViewModelBase
         Fields.Clear();
         BuildProviders();
         BuildFields();
-        var (contributors, policy) = _store.Catalog.BuildPipeline(_store);
-        _resolver.Configure(contributors, policy);
     }
 
     /// <summary>Designer ctor.</summary>
     public MetadataViewModel()
     {
         _store = new MetadataConfigStore();
-        _resolver = null!;
+        _pipeline = null;
         BuildProviders();
         BuildFields();
     }
@@ -139,32 +137,29 @@ public sealed partial class MetadataViewModel : ViewModelBase
     [RelayCommand]
     private void Apply()
     {
-        if (_resolver == null) return;
+        if (_pipeline == null) return;
         HasError = false;
         StatusMessage = "Applying...";
         try
         {
             // Persist every provider's config (so creds stick even when disabled),
             // and the enabled ones — in their current display order — as the chain.
+            var settings = new List<(string, ConfigValues)>();
             var order = new List<string>();
             foreach (var row in Providers)
             {
                 var values = new ConfigValues();
                 foreach (var f in row.Fields) values.Set(f.Key, f.GetValue());
-                _store.Save(row.Id, values);
+                settings.Add((row.Id, values));
                 if (row.IsEnabled) order.Add(row.Id);
             }
-            _store.Order = order;
 
             var forced = new Dictionary<MetadataField, string>();
             foreach (var fr in Fields)
                 if (fr.Selected?.ProviderId is { } pid) forced[fr.Field] = pid;
-            _store.Forced = forced;
-            _shownOrder = [.. _store.Order];
-            _shownForced = new Dictionary<MetadataField, string>(_store.Forced);
-
-            var (contributors, policy) = _store.Catalog.BuildPipeline(_store);
-            _resolver.Configure(contributors, policy);
+            _shownOrder = [.. order];
+            _shownForced = new Dictionary<MetadataField, string>(forced);
+            _pipeline.Save(settings, order, forced);
 
             StatusMessage = _store.Order.Count == 0
                 ? "Enrichment disabled (no providers enabled)."
