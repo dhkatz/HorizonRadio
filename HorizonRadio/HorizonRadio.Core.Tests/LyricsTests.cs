@@ -272,7 +272,7 @@ public class LyricsServiceTests
     [Fact]
     public async Task Synced_lyrics_win_over_an_earlier_providers_text()
     {
-        var service = new LyricsService([new Stub("a", () => Lyrics("a", false)), new Stub("b", () => Lyrics("b", true))]);
+        var service = new LyricsService([new Stub("a", () => Lyrics("a", false)), new Stub("b", () => Lyrics("b", true))], NoLog.Instance);
 
         Assert.Equal("b", (await service.FindAsync(Query, CancellationToken.None))!.ProviderId);
     }
@@ -280,7 +280,7 @@ public class LyricsServiceTests
     [Fact]
     public async Task The_earlier_provider_wins_a_tie()
     {
-        var service = new LyricsService([new Stub("a", () => Lyrics("a", true)), new Stub("b", () => Lyrics("b", true))]);
+        var service = new LyricsService([new Stub("a", () => Lyrics("a", true)), new Stub("b", () => Lyrics("b", true))], NoLog.Instance);
 
         Assert.Equal("a", (await service.FindAsync(Query, CancellationToken.None))!.ProviderId);
     }
@@ -289,7 +289,7 @@ public class LyricsServiceTests
     public async Task Answers_are_remembered()
     {
         var stub = new Stub("a", () => null);
-        var service = new LyricsService([stub]);
+        var service = new LyricsService([stub], NoLog.Instance);
 
         Assert.Null(await service.FindAsync(Query, CancellationToken.None));
         Assert.Null(await service.FindAsync(Query, CancellationToken.None));
@@ -301,9 +301,12 @@ public class LyricsServiceTests
     {
         bool down = true;
         var flaky = new Stub("a", () => down ? throw new HttpRequestException("503") : Lyrics("a", true));
-        var service = new LyricsService([flaky]);
+        var log = new LinesLog();
+        var service = new LyricsService([flaky], log);
 
         Assert.Null(await service.FindAsync(Query, CancellationToken.None));
+        // Said in the Console, through the host's log (a module replacing it gets this too).
+        Assert.Contains(log.Lines, l => l.StartsWith("lyrics: a unavailable", StringComparison.Ordinal));
         down = false;
         Assert.NotNull(await service.FindAsync(Query, CancellationToken.None));
     }

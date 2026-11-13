@@ -355,7 +355,7 @@ public class PlaybackRouterTests
         await Eventually.Until(() => a.Plays == 2, "a again");
 
         // Another source taking over (Spotify Connect, the test tone) ends the queue's engine.
-        await new ActionDispatcher(h.Router, new SourceConfigStore())
+        await new ActionDispatcher(h.Router, new SourceConfigStore(), NoLog.Instance)
             .RunAsync(new EventAction(EventActionType.SwitchSource, "testtone"));
 
         Assert.False(h.Player.IsActive);

@@ -150,7 +150,7 @@ public class VoiceCreditTests
             new MetadataContribution(Artist: "supercell", Album: "supercell"));
         var vocadb = new Catalog("vocadb", identifies: true, "Hatsune Miku", "Melt",
             new MetadataContribution(Title: "メルト", Artist: "ryo feat. 初音ミク"));
-        var resolver = new MetadataResolver();
+        var resolver = new MetadataResolver(NoLog.Instance);
         resolver.Configure([store, vocadb], Policy("itunes", "vocadb"));
 
         var r = await resolver.ResolveDetailedAsync(new Track("Melt", "Hatsune Miku", null, null, "radio", "Internet Radio"), CancellationToken.None);
@@ -167,7 +167,7 @@ public class VoiceCreditTests
         // "keerosah - [初音ミク] Migratory [Clean Tears]": the vocalist tag is the weaker reading.
         var catalog = new Catalog("itunes", identifies: false, "Clean Tears", "Migratory",
             new MetadataContribution(Artist: "Clean Tears", Album: "Heat Haze"));
-        var resolver = new MetadataResolver();
+        var resolver = new MetadataResolver(NoLog.Instance);
         resolver.Configure([catalog], Policy("itunes"));
         var seed = new Track("Migratory", "keerosah", null, null, "radio", "Internet Radio",
             Candidates: [new TitleCandidate("初音ミク", "Migratory"), new TitleCandidate("Clean Tears", "Migratory")]);

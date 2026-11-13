@@ -31,6 +31,18 @@ public sealed class NoLog : IPluginLog
     public void Trace(string tag, string text) { }
 }
 
+/// <summary>A log that keeps what's written to the Console, as <c>tag: text</c>.</summary>
+public sealed class LinesLog : IPluginLog
+{
+    private readonly List<string> _lines = [];
+
+    public IReadOnlyList<string> Lines { get { lock (_lines) return [.. _lines]; } }
+
+    public void Write(string tag, string text) { lock (_lines) _lines.Add($"{tag}: {text}"); }
+
+    public void Trace(string tag, string text) { }
+}
+
 /// <summary>No title model installed.</summary>
 public sealed class NoTitleModel : Sdk.Metadata.ITitleModel
 {

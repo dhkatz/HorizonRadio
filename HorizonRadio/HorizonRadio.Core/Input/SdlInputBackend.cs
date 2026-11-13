@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Sdk;
 using SDL3;
 using Thread = System.Threading.Thread;
 
@@ -23,7 +23,7 @@ namespace HorizonRadio.Core.Input;
 /// A recognized gamepad is also a joystick to SDL; we ignore its joystick events
 /// to avoid double-emitting.
 /// </summary>
-public sealed class SdlInputBackend : IInputBackend, IControllerDeviceSource
+public sealed class SdlInputBackend(IPluginLog log) : IInputBackend, IControllerDeviceSource
 {
     public string Name => "Controllers (SDL)";
     public bool IsAvailable { get; private set; } = true;
@@ -63,11 +63,11 @@ public sealed class SdlInputBackend : IInputBackend, IControllerDeviceSource
             SDL.SetHint("SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS", "1");
             if (!SDL.Init(SDL.InitFlags.Joystick | SDL.InitFlags.Gamepad | SDL.InitFlags.Events))
             {
-                ProcessConsole.Append("controls", $"SDL init failed: {SDL.GetError()}");
+                log.Write("controls", $"SDL init failed: {SDL.GetError()}");
                 IsAvailable = false;
                 return;
             }
-            ProcessConsole.Append("controls", "SDL3 initialized");
+            log.Write("controls", "SDL3 initialized");
 
             // Open whatever is already connected.
             var gamepads = SDL.GetGamepads(out _);
@@ -115,7 +115,7 @@ public sealed class SdlInputBackend : IInputBackend, IControllerDeviceSource
         }
         catch (Exception ex)
         {
-            ProcessConsole.Append("controls", $"SDL pump stopped: {ex.GetType().Name}: {ex.Message}");
+            log.Write("controls", $"SDL pump stopped: {ex.GetType().Name}: {ex.Message}");
             IsAvailable = false;
         }
         finally
@@ -142,7 +142,7 @@ public sealed class SdlInputBackend : IInputBackend, IControllerDeviceSource
         if (string.IsNullOrEmpty(name)) name = $"Controller {instanceId}";
         var style = ClassifyStyle(SDL.GetGamepadType(gp), name);
         _gamepads[instanceId] = (gp, name, style);
-        ProcessConsole.Append("controls", $"controller connected: {name} ({style})");
+        log.Write("controls", $"controller connected: {name} ({style})");
         RefreshDevices();
     }
 
@@ -162,7 +162,7 @@ public sealed class SdlInputBackend : IInputBackend, IControllerDeviceSource
         string name = SDL.GetJoystickName(js) ?? "";
         if (string.IsNullOrEmpty(name)) name = $"Joystick {instanceId}";
         _joysticks[instanceId] = (js, name);
-        ProcessConsole.Append("controls", $"joystick connected: {name}");
+        log.Write("controls", $"joystick connected: {name}");
         RefreshDevices();
     }
 

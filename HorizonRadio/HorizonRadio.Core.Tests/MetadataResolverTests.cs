@@ -49,7 +49,7 @@ public class MetadataResolverTests
     [Fact]
     public async Task No_contributors_returns_seed_unchanged()
     {
-        var resolver = new MetadataResolver();
+        var resolver = new MetadataResolver(NoLog.Instance);
         var seed = Seed();
         var result = await resolver.ResolveAsync(seed, CancellationToken.None);
         Assert.Same(seed, result);
@@ -58,7 +58,7 @@ public class MetadataResolverTests
     [Fact]
     public async Task Non_resolvable_placeholder_skips_the_provider_search()
     {
-        var resolver = new MetadataResolver();
+        var resolver = new MetadataResolver(NoLog.Instance);
         var logo = new byte[] { 4, 2 };
         // A contributor that would throw if queried — so a green test proves it's never reached.
         resolver.Configure([new ThrowingContributor()], Policy(["boom"]));
@@ -76,7 +76,7 @@ public class MetadataResolverTests
     [Fact]
     public async Task Provider_fills_only_missing_fields()
     {
-        var resolver = new MetadataResolver();
+        var resolver = new MetadataResolver(NoLog.Instance);
         var art = new byte[] { 1, 2, 3 };
         resolver.Configure(
             [new FakeContributor("mb", new MetadataContribution(Title: "Canonical", Artist: "RealArtist", Art: art))],
@@ -92,7 +92,7 @@ public class MetadataResolverTests
     [Fact]
     public async Task Forced_field_overrides_even_when_source_has_it()
     {
-        var resolver = new MetadataResolver();
+        var resolver = new MetadataResolver(NoLog.Instance);
         var srcArt = new byte[] { 9 };
         var spotifyArt = new byte[] { 7 };
         resolver.Configure(
@@ -106,7 +106,7 @@ public class MetadataResolverTests
     [Fact]
     public async Task Fallback_art_fills_in_when_no_provider_finds_a_cover()
     {
-        var resolver = new MetadataResolver();
+        var resolver = new MetadataResolver(NoLog.Instance);
         var logo = new byte[] { 4, 2 };
         // A provider that matches text but supplies no art (the Niconico-only track case).
         resolver.Configure(
@@ -121,7 +121,7 @@ public class MetadataResolverTests
     [Fact]
     public async Task Real_art_beats_fallback_art()
     {
-        var resolver = new MetadataResolver();
+        var resolver = new MetadataResolver(NoLog.Instance);
         var logo = new byte[] { 4, 2 };
         var cover = new byte[] { 1, 1 };
         resolver.Configure(
@@ -136,7 +136,7 @@ public class MetadataResolverTests
     [Fact]
     public async Task Fallback_art_applies_even_with_no_contributors()
     {
-        var resolver = new MetadataResolver();
+        var resolver = new MetadataResolver(NoLog.Instance);
         var logo = new byte[] { 4, 2 };
 
         var result = await resolver.ResolveAsync(Seed(art: null, fallbackArt: logo), CancellationToken.None);
@@ -147,7 +147,7 @@ public class MetadataResolverTests
     [Fact]
     public async Task Order_decides_precedence_between_providers()
     {
-        var resolver = new MetadataResolver();
+        var resolver = new MetadataResolver(NoLog.Instance);
         var a = new FakeContributor("a", new MetadataContribution(Album: "AlbumA"));
         var b = new FakeContributor("b", new MetadataContribution(Album: "AlbumB"));
 
@@ -168,7 +168,7 @@ public class MetadataResolverTests
     [Fact]
     public async Task Candidate_that_the_catalog_confirms_wins_over_a_wrong_primary()
     {
-        var resolver = new MetadataResolver();
+        var resolver = new MetadataResolver(NoLog.Instance);
         var art = new byte[] { 1, 2, 3 };
         // Catalog only "has" Heavenz / テロメアの産声.
         resolver.Configure(
@@ -189,7 +189,7 @@ public class MetadataResolverTests
     [Fact]
     public async Task Primary_match_short_circuits_candidates()
     {
-        var resolver = new MetadataResolver();
+        var resolver = new MetadataResolver(NoLog.Instance);
         var art = new byte[] { 4 };
         resolver.Configure(
             [new MatchingContributor("itunes", "MuryokuP", "Sacred Secret", new MetadataContribution(Art: art))],
@@ -206,7 +206,7 @@ public class MetadataResolverTests
     [Fact]
     public async Task No_candidate_matches_keeps_the_primary_and_fallback_art()
     {
-        var resolver = new MetadataResolver();
+        var resolver = new MetadataResolver(NoLog.Instance);
         var logo = new byte[] { 9 };
         // Catalog has neither the primary nor the candidate.
         resolver.Configure(
@@ -227,7 +227,7 @@ public class MetadataResolverTests
     [Fact]
     public async Task ResolveDetailed_reports_matched_when_a_catalog_confirms()
     {
-        var resolver = new MetadataResolver();
+        var resolver = new MetadataResolver(NoLog.Instance);
         resolver.Configure(
             [new MatchingContributor("itunes", "RealArtist", "Real Song", new MetadataContribution(Art: [1]))],
             Policy(["itunes"]));
@@ -241,7 +241,7 @@ public class MetadataResolverTests
     [Fact]
     public async Task ResolveDetailed_reports_unmatched_when_no_provider_confirms()
     {
-        var resolver = new MetadataResolver();
+        var resolver = new MetadataResolver(NoLog.Instance);
         resolver.Configure(
             [new MatchingContributor("itunes", "Someone Else", "Other Song", new MetadataContribution(Art: [1]))],
             Policy(["itunes"]));
@@ -255,7 +255,7 @@ public class MetadataResolverTests
     [Fact]
     public async Task ResolveDetailed_reports_matched_via_a_confirmed_candidate()
     {
-        var resolver = new MetadataResolver();
+        var resolver = new MetadataResolver(NoLog.Instance);
         resolver.Configure(
             [new MatchingContributor("itunes", "Heavenz", "テロメアの産声", new MetadataContribution(Art: [1]))],
             Policy(["itunes"]));
@@ -270,7 +270,7 @@ public class MetadataResolverTests
     [Fact]
     public async Task ResolveDetailed_reports_unmatched_with_no_contributors()
     {
-        var resolver = new MetadataResolver();
+        var resolver = new MetadataResolver(NoLog.Instance);
         var (_, matched, _) = await resolver.ResolveDetailedAsync(Seed(), CancellationToken.None);
         Assert.False(matched);
     }
@@ -278,7 +278,7 @@ public class MetadataResolverTests
     [Fact]
     public async Task ResolveDetailed_surfaces_provider_playables()
     {
-        var resolver = new MetadataResolver();
+        var resolver = new MetadataResolver(NoLog.Instance);
         var pvs = new[]
         {
             new PlayableRef("YouTube", "https://youtu.be/abc"),

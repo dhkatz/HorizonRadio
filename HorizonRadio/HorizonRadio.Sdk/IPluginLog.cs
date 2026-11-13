@@ -6,6 +6,9 @@ namespace HorizonRadio.Sdk;
 /// </summary>
 public interface IPluginLog
 {
+    /// <summary>A log that drops everything (tests, a design-time view model).</summary>
+    static IPluginLog None { get; } = new NoLog();
+
     /// <summary>Lines for the Console tab, under <paramref name="tag"/>: usually the tool that said
     /// them ("yt-dlp", "ffmpeg") or the activity ("search", "sync"). <paramref name="text"/> may
     /// hold several lines (a tool's whole stderr); empty lines are dropped.</summary>
@@ -14,4 +17,10 @@ public interface IPluginLog
     /// <summary>A line for the log file only: detail for whoever reads the log after a failure,
     /// not for the Console tab. Written as <c>[hzn-&lt;tag&gt;] text</c>.</summary>
     void Trace(string tag, string text);
+
+    private sealed class NoLog : IPluginLog
+    {
+        public void Write(string tag, string text) { }
+        public void Trace(string tag, string text) { }
+    }
 }

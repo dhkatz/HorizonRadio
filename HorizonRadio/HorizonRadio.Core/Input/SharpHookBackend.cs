@@ -1,5 +1,5 @@
 using System;
-using HorizonRadio.Core.Diagnostics;
+using HorizonRadio.Sdk;
 using SharpHook;
 using SharpHook.Data;
 
@@ -13,7 +13,7 @@ namespace HorizonRadio.Core.Input;
 /// unavailable and no-ops where the OS hook can't be installed (e.g. Wayland,
 /// or a missing macOS Accessibility grant).
 /// </summary>
-public sealed class SharpHookBackend : IInputBackend
+public sealed class SharpHookBackend(IPluginLog log) : IInputBackend
 {
     public string Name => "Keyboard & mouse";
     public bool IsAvailable { get; private set; } = true;
@@ -36,7 +36,7 @@ public sealed class SharpHookBackend : IInputBackend
         catch (Exception ex)
         {
             IsAvailable = false;
-            ProcessConsole.Append("controls", $"global hook unavailable: {ex.GetType().Name}: {ex.Message}");
+            log.Write("controls", $"global hook unavailable: {ex.GetType().Name}: {ex.Message}");
         }
     }
 
