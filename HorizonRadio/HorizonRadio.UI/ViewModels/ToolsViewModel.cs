@@ -13,13 +13,12 @@ using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Tools;
 using HorizonRadio.Sdk.UI.Theme;
-using HorizonRadio.UI.Tools;
 
 namespace HorizonRadio.UI.ViewModels;
 
 public sealed partial class ToolsViewModel : ViewModelBase
 {
-    private readonly ToolRegistry _registry;
+    private readonly ToolInstalls _installs;
 
     public ObservableCollection<ToolItemViewModel> Items { get; } = new();
 
@@ -37,16 +36,17 @@ public sealed partial class ToolsViewModel : ViewModelBase
 
     public string CheckLabel => IsChecking ? "Checking…" : "Check for Updates";
 
-    public ToolsViewModel(ToolRegistry registry, IEnumerable<IToolInstaller> installers,
-        IConfirmations? confirmations = null)
+    public ToolsViewModel(ToolRegistry registry, ToolInstalls installs, IConfirmations? confirmations = null)
     {
-        _registry = registry;
-        foreach (var installer in installers)
-            Items.Add(new ToolItemViewModel(installer, registry, confirmations));
+        _installs = installs;
+        foreach (var installer in installs.Installers)
+            Items.Add(new ToolItemViewModel(installer, registry, installs, confirmations));
     }
 
     /// <summary>Designer ctor: no tools (the app's come from the plugins it loads).</summary>
-    public ToolsViewModel() : this(new ToolRegistry(), []) { }
+    public ToolsViewModel() : this(DesignerRegistry, new ToolInstalls(DesignerRegistry, IPluginLog.None)) { }
+
+    private static readonly ToolRegistry DesignerRegistry = new();
 
     /// <summary>
     /// Run the provisioning-freshness check across every tool and update
@@ -62,18 +62,9 @@ public sealed partial class ToolsViewModel : ViewModelBase
         IsChecking = true;
         try
         {
-            using var http = ToolInstallerBase.CreateHttpClient(TimeSpan.FromSeconds(30));
-            // Check tools concurrently — yt-dlp/ffmpeg each hit the network,
-            // so serial checks would stack their latency onto every launch.
-            // Each task's ConfigureAwait(true) marshals its Freshness write
-            // back to the UI thread; the shared HttpClient is thread-safe.
-            await Task.WhenAll(Items.Select(async item =>
-            {
-                var installed = _registry.PrimaryFor(item.Kind);
-                item.Freshness = await ToolFreshnessChecker
-                    .CheckAsync(item.Installer, installed, http, ct)
-                    .ConfigureAwait(true);
-            })).ConfigureAwait(true);
+            var freshness = await _installs.CheckAsync(ct).ConfigureAwait(true);
+            foreach (var item in Items)
+                item.Freshness = freshness.GetValueOrDefault(item.Kind, ToolFreshness.Unknown);
             UpdatesAvailable = Items.Count(i => i.UpdateAvailable);
             return UpdatesAvailable;
         }
@@ -91,6 +82,7 @@ public sealed partial class ToolItemViewModel : ViewModelBase, IDisposable
 {
     private readonly IToolInstaller _installer;
     private readonly ToolRegistry _registry;
+    private readonly ToolInstalls _installs;
     private readonly IConfirmations _confirm;
 
     private CancellationTokenSource? _cts;
@@ -164,10 +156,12 @@ public sealed partial class ToolItemViewModel : ViewModelBase, IDisposable
     public bool CanInstall => !IsWorking;
     public bool CanUninstall => IsInstalled && !IsWorking;
 
-    public ToolItemViewModel(IToolInstaller installer, ToolRegistry registry, IConfirmations? confirmations = null)
+    public ToolItemViewModel(IToolInstaller installer, ToolRegistry registry, ToolInstalls installs,
+        IConfirmations? confirmations = null)
     {
         _installer = installer;
         _registry = registry;
+        _installs = installs;
         _confirm = confirmations ?? ProceedWithoutAsking.Instance;
 
         registry.Changed += OnRegistryChanged;
@@ -202,44 +196,32 @@ public sealed partial class ToolItemViewModel : ViewModelBase, IDisposable
         ProgressIsIndeterminate = true;
         _cts = new CancellationTokenSource();
 
-        var lastStatus = "";
         var progress = new Progress<ToolInstallProgress>(p =>
         {
             ProgressText = p.Status;
             ProgressIsIndeterminate = p.Fraction is null;
             ProgressFraction = p.Fraction ?? 0;
-            // De-dupe: percentage ticks repeat the same status string.
-            if (p.Status != lastStatus)
-            {
-                lastStatus = p.Status;
-                ProcessConsole.Append(_installer.Kind, $"install: {p.Status}");
-            }
         });
 
-        ProcessConsole.Append(_installer.Kind, "install: starting…");
+        // ToolInstalls tells the Console how it goes; this card shows it.
         try
         {
-            await _installer.InstallAsync(_registry.Catalog.TargetFor(_installer.Kind), progress, _cts.Token).ConfigureAwait(true);
-            _registry.Rescan();
+            await _installs.InstallAsync(_installer.Kind, progress, _cts.Token).ConfigureAwait(true);
             // We just installed exactly what the app expects (latest for
             // latest-policy tools, the manifest pin for librespot), so the
             // sidecar now matches the baseline — mark fresh without a
             // round-trip.
             Freshness = ToolFreshness.UpToDate;
             ProgressText = "Done.";
-            ProcessConsole.Append(_installer.Kind, "install: done");
         }
         catch (OperationCanceledException)
         {
             ProgressText = "Cancelled.";
-            ProcessConsole.Append(_installer.Kind, "install: cancelled");
         }
         catch (Exception ex)
         {
-            Trace.WriteLine($"[hzn-tools-vm] install {_installer.Kind}: {ex}");
             ErrorMessage = ex.Message;
             ProgressText = "Failed.";
-            ProcessConsole.Append(_installer.Kind, $"install failed: {ex.Message}");
         }
         finally
         {
@@ -260,16 +242,12 @@ public sealed partial class ToolItemViewModel : ViewModelBase, IDisposable
             return;
         try
         {
-            var dir = _registry.Catalog.DirectoryFor(_installer.Kind);
-            if (Directory.Exists(dir))
-                Directory.Delete(dir, recursive: true);
-            _registry.Rescan();
+            _installs.Uninstall(_installer.Kind);
             ProgressText = "Uninstalled.";
             ErrorMessage = null;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Trace.WriteLine($"[hzn-tools-vm] uninstall {_installer.Kind}: {ex}");
             ErrorMessage = ex.Message;
         }
     }

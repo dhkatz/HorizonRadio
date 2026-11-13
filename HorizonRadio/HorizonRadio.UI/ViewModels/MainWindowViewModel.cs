@@ -119,7 +119,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                                Core.Sources.Mixes.MixEntryDescriber mixEntries,
                                MetadataViewModel metadata,
                                ToolRegistry registry,
-                               System.Collections.Generic.IEnumerable<IToolInstaller> installers,
+                               ToolInstalls toolInstalls,
                                EventsViewModel events,
                                ControlsViewModel controls,
                                Core.Audio.PreviewController preview,
@@ -157,7 +157,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             Songs = songs,
         };
         Metadata = metadata;
-        ToolsTab = new ToolsViewModel(registry, installers, confirmations);
+        ToolsTab = new ToolsViewModel(registry, toolInstalls, confirmations);
         Events = events;
         Controls = controls;
         Mixes = new MixesViewModel(mixStore, mixLibrary, mixSwitcher, playback.Sources, DialogManager, mixEntries,

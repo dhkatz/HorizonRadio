@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Sdk.Tools;
 
-namespace HorizonRadio.UI.Tools;
+namespace HorizonRadio.Core.Tools;
 
 /// <summary>
 /// Decides a tool's <see cref="ToolFreshness"/> by comparing the hash

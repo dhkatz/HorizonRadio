@@ -80,8 +80,6 @@ public partial class App : Application
             {
                 var engine = host.StartEngine(chosenGameId);
                 var services = host.Services;
-                var tools = services.GetRequiredService<ToolCatalog>();
-                var installers = tools.Plugins.Select(t => t.Installer).ToArray();
 
                 var metaVm = new MetadataViewModel(engine.MetadataConfig, engine.Metadata);
                 var eventsVm = new EventsViewModel(engine.EventRules, engine.Events, engine.Game.EventCatalog,
@@ -94,7 +92,7 @@ public partial class App : Application
 
                 var vm = new MainWindowViewModel(engine.Router, engine.SourceConfig, engine.Mixes, engine.MixSwitcher, engine.MixLibrary,
                     engine.Player, engine.HistoryStore, engine.Metadata, engine.MixEntries, metaVm,
-                    services.GetRequiredService<ToolRegistry>(), installers, eventsVm, controlsVm, engine.Preview,
+                    services.GetRequiredService<ToolRegistry>(), services.GetRequiredService<ToolInstalls>(), eventsVm, controlsVm, engine.Preview,
                     engine.Game, gameSettings, toasts, dialogManager, confirmations, devicesVm, friendsVm,
                     new AboutViewModel(services.GetRequiredService<MetadataTrace>()), engine.Lyrics, engine.SongSync);
                 var mainWindow = new MainWindow { DataContext = vm };

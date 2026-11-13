@@ -1,4 +1,4 @@
-namespace HorizonRadio.UI.Tools;
+namespace HorizonRadio.Core.Tools;
 
 /// <summary>
 /// Provisioning-freshness of an installed tool: does the user have what

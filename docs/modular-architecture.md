@@ -267,7 +267,9 @@ Each step leaves the app working and lands as its own PR or short stack.
      one in place of the queue's mix or added to it, the mode being the window's question.
    - [ ] History: identifying a radio song and finding where to replay it runs in Core, not only
      while the History page is open.
-   - [ ] Tools: install, uninstall and update checks, with their Console lines.
+   - [x] Tools: `ToolInstalls` (a service) installs, uninstalls and checks for updates
+     (`ToolFreshnessChecker`, moved from the UI), rescans the registry and tells the Console; the
+     Tools page only shows progress and asks before uninstalling.
    - [ ] What only the window applied: a synced change of metadata provider order or of shuffle,
      and pausing when the chosen output can't be reached.
    - [ ] The command list: named actions (the event-rule and key-binding ones, then the services
