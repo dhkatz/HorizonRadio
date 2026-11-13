@@ -160,7 +160,7 @@ Each step leaves the app working and lands as its own PR or short stack.
    - [x] FH6 takes its settings (`IPluginSettingsStore`), confirmations and log by constructor, and
      `IGamePlugin.Create()` no longer gets a context: `IPluginContext` is gone. FH6 already reached
      the engine only through `IGameHost`. No plugin references Core.
-6. [ ] `App.axaml.cs` stops naming plugin internals: the catalogs (sources, metadata, tools) are
+6. [x] `App.axaml.cs` stops naming plugin internals: the catalogs (sources, metadata, tools) are
    services, and Core reaches replaceable services through their interfaces.
    - [x] `App` names no plugin: tool plugins come from the container like the rest (the static
      tool list is gone), and plugins tell the user things through `INotifications` (the Soloist
@@ -172,9 +172,12 @@ Each step leaves the app working and lands as its own PR or short stack.
      `ToolResolver` did (where tools install, finding a configured, bundled or installed copy); the
      host's `IToolLocator` answers from it, and whether a source has its tools is the source
      catalog's question (`SourceCatalog.EnsureToolsAvailable`).
-   - [ ] Core reaches what a plugin can replace through its interface (the Console log, process
-     launching, folders, the tool locator), so a replacement applies to Core's own use too.
-7. [ ] `Core/Hosting/`: the startup sequence, plugin discovery, plugin context, game host and
+   - [x] Core reaches what a plugin can replace through its interface (the Console log, process
+     launching, folders, the tool locator), so a replacement applies to Core's own use too. (Done
+     with step 7's last item: Core starts tool processes and finds tools only through the host's
+     `IProcesses` and `IToolLocator`, and logs and keeps its files through `IPluginLog` and
+     `IAppFolders`.)
+7. [x] `Core/Hosting/`: the startup sequence, plugin discovery, plugin context, game host and
    tool registry move out of `HorizonRadio.UI`.
    - [x] Plugin discovery (`Core/Hosting/PluginDiscovery`), the tool registry (a service, beside the
      tool catalog) and the game host (`Core/Games/GameHost`) are in Core. (The plugin context is
@@ -187,7 +190,7 @@ Each step leaves the app working and lands as its own PR or short stack.
      together, started once the front end has subscribed, and stopped in the order that matters).
      The title model is a module wrapping the host's `ITitleModel`. `App` only adds the window; a
      headless host runs the same engine.
-   - [ ] Core's own services log and find their folders through `IPluginLog` and `IAppFolders`
+   - [x] Core's own services log and find their folders through `IPluginLog` and `IAppFolders`
      (the stores, the caches, the fingerprint store), so a replacement reaches Core too, and a test
      host can run the whole engine against a temporary folder.
      - [x] Folders: the host runs on an `AppFolders` (the profile's, or any folder:
@@ -199,7 +202,8 @@ Each step leaves the app working and lands as its own PR or short stack.
        container. (The window's own lines move with its workflows, step 9.)
      - [x] Metadata diagnostics: `MetadataTrace` is a service, the host's `IMetadataTrace`, which
        the resolver records its lookups in; it writes to the host's folder and Console log.
-     - [ ] A test runs the whole engine, headless, in a temporary folder.
+     - [x] A test runs the whole engine, headless, in a temporary folder (`HeadlessEngineTests`:
+       it plays, stops, and the next host on that folder finds the history, mixes and settings).
 8. [ ] Platform interfaces in Core; `HorizonRadio.Platform` with the Windows implementations.
 9. [ ] Workflows move from view models into Core services; the command list.
 10. [ ] The control endpoint.
