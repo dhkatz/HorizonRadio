@@ -102,6 +102,8 @@ public partial class App : Application
 
                 // What the window shows follows the engine, which raises on its own threads.
                 engine.Game.StateChanged += state => Dispatcher.UIThread.Post(() => vm.SetConnection(state));
+                vm.NowPlaying.OutputGuard = engine.OutputGuard;
+                engine.OutputGuard.OutputLost += loss => Dispatcher.UIThread.Post(() => vm.NowPlaying.OnOutputLost(loss));
                 engine.Runner.TrackChanged += t => Dispatcher.UIThread.Post(() => vm.NowPlaying.Apply(t));
                 engine.Enricher.TrackEnriched += t => Dispatcher.UIThread.Post(() => vm.NowPlaying.Apply(t));
                 engine.Start();
