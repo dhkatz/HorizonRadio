@@ -12,7 +12,7 @@ namespace HorizonRadio.Source.Spotify;
 /// The user's Spotify account connection: a PKCE OAuth login (no client secret — safe
 /// to ship a default Client ID in the binary) that yields a ready user-scoped
 /// <see cref="SpotifyClient"/> for playback control, queue, and search. The refresh
-/// token is persisted (DPAPI-encrypted) via <see cref="SpotifyAuthStore"/>, so the
+/// token is persisted (protected by the host) via <see cref="SpotifyAuthStore"/>, so the
 /// user logs in once and the client silently refreshes thereafter.
 ///
 /// The browser redirect is captured by a one-shot loopback <see cref="TcpListener"/>

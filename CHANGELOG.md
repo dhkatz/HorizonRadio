@@ -172,6 +172,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   color tokens and text styles) is one `HorizonRadioTheme`, which plugin pages use too: the FH6
   plugin now references it instead of reaching ShadUI through the app. Status colors come from
   named tones (`ToneSuccessBrush`…, `Tone` in view models) instead of color literals.
+- **The OS code is its own project, `HorizonRadio.Platform` (internal).** Core declares what it
+  needs from the OS as interfaces with portable defaults, and the platform registers Windows' own
+  over them: the speakers (WASAPI), keeping secrets (DPAPI, now the SDK's `ISecretProtector`, which
+  the Spotify plugin keeps its login with too), and tying the tools the app starts to its lifetime
+  (a job object). Core no longer depends on NAudio or Windows APIs, a step towards macOS and Linux.
+  Saved secrets and the Spotify login read as before.
 - **The engine runs on any folder, without the window (internal).** Core's stores, caches, log and
   metadata diagnostics take the app's folder and Console log from the host's services
   (`IAppFolders`, `IPluginLog`, `IMetadataTrace`) instead of statics, so a plugin replacing one of

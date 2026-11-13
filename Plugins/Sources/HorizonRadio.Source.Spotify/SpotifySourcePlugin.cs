@@ -20,7 +20,8 @@ public sealed class SpotifySourcePlugin : IPlugin, IPluginModule
         // The account, the players and what goes first: one each, shared by both sources and by
         // the Spotify metadata plugin (which reads the catalog through this connection).
         services.AddSingleton<SpotifySettings>();
-        services.AddSingleton(sp => new SpotifyAuthStore(sp.GetRequiredService<IAppFolders>().Data("spotify-auth.dat")));
+        services.AddSingleton(sp => new SpotifyAuthStore(sp.GetRequiredService<IAppFolders>().Data("spotify-auth.dat"),
+            sp.GetRequiredService<ISecretProtector>()));
         services.AddSingleton(sp => new SpotifyConnection(
             sp.GetRequiredService<SpotifyAuthStore>(), sp.GetRequiredService<SpotifySettings>().ClientId,
             sp.GetRequiredService<IPluginLog>()));

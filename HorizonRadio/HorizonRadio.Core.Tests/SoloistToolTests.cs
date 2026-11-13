@@ -85,7 +85,7 @@ public sealed class SecretSettingTests : IDisposable
 
     private static ConfigValues Read(string path)
     {
-        using var settings = SettingsStore.Open(path);
+        using var settings = SettingsStore.Open(path, TestSecrets.ThisOs);
         return new SourceConfigStore(settings).Load("spotify-driven", Schema);
     }
 
@@ -93,7 +93,7 @@ public sealed class SecretSettingTests : IDisposable
     public void A_secret_setting_is_stored_encrypted_and_read_back()
     {
         if (!OperatingSystem.IsWindows()) return;
-        using (var settings = SettingsStore.Open(Path))
+        using (var settings = SettingsStore.Open(Path, TestSecrets.ThisOs))
         {
             Write(settings, values =>
             {
@@ -104,7 +104,7 @@ public sealed class SecretSettingTests : IDisposable
 
         var onDisk = File.ReadAllText(Path);
         Assert.DoesNotContain("my-secret-key", onDisk, StringComparison.Ordinal);
-        Assert.Contains(SecretText.Prefix, onDisk, StringComparison.Ordinal);
+        Assert.Contains("dpapi:", onDisk, StringComparison.Ordinal);
         Assert.Contains("Horizon Radio", onDisk, StringComparison.Ordinal); // the rest stays plain
 
         Assert.Equal("my-secret-key", Read(Path).GetString("soloistKey"));
@@ -115,14 +115,14 @@ public sealed class SecretSettingTests : IDisposable
     {
         if (!OperatingSystem.IsWindows()) return;
         // As if settings.json came from another Windows account: valid base64, not this user's DPAPI.
-        const string foreign = SecretText.Prefix + "AAECAwQFBgcICQ==";
+        const string foreign = "dpapi:AAECAwQFBgcICQ==";
         File.WriteAllText(Path, $$"""
             { "version": 1, "settings": {
               "source.spotify-driven.soloistKey": { "value": "{{foreign}}", "scope": "secret" },
               "source.spotify-driven.deviceName": { "value": "Horizon Radio", "scope": "device" } } }
             """);
 
-        using var settings = SettingsStore.Open(Path);
+        using var settings = SettingsStore.Open(Path, TestSecrets.ThisOs);
         Assert.Null(new SourceConfigStore(settings).Load("spotify-driven", Schema).GetString("soloistKey"));
         Write(settings, values => values.Set("deviceName", "Renamed"));
         Assert.Contains(foreign, File.ReadAllText(Path), StringComparison.Ordinal);
@@ -136,11 +136,11 @@ public sealed class SecretSettingTests : IDisposable
     public void A_secret_stays_encrypted_when_saved_before_its_settings_are_shown()
     {
         if (!OperatingSystem.IsWindows()) return;
-        using (var first = SettingsStore.Open(Path))
+        using (var first = SettingsStore.Open(Path, TestSecrets.ThisOs))
             Write(first, values => values.Set("soloistKey", "my-secret-key"));
 
         // Next run: saved again, with a source that never loads the Spotify settings.
-        using (var next = SettingsStore.Open(Path))
+        using (var next = SettingsStore.Open(Path, TestSecrets.ThisOs))
         {
             var config = new SourceConfigStore(next);
             var values = config.Load("local", []);

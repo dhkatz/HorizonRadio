@@ -148,9 +148,8 @@ Each step leaves the app working and lands as its own PR or short stack.
      settings (`SpotifySettings`), its sources and the Spotify metadata provider take them by
      constructor, and `SpotifyRuntime` and the app's Spotify wiring are gone (the Connect receiver
      frees the driven librespot itself). The Spotify, librespot and Soloist plugins reference only
-     the SDK. Left for later: the login token's DPAPI encryption (a host secret service, with the
-     Platform step) and the Soloist pairing toast (`App` listens for it until plugins can show a
-     notice).
+     the SDK. Left for later, both since done: the login token's DPAPI encryption (the host's
+     `ISecretProtector`, step 8) and the Soloist pairing toast (`INotifications`, step 6).
    - [x] The peer helper: its plugin registers the app's peer network (`IPeerNetworkFactory`, in
      the SDK, so a plugin can bring another), started through `IProcesses`; it references only the
      SDK.
@@ -204,7 +203,7 @@ Each step leaves the app working and lands as its own PR or short stack.
        the resolver records its lookups in; it writes to the host's folder and Console log.
      - [x] A test runs the whole engine, headless, in a temporary folder (`HeadlessEngineTests`:
        it plays, stops, and the next host on that folder finds the history, mixes and settings).
-8. [ ] Platform interfaces in Core; `HorizonRadio.Platform` with the Windows implementations.
+8. [x] Platform interfaces in Core; `HorizonRadio.Platform` with the Windows implementations.
    - [x] `HorizonRadio.Platform`: an `IHostPlatform` per OS, picked at run time
      (`HostPlatforms.Current()`) and passed to the host (`HorizonHostOptions.Platform`), which
      registers it over Core's portable defaults and before the front end and the plugins. The
@@ -213,8 +212,10 @@ Each step leaves the app working and lands as its own PR or short stack.
      each OS.
    - [x] Child processes: Core's `IProcesses` only starts a process; the Windows platform wraps it
      to tie each one to the app's lifetime (`ChildProcesses`, a kill-on-close job object).
-   - [ ] Secrets: the SDK's `ISecretProtector` (DPAPI on Windows), which the settings store and
-     the Spotify login keep their secrets with.
+   - [x] Secrets: the SDK's `ISecretProtector` (DPAPI on Windows), which the settings store and
+     the Spotify login keep their secrets with; the platform hands it to the host before the
+     container, since the settings open first. Core has no OS calls left, and no NAudio or DPAPI
+     package.
 9. [ ] Workflows move from view models into Core services; the command list.
 10. [ ] The control endpoint.
 11. [ ] `hzr`: remote commands, then `hzr serve`. The CLI project emits the same

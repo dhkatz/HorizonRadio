@@ -15,7 +15,7 @@ public class SpotifyAuthStoreTests
         if (!OperatingSystem.IsWindows()) return;
         using var dir = TempDir.Create();
         var path = System.IO.Path.Combine(dir.Path, "spotify-auth.dat");
-        var store = new SpotifyAuthStore(path);
+        var store = new SpotifyAuthStore(path, TestSecrets.ThisOs);
 
         Assert.Null(store.Load());                 // nothing yet
 
@@ -24,7 +24,7 @@ public class SpotifyAuthStoreTests
         Assert.Equal("refresh-token-abc123", store.Load());
 
         // A fresh instance over the same path reads it back (decryptable on disk).
-        Assert.Equal("refresh-token-abc123", new SpotifyAuthStore(path).Load());
+        Assert.Equal("refresh-token-abc123", new SpotifyAuthStore(path, TestSecrets.ThisOs).Load());
     }
 
     [Fact]
@@ -33,7 +33,7 @@ public class SpotifyAuthStoreTests
         if (!OperatingSystem.IsWindows()) return;
         using var dir = TempDir.Create();
         var path = System.IO.Path.Combine(dir.Path, "spotify-auth.dat");
-        new SpotifyAuthStore(path).Save("super-secret-refresh-token");
+        new SpotifyAuthStore(path, TestSecrets.ThisOs).Save("super-secret-refresh-token");
 
         var bytes = System.IO.File.ReadAllBytes(path);
         var asText = System.Text.Encoding.UTF8.GetString(bytes);
@@ -46,7 +46,7 @@ public class SpotifyAuthStoreTests
         if (!OperatingSystem.IsWindows()) return;
         using var dir = TempDir.Create();
         var path = System.IO.Path.Combine(dir.Path, "spotify-auth.dat");
-        var store = new SpotifyAuthStore(path);
+        var store = new SpotifyAuthStore(path, TestSecrets.ThisOs);
 
         store.Save("token");
         store.Clear();

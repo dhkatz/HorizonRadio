@@ -2,7 +2,7 @@
 
   <!--
     The OS behind Core's interfaces: the code that reaches the operating system (on Windows, the
-    speakers through WASAPI), a folder per OS, picked at run time (HostPlatforms.Current) and
+    speakers through WASAPI, secrets through DPAPI), a folder per OS, picked at run time (HostPlatforms.Current) and
     registered over Core's portable defaults (IHostPlatform). Each OS's classes carry
     [SupportedOSPlatform], so the platform analyzer flags a call that isn't guarded. Front ends
     reference it; Core and plugins don't (see docs/modular-architecture.md).
@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <PackageReference Include="NAudio" Version="2.3.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.9" />
   </ItemGroup>
 
 </Project>

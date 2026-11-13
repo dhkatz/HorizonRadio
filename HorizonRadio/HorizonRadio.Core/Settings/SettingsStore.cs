@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using HorizonRadio.Core.IO;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.IO;
 
 namespace HorizonRadio.Core.Settings;
@@ -52,6 +53,7 @@ public sealed class SettingsStore : IDisposable
     };
 
     private readonly string? _path; // null = in memory only
+    private readonly SecretText _secrets;
     private readonly TimeSpan _saveDelay;
     private readonly TimeProvider _time;
     private readonly Lock _lock = new();
@@ -61,9 +63,10 @@ public sealed class SettingsStore : IDisposable
     private bool _dirty;
     private bool _disposed;
 
-    private SettingsStore(string? path, TimeSpan saveDelay, TimeProvider time)
+    private SettingsStore(string? path, TimeSpan saveDelay, TimeProvider time, ISecretProtector? secrets)
     {
         _path = path;
+        _secrets = new SecretText(secrets ?? ISecretProtector.None);
         _saveDelay = saveDelay;
         _time = time;
         if (path != null) _saveTimer = new Timer(_ => Flush(), null, Timeout.Infinite, Timeout.Infinite);
@@ -78,11 +81,15 @@ public sealed class SettingsStore : IDisposable
     /// (<see cref="LegacySettingsImport"/>), which leaves those files as they were.
     /// An unreadable file is set aside as <c>settings.json.bad</c> rather than overwritten.
     /// </summary>
-    public static SettingsStore Open(string path) => Open(path, DefaultSaveDelay, TimeProvider.System);
+    /// <param name="path">The settings file.</param>
+    /// <param name="secrets">What secret settings are protected with on disk (the platform's); with
+    /// none, they're written as they are, and ones protected elsewhere are kept but can't be read.</param>
+    public static SettingsStore Open(string path, ISecretProtector? secrets = null) =>
+        Open(path, DefaultSaveDelay, TimeProvider.System, secrets);
 
-    internal static SettingsStore Open(string path, TimeSpan saveDelay, TimeProvider time)
+    internal static SettingsStore Open(string path, TimeSpan saveDelay, TimeProvider time, ISecretProtector? secrets = null)
     {
-        var store = new SettingsStore(path, saveDelay, time);
+        var store = new SettingsStore(path, saveDelay, time, secrets);
         var exists = File.Exists(path);
         if (exists) store.Load(path);
         if (LegacySettingsImport.Import(store, Path.GetDirectoryName(path) ?? ".", firstRun: !exists)) store.Flush();
@@ -91,7 +98,7 @@ public sealed class SettingsStore : IDisposable
 
     /// <summary>A store that never touches disk (tests, the designer).</summary>
     public static SettingsStore CreateInMemory(TimeProvider? time = null) =>
-        new(null, TimeSpan.Zero, time ?? TimeProvider.System);
+        new(null, TimeSpan.Zero, time ?? TimeProvider.System, null);
 
     /// <summary>The setting's value, or its <see cref="Setting{T}.Default"/> when it isn't set (or
     /// what's stored isn't a <typeparamref name="T"/>, e.g. after a hand edit).</summary>
@@ -377,14 +384,14 @@ public sealed class SettingsStore : IDisposable
         }
     }
 
-    private static Entry Decode(string key, JsonElement stored, SettingScope scope, DateTimeOffset modified)
+    private Entry Decode(string key, JsonElement stored, SettingScope scope, DateTimeOffset modified)
     {
         if (scope == SettingScope.Secret && stored.ValueKind == JsonValueKind.String && stored.GetString() is { } text && SecretText.IsProtected(text))
         {
-            var plain = SecretText.Unprotect(text);
+            var plain = _secrets.Unprotect(text);
             if (plain == null)
             {
-                Log($"secret '{key}' can't be decrypted by this Windows user: kept as stored");
+                Log($"secret '{key}' can't be decrypted by this user on this machine: kept as stored");
                 return new Entry(null, scope, modified, Unreadable: stored.GetString());
             }
             return new Entry(JsonSerializer.SerializeToElement(plain, ValueJson), scope, modified, Unreadable: null);
@@ -392,7 +399,7 @@ public sealed class SettingsStore : IDisposable
         return new Entry(stored.Clone(), scope, modified, Unreadable: null);
     }
 
-    private static void Write(string path, List<KeyValuePair<string, Entry>> entries)
+    private void Write(string path, List<KeyValuePair<string, Entry>> entries)
     {
         try
         {
@@ -432,7 +439,7 @@ public sealed class SettingsStore : IDisposable
 
     // What a value is written as: a secret encrypted, or as it was when it couldn't be decrypted.
     // False leaves it out: a secret that can't be encrypted is never written in plain text.
-    private static bool TryStoredForm(string key, Entry entry, out JsonElement stored)
+    private bool TryStoredForm(string key, Entry entry, out JsonElement stored)
     {
         if (entry.Unreadable != null)
         {
@@ -443,7 +450,7 @@ public sealed class SettingsStore : IDisposable
         if (entry.Scope != SettingScope.Secret || IsBlank(stored)) return true;
         try
         {
-            stored = JsonSerializer.SerializeToElement(SecretText.Protect(stored.GetString()!), ValueJson);
+            stored = JsonSerializer.SerializeToElement(_secrets.Protect(stored.GetString()!), ValueJson);
             return true;
         }
         catch (CryptographicException ex)
