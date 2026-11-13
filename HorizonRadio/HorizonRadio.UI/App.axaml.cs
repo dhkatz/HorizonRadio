@@ -91,7 +91,7 @@ public partial class App : Application
                 var friendsVm = new FriendsViewModel(engine.Friends, engine.Party, confirmations);
 
                 var vm = new MainWindowViewModel(engine.Router, engine.SourceConfig, engine.Mixes, engine.MixSwitcher, engine.MixLibrary,
-                    engine.Player, engine.HistoryStore, engine.Metadata, engine.MixEntries, metaVm,
+                    engine.Player, engine.HistoryStore, engine.HistoryIdentifier, engine.Metadata, engine.MixEntries, metaVm,
                     services.GetRequiredService<ToolRegistry>(), services.GetRequiredService<ToolInstalls>(), eventsVm, controlsVm, engine.Preview,
                     engine.Game, gameSettings, toasts, dialogManager, confirmations, devicesVm, friendsVm,
                     new AboutViewModel(services.GetRequiredService<MetadataTrace>()), engine.Lyrics, engine.SongSync);
