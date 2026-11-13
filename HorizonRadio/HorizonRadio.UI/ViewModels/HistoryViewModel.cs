@@ -27,11 +27,9 @@ namespace HorizonRadio.UI.ViewModels;
 /// <summary>
 /// The History tab: a newest-first list of every song the app played. Mirrors the
 /// <see cref="PlayHistoryStore"/> into bound rows and lets the user play one again. Songs played
-/// from a re-addressable source replay in one click; a freeform (radio) song is resolved lazily —
-/// the row enrichment searches the services for the catalog-canonical name and stores a playable
-/// URL per service, so replay becomes a one-click (or pick-a-source) action instead of a fuzzy
-/// live search. The same enrichment refreshes the "couldn't identify" warning that opens a
-/// pre-filled GitHub issue.
+/// from a re-addressable source replay in one click; a radio song can once Core has identified it
+/// and found it on the services (<see cref="HistoryIdentifier"/>), which also sets the "couldn't
+/// identify" warning that opens a pre-filled GitHub issue. The rows' cover art is looked up here.
 /// </summary>
 public sealed partial class HistoryViewModel : ViewModelBase
 {
@@ -41,11 +39,11 @@ public sealed partial class HistoryViewModel : ViewModelBase
     private readonly Action<string>? _openSearch;
     private readonly ToastManager? _toasts;
     private readonly SongActions? _songs;
+    private readonly HistoryIdentifier? _identifier;
     private readonly IConfirmations _confirm = ProceedWithoutAsking.Instance;
 
-    // Rows whose enrichment has settled (art + verdict + any playable sources resolved). A row is
-    // removed from here if its enrichment couldn't complete (no search source ready yet, or a
-    // transient error), so it's retried on the next rebuild / tab view rather than stuck forever.
+    // Rows whose art has been looked up. A row is removed from here if the lookup failed, so it's
+    // retried on the next rebuild / tab view rather than stuck forever.
     private readonly HashSet<string> _enriched = new();
 
     public ObservableCollection<HistoryRowViewModel> Items { get; } = new();
@@ -59,8 +57,10 @@ public sealed partial class HistoryViewModel : ViewModelBase
         Action<string>? openSearch,
         ToastManager? toasts,
         SongActions? songs = null,
-        IConfirmations? confirmations = null)
+        IConfirmations? confirmations = null,
+        HistoryIdentifier? identifier = null)
     {
+        _identifier = identifier;
         _store = store;
         _confirm = confirmations ?? ProceedWithoutAsking.Instance;
         _queue = queue;
@@ -104,10 +104,14 @@ public sealed partial class HistoryViewModel : ViewModelBase
         EnrichRows();
     }
 
-    /// <summary>Re-run enrichment for any not-yet-settled rows. Called when the History tab is
-    /// shown, so rows that couldn't resolve earlier (e.g. a search source connected after startup)
-    /// get another chance without waiting for a store change.</summary>
-    public void RefreshEnrichment() => EnrichRows();
+    /// <summary>Look again at rows that couldn't be settled. Called when the History tab is shown,
+    /// so a song that couldn't be found earlier (a search source signed in since) gets another
+    /// chance without waiting for a store change.</summary>
+    public void RefreshEnrichment()
+    {
+        _identifier?.Retry();
+        EnrichRows();
+    }
 
     private HistoryRowViewModel CreateRow(PlayHistoryEntry entry) => new(
         entry,
@@ -118,67 +122,27 @@ public sealed partial class HistoryViewModel : ViewModelBase
 
     private void EnrichRows()
     {
-        // Enrichment fetches art (needs the resolver) and, for freeform songs, playable sources
-        // (needs a searchable source). Run if either is available. Every row is enriched (not just
-        // a fixed window) so songs deep in the list still get art, a verdict, and replay sources;
-        // the shared gate keeps the actual work trickling a few at a time.
-        if (_resolver is not { HasContributors: true } && !_queue!.Sources.Search.HasReadySource) return;
+        // Every row gets its art (not just a fixed window); the shared gate keeps the lookups
+        // trickling a few at a time, and they're cached, so the identifier's are shared.
+        if (_resolver is not { HasContributors: true }) return;
         foreach (var row in Items)
             if (_enriched.Add(row.Id)) _ = EnrichRowAsync(row);
     }
 
-    // Resolve a row's art and — for a freeform song with no playable source yet — find one per
-    // service by searching the catalog-canonical name, then store both. Throttled, off the UI thread.
+    // Look up a row's cover art. Throttled, off the UI thread.
     private async Task EnrichRowAsync(HistoryRowViewModel row)
     {
         await EnrichmentThrottle.Gate.WaitAsync().ConfigureAwait(false);
-        var settled = true;
         try
         {
-            var entry = row.Entry;
-            var seed = BuildSeed(entry);
-            var resolved = _resolver is { HasContributors: true }
-                // Background: the song playing now goes ahead of History rows at every provider.
-                ? await _resolver.ResolveDetailedAsync(seed, CancellationToken.None, ResolvePriority.Background).ConfigureAwait(false)
-                : new MetadataResult(seed, false, []);
-            var final = resolved.Track;
+            // Background: the song playing now goes ahead of History rows at every provider.
+            var final = (await _resolver!.ResolveDetailedAsync(BuildSeed(row.Entry), CancellationToken.None,
+                ResolvePriority.Background).ConfigureAwait(false)).Track;
             var art = final.AlbumArt is { Length: > 0 } ? DecodeArt(final.AlbumArt) : null;
-
-            // A freeform song (no re-addressable origin) needs identification + a playable URL.
-            IReadOnlyList<ReplaySource>? foundSources = null;
-            HistoryMatchState? newState = null;
-            if (entry.Sources.Count == 0 && _resolver is { HasContributors: true })
-            {
-                if (resolved.Matched)
-                {
-                    // Catalog confirmed the identity. Prefer VocaDB's PV links (the exact official
-                    // uploads, incl. Niconico) and supplement with a name search for any other
-                    // service (e.g. Spotify). Searching only when matched is what keeps a fuzzy
-                    // title-only parse from latching onto the wrong artist's same-titled track.
-                    var pvSources = HistorySourceMatch.FromPvs(resolved.Playables);
-                    var (searchHits, ran) = await SongSources.SearchAsync(_queue!.Sources, final, CancellationToken.None).ConfigureAwait(false);
-                    foundSources = HistorySourceMatch.Combine(pvSources, searchHits);
-                    newState = HistoryMatchState.Matched;
-                    // Settle when the search actually ran, or when we have PVs and there's no search
-                    // source that could ever add more. If a search source exists but wasn't ready yet
-                    // (ran == false), stay unsettled so a later pass can still add e.g. Spotify —
-                    // having a PV mustn't permanently suppress the other services.
-                    settled = ran || (pvSources.Count > 0 && !_queue!.Sources.Search.HasSearchableSource);
-                }
-                else
-                {
-                    // Couldn't confirm what this song is → flag it for the report action.
-                    newState = HistoryMatchState.Unmatched;
-                }
-            }
-
             Dispatcher.UIThread.Post(() =>
             {
                 if (art != null) row.Thumbnail = art;
-                if (foundSources != null) _store?.SetSources(entry.Id, foundSources);
-                if (newState is { } ns) _store?.SetMatchState(entry.Id, ns);
                 row.SyncFromEntry();
-                if (!settled) _enriched.Remove(entry.Id); // retry on the next rebuild / tab view
             });
         }
         catch (Exception ex)

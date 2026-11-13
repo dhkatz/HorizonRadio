@@ -91,6 +91,7 @@ public sealed class HorizonEngine : IAsyncDisposable
         // Every song the runner reports, deduped, tagged through the metadata pipeline, kept.
         HistoryStore = services.GetRequiredService<PlayHistoryStore>();
         History = new PlayHistoryService(HistoryStore, Runner, Sources);
+        HistoryIdentifier = new HistoryIdentifier(HistoryStore, Metadata, Sources, log);
 
         // One dispatcher turns an action into a transport, source, mix or volume call, for game
         // events (the rules) and bound inputs alike.
@@ -145,6 +146,9 @@ public sealed class HorizonEngine : IAsyncDisposable
     public MixEntryDescriber MixEntries { get; }
     public PlayHistoryStore HistoryStore { get; }
     public PlayHistoryService History { get; }
+
+    /// <summary>Identifies the radio songs in the history and finds where to replay them.</summary>
+    public HistoryIdentifier HistoryIdentifier { get; }
     public EventRuleStore EventRules { get; }
     public ActionDispatcher Actions { get; }
     public EventActionExecutor Events { get; }
@@ -168,6 +172,7 @@ public sealed class HorizonEngine : IAsyncDisposable
         Party.Start();
         Game.Start(new GameHost(Router));
         Input.Start();
+        HistoryIdentifier.Start();
     }
 
     private void OnTrackChanged(Track t)

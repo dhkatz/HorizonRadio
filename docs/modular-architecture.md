@@ -265,8 +265,9 @@ Each step leaves the app working and lands as its own PR or short stack.
      the entry lookups, telling the Console), and clears a deleted mix's key bindings, also when
      another PC deleted it (only the Controls page did); `MixSwitcher.PlayAsync(id, mode)` plays
      one in place of the queue's mix or added to it, the mode being the window's question.
-   - [ ] History: identifying a radio song and finding where to replay it runs in Core, not only
-     while the History page is open.
+   - [x] History: `HistoryIdentifier` (started with the engine) identifies the radio songs in the
+     history and stores where to replay them, or marks them to report; the History page only
+     looks up cover art, and asks for a retry when it's shown.
    - [x] Tools: `ToolInstalls` (a service) installs, uninstalls and checks for updates
      (`ToolFreshnessChecker`, moved from the UI), rescans the registry and tells the Console; the
      Tools page only shows progress and asks before uninstalling.

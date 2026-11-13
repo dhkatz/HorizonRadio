@@ -115,6 +115,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                                MixLibrary mixLibrary,
                                QueuePlayback queue,
                                PlayHistoryStore historyStore,
+                               HistoryIdentifier historyIdentifier,
                                MetadataResolver metaResolver,
                                Core.Sources.Mixes.MixEntryDescriber mixEntries,
                                MetadataViewModel metadata,
@@ -177,7 +178,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         // History replays directly when it can; otherwise it re-searches the song on the
         // full search page (the same picker), so no-locator (radio) songs stay playable.
-        History = new HistoryViewModel(historyStore, queue, metaResolver, OpenSearchFor, toasts, songs, confirmations);
+        History = new HistoryViewModel(historyStore, queue, metaResolver, OpenSearchFor, toasts, songs, confirmations,
+            historyIdentifier);
 
         // The game's own pages plus the host's game-related ones (Events, when the game reports
         // any), under the game's name in the sidebar.
