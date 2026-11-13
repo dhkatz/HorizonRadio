@@ -3,7 +3,6 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using HorizonRadio.Core.IO;
 using HorizonRadio.Sdk.IO;
 
 namespace HorizonRadio.Core.Fingerprints;
@@ -40,7 +39,7 @@ public sealed record StoredReference(
 /// The fingerprints of songs' reference recordings, kept on disk so each recording is downloaded once:
 /// the next time a station plays the song, its audio is lined up against the stored fingerprint. One
 /// small file per song (a four-minute fingerprint is about 8 KB) under
-/// <c>%LOCALAPPDATA%\HorizonRadio\fingerprints</c>.
+/// <c>fingerprints</c> in the app's folder.
 /// </summary>
 public sealed class ReferenceStore
 {
@@ -53,8 +52,9 @@ public sealed class ReferenceStore
     private readonly string _directory;
     private readonly Lock _lock = new();
 
-    public ReferenceStore(string? directory = null) =>
-        _directory = directory ?? AppPaths.In("fingerprints");
+    /// <param name="directory">Where the fingerprints go (the app's <c>fingerprints</c>).</param>
+    public ReferenceStore(string directory) =>
+        _directory = directory;
 
     /// <summary>What a song is stored under: its artist and title, the way they're written aside.</summary>
     public static string SongKey(string artist, string title) =>

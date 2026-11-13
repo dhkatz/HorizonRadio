@@ -1,4 +1,5 @@
 using HorizonRadio.Core.Events;
+using HorizonRadio.Core.Fingerprints;
 using HorizonRadio.Core.History;
 using HorizonRadio.Core.Hosting;
 using HorizonRadio.Core.Input;
@@ -17,31 +18,26 @@ using Microsoft.Extensions.DependencyInjection;
 namespace HorizonRadio.Core;
 
 /// <summary>
-/// Registers the Core engine's services into a DI container. This is the first step of the
-/// plugin-system migration: the composition root (the UI's <c>App</c>) builds a container and
-/// resolves these instead of hand-constructing them, so ownership and lifetime move to DI
-/// incrementally without changing behavior.
-///
-/// For now it registers the leaf singletons that are safe to let the container own: the persisted
-/// config stores, the metadata cache, and the mix content resolver — all non-disposable (or
-/// load-from-disk) with no hand-tuned shutdown order, via the exact same calls the root used before,
-/// so resolution is behavior-identical. The heavier engine services (source runner, queue, resolver,
-/// IPC, Spotify, …) stay App-owned for now: App disposes them in a specific order at shutdown, which
-/// container-managed disposal would not preserve. They move once that ordering is handled.
+/// Registers Core's services: the stores (settings, sources, mixes, history, event rules, bindings),
+/// the catalogs (sources, metadata, tools), the caches, and the inputs bound actions listen to. The
+/// engine (<see cref="Hosting.HorizonEngine"/>) is built from them for the game that runs.
 ///
 /// It also registers the host's side of the plugin SDK: the services plugin constructors take
 /// (<see cref="IPluginLog"/>, <see cref="IProcesses"/>, <see cref="IAppFolders"/>,
 /// <see cref="IToolLocator"/>, <see cref="IMetadataCache"/>, <see cref="IMetadataTrace"/>,
 /// <see cref="IAudioCaches"/>, <see cref="ISourceSettings"/>, <see cref="ITitleModel"/>,
 /// <see cref="IPluginSettingsStore"/>, <see cref="IConfirmations"/>, <see cref="INotifications"/>),
-/// each of which a plugin module may
-/// replace (<see cref="Hosting.PluginRegistration.AddPlugins"/>).
+/// each of which a plugin module may replace (<see cref="Hosting.PluginRegistration.AddPlugins"/>).
+/// Core's own services take them from the container too, so a replacement reaches Core as well.
 /// </summary>
 public static class HorizonCoreServiceCollectionExtensions
 {
     /// <param name="settings">The app's settings, opened before the container (startup reads them
     /// first). The caller owns it: the container doesn't dispose an instance it was given.</param>
-    public static IServiceCollection AddHorizonCore(this IServiceCollection services, SettingsStore settings)
+    /// <param name="folders">Where the stores and caches keep their files (the profile's folder, or
+    /// a test's). A module may replace it; Core's stores take it from the container, so they follow.</param>
+    public static IServiceCollection AddHorizonCore(this IServiceCollection services, SettingsStore settings,
+        IAppFolders folders)
     {
         services.AddSingleton(settings);
         services.AddSingleton(_ => new SourceConfigStore(settings));
@@ -50,22 +46,24 @@ public static class HorizonCoreServiceCollectionExtensions
         services.AddSingleton<SourceCatalog>();
         services.AddSingleton<MetadataCatalog>();
         services.AddSingleton(sp => new MetadataConfigStore(settings, sp.GetRequiredService<MetadataCatalog>()));
-        services.AddSingleton(_ => MixStore.LoadFromDisk());
-        services.AddSingleton(_ => PlayHistoryStore.LoadFromDisk());
+        services.AddSingleton(sp => MixStore.LoadFromDisk(sp.GetRequiredService<IAppFolders>().Data("mixes.json")));
+        services.AddSingleton(sp => PlayHistoryStore.LoadFromDisk(sp.GetRequiredService<IAppFolders>().Data("history.json")));
+        services.AddSingleton(sp => new MixEntryInfoStore(sp.GetRequiredService<IAppFolders>().Data("mix-entries")));
+        services.AddSingleton(sp => new ReferenceStore(sp.GetRequiredService<IAppFolders>().Data("fingerprints")));
         services.AddSingleton(_ => new EventRuleStore(settings));
         services.AddSingleton(_ => new InputBindingStore(settings));
         // Global keyboard and mouse, and controllers: what bound inputs listen to (the engine's
         // InputBindingService starts and stops them). A module can add one, or a host drop them.
         services.AddSingleton<IInputBackend, SharpHookBackend>();
         services.AddSingleton<IInputBackend, SdlInputBackend>();
-        services.AddSingleton(_ => new MetadataCache());
+        services.AddSingleton(sp => new MetadataCache(sp.GetRequiredService<IAppFolders>().Data("metadata")));
         services.AddSingleton<IMetadataCache>(sp => sp.GetRequiredService<MetadataCache>());
 
         // What plugins take in their constructors, as the host provides it. A plugin module can
         // replace or wrap any of these (see PluginRegistration.AddPlugins).
         services.AddSingleton<IPluginLog, HostPluginLog>();
         services.AddSingleton<IProcesses, HostProcesses>();
-        services.AddSingleton<IAppFolders, HostAppFolders>();
+        services.AddSingleton(folders);
         services.AddSingleton<IToolLocator, HostToolLocator>();
         services.AddSingleton<IMetadataTrace, HostMetadataTrace>();
         services.AddSingleton<IAudioCaches, HostAudioCaches>();

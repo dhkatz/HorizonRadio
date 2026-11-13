@@ -190,6 +190,13 @@ Each step leaves the app working and lands as its own PR or short stack.
    - [ ] Core's own services log and find their folders through `IPluginLog` and `IAppFolders`
      (the stores, the caches, the fingerprint store), so a replacement reaches Core too, and a test
      host can run the whole engine against a temporary folder.
+     - [x] Folders: the host runs on an `AppFolders` (the profile's, or any folder:
+       `HorizonHostOptions.Folders`), the settings and the log open in it, and the stores and caches
+       (mixes, history, mix entries, metadata, fingerprints) take their paths from `IAppFolders`.
+       A store built in memory no longer saves over the app's file.
+     - [ ] Logging: Core's services write to the Console through `IPluginLog`.
+     - [ ] Metadata diagnostics: `MetadataTrace` is the host's `IMetadataTrace`, a service.
+     - [ ] A test runs the whole engine, headless, in a temporary folder.
 8. [ ] Platform interfaces in Core; `HorizonRadio.Platform` with the Windows implementations.
 9. [ ] Workflows move from view models into Core services; the command list.
 10. [ ] The control endpoint.

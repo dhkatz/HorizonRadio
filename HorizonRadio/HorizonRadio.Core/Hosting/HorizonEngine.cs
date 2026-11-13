@@ -72,7 +72,7 @@ public sealed class HorizonEngine : IAsyncDisposable
         // provider. Radio lyrics follow the song by lining the station's audio up against a
         // recording of it (fetched through a source that can, e.g. YouTube).
         Lyrics = new LyricsService(services.GetServices<ILyricsProvider>().InDisplayOrder());
-        SongSync = new LiveSongSync(() => Sources.All, new ReferenceStore(), Metadata);
+        SongSync = new LiveSongSync(() => Sources.All, services.GetRequiredService<ReferenceStore>(), Metadata);
 
         // The router is the one owner of the engine: everything that changes what plays (the game
         // tuning, the queue getting something to play, a source started or stopped) goes through it,
@@ -81,6 +81,9 @@ public sealed class HorizonEngine : IAsyncDisposable
         ContentResolver = services.GetRequiredService<MixContentResolver>();
         Router = new PlaybackRouter(Runner, SourceConfig, Mixes, ContentResolver);
         MixSwitcher = new MixSwitcher(Mixes, Player, Runner);
+        // Mix entries shown as what they are (titles, artists, covers), looked up through the same
+        // sources and metadata the queue uses, and kept on disk between sessions.
+        MixEntries = new MixEntryDescriber(ContentResolver, Metadata, services.GetRequiredService<MixEntryInfoStore>());
 
         // Every song the runner reports, deduped, tagged through the metadata pipeline, kept.
         HistoryStore = services.GetRequiredService<PlayHistoryStore>();
@@ -133,6 +136,9 @@ public sealed class HorizonEngine : IAsyncDisposable
     public QueuePlayback Player => Router.Player;
 
     public MixSwitcher MixSwitcher { get; }
+
+    /// <summary>What each mix entry is, for the mix editor and lists.</summary>
+    public MixEntryDescriber MixEntries { get; }
     public PlayHistoryStore HistoryStore { get; }
     public PlayHistoryService History { get; }
     public EventRuleStore EventRules { get; }

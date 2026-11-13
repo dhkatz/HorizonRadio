@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text.Json;
-using HorizonRadio.Core.IO;
 using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.Sources.Mixes;
@@ -16,9 +15,6 @@ namespace HorizonRadio.Core.Sources.Mixes;
 /// </summary>
 public static class MixMigration
 {
-    private static string DefaultProfilesPath =>
-        AppPaths.In("profiles.json");
-
     private static void Log(string msg) => Trace.WriteLine($"[hzn-mix-migrate] {msg}");
 
     /// <summary>
@@ -26,11 +22,11 @@ public static class MixMigration
     /// profiles file (if present) and persist. No-op once any mix exists, so it
     /// runs at most once. Returns the number of mixes migrated.
     /// </summary>
-    public static int MaybeMigrate(MixStore store, SourceCatalog sources, string? profilesPath = null)
+    public static int MaybeMigrate(MixStore store, SourceCatalog sources, string profilesPath)
     {
         if (store.All.Count > 0) return 0;
 
-        var migrated = FromLegacyProfiles(profilesPath ?? DefaultProfilesPath, sources);
+        var migrated = FromLegacyProfiles(profilesPath, sources);
         if (migrated.Count == 0) return 0;
 
         foreach (var mix in migrated) store.AddOrUpdate(mix);
