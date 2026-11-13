@@ -2,7 +2,6 @@ using System.Collections;
 using Avalonia;
 using Avalonia.Controls;
 using HorizonRadio.Sdk.Tools;
-using HorizonRadio.UI.Tools;
 using HorizonRadio.UI.ViewModels;
 
 namespace HorizonRadio.UI.Views;
