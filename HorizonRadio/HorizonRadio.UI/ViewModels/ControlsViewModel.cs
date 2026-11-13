@@ -115,8 +115,7 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
             var m = mixes.FirstOrDefault(x => x.Id == row.Action.Param);
             if (m == null)
             {
-                // Mix deleted: drop its row and reap any orphaned bindings to it.
-                _store.ClearBindingsForAction(row.Action);
+                // Mix deleted: drop its row (MixLibrary clears its bindings).
                 row.Dispose();
                 MixRows.RemoveAt(i);
             }

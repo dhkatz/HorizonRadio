@@ -34,6 +34,7 @@ namespace HorizonRadio.UI.ViewModels;
 public sealed partial class MixesViewModel : ViewModelBase
 {
     private readonly MixStore _store;
+    private readonly MixLibrary _library;
     private readonly MixSwitcher _switcher;
     private readonly DialogManager? _dialogs;
     private readonly MixEntryDescriber? _describer;
@@ -86,11 +87,12 @@ public sealed partial class MixesViewModel : ViewModelBase
     private readonly IConfirmations _confirm = ProceedWithoutAsking.Instance;
     private readonly SourceCatalog _sources = SourceCatalog.Empty;
 
-    public MixesViewModel(MixStore store, MixSwitcher switcher, SourceCatalog sources,
+    public MixesViewModel(MixStore store, MixLibrary library, MixSwitcher switcher, SourceCatalog sources,
                           DialogManager? dialogs = null, MixEntryDescriber? describer = null,
                           SongActions? songs = null, IConfirmations? confirmations = null)
     {
         _store = store;
+        _library = library;
         _confirm = confirmations ?? ProceedWithoutAsking.Instance;
         _switcher = switcher;
         _dialogs = dialogs;
@@ -107,10 +109,13 @@ public sealed partial class MixesViewModel : ViewModelBase
 
     /// <summary>Designer-only ctor.</summary>
     public MixesViewModel() : this(
-        new MixStore(),
+        DesignerStore,
+        new MixLibrary(DesignerStore, null, null, IPluginLog.None),
         DesignerSwitcher(),
         SourceCatalog.Empty)
     { }
+
+    private static readonly MixStore DesignerStore = new();
 
     private static MixSwitcher DesignerSwitcher()
     {
@@ -236,19 +241,15 @@ public sealed partial class MixesViewModel : ViewModelBase
     /// is open in the editor, the entry shows there too, so saving the editor keeps it.</summary>
     public MixAddResult AddToMix(string mixId, ContentRef entry, MixEntryInfo? known)
     {
-        if (_store.Get(mixId) is not { } mix) return MixAddResult.NoSuchMix;
         var editing = IsEditing && _editingId == mixId;
-        if (mix.Entries.Any(e => SameEntry(e, entry)) || (editing && EditEntries.Any(r => SameEntry(r.Entry, entry))))
-            return MixAddResult.AlreadyInMix;
+        if (editing && EditEntries.Any(r => SameEntry(r.Entry, entry))) return MixAddResult.AlreadyInMix;
 
-        if (known != null) _describer?.Remember(entry, known);
-        _store.AddOrUpdate(mix with { Entries = [.. mix.Entries, entry] });
-        _store.SaveToDisk();
-        if (editing) EditEntries.Add(NewEntryRow(entry));
-        return MixAddResult.Added;
+        var result = _library.Add(mixId, entry, known);
+        if (result == MixAddResult.Added && editing) EditEntries.Add(NewEntryRow(entry));
+        return result;
     }
 
-    private static bool SameEntry(ContentRef a, ContentRef b) => a.SourceId == b.SourceId && a.Locator == b.Locator;
+    private static bool SameEntry(ContentRef a, ContentRef b) => MixLibrary.SameEntry(a, b);
 
     private bool CanAddEntry => !string.IsNullOrWhiteSpace(NewLocator);
 
@@ -416,19 +417,14 @@ public sealed partial class MixesViewModel : ViewModelBase
     [RelayCommand]
     private void Save()
     {
-        if (string.IsNullOrWhiteSpace(EditingName)) { Fail("Give the mix a name."); return; }
-        if (EditEntries.Count == 0) { Fail("Add at least one entry: paste a link, or a folder or file path."); return; }
-
         // Keep each entry's title in mixes.json: the file stays readable, and an entry whose
         // lookup is gone still has a name.
         var entries = EditEntries
             .Select(r => r.Entry with { DisplayName = r.HasInfo ? r.Title : r.Entry.DisplayName })
             .ToList();
 
-        var id = _editingId ?? Guid.NewGuid().ToString("n");
-        _store.AddOrUpdate(new Mix(id, EditingName.Trim(), entries));
-        _store.SaveToDisk();
-        _describer?.KeepOnly(_store.All.SelectMany(m => m.Entries));
+        try { _library.Save(_editingId, EditingName, entries); }
+        catch (ArgumentException ex) { Fail(ex.Message); return; }
 
         IsEditing = false;
         EditEntries.Clear();
@@ -444,9 +440,7 @@ public sealed partial class MixesViewModel : ViewModelBase
                 "The mix is deleted, on your other devices too if you've paired them. The songs in it aren't affected.",
                 "Delete Mix")))
             return;
-        _store.Remove(id);
-        _store.SaveToDisk();
-        _describer?.KeepOnly(_store.All.SelectMany(m => m.Entries));
+        _library.Delete(id);
     }
 
     // Starting a mix while the queue already has content asks whether to replace the
@@ -476,14 +470,12 @@ public sealed partial class MixesViewModel : ViewModelBase
         StatusMessage = mode == QueueAddMode.Add ? $"Adding {name} to the queue…" : $"Starting {name}…";
         try
         {
-            if (mode == QueueAddMode.Add) await _switcher.AddToQueueAsync(id);
-            else await _switcher.SwitchToAsync(id);
+            await _switcher.PlayAsync(id, mode);
             StatusMessage = mode == QueueAddMode.Add ? $"Added to queue: {name}" : $"Playing: {name}";
         }
         catch (Exception ex)
         {
-            Fail(ex.Message);
-            Trace.WriteLine($"[hzn-mixes-vm] play failed: {ex}");
+            Fail(ex.Message); // the switcher has told the Console
         }
     }
 

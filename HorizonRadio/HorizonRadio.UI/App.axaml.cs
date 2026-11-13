@@ -92,7 +92,7 @@ public partial class App : Application
                 var devicesVm = new DevicesViewModel(engine.Devices, confirmations);
                 var friendsVm = new FriendsViewModel(engine.Friends, engine.Party, confirmations);
 
-                var vm = new MainWindowViewModel(engine.Router, engine.SourceConfig, engine.Mixes, engine.MixSwitcher,
+                var vm = new MainWindowViewModel(engine.Router, engine.SourceConfig, engine.Mixes, engine.MixSwitcher, engine.MixLibrary,
                     engine.Player, engine.HistoryStore, engine.Metadata, engine.MixEntries, metaVm,
                     services.GetRequiredService<ToolRegistry>(), installers, eventsVm, controlsVm, engine.Preview,
                     engine.Game, gameSettings, toasts, dialogManager, confirmations, devicesVm, friendsVm,
