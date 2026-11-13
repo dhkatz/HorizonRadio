@@ -1,4 +1,5 @@
 using HorizonRadio.Core.Audio;
+using HorizonRadio.Core.Commands;
 using HorizonRadio.Core.Devices;
 using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Events;
@@ -95,15 +96,15 @@ public sealed class HorizonEngine : IAsyncDisposable
         History = new PlayHistoryService(HistoryStore, Runner, Sources);
         HistoryIdentifier = new HistoryIdentifier(HistoryStore, Metadata, Sources, log);
 
-        // One dispatcher turns an action into a transport, source, mix or volume call, for game
-        // events (the rules) and bound inputs alike.
+        // The command list turns a named action into a transport, source, mix or volume call, for
+        // game events (the rules) and bound inputs alike.
         EventRules = services.GetRequiredService<EventRuleStore>();
-        Actions = new ActionDispatcher(Router, SourceConfig, log, MixSwitcher,
+        Commands = new CommandList(Router, log, MixSwitcher, Mixes,
             game.Volume is { } gameVolume ? gameVolume.SetDuckGain : null);
-        Events = new EventActionExecutor(game.EventSources, EventRules, Actions, log);
+        Events = new EventActionExecutor(game.EventSources, EventRules, Commands, log);
         InputBindings = services.GetRequiredService<InputBindingStore>();
         MixLibrary = new MixLibrary(Mixes, MixEntries, InputBindings, log);
-        Input = new InputBindingService(services.GetServices<IInputBackend>(), InputBindings, Actions);
+        Input = new InputBindingService(services.GetServices<IInputBackend>(), InputBindings, Commands);
 
         // Your devices and your friends share the peer helper, which starts once either needs it
         // (this PC paired, or pairing; a friend added). Parties run over the friends' connections.
@@ -158,7 +159,8 @@ public sealed class HorizonEngine : IAsyncDisposable
     /// <summary>Keeps <see cref="Metadata"/> on the user's metadata settings, synced ones too.</summary>
     public MetadataPipeline MetadataPipeline { get; }
     public EventRuleStore EventRules { get; }
-    public ActionDispatcher Actions { get; }
+    /// <summary>The commands a key, an event rule or a remote caller can run by name.</summary>
+    public CommandList Commands { get; }
     public EventActionExecutor Events { get; }
     public InputBindingStore InputBindings { get; }
 

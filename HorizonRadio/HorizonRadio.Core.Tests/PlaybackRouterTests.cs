@@ -1,3 +1,4 @@
+using HorizonRadio.Core.Commands;
 using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Sources;
@@ -355,7 +356,7 @@ public class PlaybackRouterTests
         await Eventually.Until(() => a.Plays == 2, "a again");
 
         // Another source taking over (Spotify Connect, the test tone) ends the queue's engine.
-        await new ActionDispatcher(h.Router, new SourceConfigStore(), NoLog.Instance)
+        await new CommandList(h.Router, NoLog.Instance)
             .RunAsync(new EventAction(EventActionType.SwitchSource, "testtone"));
 
         Assert.False(h.Player.IsActive);

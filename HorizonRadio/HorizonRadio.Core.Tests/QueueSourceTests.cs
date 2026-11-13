@@ -1,3 +1,4 @@
+using HorizonRadio.Core.Commands;
 using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Sources;
@@ -405,7 +406,7 @@ public class QueueSourceTests
 
         Assert.True(src.CanSkipNext);
         // A bound Next (hotkey, game event) goes through the same check.
-        await new ActionDispatcher(playback, new SourceConfigStore(), NoLog.Instance).RunAsync(new EventAction(EventActionType.NextTrack));
+        await new CommandList(playback, NoLog.Instance).RunAsync(new EventAction(EventActionType.NextTrack));
         await Eventually.Until(() => b.Plays == 1, "b");
     }
 
@@ -466,7 +467,7 @@ public class QueueSourceTests
         var src = new QueueSource(model);
         await runner.StartSourceAsync(src);
         await Eventually.Until(() => a.Plays == 1, "a");
-        var dispatcher = new ActionDispatcher(playback, new SourceConfigStore(), NoLog.Instance);
+        var dispatcher = new CommandList(playback, NoLog.Instance);
 
         await dispatcher.RunAsync(new EventAction(EventActionType.Pause));
         await dispatcher.RunAsync(new EventAction(EventActionType.Pause));

@@ -1,3 +1,4 @@
+using HorizonRadio.Core.Commands;
 using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Playback;
 using HorizonRadio.Core.Sources;
@@ -97,7 +98,7 @@ public class SourcePlayRoutingTests
     {
         await using var runner = new SourceRunner(new NullSink());
         await using var playback = Router(runner);
-        var dispatcher = new ActionDispatcher(playback, new SourceConfigStore(), NoLog.Instance);
+        var dispatcher = new CommandList(playback, NoLog.Instance);
 
         await dispatcher.RunAsync(new EventAction(EventActionType.SwitchSource, "local"));
 
@@ -109,7 +110,7 @@ public class SourcePlayRoutingTests
     {
         await using var runner = new SourceRunner(new NullSink());
         await using var playback = Router(runner);
-        var dispatcher = new ActionDispatcher(playback, new SourceConfigStore(), NoLog.Instance);
+        var dispatcher = new CommandList(playback, NoLog.Instance);
 
         await dispatcher.RunAsync(new EventAction(EventActionType.SwitchSource, "testtone"));
 

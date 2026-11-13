@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using HorizonRadio.Core.Commands;
 using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Sources;
 using HorizonRadio.Sdk.Games;
@@ -20,6 +21,7 @@ namespace HorizonRadio.UI.ViewModels;
 public sealed partial class EventsViewModel : ViewModelBase, IDisposable
 {
     private readonly EventActionExecutor? _executor;
+    private readonly CommandList? _commands;
 
     public ObservableCollection<EventCategoryGroup> Groups { get; } = new();
     public ObservableCollection<string> Activity { get; } = new();
@@ -29,14 +31,16 @@ public sealed partial class EventsViewModel : ViewModelBase, IDisposable
     public bool HasSetupHint => !string.IsNullOrEmpty(SetupHint);
 
     // Design-time / fallback ctor.
-    public EventsViewModel() : this(new EventRuleStore(), null, GameEventKinds.Catalog, null) { }
+    public EventsViewModel() : this(new EventRuleStore(), null, null, GameEventKinds.Catalog, null) { }
 
+    /// <param name="commands">Names the actions in the activity list.</param>
     /// <param name="catalog">The events the active game reports (its own list).</param>
     /// <param name="sources">The sources, whose self-driven ones an event can switch to.</param>
-    public EventsViewModel(EventRuleStore rules, EventActionExecutor? executor,
+    public EventsViewModel(EventRuleStore rules, EventActionExecutor? executor, CommandList? commands,
                            IReadOnlyList<GameEventInfo> catalog, string? setupHint, SourceCatalog? sources = null)
     {
         _executor = executor;
+        _commands = commands;
         SetupHint = setupHint;
 
         var options = BuildOptions(sources ?? SourceCatalog.Empty);
@@ -57,7 +61,7 @@ public sealed partial class EventsViewModel : ViewModelBase, IDisposable
     private void OnHandled(GameEvent e, EventAction action)
     {
         var line = string.Create(CultureInfo.InvariantCulture,
-            $"{DateTime.Now:HH:mm:ss}  {e.Kind} → {DescribeAction(action)}");
+            $"{DateTime.Now:HH:mm:ss}  {e.Kind} → {_commands?.Describe(action) ?? action.Type.ToString()}");
         Dispatcher.UIThread.Post(() =>
         {
             Activity.Insert(0, line);
@@ -67,38 +71,26 @@ public sealed partial class EventsViewModel : ViewModelBase, IDisposable
 
     private static List<EventActionOption> BuildOptions(SourceCatalog sources)
     {
-        var list = new List<EventActionOption>
-        {
-            new("Do nothing", EventAction.None),
-            new("Next track", new EventAction(EventActionType.NextTrack)),
-            new("Previous track", new EventAction(EventActionType.PreviousTrack)),
-            new("Restart track", new EventAction(EventActionType.RestartTrack)),
-            new("Pause", new EventAction(EventActionType.Pause)),
-            new("Resume", new EventAction(EventActionType.Resume)),
-            new("Next mix", new EventAction(EventActionType.NextMix)),
-            new("Previous mix", new EventAction(EventActionType.PreviousMix)),
-        };
+        var list = new List<EventActionOption> { new("Do Nothing", EventAction.None) };
+        foreach (var type in Offered)
+            list.Add(new EventActionOption(CommandList.For(type).Title, new EventAction(type)));
         // Only self-driven sources are directly switchable (Spotify Connect, the
         // test tone). Content sources play via mixes, so they aren't offered here.
+        var start = CommandList.For(EventActionType.SwitchSource);
         foreach (var f in sources.All.Where(f => f is ISelfDrivenSourceFactory))
-            list.Add(new EventActionOption($"Switch to: {f.DisplayName}",
-                new EventAction(EventActionType.SwitchSource, f.Id)));
-        list.Add(new EventActionOption("Duck volume (30%)",
-            new EventAction(EventActionType.SetVolume, EventRuleStore.FormatVolume(0.3))));
-        list.Add(new EventActionOption("Full volume (100%)",
-            new EventAction(EventActionType.SetVolume, EventRuleStore.FormatVolume(1.0))));
+            list.Add(new EventActionOption($"Switch to {f.DisplayName}", start.ToAction(f.Id)));
+        var volume = CommandList.For(EventActionType.SetVolume);
+        list.Add(new EventActionOption("Duck Volume (30%)", volume.ToAction(EventRuleStore.FormatVolume(0.3))));
+        list.Add(new EventActionOption("Full Volume (100%)", volume.ToAction(EventRuleStore.FormatVolume(1.0))));
         return list;
     }
 
-    private static string DescribeAction(EventAction a) => a.Type switch
-    {
-        EventActionType.None => "(no action)",
-        EventActionType.SwitchSource => $"switch to {a.Param}",
-        EventActionType.NextMix => "next mix",
-        EventActionType.PreviousMix => "previous mix",
-        EventActionType.SetVolume => $"volume {a.Param}",
-        _ => a.Type.ToString(),
-    };
+    // The commands an event can run that take no argument, in the order offered.
+    private static readonly EventActionType[] Offered =
+    [
+        EventActionType.NextTrack, EventActionType.PreviousTrack, EventActionType.RestartTrack,
+        EventActionType.Pause, EventActionType.Resume, EventActionType.NextMix, EventActionType.PreviousMix,
+    ];
 
     public void Dispose()
     {

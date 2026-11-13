@@ -256,7 +256,7 @@ Each step leaves the app working and lands as its own PR or short stack.
      the Spotify login keep their secrets with; the platform hands it to the host before the
      container, since the settings open first. Core has no OS calls left, and no NAudio or DPAPI
      package.
-9. [ ] Workflows move from view models into Core services; the command list.
+9. [x] Workflows move from view models into Core services; the command list.
    - [x] Adding to the queue: `QueuePlayback.EnqueueAsync(ContentRef, playNow)` finds the source,
      queues it and tells the Console. Search, history, a song's menu, quick play, the Queue page
      and the Sources tab call it; each had its own copy, with its own error handling. A
@@ -277,9 +277,14 @@ Each step leaves the app working and lands as its own PR or short stack.
    - [x] What else only the window did: `OutputGuard` (the engine's) pauses once when the chosen
      output can't be heard and says so (`OutputLost`, which the window toasts), and the engine turns
      the local speakers on when there's no game.
-   - [ ] The command list: named actions (the event-rule and key-binding ones, then the services
-     above) for bindings, rules, the control endpoint, and plugins' own commands.
-10. [ ] The control endpoint.
+   - [x] The command list: `CommandList` names the event-rule and key-binding actions
+     (`playback.next`, `mix.switch <id>`), runs them for bindings and rules alike, says why one
+     couldn't be done, and names them for the Events and Controls pages. Bindings and rules keep
+     saving them as before (`EventAction`), so synced ones still read on an older version.
+   Plugins' own commands join when a plugin needs one, as the SDK rule above says.
+10. [ ] The control endpoint, with the commands it needs from the services above (adding to the
+    queue, playing a mix, shuffle, stop) joining the command list: their arguments take the
+    endpoint's message shape, so they're added with it.
 11. [ ] `hzr`: remote commands, then `hzr serve`. The CLI project emits the same
     `PluginAssembly_*` metadata the UI's does, which plugin discovery reads to load the plugins.
 12. [ ] OS declarations for plugins and per-platform tool downloads; macOS and Linux platform code.

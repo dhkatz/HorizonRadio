@@ -236,6 +236,15 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   `INotifications`, the view models, and the update checks. Everything a host keeps goes in its
   folder (`HorizonHostOptions.Folders`, default the profile's), so `HeadlessEngineTests` runs the
   same engine with no window and no game on a temporary folder: extend it to test across services.
+- **Commands (`Core/Commands/`)** — what a user can have the engine do by name: `CommandList`
+  (the engine's `Commands`) holds each command's name (`playback.next`, `mix.switch <mix id>`,
+  `volume.set 0.3`), title and description, and carries it out over the service that does the
+  work, so a key binding (`InputBindingService`), an event rule (`EventActionExecutor`) and, later,
+  the control endpoint all go through the same checks. A command that can't be done returns why
+  (`CommandResult`) and says it in the Console (tag `commands`); none throws. Bindings and rules
+  still save a command as an `EventAction` (`{ "type": "NextTrack" }`): each built-in command
+  names the action type it's saved as (`CommandList.For`). The Events and Controls pages take their
+  titles and their activity lines (`Describe`) from it.
 - **Plugins and the container** — `HorizonHost` builds one DI container: Core's services
   (`AddHorizonCore`), the front end's, then the plugins (`PluginRegistration.AddPlugins`, fed by
   `PluginDiscovery`'s assembly scan). A plugin is an `IPlugin` (its id, name and order) and,
