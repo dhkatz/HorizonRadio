@@ -1,3 +1,4 @@
+using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Fingerprints;
@@ -59,6 +60,8 @@ public static class HorizonCoreServiceCollectionExtensions
         services.AddSingleton<IInputBackend, SdlInputBackend>();
         services.AddSingleton(sp => new MetadataCache(sp.GetRequiredService<IAppFolders>().Data("metadata")));
         services.AddSingleton<IMetadataCache>(sp => sp.GetRequiredService<MetadataCache>());
+        // What reaches the OS, portable defaults: the platform (IHostPlatform) registers its own.
+        services.AddSingleton<ISpeakers, NoSpeakers>();
 
         // What plugins take in their constructors, as the host provides it. A plugin module can
         // replace or wrap any of these (see PluginRegistration.AddPlugins).

@@ -205,6 +205,16 @@ Each step leaves the app working and lands as its own PR or short stack.
      - [x] A test runs the whole engine, headless, in a temporary folder (`HeadlessEngineTests`:
        it plays, stops, and the next host on that folder finds the history, mixes and settings).
 8. [ ] Platform interfaces in Core; `HorizonRadio.Platform` with the Windows implementations.
+   - [x] `HorizonRadio.Platform`: an `IHostPlatform` per OS, picked at run time
+     (`HostPlatforms.Current()`) and passed to the host (`HorizonHostOptions.Platform`), which
+     registers it over Core's portable defaults and before the front end and the plugins. The
+     local speakers are the first service (`ISpeakers`: WASAPI on Windows, none by default), so
+     NAudio leaves Core. App folders stay in Core: .NET already finds the per-user data folder on
+     each OS.
+   - [ ] Child processes: tying a tool to the app's lifetime (a job object on Windows) is the
+     platform's `IProcesses`.
+   - [ ] Secrets: the SDK's `ISecretProtector` (DPAPI on Windows), which the settings store and
+     the Spotify login keep their secrets with.
 9. [ ] Workflows move from view models into Core services; the command list.
 10. [ ] The control endpoint.
 11. [ ] `hzr`: remote commands, then `hzr serve`. The CLI project emits the same

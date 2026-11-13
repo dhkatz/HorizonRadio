@@ -55,6 +55,7 @@ public sealed class PreviewController : IDisposable
     private readonly SettingsStore _settings;
     private readonly ISpeakerOutput _speaker;
     private readonly IAudioDeviceWatcher? _watcher;
+    private readonly Func<IReadOnlyList<AudioDevice>> _devices;
     private readonly Action<Action> _post;
     private readonly Lock _lock = new();
 
@@ -66,22 +67,24 @@ public sealed class PreviewController : IDisposable
     // that fires SetVolume dozens of times writes the file once.
     private bool _disposed;
 
-    public PreviewController(TeePcmSink tee, SettingsStore settings)
-        : this(tee, settings, a => ThreadPool.QueueUserWorkItem(_ => a()), new SpeakerPcmSink(),
-            WasapiDeviceWatcher.TryCreate())
+    /// <param name="speakers">The OS's speakers (the host's <see cref="ISpeakers"/>).</param>
+    public PreviewController(TeePcmSink tee, SettingsStore settings, ISpeakers speakers)
+        : this(tee, settings, a => ThreadPool.QueueUserWorkItem(_ => a()), speakers.CreateOutput(),
+            speakers.WatchDevices(), () => speakers.Devices)
     {
     }
 
     /// <param name="post">Runs an action later, off the thread that raised a device
     /// callback (tests run it when they choose).</param>
     internal PreviewController(TeePcmSink tee, SettingsStore settings, Action<Action> post,
-        ISpeakerOutput speaker, IAudioDeviceWatcher? watcher)
+        ISpeakerOutput speaker, IAudioDeviceWatcher? watcher, Func<IReadOnlyList<AudioDevice>>? devices = null)
     {
         _tee = tee;
         _settings = settings;
         _post = post;
         _speaker = speaker;
         _watcher = watcher;
+        _devices = devices ?? (() => []);
         Enabled = settings.Get(PreviewSettings.Enabled);
         DeviceId = settings.Get(PreviewSettings.Device);
         Volume = settings.Get(PreviewSettings.Volume);
@@ -125,8 +128,8 @@ public sealed class PreviewController : IDisposable
     public bool IsSpeakerActive => State == SpeakerState.On;
 
     /// <summary>Active render endpoints for the UI's device picker (first entry
-    /// is "system default", with a null id).</summary>
-    public static IReadOnlyList<AudioDevice> Devices => SpeakerPcmSink.EnumerateRenderDevices();
+    /// is "system default", with a null id; none when the OS has no speakers to offer).</summary>
+    public IReadOnlyList<AudioDevice> Devices => _devices();
 
     /// <summary>Turn local monitoring on or off. Turning it on while faulted retries.</summary>
     public void SetEnabled(bool on)

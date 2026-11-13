@@ -21,6 +21,10 @@ public sealed class HorizonHostOptions
     /// in <see cref="Folders"/>.</summary>
     public SettingsStore? Settings { get; init; }
 
+    /// <summary>The OS code to run on (<c>HorizonRadio.Platform</c>'s <c>HostPlatforms.Current()</c>).
+    /// Default: none, Core's portable defaults (no speakers), which is what a test wants.</summary>
+    public IHostPlatform? Platform { get; init; }
+
     /// <summary>The plugin and module types to register. Default: the scan of the app's plugin
     /// assemblies (<see cref="PluginDiscovery.PluginTypes"/>).</summary>
     public IEnumerable<Type>? PluginTypes { get; init; }
@@ -35,7 +39,7 @@ public sealed class HorizonHostOptions
 
 /// <summary>
 /// One running Horizon Radio, whatever front end it has: the window, the CLI, a test. It opens the
-/// settings, builds the container (Core's services, the front end's, then the plugins'), brings old
+/// settings, builds the container (Core's services, the OS's, the front end's, then the plugins'), brings old
 /// settings over, and then starts the engine for the chosen game (<see cref="StartEngine"/>).
 /// Disposing it stops the engine, then the container, then the settings (writing anything still
 /// pending), then the log.
@@ -73,6 +77,13 @@ public sealed class HorizonHost : IAsyncDisposable
         var settings = options.Settings ?? SettingsStore.Open(folders.Data(SettingsStore.FileName));
         var services = new ServiceCollection();
         services.AddHorizonCore(settings, folders);
+        // The OS's services over Core's portable defaults; the front end and the plugins come after,
+        // so they can still replace one.
+        if (options.Platform is { } platform)
+        {
+            platform.ConfigureServices(services);
+            ProcessConsole.Append("plugins", $"platform: {platform.Name}");
+        }
         options.ConfigureServices?.Invoke(services);
         // Last, so a module can replace or wrap any service above; the Console tab says when one does.
         services.AddPlugins(options.PluginTypes ?? PluginDiscovery.PluginTypes(),

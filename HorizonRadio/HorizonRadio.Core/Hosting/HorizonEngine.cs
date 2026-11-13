@@ -60,7 +60,7 @@ public sealed class HorizonEngine : IAsyncDisposable
         // Tee the pipeline so the active source plays to the game and, when the user turns it on,
         // to a local speaker instead.
         var tee = new TeePcmSink(game.Output);
-        Preview = new PreviewController(tee, settings);
+        Preview = new PreviewController(tee, settings, services.GetRequiredService<ISpeakers>());
         Runner = new SourceRunner(tee);
 
         // The metadata pipeline: one resolver (the source, then the providers in the user's order,
