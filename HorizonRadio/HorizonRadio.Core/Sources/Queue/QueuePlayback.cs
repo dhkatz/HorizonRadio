@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Sources;
 
 namespace HorizonRadio.Core.Sources.Queue;
@@ -24,6 +25,7 @@ public sealed class QueuePlayback : IDisposable
     private readonly SourceRunner _runner;
     private readonly SourceConfigStore _config;
     private readonly MixContentResolver _resolver;
+    private readonly IPluginLog _log;
 
     /// <summary>The sources it plays from.</summary>
     public SourceCatalog Sources => _resolver.Sources;
@@ -42,12 +44,13 @@ public sealed class QueuePlayback : IDisposable
     /// player has the runner (not while a game routes playback to a mix station or silence:
     /// additions then wait in the queue until the game routes back to the player).</param>
     internal QueuePlayback(SourceRunner runner, SourceConfigStore config, MixContentResolver resolver,
-                           Func<Task> requestPlay)
+                           Func<Task> requestPlay, IPluginLog log)
     {
         _runner = runner;
         _config = config;
         _resolver = resolver;
         _requestPlay = requestPlay;
+        _log = log;
     }
 
     /// <summary>True when the queue engine is the source currently on the runner
@@ -65,6 +68,36 @@ public sealed class QueuePlayback : IDisposable
 
     /// <summary>A fresh engine over the queue, replacing a disposed one (router only).</summary>
     internal QueueSource NewEngine() => _source = new QueueSource(Model);
+
+    /// <summary>
+    /// Add what <paramref name="entry"/> plays to the queue, from its source in the catalog
+    /// (<see cref="EnqueueLocatorAsync"/>): what search, history, a song's menu and quick play
+    /// all do. The Console says what was added, or why it couldn't be; the caller tells the user.
+    /// </summary>
+    /// <param name="playNow">Jump to it, so it starts now (Play), rather than add it (Add).</param>
+    /// <exception cref="InvalidOperationException">There's no such source, it can't be queued, or
+    /// nothing playable came of it.</exception>
+    /// <exception cref="MissingToolException">The source's tool isn't installed.</exception>
+    public async Task EnqueueAsync(ContentRef entry, bool playNow = false, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        var what = $"{entry.DisplayName ?? entry.Locator} ({entry.SourceId})";
+        try
+        {
+            var factory = Sources.Find(entry.SourceId)
+                ?? throw new InvalidOperationException($"There's no {entry.SourceId} source here.");
+            await EnqueueLocatorAsync(factory, entry.Locator, playNow, ct).ConfigureAwait(false);
+            _log.Write(ConsoleTag, $"{(playNow ? "playing" : "added")}: {what}");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.Write(ConsoleTag, $"couldn't {(playNow ? "play" : "add")} {what}: {ex.Message}");
+            throw;
+        }
+    }
+
+    /// <summary>The Console tag for what's added to the queue.</summary>
+    public const string ConsoleTag = "queue";
 
     /// <summary>Resolve a one-off locator and append it to the explicit queue, and ask for
     /// the queue to play (<see cref="EnsureActiveAsync"/>). Mirrors the old quick-play

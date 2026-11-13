@@ -561,7 +561,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         SwitchStatus = $"Adding {source.DisplayName} to the queue...";
         try
         {
-            await _queue.EnqueueLocatorAsync(source, locator);
+            await _queue.EnqueueAsync(new ContentRef(source.Id, locator));
             SwitchStatus = null;
         }
         catch (MissingToolException ex)
@@ -592,8 +592,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
         SwitchStatus = $"Starting {factory.DisplayName}...";
         try
         {
-            var values = _store.Load(factory.Id, factory.Schema);
-            await _playback.StartSourceAsync(factory, values);
+            await _playback.StartSourceAsync(factory.Id);
             SwitchStatus = null;
         }
         catch (MissingToolException ex)

@@ -1,6 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Sources.Queue;
 using HorizonRadio.Sdk.Sources;
 using ShadUI;
@@ -9,10 +8,9 @@ namespace HorizonRadio.UI.Services;
 
 /// <summary>
 /// Turns a <see cref="SearchResult"/> into a queue action — the one place the two
-/// search surfaces (top-bar dropdown, search page) share. Resolves the result's
-/// <see cref="SearchResult.SourceId"/> back to its catalog factory and hands the
-/// locator to <see cref="QueuePlayback.EnqueueLocatorAsync"/>, which already knows how
-/// to resolve and play any content source — so search adds no playback code.
+/// search surfaces (top-bar dropdown, search page) share. The queue does the work
+/// (<see cref="QueuePlayback.EnqueueAsync"/>, which also tells the Console); this only
+/// tells the user when it fails.
 /// </summary>
 public sealed class SearchEnqueuer
 {
@@ -32,23 +30,14 @@ public sealed class SearchEnqueuer
     /// it starts immediately (the row's Play action) rather than appending (Add).</summary>
     public async Task EnqueueAsync(SearchResult result, bool playNow)
     {
-        if (_queue.Sources.Find(result.SourceId) is not { } factory)
-        {
-            ProcessConsole.Append("search", $"no factory for source '{result.SourceId}'");
-            return;
-        }
-
         try
         {
-            await _queue.EnqueueLocatorAsync(factory, result.Locator, playNow);
-            ProcessConsole.Append("search",
-                $"{(playNow ? "play" : "add")} ok: {result.Title} ({result.Locator})");
+            await _queue.EnqueueAsync(new ContentRef(result.SourceId, result.Locator, result.Title), playNow);
         }
         catch (Exception ex)
         {
-            // Surface it — a swallowed failure here is exactly why "Play does nothing"
-            // was invisible. Console line for diagnosis + a toast for the user.
-            ProcessConsole.Append("search", $"enqueue FAILED for {result.Locator}: {ex.Message}");
+            // Surface it: a swallowed failure here is exactly why "Play does nothing" was
+            // invisible. The queue has told the Console; this tells the user.
             _toasts?.CreateToast("Couldn't play that")
                 .WithContent(ex.Message)
                 .WithDelay(8)

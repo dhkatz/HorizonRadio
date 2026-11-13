@@ -62,6 +62,30 @@ public class SourcePlayRoutingTests
         Assert.Null(runner.ActiveFactory);
     }
 
+    [Fact]
+    public async Task An_entry_is_queued_from_its_source_and_the_Console_says_so()
+    {
+        var config = new SourceConfigStore();
+        var log = new LinesLog();
+        await using var runner = new SourceRunner(new NullSink());
+        await using var playback = new PlaybackRouter(runner, config, new MixStore(),
+            new MixContentResolver(config, TestSources.Catalog), log: log);
+        string? played = null;
+        runner.TrackChanged += t => Volatile.Write(ref played, t.Title);
+        using var dir = TempDir.Create();
+        dir.WriteSilentWav("song.wav", seconds: 5);
+
+        await playback.Player.EnqueueAsync(new ContentRef("local", dir.Path, "Song"));
+        await WaitUntilAsync(() => Volatile.Read(ref played) == "song");
+        Assert.Contains("queue: added: Song (local)", log.Lines);
+
+        // One that can't be queued fails, and says why, for the caller to show.
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => playback.Player.EnqueueAsync(new ContentRef("nowhere", "x"), playNow: true));
+        Assert.Contains(log.Lines, l => l.StartsWith("queue: couldn't play x (nowhere): ", StringComparison.Ordinal)
+            && l.EndsWith(ex.Message, StringComparison.Ordinal));
+    }
+
     private static PlaybackRouter Router(SourceRunner runner)
     {
         var config = new SourceConfigStore();

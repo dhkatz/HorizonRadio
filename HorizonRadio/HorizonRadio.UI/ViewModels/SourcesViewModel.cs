@@ -202,7 +202,7 @@ public sealed partial class SourcesViewModel : ViewModelBase
         }
 
         StatusMessage = "Adding to the queue...";
-        await _queue.EnqueueLocatorAsync(content, locator, playNow: true);
+        await _queue.EnqueueAsync(new ContentRef(content.Id, locator), playNow: true);
         StatusMessage = $"Playing from {content.DisplayName}";
     }
 
