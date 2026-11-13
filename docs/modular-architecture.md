@@ -68,6 +68,46 @@ Each rule says where a kind of code goes; the reason follows it.
 - **Commands are plain service methods**, plus a small catalog of named actions for key
   bindings, event rules and the control endpoint. No mediator or command-bus framework.
 
+## What goes in the SDK
+
+The SDK is the contract between the host and its plugins; Core is the host's implementation. A
+type goes in the SDK only when a plugin has to name it, and then only as one of:
+
+- what a plugin implements (`IAudioSourceFactory`, `IMetadataProvider`, `IGamePlugin`,
+  `IToolPlugin`);
+- what the host offers plugins, as an interface (`IPluginLog`, `IProcesses`, `INotifications`,
+  `ISecretProtector`, `IGameHost`);
+- the plain data passed across (`Track`, `ContentRef`, `ConfigField`, `MixInfo`);
+- a helper that keeps no host state and needs nothing beyond .NET (search-term matching, lyrics
+  parsing, `AtomicFile`).
+
+Anything that keeps the app's data or knows how other parts of the engine work stays in Core,
+and plugins see at most an interface over it. Every SDK type is a promise to plugins built
+against it, while Core can change freely behind it.
+
+**No plugin references Core.** The projects that do (the front ends, `HorizonRadio.Platform`)
+are parts of the host, not plugins. A plugin that seems to need Core is a sign that an SDK
+interface is missing.
+
+**When a plugin needs something the engine does** (build or play a mix, make sure a tool is
+installed), the SDK gets a narrow interface for it, as `IGameHost.Playback` (`IPlaybackRouter`)
+already lets a game steer playback and list the user's mixes:
+
+- Its signatures use SDK models, never Core's: the router hands out `MixInfo`, not `Mix`, so
+  Core can change how mixes are kept without breaking a plugin.
+- Core implements it over the service that does the work (step 9), so a plugin goes through the
+  same steps the window does (saving, syncing to your devices, tidying caches) and can't skip one.
+- It's registered in the container like the other host services, so a test or a module can
+  replace it.
+- It says which thread its events come on and whether its calls return before the work is done,
+  since a plugin can't read Core to find out.
+- It's added when a plugin needs it, not ahead of time: each one has to stay compatible.
+
+A plugin can also **contribute** actions: its commands join the command list the way its
+sources join the source catalog, so they can be bound to keys, used in event rules and called
+from `hzr`. Plugins call the host through typed interfaces; named commands are for users and
+remote control.
+
 ## Front ends and the control endpoint
 
 One instance of the engine runs per profile: the window, or `hzr serve` (headless). The running
