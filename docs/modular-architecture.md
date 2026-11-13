@@ -271,8 +271,11 @@ Each step leaves the app working and lands as its own PR or short stack.
    - [x] Tools: `ToolInstalls` (a service) installs, uninstalls and checks for updates
      (`ToolFreshnessChecker`, moved from the UI), rescans the registry and tells the Console; the
      Tools page only shows progress and asks before uninstalling.
-   - [ ] What only the window applied: a synced change of metadata provider order or of shuffle,
-     and pausing when the chosen output can't be reached.
+   - [x] Synced preferences the window passed on: the router follows the shuffle setting, and
+     `MetadataPipeline` rebuilds the resolver when the provider order or a field's provider changes
+     (the Metadata page saves through it).
+   - [ ] What else only the window does: pausing when the chosen output can't be reached, and
+     turning the local speakers on when there's no game.
    - [ ] The command list: named actions (the event-rule and key-binding ones, then the services
      above) for bindings, rules, the control endpoint, and plugins' own commands.
 10. [ ] The control endpoint.

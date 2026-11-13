@@ -104,6 +104,7 @@ public sealed class PlaybackRouter : IPlaybackRouter, IAsyncDisposable
     private readonly SourceRunner _runner;
     private readonly SourceConfigStore _config;
     private readonly MixStore _mixes;
+    private readonly IDisposable _shuffleWatch;
     private readonly TimeProvider _time;
     private readonly Channel<Command> _commands =
         Channel.CreateUnbounded<Command>(new UnboundedChannelOptions { SingleReader = true });
@@ -131,8 +132,10 @@ public sealed class PlaybackRouter : IPlaybackRouter, IAsyncDisposable
         _mixList = mixes.All;
         MixContexts = (mix, shuffle) => new MixContextProvider(mix, resolver, shuffle);
 
-        // The persisted preference; SetShuffleAsync keeps the runner in step from here on.
+        // The preference, which follows you between your PCs: each change to it (here, or synced
+        // from another) reaches what's playing and every channel as it (re)starts.
         _runner.Shuffle = config.Settings.Get(PlaybackSettings.Shuffle);
+        _shuffleWatch = config.Settings.Watch(PlaybackSettings.Shuffle, on => _ = FollowShuffleAsync(on));
         Player = new QueuePlayback(runner, config, resolver, () => Send(new PlayerHasWork { Done = NewDone() }),
             log ?? IPluginLog.None);
 
@@ -141,6 +144,12 @@ public sealed class PlaybackRouter : IPlaybackRouter, IAsyncDisposable
     }
 
     private static void Log(string msg) => Trace.WriteLine($"[hzn-router] {msg}");
+
+    private async Task FollowShuffleAsync(bool on)
+    {
+        try { await SetShuffleAsync(on).ConfigureAwait(false); }
+        catch (Exception ex) { Log($"shuffle: {ex.Message}"); }
+    }
 
     /// <summary>The engine. Read what's playing from it; change that only through the router.</summary>
     public SourceRunner Runner => _runner;
@@ -461,6 +470,7 @@ public sealed class PlaybackRouter : IPlaybackRouter, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _mixes.Changed -= OnMixesChanged;
+        _shuffleWatch.Dispose();
         _commands.Writer.TryComplete();
         await _loop.ConfigureAwait(false);
 
