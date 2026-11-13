@@ -218,11 +218,11 @@ public sealed partial class HistoryViewModel : ViewModelBase
     {
         if (_queue == null) return;
         var target = source ?? (e.Sources.Count > 0 ? e.Sources[0] : null);
-        if (target != null && _queue!.Sources.Find(target.SourceId) is IContentSourceFactory factory)
+        if (target != null)
         {
             try
             {
-                await _queue.EnqueueLocatorAsync(factory, target.Locator, playNow: true);
+                await _queue.EnqueueAsync(new ContentRef(target.SourceId, target.Locator, e.Title), playNow: true);
                 return;
             }
             catch (Exception ex)

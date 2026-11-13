@@ -257,6 +257,19 @@ Each step leaves the app working and lands as its own PR or short stack.
      container, since the settings open first. Core has no OS calls left, and no NAudio or DPAPI
      package.
 9. [ ] Workflows move from view models into Core services; the command list.
+   - [x] Adding to the queue: `QueuePlayback.EnqueueAsync(ContentRef, playNow)` finds the source,
+     queues it and tells the Console. Search, history, a song's menu, quick play, the Queue page
+     and the Sources tab call it; each had its own copy, with its own error handling. A
+     self-driven source starts by id with its saved settings (`PlaybackRouter.StartSourceAsync(id)`).
+   - [ ] Mixes: save, delete, add a song, play (replace or add) as a mix library service.
+     Deleting a mix also clears its key bindings, which only the Controls page did.
+   - [ ] History: identifying a radio song and finding where to replay it runs in Core, not only
+     while the History page is open.
+   - [ ] Tools: install, uninstall and update checks, with their Console lines.
+   - [ ] What only the window applied: a synced change of metadata provider order or of shuffle,
+     and pausing when the chosen output can't be reached.
+   - [ ] The command list: named actions (the event-rule and key-binding ones, then the services
+     above) for bindings, rules, the control endpoint, and plugins' own commands.
 10. [ ] The control endpoint.
 11. [ ] `hzr`: remote commands, then `hzr serve`. The CLI project emits the same
     `PluginAssembly_*` metadata the UI's does, which plugin discovery reads to load the plugins.

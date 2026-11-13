@@ -82,7 +82,7 @@ public sealed class HorizonEngine : IAsyncDisposable
         // one step at a time. The player is the queue: explicit songs first, then the active mix as
         // its endless tail, which the switcher sets.
         ContentResolver = services.GetRequiredService<MixContentResolver>();
-        Router = new PlaybackRouter(Runner, SourceConfig, Mixes, ContentResolver);
+        Router = new PlaybackRouter(Runner, SourceConfig, Mixes, ContentResolver, log: log);
         MixSwitcher = new MixSwitcher(Mixes, Player, Runner);
         // Mix entries shown as what they are (titles, artists, covers), looked up through the same
         // sources and metadata the queue uses, and kept on disk between sessions.

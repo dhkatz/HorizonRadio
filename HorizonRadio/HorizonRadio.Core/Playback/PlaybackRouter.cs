@@ -4,6 +4,7 @@ using HorizonRadio.Core.Sources;
 using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Sources.Mixes;
 using HorizonRadio.Core.Sources.Queue;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Games;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Sources.Config;
@@ -101,6 +102,7 @@ public sealed class PlaybackRouter : IPlaybackRouter, IAsyncDisposable
     }
 
     private readonly SourceRunner _runner;
+    private readonly SourceConfigStore _config;
     private readonly MixStore _mixes;
     private readonly TimeProvider _time;
     private readonly Channel<Command> _commands =
@@ -118,10 +120,12 @@ public sealed class PlaybackRouter : IPlaybackRouter, IAsyncDisposable
     private readonly Dictionary<string, MixChannel> _channels = new(StringComparer.Ordinal);
     private volatile EngineState _state = PlayerIdle;
 
+    /// <param name="log">The Console (what's added to the queue). Default: nowhere.</param>
     public PlaybackRouter(SourceRunner runner, SourceConfigStore config, MixStore mixes, MixContentResolver resolver,
-                          TimeProvider? time = null)
+                          TimeProvider? time = null, IPluginLog? log = null)
     {
         _runner = runner;
+        _config = config;
         _mixes = mixes;
         _time = time ?? TimeProvider.System;
         _mixList = mixes.All;
@@ -129,7 +133,8 @@ public sealed class PlaybackRouter : IPlaybackRouter, IAsyncDisposable
 
         // The persisted preference; SetShuffleAsync keeps the runner in step from here on.
         _runner.Shuffle = config.Settings.Get(PlaybackSettings.Shuffle);
-        Player = new QueuePlayback(runner, config, resolver, () => Send(new PlayerHasWork { Done = NewDone() }));
+        Player = new QueuePlayback(runner, config, resolver, () => Send(new PlayerHasWork { Done = NewDone() }),
+            log ?? IPluginLog.None);
 
         _mixes.Changed += OnMixesChanged;
         _loop = Task.Run(RunAsync);
@@ -177,6 +182,19 @@ public sealed class PlaybackRouter : IPlaybackRouter, IAsyncDisposable
     /// </summary>
     public Task StartSourceAsync(ISelfDrivenSourceFactory factory, ConfigValues values) =>
         Send(new StartExternal(factory, values) { Done = NewDone() });
+
+    /// <summary>Start the self-driven source <paramref name="sourceId"/> with its saved settings
+    /// (<see cref="StartSourceAsync(ISelfDrivenSourceFactory, ConfigValues)"/>).</summary>
+    /// <exception cref="InvalidOperationException">There's no such source, or it plays through the
+    /// queue (it needs something to play).</exception>
+    public Task StartSourceAsync(string sourceId)
+    {
+        var factory = Sources.Find(sourceId)
+            ?? throw new InvalidOperationException($"There's no {sourceId} source here.");
+        if (factory is not ISelfDrivenSourceFactory selfDriven)
+            throw new InvalidOperationException($"{factory.DisplayName} plays through the queue: add something from it instead.");
+        return StartSourceAsync(selfDriven, _config.Load(sourceId, factory.Schema));
+    }
 
     /// <summary>Stop playback. A mix station is parked, not discarded: when the game routes to it
     /// again it picks up where it stopped.</summary>

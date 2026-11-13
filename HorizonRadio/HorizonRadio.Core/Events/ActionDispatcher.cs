@@ -124,7 +124,7 @@ public sealed class ActionDispatcher : IActionDispatcher
             _log.Write(_logChannel, $"switch source: unknown source '{sourceId}'");
             return;
         }
-        if (factory is not ISelfDrivenSourceFactory selfDriven)
+        if (factory is not ISelfDrivenSourceFactory)
         {
             // A content source needs a locator and plays through the queue; the rule
             // editor never offers one, so only a hand-edited rule lands here.
@@ -133,8 +133,7 @@ public sealed class ActionDispatcher : IActionDispatcher
             return;
         }
         if (_runner.ActiveFactory?.Id == sourceId) return; // already on it
-        var values = _configStore.Load(sourceId, factory.Schema);
-        await _playback.StartSourceAsync(selfDriven, values).ConfigureAwait(false);
+        await _playback.StartSourceAsync(sourceId).ConfigureAwait(false);
     }
 
     private void SetVolume(string? param)

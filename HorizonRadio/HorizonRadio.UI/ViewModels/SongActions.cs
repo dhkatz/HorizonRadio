@@ -112,20 +112,13 @@ public sealed class SongActions
         if (_queue is null) return;
         var entry = await EntryForAsync(song);
         if (entry is null) return;
-        if (_queue.Sources.Find(entry.SourceId) is not { } factory)
-        {
-            Toast("Couldn't add that to the queue", $"{entry.SourceId} isn't available.").ShowError();
-            return;
-        }
-
         try
         {
-            await _queue.EnqueueLocatorAsync(factory, entry.Locator);
+            await _queue.EnqueueAsync(entry with { DisplayName = entry.DisplayName ?? song.Title });
             Toast("Added to the queue", song.Title).ShowSuccess();
         }
         catch (Exception ex)
         {
-            Trace.WriteLine($"[hzn-songs] queue {entry.SourceId} {entry.Locator}: {ex.Message}");
             Toast($"Couldn't add “{song.Title}” to the queue", ex.Message).ShowError();
         }
     }

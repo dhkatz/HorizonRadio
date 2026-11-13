@@ -407,11 +407,11 @@ public sealed partial class QueueViewModel : ViewModelBase, IDisposable
         if (_queue == null) return;
         try
         {
-            await _queue.EnqueueLocatorAsync(source, locator);
+            await _queue.EnqueueAsync(new ContentRef(source.Id, locator));
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            Trace.WriteLine($"[hzn-queue-vm] enqueue failed: {ex.Message}");
+            // The queue has said why on the Console.
         }
     }
 }
