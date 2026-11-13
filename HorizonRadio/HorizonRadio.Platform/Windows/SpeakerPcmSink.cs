@@ -1,20 +1,20 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.Versioning;
 using System.Threading;
+using HorizonRadio.Core.Audio;
 using HorizonRadio.Sdk.Audio;
 using HorizonRadio.Sdk.Sources;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 
-namespace HorizonRadio.Core.Audio;
+namespace HorizonRadio.Platform.Windows;
 
 /// <summary>
 /// An <see cref="IPcmSink"/> that plays the pipeline's PCM out of a local
 /// speaker/headphone device via WASAPI. This is the "test playback" path:
-/// it lets the app validate a source or profile without launching the game
-/// (and later, in <see cref="Ipc"/>, doubles as the playback target for the
-/// post-processed audio captured back from the game).
+/// it lets the app validate a source or profile without launching the game.
 ///
 /// Sources push at wall-clock pace while WASAPI drains on its own render
 /// clock; the two aren't synchronized, so we feed a bounded
@@ -33,6 +33,7 @@ namespace HorizonRadio.Core.Audio;
 /// stopping a <see cref="WasapiOut"/> joins that thread); the next
 /// <see cref="Open"/>/<see cref="Close"/> releases it.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class SpeakerPcmSink : ISpeakerOutput
 {
     private readonly WaveFormat _format;
@@ -252,7 +253,3 @@ public sealed class SpeakerPcmSink : ISpeakerOutput
         }
     }
 }
-
-/// <summary>A selectable audio render endpoint. <see cref="Id"/> is null for
-/// the system-default entry.</summary>
-public sealed record AudioDevice(string? Id, string Name);

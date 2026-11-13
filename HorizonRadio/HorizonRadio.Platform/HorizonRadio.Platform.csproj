@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The OS behind Core's interfaces: the code that reaches the operating system (on Windows, the
+    speakers through WASAPI), a folder per OS, picked at run time (HostPlatforms.Current) and
+    registered over Core's portable defaults (IHostPlatform). Each OS's classes carry
+    [SupportedOSPlatform], so the platform analyzer flags a call that isn't guarded. Front ends
+    reference it; Core and plugins don't (see docs/modular-architecture.md).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="HorizonRadio.Core.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.3.0" />
+  </ItemGroup>
+
+</Project>

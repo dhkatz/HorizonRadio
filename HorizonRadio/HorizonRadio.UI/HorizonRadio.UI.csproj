@@ -85,6 +85,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\HorizonRadio.Core\HorizonRadio.Core.csproj" />
+      <ProjectReference Include="..\HorizonRadio.Platform\HorizonRadio.Platform.csproj" />
       <ProjectReference Include="..\HorizonRadio.Sdk.UI\HorizonRadio.Sdk.UI.csproj" />
       <ProjectReference Include="..\..\Plugins\Lyrics\HorizonRadio.Lyrics.Lrclib\HorizonRadio.Lyrics.Lrclib.csproj" />
       <ProjectReference Include="..\..\Plugins\Lyrics\HorizonRadio.Lyrics.Unison\HorizonRadio.Lyrics.Unison.csproj" />

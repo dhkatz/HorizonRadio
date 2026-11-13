@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Hosting;
 using HorizonRadio.Core.Tools;
+using HorizonRadio.Platform;
 using HorizonRadio.Sdk;
 using HorizonRadio.UI.Services;
 using HorizonRadio.UI.ViewModels;
@@ -42,6 +43,7 @@ public partial class App : Application
             // (which never enters here) is unaffected.
             var host = HorizonHost.Build(new HorizonHostOptions
             {
+                Platform = HostPlatforms.Current(),
                 ConfigureServices = services =>
                 {
                     services.Replace(ServiceDescriptor.Singleton<IConfirmations>(confirmations));

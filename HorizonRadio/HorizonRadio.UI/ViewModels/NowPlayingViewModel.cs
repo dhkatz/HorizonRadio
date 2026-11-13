@@ -188,7 +188,7 @@ public sealed partial class NowPlayingViewModel : ViewModelBase
             // The game's output first, if the game has one ("No Game" doesn't: local speakers
             // are the only destination then, so make sure they're on).
             if (gameOutputName != null) OutputTargets.Add(OutputTarget.Game(gameOutputName));
-            foreach (var d in PreviewController.Devices)
+            foreach (var d in _preview.Devices)
                 OutputTargets.Add(new OutputTarget(false, d.Id, d.Name));
             if (gameOutputName == null && !_preview.Enabled) _preview.SetEnabled(true);
 

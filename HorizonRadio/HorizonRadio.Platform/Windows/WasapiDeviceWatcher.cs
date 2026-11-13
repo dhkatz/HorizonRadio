@@ -1,15 +1,18 @@
 using System;
 using System.Diagnostics;
+using System.Runtime.Versioning;
+using HorizonRadio.Core.Audio;
 using NAudio.CoreAudioApi;
 using NAudio.CoreAudioApi.Interfaces;
 
-namespace HorizonRadio.Core.Audio;
+namespace HorizonRadio.Platform.Windows;
 
 /// <summary>
 /// <see cref="IAudioDeviceWatcher"/> over WASAPI's <see cref="IMMNotificationClient"/>.
 /// Windows calls it on a COM worker thread and forbids blocking or calling back into
 /// the enumerator from there, so it only raises events; listeners post them on.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class WasapiDeviceWatcher : IAudioDeviceWatcher, IMMNotificationClient
 {
     private readonly MMDeviceEnumerator _enumerator;

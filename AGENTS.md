@@ -34,7 +34,7 @@ These rules are mandatory for every change, human or agent.
 ```
 Assets/         README screenshots and artwork
 HorizonRadio/   the app: Sdk (the plugin SDK), Sdk.UI (theme + shared controls), Core (headless engine),
-                UI (Avalonia), Core.Tests, TitleModel
+                Platform (the OS behind Core's interfaces), UI (Avalonia), Core.Tests, TitleModel
 Plugins/        everything that plugs into Horizon Radio (.NET)
   Games/  Lyrics/  Metadata/  Sources/  Tools/  one project per plugin
     Sources/HorizonRadio.Source.Spotify/Native/   the audio tap DLL (CMake), loaded into Spotify Soloist
@@ -218,7 +218,8 @@ Spotify / Local / YouTube ──► HorizonRadio.UI (C#, Avalonia)
   state from one marshals it (`Dispatcher.UIThread.Post`). Local preview (`PreviewController`) runs
   its state machine under a lock and hands device callbacks to the thread pool.
 - **Starting up (`Core/Hosting/`)** — any front end starts the same way: `HorizonHost.Build`
-  starts the session's log file, opens the settings, builds the container (below), and brings old
+  starts the session's log file, opens the settings, builds the container (below; the OS's services
+  come from the platform the front end passes, `HorizonHostOptions.Platform`), and brings old
   settings over; `ChosenGame()` says which game to run (null: the front end asks, as the window's
   first-run picker does); `StartEngine(gameId)` builds the `HorizonEngine` for it: the pipeline into
   the game and the local speaker, the runner and router, metadata, lyrics, history, events and bound

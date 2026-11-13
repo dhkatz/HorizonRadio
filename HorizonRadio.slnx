@@ -2,6 +2,7 @@
   <Folder Name="/HorizonRadio/">
     <Project Path="HorizonRadio/HorizonRadio.Core/HorizonRadio.Core.csproj" />
     <Project Path="HorizonRadio/HorizonRadio.Core.Tests/HorizonRadio.Core.Tests.csproj" />
+    <Project Path="HorizonRadio/HorizonRadio.Platform/HorizonRadio.Platform.csproj" />
     <Project Path="HorizonRadio/HorizonRadio.Sdk/HorizonRadio.Sdk.csproj" />
     <Project Path="HorizonRadio/HorizonRadio.Sdk.UI/HorizonRadio.Sdk.UI.csproj" />
     <Project Path="HorizonRadio/HorizonRadio.TitleModel/HorizonRadio.TitleModel.csproj" />
