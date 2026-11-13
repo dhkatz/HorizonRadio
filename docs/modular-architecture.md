@@ -277,8 +277,13 @@ Each step leaves the app working and lands as its own PR or short stack.
    - [x] What else only the window did: `OutputGuard` (the engine's) pauses once when the chosen
      output can't be heard and says so (`OutputLost`, which the window toasts), and the engine turns
      the local speakers on when there's no game.
-   - [ ] The command list: named actions (the event-rule and key-binding ones, then the services
-     above) for bindings, rules, the control endpoint, and plugins' own commands.
+   - [x] The command list: `CommandList` names the event-rule and key-binding actions
+     (`playback.next`, `mix.switch <id>`), runs them for bindings and rules alike, says why one
+     couldn't be done, and names them for the Events and Controls pages. Bindings and rules keep
+     saving them as before (`EventAction`), so synced ones still read on an older version.
+   - [ ] The services' commands the control endpoint needs (adding to the queue, playing a mix,
+     shuffle, stop), next to those. Plugins' own commands join when a plugin needs one, as the SDK
+     rule above says.
 10. [ ] The control endpoint.
 11. [ ] `hzr`: remote commands, then `hzr serve`. The CLI project emits the same
     `PluginAssembly_*` metadata the UI's does, which plugin discovery reads to load the plugins.

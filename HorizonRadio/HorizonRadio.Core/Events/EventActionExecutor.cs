@@ -51,21 +51,12 @@ public sealed class EventActionExecutor : IDisposable
         if (!_debounce.ShouldFire(e.Kind)) return;
 
         var action = _rules.GetAction(e.Kind);
-        _log.Write("events",
-            $"{e.Kind} -> {Describe(action)}");
+        _log.Write("events", $"{e.Kind} -> {_dispatcher.Describe(action)}");
         Handled?.Invoke(e, action);
 
         if (action.Type == EventActionType.None) return;
         _ = Task.Run(() => _dispatcher.RunAsync(action));
     }
-
-    private static string Describe(EventAction a) => a.Type switch
-    {
-        EventActionType.None => "(no action)",
-        EventActionType.SwitchSource => $"switch source: {a.Param}",
-        EventActionType.SetVolume => $"set volume: {a.Param}",
-        _ => a.Type.ToString(),
-    };
 
     public void Dispose()
     {

@@ -82,9 +82,9 @@ public partial class App : Application
                 var services = host.Services;
 
                 var metaVm = new MetadataViewModel(engine.MetadataConfig, engine.MetadataPipeline);
-                var eventsVm = new EventsViewModel(engine.EventRules, engine.Events, engine.Game.EventCatalog,
+                var eventsVm = new EventsViewModel(engine.EventRules, engine.Events, engine.Commands, engine.Game.EventCatalog,
                     engine.Game.EventsHint, engine.Sources);
-                var controlsVm = new ControlsViewModel(engine.InputBindings, engine.Input, engine.Mixes);
+                var controlsVm = new ControlsViewModel(engine.InputBindings, engine.Input, engine.Mixes, engine.Commands);
                 var gameSettings = new GameSettingsViewModel(host.Games, host.Settings, chosenGameId);
                 gameSettings.RestartRequested += () => Restart(desktop);
                 var devicesVm = new DevicesViewModel(engine.Devices, confirmations);

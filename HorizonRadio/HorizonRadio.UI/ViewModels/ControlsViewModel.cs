@@ -9,6 +9,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HorizonRadio.Core.Commands;
 using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Input;
 using HorizonRadio.Core.Sources.Mixes;
@@ -27,6 +28,7 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
     private readonly InputBindingStore _store;
     private readonly InputBindingService? _service;
     private readonly MixStore? _mixes;
+    private readonly CommandList? _commands;
 
     /// <summary>Playback action rows (Play/Pause, Next/Previous/Restart Track).</summary>
     public ObservableCollection<ControlBindingRow> Rows { get; } = new();
@@ -44,38 +46,33 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
 
     public bool HasControllers => Controllers.Count > 0;
 
-    // The playback actions a user can bind, in display order.
-    private static readonly IReadOnlyList<(string Name, string Description, EventAction Action)> Bindable = new[]
-    {
-        ("Play / Pause", "Toggle playback on or off.", new EventAction(EventActionType.TogglePause)),
-        ("Next Track", "Skip to the next track.", new EventAction(EventActionType.NextTrack)),
-        ("Previous Track", "Go back to the previous track.", new EventAction(EventActionType.PreviousTrack)),
-        ("Restart Track", "Restart the current track from the beginning.", new EventAction(EventActionType.RestartTrack)),
-    };
+    // The playback commands a user can bind, in display order.
+    private static readonly EventActionType[] Bindable =
+    [
+        EventActionType.TogglePause, EventActionType.NextTrack, EventActionType.PreviousTrack,
+        EventActionType.RestartTrack,
+    ];
 
-    // Mix-switch actions that don't depend on a specific mix.
-    private static readonly IReadOnlyList<(string Name, string Description, EventAction Action)> FixedMixActions = new[]
-    {
-        ("Next Mix", "Cycle to the next saved mix.", new EventAction(EventActionType.NextMix)),
-        ("Previous Mix", "Cycle to the previous saved mix.", new EventAction(EventActionType.PreviousMix)),
-    };
+    // Mix-switch commands that don't depend on a specific mix.
+    private static readonly EventActionType[] FixedMixActions = [EventActionType.NextMix, EventActionType.PreviousMix];
 
     // Design-time / fallback ctor.
     public ControlsViewModel() : this(new InputBindingStore(), null) { }
 
-    public ControlsViewModel(InputBindingStore store, InputBindingService? service, MixStore? mixes = null)
+    /// <param name="commands">Names the actions in the activity list.</param>
+    public ControlsViewModel(InputBindingStore store, InputBindingService? service, MixStore? mixes = null,
+                             CommandList? commands = null)
     {
         _store = store;
         _service = service;
         _mixes = mixes;
+        _commands = commands;
 
-        foreach (var (name, description, action) in Bindable)
-            Rows.Add(new ControlBindingRow(name, description, action, store, service));
+        foreach (var type in Bindable) Rows.Add(RowFor(CommandList.For(type)));
 
         // Fixed mix-switch rows live for the VM's lifetime; the per-mix rows below
         // them are synced in place as mixes change.
-        foreach (var (name, description, action) in FixedMixActions)
-            MixRows.Add(new ControlBindingRow(name, description, action, store, service));
+        foreach (var type in FixedMixActions) MixRows.Add(RowFor(CommandList.For(type)));
 
         if (service != null)
         {
@@ -95,6 +92,9 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
         RefreshControllers();
         RefreshMixRows();
     }
+
+    private ControlBindingRow RowFor(HorizonCommand command) =>
+        new(command.Title, command.Description, command.ToAction(), _store, _service);
 
     private void OnMixesChanged() => Dispatcher.UIThread.Post(RefreshMixRows);
 
@@ -131,8 +131,8 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
         {
             if (MixRows.Any(r => r.Action.Type == EventActionType.SwitchMix && r.Action.Param == m.Id))
                 continue;
-            var row = new ControlBindingRow(m.Name, "Switch to this mix.",
-                new EventAction(EventActionType.SwitchMix, m.Id), _store, _service);
+            var switchMix = CommandList.For(EventActionType.SwitchMix);
+            var row = new ControlBindingRow(m.Name, switchMix.Description, switchMix.ToAction(m.Id), _store, _service);
             row.Controller.SetDevice(SelectedController);
             MixRows.Add(row);
         }
@@ -171,25 +171,13 @@ public sealed partial class ControlsViewModel : ViewModelBase, IDisposable
     private void OnTriggered(InputBinding binding, EventAction action)
     {
         var line = string.Create(CultureInfo.InvariantCulture,
-            $"{DateTime.Now:HH:mm:ss}  {binding.Label} → {Describe(action)}");
+            $"{DateTime.Now:HH:mm:ss}  {binding.Label} → {_commands?.Describe(action) ?? action.Type.ToString()}");
         Dispatcher.UIThread.Post(() =>
         {
             Activity.Insert(0, line);
             while (Activity.Count > 50) Activity.RemoveAt(Activity.Count - 1);
         });
     }
-
-    private string Describe(EventAction a) => a.Type switch
-    {
-        EventActionType.TogglePause => "Play / Pause",
-        EventActionType.NextTrack => "Next Track",
-        EventActionType.PreviousTrack => "Previous Track",
-        EventActionType.RestartTrack => "Restart Track",
-        EventActionType.NextMix => "Next Mix",
-        EventActionType.PreviousMix => "Previous Mix",
-        EventActionType.SwitchMix => _mixes?.Get(a.Param ?? "") is { } m ? $"Mix: {m.Name}" : "Switch Mix",
-        _ => a.Type.ToString(),
-    };
 
     public void Dispose()
     {
