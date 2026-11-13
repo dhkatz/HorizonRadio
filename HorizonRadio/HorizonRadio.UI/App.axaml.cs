@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Hosting;
 using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk;
@@ -93,7 +94,7 @@ public partial class App : Application
                     engine.Player, engine.HistoryStore, engine.Metadata, engine.MixEntries, metaVm,
                     services.GetRequiredService<ToolRegistry>(), installers, eventsVm, controlsVm, engine.Preview,
                     engine.Game, gameSettings, toasts, dialogManager, confirmations, devicesVm, friendsVm,
-                    engine.Lyrics, engine.SongSync);
+                    new AboutViewModel(services.GetRequiredService<MetadataTrace>()), engine.Lyrics, engine.SongSync);
                 var mainWindow = new MainWindow { DataContext = vm };
                 desktop.MainWindow = mainWindow;
                 // Composed after startup (the first-run picker), so show it ourselves.

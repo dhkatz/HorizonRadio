@@ -1,5 +1,6 @@
 using HorizonRadio.Core.Audio;
 using HorizonRadio.Core.Devices;
+using HorizonRadio.Core.Diagnostics;
 using HorizonRadio.Core.Events;
 using HorizonRadio.Core.Fingerprints;
 using HorizonRadio.Core.Games;
@@ -65,7 +66,7 @@ public sealed class HorizonEngine : IAsyncDisposable
         // The metadata pipeline: one resolver (the source, then the providers in the user's order,
         // with a policy per field) for play-time enrichment and for lists.
         MetadataConfig = services.GetRequiredService<MetadataConfigStore>();
-        Metadata = new MetadataResolver(log);
+        Metadata = new MetadataResolver(log, services.GetRequiredService<MetadataTrace>());
         var (contributors, policy) = MetadataConfig.Catalog.BuildPipeline(MetadataConfig);
         Metadata.Configure(contributors, policy);
         Enricher = new EnrichmentService(Runner, Metadata);

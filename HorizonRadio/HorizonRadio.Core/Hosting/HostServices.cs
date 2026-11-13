@@ -9,7 +9,6 @@ using HorizonRadio.Core.Sources.Config;
 using HorizonRadio.Core.Tools;
 using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
-using HorizonRadio.Sdk.Models;
 using HorizonRadio.Sdk.Sources;
 using HorizonRadio.Sdk.Sources.Config;
 
@@ -35,22 +34,6 @@ internal sealed class HostProcesses : IProcesses
         ChildProcesses.TieToApp(process);
         return process;
     }
-}
-
-/// <summary>The metadata diagnostics (<see cref="MetadataTrace"/>), switched on in About.</summary>
-internal sealed class HostMetadataTrace : IMetadataTrace
-{
-    public bool Enabled => MetadataTrace.Enabled;
-
-    public void ProviderSearch(string providerId, string query, IReadOnlyList<CatalogCandidate>? considered) =>
-        MetadataTrace.ProviderSearch(providerId, query, considered);
-
-    public void Song(string station, string raw, string? parsedArtist, string parsedTitle,
-        string confidence, IReadOnlyList<TitleCandidate>? candidates, string modelMode, bool modelWillRun) =>
-        MetadataTrace.Song(station, raw, parsedArtist, parsedTitle, confidence, candidates, modelMode, modelWillRun);
-
-    public void Model(string raw, long latencyMs, IReadOnlyList<TitleCandidate> extracted, bool applied) =>
-        MetadataTrace.Model(raw, latencyMs, extracted, applied);
 }
 
 /// <summary>One audio cache per source under the profile's data folder (<c>cache\audio\&lt;source&gt;</c>),

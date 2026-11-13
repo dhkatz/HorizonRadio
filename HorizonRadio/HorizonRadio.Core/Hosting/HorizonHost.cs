@@ -71,10 +71,6 @@ public sealed class HorizonHost : IAsyncDisposable
         if (options.WriteLogFile) LogFile.Start(folders.Data("logs"));
         // Every setting, in one file; the first run on it brings over the older per-feature files.
         var settings = options.Settings ?? SettingsStore.Open(folders.Data(SettingsStore.FileName));
-        // Re-arm opt-in metadata diagnostics before any source can emit, so the first song of the
-        // session is captured too.
-        MetadataTrace.RestoreFromSettings(settings);
-
         var services = new ServiceCollection();
         services.AddHorizonCore(settings, folders);
         options.ConfigureServices?.Invoke(services);
@@ -82,6 +78,9 @@ public sealed class HorizonHost : IAsyncDisposable
         services.AddPlugins(options.PluginTypes ?? PluginDiscovery.PluginTypes(),
             line => ProcessConsole.Append("plugins", line));
         var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
+        // Opt-in metadata diagnostics start capturing now if the user left them on, before any
+        // source can record, so the first song of the session is captured too.
+        provider.GetRequiredService<MetadataTrace>();
 
         // Before any game is built: its settings must already hold anything migrated into them.
         // Saving drops the legacy fields so the migration can't re-apply later.

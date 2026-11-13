@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using HorizonRadio.Core.IO;
 using HorizonRadio.Core.Settings;
+using HorizonRadio.Sdk;
 using HorizonRadio.Sdk.Metadata;
 using HorizonRadio.Sdk.Models;
 
@@ -21,14 +22,15 @@ namespace HorizonRadio.Core.Diagnostics;
 /// resolved track. A concise line per song also goes to the in-app Console tab.
 ///
 /// Off by default and inert when off (a single bool check on each capture call). Enabled either by
-/// the toggle in the About tab (persisted to <c>diagnostics/settings.json</c>) or the
+/// the toggle in the About tab (kept as <see cref="EnabledSetting"/>) or the
 /// <c>HZN_META_TRACE</c> environment variable, so a user hitting a metadata bug can switch it on,
 /// reproduce, and attach the file to a report.
 ///
-/// Deliberately static, mirroring <see cref="ProcessConsole"/>: the producers (the radio source,
-/// the resolver) are created deep in Core without a logging dependency.
+/// One per host, from the container: it's the host's <see cref="IMetadataTrace"/> (what sources and
+/// providers record) and the resolver's record of each lookup (<see cref="BeginResolve"/> …
+/// <see cref="EndResolve"/>). The files go in the app's <c>diagnostics</c> folder.
 /// </summary>
-public static class MetadataTrace
+public sealed class MetadataTrace : IMetadataTrace, IDisposable
 {
     private const string ConsoleTag = "metadata-trace";
 
@@ -43,25 +45,34 @@ public static class MetadataTrace
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
 
-    private static readonly object Gate = new();
-    private static StreamWriter? _writer;
-
-    /// <summary>True while a trace file is open and capturing.</summary>
-    public static bool Enabled { get; private set; }
-
-    public static string Directory => AppPaths.In("diagnostics");
+    private readonly Lock _gate = new();
+    private readonly SettingsStore _settings;
+    private readonly IPluginLog _log;
+    private StreamWriter? _writer;
 
     /// <summary>Whether capture is on, kept across restarts.</summary>
     public static readonly Setting<bool> EnabledSetting = new("diagnostics.metadataTrace", SettingScope.Device, false);
 
-    private static SettingsStore? _settings;
-
-    /// <summary>Apply the persisted setting (and the <c>HZN_META_TRACE</c> override) at startup, and
-    /// keep <paramref name="settings"/> to persist later changes in.
-    /// The env var wins when set to anything other than 0/false/off (useful for headless runs).</summary>
-    public static void RestoreFromSettings(SettingsStore settings)
+    /// <summary>Starts capturing if the user left it on (or <c>HZN_META_TRACE</c> says so), and keeps
+    /// <paramref name="settings"/> to remember later changes in.</summary>
+    public MetadataTrace(SettingsStore settings, IAppFolders folders, IPluginLog log)
     {
         _settings = settings;
+        _log = log;
+        Directory = folders.Data("diagnostics");
+        RestoreFromSettings();
+    }
+
+    /// <summary>True while a trace file is open and capturing.</summary>
+    public bool Enabled { get; private set; }
+
+    /// <summary>Where the trace files go.</summary>
+    public string Directory { get; }
+
+    // Apply the persisted setting (and the HZN_META_TRACE override). The env var wins when set to
+    // anything other than 0/false/off (useful for headless runs).
+    private void RestoreFromSettings()
+    {
         var env = Environment.GetEnvironmentVariable("HZN_META_TRACE")?.Trim().ToLowerInvariant();
         if (!string.IsNullOrEmpty(env))
         {
@@ -70,14 +81,14 @@ public static class MetadataTrace
             if (env is not ("0" or "false" or "off" or "no")) { SetEnabled(true, persist: false); return; }
             return; // explicitly disabled via env → don't fall through to the persisted setting
         }
-        if (settings.Get(EnabledSetting)) SetEnabled(true, persist: false);
+        if (_settings.Get(EnabledSetting)) SetEnabled(true, persist: false);
     }
 
     /// <summary>Turn capture on/off. Opening a session starts a fresh timestamped file; the choice
     /// is persisted so it survives a restart (unless <paramref name="persist"/> is false).</summary>
-    public static void SetEnabled(bool on, bool persist = true)
+    public void SetEnabled(bool on, bool persist = true)
     {
-        lock (Gate)
+        lock (_gate)
         {
             if (on && _writer is null)
             {
@@ -88,11 +99,11 @@ public static class MetadataTrace
                     var path = Path.Combine(Directory, $"metadata-trace-{stamp}.jsonl");
                     _writer = new StreamWriter(path, append: true) { AutoFlush = true };
                     Enabled = true;
-                    ProcessConsole.Append(ConsoleTag, $"capture started → {path}");
+                    _log.Write(ConsoleTag, $"capture started → {path}");
                 }
                 catch (Exception ex)
                 {
-                    ProcessConsole.Append(ConsoleTag, $"could not start capture: {ex.Message}");
+                    _log.Write(ConsoleTag, $"could not start capture: {ex.Message}");
                     _writer = null;
                     Enabled = false;
                 }
@@ -102,16 +113,16 @@ public static class MetadataTrace
                 try { _writer.Flush(); _writer.Dispose(); } catch { }
                 _writer = null;
                 Enabled = false;
-                ProcessConsole.Append(ConsoleTag, "capture stopped");
+                _log.Write(ConsoleTag, "capture stopped");
             }
         }
-        if (persist) _settings?.Set(EnabledSetting, on);
+        if (persist) _settings.Set(EnabledSetting, on);
     }
 
     // -- Song / model capture (from the radio source) --
 
     /// <summary>One observed ICY title: the raw string and the deterministic parse.</summary>
-    public static void Song(string station, string raw, string? parsedArtist, string parsedTitle,
+    public void Song(string station, string raw, string? parsedArtist, string parsedTitle,
         string confidence, IReadOnlyList<TitleCandidate>? candidates, string modelMode, bool modelWillRun)
     {
         if (!Enabled) return;
@@ -125,11 +136,11 @@ public static class MetadataTrace
             candidates = Cands(candidates),
             model = new { mode = modelMode, willRun = modelWillRun },
         });
-        ProcessConsole.Append(ConsoleTag, $"song: \"{raw}\" → {parsedArtist} / {parsedTitle} [{confidence}]");
+        _log.Write(ConsoleTag, $"song: \"{raw}\" → {parsedArtist} / {parsedTitle} [{confidence}]");
     }
 
     /// <summary>The model's extraction for a raw title, with inference latency.</summary>
-    public static void Model(string raw, long latencyMs, IReadOnlyList<TitleCandidate> extracted, bool applied)
+    public void Model(string raw, long latencyMs, IReadOnlyList<TitleCandidate> extracted, bool applied)
     {
         if (!Enabled) return;
         WriteLine(new
@@ -142,7 +153,7 @@ public static class MetadataTrace
             extracted = Cands(extracted),
         });
         var top = extracted.Count > 0 ? $"{extracted[0].Artist} / {extracted[0].Title}" : "(none)";
-        ProcessConsole.Append(ConsoleTag, $"model: \"{raw}\" → {top} ({latencyMs} ms)");
+        _log.Write(ConsoleTag, $"model: \"{raw}\" → {top} ({latencyMs} ms)");
     }
 
     // -- Resolve capture (from MetadataResolver). One scope per ResolveAsync, isolated per async
@@ -187,12 +198,12 @@ public static class MetadataTrace
         public List<object>? Considered;
     }
 
-    private static readonly AsyncLocal<ResolveScope?> Scope = new();
+    private readonly AsyncLocal<ResolveScope?> _scope = new();
 
-    public static void BeginResolve(Track seed)
+    public void BeginResolve(Track seed)
     {
-        if (!Enabled) { Scope.Value = null; return; }
-        Scope.Value = new ResolveScope
+        if (!Enabled) { _scope.Value = null; return; }
+        _scope.Value = new ResolveScope
         {
             SeedArtist = seed.Artist,
             SeedTitle = seed.Title,
@@ -204,9 +215,9 @@ public static class MetadataTrace
     /// <summary>Start recording one interpretation. <paramref name="providerIds"/> lists the
     /// providers about to be asked, in priority order, so the record reads in that order even
     /// though they answer in parallel.</summary>
-    public static void BeginAttempt(string? interpArtist, string interpTitle, IEnumerable<string>? providerIds = null)
+    public void BeginAttempt(string? interpArtist, string interpTitle, IEnumerable<string>? providerIds = null)
     {
-        var s = Scope.Value;
+        var s = _scope.Value;
         if (s is null) return;
         var attempt = new AttemptRec { InterpArtist = interpArtist, InterpTitle = interpTitle };
         if (providerIds != null)
@@ -214,10 +225,10 @@ public static class MetadataTrace
         lock (s) s.Attempts.Add(attempt);
     }
 
-    public static void Provider(string id, bool matched, string? artist, string? title, string? album, int artBytes,
+    public void Provider(string id, bool matched, string? artist, string? title, string? album, int artBytes,
                                 long? elapsedMs = null, string? error = null)
     {
-        var s = Scope.Value;
+        var s = _scope.Value;
         if (s is null) return;
         // Providers answer in parallel, so records are written from several threads.
         lock (s)
@@ -239,22 +250,22 @@ public static class MetadataTrace
     /// <summary>A capture list for a provider's considered results, or null when not capturing — so a
     /// provider can write <c>var capture = MetadataTrace.NewCapture(); capture?.Add(...)</c> without
     /// repeating the <see cref="Enabled"/> check, then hand it straight to <see cref="ProviderSearch"/>.</summary>
-    public static List<CatalogCandidate>? NewCapture() => Enabled ? new List<CatalogCandidate>() : null;
+    public List<CatalogCandidate>? NewCapture() => Enabled ? new List<CatalogCandidate>() : null;
 
     /// <summary>The raw catalog results a provider examined for the current interpretation, with the
     /// query it sent. Called from inside the provider during its search (the resolve scope flows in
     /// via <see cref="AsyncLocal{T}"/>); merged into that provider's record for the attempt. This is
     /// the data that makes a trace line replayable — see <see cref="CatalogCandidate"/>. A null
     /// <paramref name="considered"/> (capture was off) is a no-op.</summary>
-    public static void ProviderSearch(string id, string query, IReadOnlyList<CatalogCandidate>? considered)
+    public void ProviderSearch(string providerId, string query, IReadOnlyList<CatalogCandidate>? considered)
     {
         if (considered is null) return;
-        var s = Scope.Value;
+        var s = _scope.Value;
         if (s is null) return;
         lock (s)
         {
             if (s.Attempts.Count == 0) return;
-            var rec = GetOrAddProvider(s.Attempts[^1], id);
+            var rec = GetOrAddProvider(s.Attempts[^1], providerId);
             rec.Query = query;
             rec.Considered = considered.Count == 0
                 ? null
@@ -274,10 +285,10 @@ public static class MetadataTrace
     }
 
     /// <param name="elapsedMs">How long the whole resolve took, every interpretation included.</param>
-    public static void EndResolve(Track final, long? elapsedMs = null)
+    public void EndResolve(Track final, long? elapsedMs = null)
     {
-        var s = Scope.Value;
-        Scope.Value = null;
+        var s = _scope.Value;
+        _scope.Value = null;
         if (s is null || !Enabled) return;
         WriteLine(new
         {
@@ -296,7 +307,7 @@ public static class MetadataTrace
                 artBytes = final.AlbumArt?.Length ?? 0,
             },
         });
-        ProcessConsole.Append(ConsoleTag,
+        _log.Write(ConsoleTag,
             $"resolved: {final.Artist} / {final.Title} · {final.Album ?? "(no album)"} · art {(final.AlbumArt?.Length ?? 0)}B" +
             (elapsedMs is { } ms ? $" · {ms} ms" : ""));
     }
@@ -308,13 +319,16 @@ public static class MetadataTrace
 
     private static string Now() => DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
 
-    private static void WriteLine(object record)
+    private void WriteLine(object record)
     {
-        lock (Gate)
+        lock (_gate)
         {
             if (_writer is null) return;
             try { _writer.WriteLine(JsonSerializer.Serialize(record, JsonOpts)); }
             catch { /* never let diagnostics break playback */ }
         }
     }
+
+    /// <summary>Closes the trace file (the host's container disposes it as the app exits).</summary>
+    public void Dispose() => SetEnabled(false, persist: false);
 }

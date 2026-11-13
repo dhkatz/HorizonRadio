@@ -197,7 +197,8 @@ Each step leaves the app working and lands as its own PR or short stack.
      - [x] Logging: Core's services (actions and event rules, lyrics, metadata, song sync,
        search, the input backends) write to the Console through `IPluginLog`, taken from the
        container. (The window's own lines move with its workflows, step 9.)
-     - [ ] Metadata diagnostics: `MetadataTrace` is the host's `IMetadataTrace`, a service.
+     - [x] Metadata diagnostics: `MetadataTrace` is a service, the host's `IMetadataTrace`, which
+       the resolver records its lookups in; it writes to the host's folder and Console log.
      - [ ] A test runs the whole engine, headless, in a temporary folder.
 8. [ ] Platform interfaces in Core; `HorizonRadio.Platform` with the Windows implementations.
 9. [ ] Workflows move from view models into Core services; the command list.
